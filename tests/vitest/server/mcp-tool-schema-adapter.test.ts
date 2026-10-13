@@ -15,6 +15,152 @@ import path from "node:path";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
 describe("MCP tool JSON Schema adapter", () : any => {
+  it("runs JSON Schema patterns through the bounded RE2 matcher", () : any => {
+    const fileName: any = compileClosedJsonSchema({
+      type: "object",
+      properties: {
+        fileName: { type: "string", pattern: "^[^/\\\\]{1,200}\\.toml$" }
+      },
+      required: ["fileName"],
+      additionalProperties: false
+    }, { requireTopLevelObject: true });
+    expect(fileName.validate({ fileName: "release-v1.toml" })).toEqual({ ok: true });
+    expect(fileName.validate({ fileName: "../release.toml" }).ok).toBe(false);
+    expect(fileName.validate({ fileName: `${"a".repeat(200)}.toml` }).ok).toBe(true);
+    expect(fileName.validate({ fileName: `${"a".repeat(201)}.toml` }).ok).toBe(false);
+
+    const unanchored: any = compileClosedJsonSchema({ type: "string", pattern: "mesh" });
+    expect(unanchored.validate("prefix-mesh-suffix")).toEqual({ ok: true });
+  });
+
+  it("handles overlapping quantified alternatives without backtracking", () : any => {
+    const duplicateAlternative: any = compileClosedJsonSchema({
+      type: "string",
+      pattern: "^(a|a)*$"
+    });
+    const overlappingAlternative: any = compileClosedJsonSchema({
+      type: "string",
+      pattern: "^(a|aa)+$"
+    });
+    expect(duplicateAlternative.validate(`${"a".repeat(2_000)}!`).ok).toBe(false);
+    expect(overlappingAlternative.validate(`${"a".repeat(2_000)}!`).ok).toBe(false);
+    expect(overlappingAlternative.validate("aaa")).toEqual({ ok: true });
+  });
+
+  it("enforces not and oneOf semantics after linear pattern matching", () : any => {
+    const longInput = "a".repeat(1_000_000);
+    const negated: any = compileClosedJsonSchema({
+      type: "string",
+      not: { pattern: "^a*$" }
+    });
+    const exclusive: any = compileClosedJsonSchema({
+      type: "string",
+      oneOf: [
+        { type: "string" },
+        { pattern: "^a*$" }
+      ]
+    });
+    expect(negated.validate(longInput).ok).toBe(false);
+    expect(exclusive.validate(longInput).ok).toBe(false);
+  });
+
+  it("propagates indeterminate nested validation through not and oneOf", () : any => {
+    const fieldNames = Array.from({ length: 128 }, (_value, index) => `field${index}`);
+    const properties = Object.fromEntries(fieldNames.map((name) => [name, {
+      type: "array",
+      minItems: 256,
+      maxItems: 256,
+      items: { type: "null" }
+    }]));
+    const heavySchema = {
+      type: "object",
+      properties,
+      required: fieldNames,
+      additionalProperties: false
+    };
+    const value = Object.fromEntries(fieldNames.map((name) => [name, Array(256).fill(null)]));
+    const negated: any = compileClosedJsonSchema({ not: heavySchema });
+    const exclusive: any = compileClosedJsonSchema({
+      oneOf: [{ type: "object" }, heavySchema]
+    });
+
+    expect(negated.validate(value)).toMatchObject({ ok: false, indeterminate: true });
+    expect(exclusive.validate(value)).toMatchObject({ ok: false, indeterminate: true });
+  });
+
+  it("rejects non-regular schema patterns and accepts ECMAScript-sized repetitions", () : any => {
+    expect(() => compileClosedJsonSchema({ type: "string", pattern: "(a)\\1" }))
+      .toThrow(/supported bounded regular-expression syntax/u);
+    expect(() => compileClosedJsonSchema({ type: "string", pattern: "(?=a)a" }))
+      .toThrow(/supported bounded regular-expression syntax/u);
+    const repeated: any = compileClosedJsonSchema({ type: "string", pattern: "^a{257}$" });
+    expect(repeated.validate("a".repeat(257))).toEqual({ ok: true });
+    const largeExact: any = compileClosedJsonSchema({ type: "string", pattern: "^[a-z]{1024}$" });
+    expect(largeExact.validate("a".repeat(1024))).toEqual({ ok: true });
+    expect(largeExact.validate("a".repeat(1023))).toEqual({ ok: false, error: expect.any(String) });
+    const largeRange: any = compileClosedJsonSchema({ type: "string", pattern: "^a{1,1000}$" });
+    expect(largeRange.validate("a")).toEqual({ ok: true });
+    expect(largeRange.validate("").ok).toBe(false);
+    expect(largeRange.validate("a".repeat(1000))).toEqual({ ok: true });
+    const repeatedGroup: any = compileClosedJsonSchema({ type: "string", pattern: "^(ab|c){1001}$" });
+    expect(repeatedGroup.validate("ab".repeat(1001))).toEqual({ ok: true });
+    expect(repeatedGroup.validate("ab".repeat(1000))).toMatchObject({ ok: false });
+  });
+
+  it("matches the supported ECMAScript subset with JSON Schema search and anchor semantics", () : any => {
+    const patterns = [
+      "^a$",
+      "^(a|b){1,3}$",
+      "\\bword\\b",
+      "\\d+",
+      "^\\cA$",
+      "^\\s$",
+      "^[\\S]$",
+      "^[^\\S]$",
+      "^[\\S\\s]$",
+      "^[\\S ]$",
+      "^[^\\S ]$",
+      ".",
+      "\\p{Letter}+",
+      "^\\p{Cased_Letter}+$",
+      "^\\p{Script=Grek}+$",
+      "^\\p{ASCII}$",
+      "^\\P{ASCII}$",
+      "^[\\P{ASCII}]$",
+      "^\\uD83D\\uDE00$",
+      "^\\u{1F600}$",
+      "foo|bar",
+      "^[^/\\\\]{1,8}\\.toml$"
+    ];
+    const values = ["", "a", "a\n", "a\r\n", "\u2028", "\u2029", "\u00a0", "\u0001", "ab", "word", "word!", "42", "éclair", "😀", "prefix-bar", "x.toml", "../x.toml"];
+    for (const pattern of patterns) {
+      const compiled: any = compileClosedJsonSchema({ type: "string", pattern });
+      const reference = new RegExp(pattern, "u");
+      for (const value of values) {
+        expect(compiled.validate(value).ok, `${pattern} against ${JSON.stringify(value)}`)
+          .toBe(reference.test(value));
+      }
+    }
+  });
+
+  it("preserves IP address format checks without a Node networking import", () : any => {
+    const addresses: any = compileClosedJsonSchema({
+      type: "object",
+      properties: {
+        ipv4: { type: "string", format: "ipv4" },
+        ipv6: { type: "string", format: "ipv6" }
+      },
+      required: ["ipv4", "ipv6"],
+      additionalProperties: false
+    });
+    expect(addresses.validate({ ipv4: "192.0.2.1", ipv6: "2001:db8::1" }).ok).toBe(true);
+    expect(addresses.validate({ ipv4: "192.0.2.1", ipv6: "fe80::1%eth0" }).ok).toBe(true);
+    expect(addresses.validate({ ipv4: "192.0.2.01", ipv6: "2001:db8::1" }).ok).toBe(false);
+    expect(addresses.validate({ ipv4: "192.0.2.1", ipv6: "2001:db8::gg" }).ok).toBe(false);
+    expect(addresses.validate({ ipv4: "192.0.2.1", ipv6: "::1]/path" }).ok).toBe(false);
+    expect(addresses.validate({ ipv4: "192.0.2.1", ipv6: "::1]#fragment" }).ok).toBe(false);
+  });
+
   it("preserves $ref target and sibling constraints", () : any => {
     const compiled: any = compileExternalSchema({
       type: "object",

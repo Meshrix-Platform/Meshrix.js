@@ -1,11 +1,11 @@
-import { isIP } from "node:net";
+import { compileRe2Pattern, type Re2PatternProgram } from "./re2-pattern.ts";
 
 export type ClosedJsonValue = null | boolean | number | string |
   readonly ClosedJsonValue[] | Readonly<{ [key: string]: ClosedJsonValue }>;
 export type ClosedJsonSchema = Readonly<{ [keyword: string]: ClosedJsonValue }>;
 export type ClosedJsonSchemaValidationResult =
   | Readonly<{ ok: true }>
-  | Readonly<{ ok: false; error: string }>;
+  | Readonly<{ ok: false; error: string; indeterminate?: true }>;
 
 export interface CompiledClosedJsonSchema {
   readonly schema: ClosedJsonSchema;
@@ -57,7 +57,7 @@ interface CompiledSchemaNode {
   readonly minProperties: number | undefined;
   readonly not: CompiledSchemaNode | null;
   readonly oneOf: readonly CompiledSchemaNode[];
-  readonly pattern: RegExp | null;
+  readonly pattern: Re2PatternProgram | null;
   readonly properties: ReadonlyMap<string, CompiledSchemaNode>;
   readonly required: readonly string[];
   readonly schema: ClosedJsonSchema;
@@ -301,19 +301,16 @@ function assertOrderedBounds(
   }
 }
 
-function compileSafePattern(value: unknown, label: string, path: string): readonly [string, RegExp] {
+function compileSafePattern(
+  value: unknown, label: string, path: string
+): readonly [string, Re2PatternProgram] {
   if (typeof value !== "string" || value.length > MAX_PATTERN_LENGTH) {
     throw schemaError(label, path, `must be a string of at most ${MAX_PATTERN_LENGTH} characters.`);
   }
-  if (/\\[1-9]/u.test(value) || /\(\?/u.test(value) ||
-    /\([^)]*[*+][^)]*\)\s*(?:[*+?]|\{\d*,?\d*\})/u.test(value) ||
-    (value.match(/\.\*/gu) || []).length > 1) {
-    throw schemaError(label, path, "uses unsupported regular-expression syntax.");
-  }
   try {
-    return [value, new RegExp(value, "u")];
+    return [value, compileRe2Pattern(value)];
   } catch {
-    throw schemaError(label, path, "must be a valid bounded regular expression.");
+    throw schemaError(label, path, "must use the supported bounded regular-expression syntax.");
   }
 }
 
@@ -454,7 +451,7 @@ function compileSchemaNode(
       }
       format = source.format;
     }
-    let pattern: RegExp | null = null;
+    let pattern: Re2PatternProgram | null = null;
     let canonicalPattern: string | undefined;
     if (Object.hasOwn(source, "pattern")) {
       [canonicalPattern, pattern] = compileSafePattern(source.pattern, context.label, `${path}.pattern`);
@@ -516,21 +513,29 @@ function valueMatchesType(value: unknown, type: SchemaType): boolean {
   }
 }
 
-function jsonValuesEqual(left: unknown, right: unknown, context: ValidationContext): boolean {
+function jsonValuesEqual(left: unknown, right: unknown, context: ValidationContext): boolean | null {
   context.steps += 1;
-  if (context.steps > MAX_VALIDATION_STEPS) return false;
+  if (context.steps > MAX_VALIDATION_STEPS) return null;
   if (Object.is(left, right)) return true;
   if (typeof left !== typeof right || left === null || right === null) return false;
   if (Array.isArray(left)) {
     if (!Array.isArray(right) || left.length !== right.length) return false;
-    return left.every((entry, index) => jsonValuesEqual(entry, right[index], context));
+    for (let index = 0; index < left.length; index += 1) {
+      const equal = jsonValuesEqual(left[index], right[index], context);
+      if (equal !== true) return equal;
+    }
+    return true;
   }
   if (!isPlainObject(left) || !isPlainObject(right)) return false;
   const leftKeys = Object.keys(left);
   const rightKeys = Object.keys(right);
   if (leftKeys.length !== rightKeys.length) return false;
-  return leftKeys.every((key) =>
-    Object.hasOwn(right, key) && jsonValuesEqual(left[key], right[key], context));
+  for (const key of leftKeys) {
+    if (!Object.hasOwn(right, key)) return false;
+    const equal = jsonValuesEqual(left[key], right[key], context);
+    if (equal !== true) return equal;
+  }
+  return true;
 }
 function stringLength(value: string): number {
   let length = 0;
@@ -549,6 +554,30 @@ function isValidHostname(value: string): boolean {
     value.split(".").every((part) => part.length > 0 && part.length <= 63 &&
       /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/u.test(part));
 }
+
+function isValidIpv4(value: string): boolean {
+  const parts = value.split(".");
+  return parts.length === 4 && parts.every((part) =>
+    /^(?:0|[1-9][0-9]{0,2})$/u.test(part) && Number(part) <= 255
+  );
+}
+
+function isValidIpv6(value: string): boolean {
+  const zoneSeparator = value.indexOf("%");
+  const address = zoneSeparator < 0 ? value : value.slice(0, zoneSeparator);
+  if (!/^[0-9A-Fa-f:.]+$/u.test(address)) return false;
+  if (zoneSeparator >= 0) {
+    const zone = value.slice(zoneSeparator + 1);
+    if (!/^[A-Za-z0-9:.-]+$/u.test(zone)) return false;
+  }
+  try {
+    const host = new URL(`http://[${address}]/`).hostname;
+    return host.startsWith("[") && host.endsWith("]");
+  } catch {
+    return false;
+  }
+}
+
 function matchesFormat(value: string, format: SchemaFormat): boolean {
   switch (format) {
     case "date": return isValidDate(value);
@@ -557,8 +586,8 @@ function matchesFormat(value: string, format: SchemaFormat): boolean {
         Number.isFinite(Date.parse(value));
     case "email": return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
     case "hostname": return isValidHostname(value);
-    case "ipv4": return isIP(value) === 4;
-    case "ipv6": return isIP(value) === 6;
+    case "ipv4": return isValidIpv4(value);
+    case "ipv6": return isValidIpv6(value);
     case "time":
       return /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-][01]\d:[0-5]\d)?$/u.test(value);
     case "uri":
@@ -570,55 +599,83 @@ function matchesFormat(value: string, format: SchemaFormat): boolean {
   }
 }
 
-function validationFailure(error: string): ClosedJsonSchemaValidationResult {
-  return { ok: false, error };
+function validationFailure(error: string, indeterminate = false): ClosedJsonSchemaValidationResult {
+  return indeterminate ? { ok: false, error, indeterminate: true } : { ok: false, error };
 }
 function validateNode(
   node: CompiledSchemaNode, value: unknown, path: string, context: ValidationContext
 ): ClosedJsonSchemaValidationResult {
   context.steps += 1;
   if (context.steps > MAX_VALIDATION_STEPS) {
-    return validationFailure(`${path} exceeds the validation work limit.`);
+    return validationFailure(`${path} exceeds the validation work limit.`, true);
   }
   if (node.effectiveTypes.length > 0 &&
     !node.effectiveTypes.some((type) => valueMatchesType(value, type))) {
     return validationFailure(`${path} must be ${node.effectiveTypes.join(" or ")}.`);
   }
-  if (node.enumValues && !node.enumValues.some((entry) => jsonValuesEqual(entry, value, context))) {
-    return validationFailure(`${path} must match a declared enum value.`);
+  if (node.enumValues) {
+    let matched = false;
+    for (const entry of node.enumValues) {
+      const equal = jsonValuesEqual(entry, value, context);
+      if (equal === null) return validationFailure(`${path} exceeds the validation work limit.`, true);
+      if (equal) {
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) return validationFailure(`${path} must match a declared enum value.`);
   }
-  if (node.hasConst && !jsonValuesEqual(node.constValue, value, context)) {
-    return validationFailure(`${path} must match the declared const value.`);
+  if (node.hasConst) {
+    const equal = jsonValuesEqual(node.constValue, value, context);
+    if (equal === null) return validationFailure(`${path} exceeds the validation work limit.`, true);
+    if (!equal) return validationFailure(`${path} must match the declared const value.`);
   }
   for (const branch of node.allOf) {
-    if (!validateNode(branch, value, path, context).ok) {
-      return validationFailure(`${path} does not satisfy allOf.`);
-    }
+    const result = validateNode(branch, value, path, context);
+    if (result.ok) continue;
+    if (result.indeterminate) return result;
+    return validationFailure(`${path} does not satisfy allOf.`);
   }
   if (node.anyOf.length > 0) {
     let matched = false;
+    let indeterminate: ClosedJsonSchemaValidationResult | null = null;
     for (const branch of node.anyOf) {
-      const branchContext: ValidationContext = { steps: context.steps };
-      if (validateNode(branch, value, path, branchContext).ok) matched = true;
-      context.steps = Math.max(context.steps, branchContext.steps);
+      const branchContext: ValidationContext = {
+        steps: context.steps
+      };
+      const result = validateNode(branch, value, path, branchContext);
+      if (result.ok) matched = true;
+      else if (result.indeterminate) indeterminate = result;
+      context.steps = branchContext.steps;
       if (matched) break;
     }
+    if (!matched && indeterminate) return indeterminate;
     if (!matched) return validationFailure(`${path} does not satisfy anyOf.`);
   }
   if (node.oneOf.length > 0) {
     let matches = 0;
+    let indeterminate: ClosedJsonSchemaValidationResult | null = null;
     for (const branch of node.oneOf) {
-      const branchContext: ValidationContext = { steps: context.steps };
-      if (validateNode(branch, value, path, branchContext).ok) matches += 1;
-      context.steps = Math.max(context.steps, branchContext.steps);
+      const branchContext: ValidationContext = {
+        steps: context.steps
+      };
+      const result = validateNode(branch, value, path, branchContext);
+      if (result.ok) matches += 1;
+      else if (result.indeterminate) indeterminate = result;
+      context.steps = branchContext.steps;
+      if (matches > 1) return validationFailure(`${path} does not satisfy exactly one oneOf branch.`);
     }
+    if (indeterminate) return indeterminate;
     if (matches !== 1) return validationFailure(`${path} does not satisfy exactly one oneOf branch.`);
   }
   if (node.not) {
-    const branchContext: ValidationContext = { steps: context.steps };
-    const matched = validateNode(node.not, value, path, branchContext).ok;
-    context.steps = Math.max(context.steps, branchContext.steps);
-    if (matched) return validationFailure(`${path} matches the disallowed schema.`);
+    const branchContext: ValidationContext = {
+      steps: context.steps
+    };
+    const result = validateNode(node.not, value, path, branchContext);
+    context.steps = branchContext.steps;
+    if (!result.ok && result.indeterminate) return result;
+    if (result.ok) return validationFailure(`${path} matches the disallowed schema.`);
   }
   if (typeof value === "string") {
     const length = stringLength(value);
@@ -628,8 +685,10 @@ function validateNode(
     if (node.maxLength !== undefined && length > node.maxLength) {
       return validationFailure(`${path} exceeds maxLength.`);
     }
-    if (node.pattern && !node.pattern.test(value)) {
-      return validationFailure(`${path} must match the declared pattern.`);
+    if (node.pattern) {
+      if (!node.pattern.test(value)) {
+        return validationFailure(`${path} must match the declared pattern.`);
+      }
     }
     if (node.format && !matchesFormat(value, node.format)) {
       return validationFailure(`${path} must match format ${node.format}.`);
