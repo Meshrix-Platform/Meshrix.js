@@ -101,13 +101,60 @@ export function isStrictMcpApiKey(value: any = "") : any {
   return MXAK1_CREDENTIAL_PATTERN.test(String(value || ""));
 }
 
+// Called only for resource admission before body retention. It never verifies
+// signed process headers or returns an effect authorization context.
+export async function authenticateMcpApiKeyAdmission({
+  request,
+  apiKeyDistributionProvider,
+  serverAudience = ""
+}: Record<string, any>): Promise<any> {
+  const credential = rawHeader(request, "x-meshrix.js-api-key");
+  if (!credential) return { handled: false };
+  if (["authorization", "x-meshrix-tool-token", "x-meshrix.js-api-key"].some(name => repeatedHeader(request, name)) ||
+      header(request, "authorization") || header(request, "x-meshrix-tool-token") || !isStrictMcpApiKey(credential)) {
+    return { handled: true, ok: false };
+  }
+  if (typeof apiKeyDistributionProvider?.authenticateAdmission !== "function") {
+    return { handled: true, ok: false };
+  }
+  const configuredAudience = String(serverAudience || "").trim();
+  if (!configuredAudience) {
+    return {
+      handled: true,
+      ok: false,
+      status: 503,
+      reasonCode: "api_key_audience_unavailable"
+    };
+  }
+  try {
+    const identity = await apiKeyDistributionProvider.authenticateAdmission({
+      credential,
+      serverAudience: configuredAudience,
+      targetId: header(request, "x-meshrix.js-mcp-target"),
+      connectorPackageId: header(request, "x-meshrix.js-connector-package-id") || null
+    });
+    if (identity?.credentialKind !== "api-key-admission" || !identity.subjectId || !identity.tenantId) {
+      return { handled: true, ok: false };
+    }
+    return { handled: true, ok: true, ...identity };
+  } catch {
+    return {
+      handled: true,
+      ok: false,
+      status: 503,
+      reasonCode: "api_key_authority_unavailable"
+    };
+  }
+}
+
 export async function authenticateMcpApiKey({
   request,
   requestBody = Buffer.alloc(0),
   url = null,
   method = "GET",
   apiKeyDistributionProvider = null,
-  securityPermissions = null
+  securityPermissions = null,
+  serverAudience = ""
 }: Record<string, any> = {}) : Promise<any> {
   const authorizationHeader: any = header(request, "authorization");
   const bearerCredential: any = authorizationHeader.match(/^Bearer\s+(.+)$/iu)?.[1]?.trim() || "";
@@ -129,13 +176,17 @@ export async function authenticateMcpApiKey({
   if (typeof apiKeyDistributionProvider?.authenticateRuntime !== "function") {
     return denial(503, "api_key_authority_unavailable", "API key authorization is unavailable.");
   }
+  const configuredAudience = String(serverAudience || "").trim();
+  if (!configuredAudience) {
+    return denial(503, "api_key_audience_unavailable", "The service audience is unavailable.");
+  }
 
   const identity: any = await verifiedProcessIdentity({ request, requestBody, url, method, securityPermissions });
   if (!identity.ok) return identity;
   try {
     const authorization: any = await apiKeyDistributionProvider.authenticateRuntime({
       credential: apiKey,
-      serverAudience: header(request, "host"),
+      serverAudience: configuredAudience,
       targetId: header(request, "x-meshrix.js-mcp-target"),
       connectorPackageId: header(request, "x-meshrix.js-connector-package-id") || null,
       processIdentityEvidence: identity.evidence

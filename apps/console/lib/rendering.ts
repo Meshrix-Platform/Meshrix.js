@@ -31,26 +31,24 @@ export function safeMediaSrc(value: string) : any {
   return "";
 }
 
+export const SAFE_HTML_TAGS: any = new Set<any>([
+  "a", "abbr", "article", "aside", "b", "blockquote", "br", "caption", "code",
+  "col", "colgroup", "dd", "del", "div", "dl", "dt", "em", "figcaption",
+  "figure", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "li",
+  "mark", "ol", "p", "pre", "section", "span", "strong", "sub", "sup",
+  "table", "tbody", "td", "tfoot", "th", "thead", "tr", "u", "ul",
+]);
+
 export function sanitizeHtmlContent(rawHtml: string) : any {
+  if (typeof document === "undefined" || typeof document.createElement !== "function") {
+    return "";
+  }
   const template: any = document.createElement("template");
   template.innerHTML = rawHtml;
-  const blockedTags: any = new Set<any>([
-    "script",
-    "style",
-    "iframe",
-    "object",
-    "embed",
-    "link",
-    "meta",
-    "form",
-    "input",
-    "button",
-    "svg",
-  ]);
   const allowedAttrs: any = new Set<any>(["href", "src", "alt", "title", "colspan", "rowspan"]);
   for (const element of Array.from(template.content.querySelectorAll("*")) as Element[]) {
     const tag: any = element.tagName.toLowerCase();
-    if (blockedTags.has(tag)) {
+    if (!SAFE_HTML_TAGS.has(tag)) {
       element.remove();
       continue;
     }

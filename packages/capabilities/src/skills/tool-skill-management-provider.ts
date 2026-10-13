@@ -16,7 +16,7 @@ import {
   createDelegatedMcpGrantForPlatform,
   revokeDelegatedMcpGrantForPlatform
 } from "./tool-skill-management-provider-delegated-mcp.ts";
-import { authenticateMcpApiKey } from "./mcp-api-key-authentication.ts";
+import { authenticateMcpApiKey, authenticateMcpApiKeyAdmission } from "./mcp-api-key-authentication.ts";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import {
   apiKeyAuthorizationEvaluationInput,
@@ -48,6 +48,98 @@ export function createToolSkillManagementProvider({
 }: Record<string, any> = {}) : any {
   const platform: any = operationPermissionPlatform;
   const visibleToolSnapshots: any = new Map<string, any>();
+  const apiKeyDenialAuditWindows = new Map<string, { nextRecordAt: number; suppressedCount: number }>();
+  const apiKeyDenialAuditRequests = new WeakSet<object>();
+  let publicOrigin = "";
+  let serverAudience = "";
+
+  function configurePublicOrigin(value: unknown): string {
+    const configured = String(value || "").trim();
+    let parsed: URL;
+    try {
+      parsed = new URL(configured);
+    } catch {
+      throw Object.assign(new Error("The configured public origin is invalid."), {
+        code: "public_origin_invalid"
+      });
+    }
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.origin !== configured
+    ) {
+      throw Object.assign(new Error("The configured public origin is invalid."), {
+        code: "public_origin_invalid"
+      });
+    }
+    if (publicOrigin && publicOrigin !== parsed.origin) {
+      throw Object.assign(new Error("The public origin cannot change after admission is configured."), {
+        code: "public_origin_immutable"
+      });
+    }
+    publicOrigin = parsed.origin;
+    serverAudience = parsed.host;
+    return publicOrigin;
+  }
+
+  function getPublicOrigin(): string {
+    return publicOrigin;
+  }
+
+  async function recordApiKeyAuthenticationDenial({
+    decisionStore,
+    request = null,
+    result
+  }: Record<string, any>): Promise<void> {
+    if (typeof decisionStore?.appendDecision !== "function") return;
+    if (request && typeof request === "object") {
+      if (apiKeyDenialAuditRequests.has(request)) return;
+      apiKeyDenialAuditRequests.add(request);
+    }
+    const status = Number(result?.status || result?.statusCode || 401);
+    const reasonCode = status >= 500
+      ? "api_key_authority_unavailable"
+      : "api_key_authentication_denied";
+    const now = Date.now();
+    const previous = apiKeyDenialAuditWindows.get(reasonCode);
+    if (previous && now < previous.nextRecordAt) {
+      previous.suppressedCount = Math.min(100_000, previous.suppressedCount + 1);
+      return;
+    }
+    const deniedAttempts = Math.min(100_001, 1 + (previous?.suppressedCount || 0));
+    apiKeyDenialAuditWindows.set(reasonCode, {
+      nextRecordAt: now + 60_000,
+      suppressedCount: 0
+    });
+    try {
+      await decisionStore.appendDecision({
+        decisionId: `mcp_auth_${now.toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+        operationId: "mcp.authenticate",
+        toolId: "",
+        grantId: "",
+        subject: { type: "anonymous", subjectId: "", scopes: [] },
+        resource: {
+          operationId: "mcp.authenticate",
+          toolId: "",
+          risk: "read_only"
+        },
+        action: "mcp.authenticate",
+        effect: "deny",
+        allowed: false,
+        reasonCode,
+        redactedReason: reasonCode === "api_key_authority_unavailable"
+          ? `API key authorization is unavailable (${deniedAttempts} denied attempt${deniedAttempts === 1 ? "" : "s"} in the audit window).`
+          : `MCP API key authentication was denied (${deniedAttempts} denied attempt${deniedAttempts === 1 ? "" : "s"} in the audit window).`,
+        requiredScopes: [],
+        missingScopes: [],
+        evaluatedLayers: ["mcp_api_key_authentication"],
+        createdAt: new Date(now).toISOString()
+      });
+    } catch {
+      logger?.warn?.("mcp.authentication.denial_audit_failed", {
+        code: "security_decision_store_unavailable"
+      });
+    }
+  }
 
   function visibleToolSnapshot() : any {
     const current: any = requirePlatform();
@@ -102,6 +194,23 @@ export function createToolSkillManagementProvider({
     return platform;
   }
 
+  async function authenticateAdmission({ request }: Record<string, any> = {}): Promise<any> {
+    const result = await authenticateMcpApiKeyAdmission({
+      request,
+      serverAudience,
+      apiKeyDistributionProvider: requirePlatform().apiKeyDistributionProvider
+    });
+    if (result?.handled && !result.ok) {
+      const current: any = requirePlatform();
+      await recordApiKeyAuthenticationDenial({
+        decisionStore: current.securityPermissions || securityPermissions,
+        request,
+        result
+      });
+    }
+    return result;
+  }
+
   async function authorizeRequest({
     request,
     requiredScopes = [],
@@ -124,10 +233,18 @@ export function createToolSkillManagementProvider({
       url,
       method,
       apiKeyDistributionProvider: current.apiKeyDistributionProvider,
-      securityPermissions: current.securityPermissions || securityPermissions
+      securityPermissions: current.securityPermissions || securityPermissions,
+      serverAudience
     });
     if (apiKeyAuthorization.handled) {
-      if (!apiKeyAuthorization.ok) return apiKeyAuthorization;
+      if (!apiKeyAuthorization.ok) {
+        await recordApiKeyAuthenticationDenial({
+          decisionStore: current.securityPermissions || securityPermissions,
+          request,
+          result: apiKeyAuthorization
+        });
+        return apiKeyAuthorization;
+      }
       try {
         const evaluation: any = apiKeyAuthorizationEvaluationInput(apiKeyAuthorization.apiKeyAuthorization);
         return Object.freeze({
@@ -136,13 +253,19 @@ export function createToolSkillManagementProvider({
           subject: evaluation.subject
         });
       } catch {
-        return {
+        const failure = {
           handled: true,
           ok: false,
           status: 503,
           reasonCode: "api_key_authority_unavailable",
           error: "API key authorization evaluation is unavailable."
         };
+        await recordApiKeyAuthenticationDenial({
+          decisionStore: current.securityPermissions || securityPermissions,
+          request,
+          result: failure
+        });
+        return failure;
       }
     }
     const authorization: any = await current.store.authorizeRequest({
@@ -517,7 +640,10 @@ export function createToolSkillManagementProvider({
     if (!current.router?.handleOperationPermissionHttpRequest) {
       return false;
     }
-    return current.router.handleOperationPermissionHttpRequest(input);
+    return current.router.handleOperationPermissionHttpRequest({
+      ...input,
+      serverAudience
+    });
   }
 
   /** Never trusts a wire approval flag: only the current, stored Operation Permission resume may authorize. */
@@ -568,6 +694,9 @@ export function createToolSkillManagementProvider({
         ]
       };
     },
+    authenticateAdmission,
+    configurePublicOrigin,
+    getPublicOrigin,
     authorizeRequest,
     authorizeMcpClientRequest,
     verifyCurrentApprovedMcpOperation,

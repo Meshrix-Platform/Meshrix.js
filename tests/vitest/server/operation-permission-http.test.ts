@@ -114,7 +114,8 @@ async function callRouter(router?: any, {
   rawRequestBody = null,
   headers = {},
   requestId,
-  signal = null
+  signal = null,
+  serverAudience = ""
 }: Record<string, any> = {}) : Promise<any> {
   const response: any = createResponse();
   const request: any = createRequest({ headers, id: requestId });
@@ -125,7 +126,8 @@ async function callRouter(router?: any, {
     requestBody,
     url: createUrl(path),
     method,
-    signal
+    signal,
+    serverAudience
   });
   return { handled, request, response };
 }
@@ -173,7 +175,8 @@ describe("operation permission http behavior", () : any => {
 
     const { response } = await callRouter(router, {
       path: "/api/operation-permission/v1/api-keys/issuer-scopes",
-      headers: { host: "console.example.test" }
+      headers: { host: "attacker.example.test" },
+      serverAudience: "console.example.test"
     });
     const payload = JSON.parse(response.body);
     expect(response.statusCode).toBe(200);
@@ -183,7 +186,10 @@ describe("operation permission http behavior", () : any => {
     expect(payload.serverAudience).toBe("console.example.test");
 
     scopesProvider.mockResolvedValueOnce({ eligibleRoots: [], eligibleNodes: [] });
-    await callRouter(router, { path: "/api/operation-permission/v1/api-keys/issuer-scopes" });
+    await callRouter(router, {
+      path: "/api/operation-permission/v1/api-keys/issuer-scopes",
+      serverAudience: "console.example.test"
+    });
     expect(discover).toHaveBeenCalledTimes(1);
   });
 
@@ -208,10 +214,66 @@ describe("operation permission http behavior", () : any => {
       ok: true,
       session: { user: { userId: "console-user" } }
     }));
-    const available = await callRouter(router, { path: "/api/operation-permission/v1/api-keys/issuer-scopes" });
+    const available = await callRouter(router, {
+      path: "/api/operation-permission/v1/api-keys/issuer-scopes",
+      serverAudience: "console.example.test"
+    });
     const payload = JSON.parse(available.response.body);
     expect(payload.mcpToolSelection).toEqual({ status: "unavailable", services: [], tools: [] });
     expect(available.response.body).not.toContain("private upstream transport details");
+  });
+
+  it("binds API-key creation and rotation to the configured server audience", async () : Promise<any> => {
+    const create = vi.fn(async (input?: any) : Promise<any> => ({
+      record: { keyId: "key-fixture", policy: input.policy },
+      apiKey: "synthetic-one-time-key"
+    }));
+    const rotate = vi.fn(async (input?: any) : Promise<any> => ({
+      record: { keyId: input.keyId },
+      apiKey: "synthetic-rotated-key"
+    }));
+    const platform = createPlatform({ apiKeyDistributionProvider: { create, rotate } });
+    const securityPermissions = {
+      authorizeOperation: vi.fn(async () : Promise<any> => ({
+        ok: true,
+        session: { user: { userId: "console-user" } }
+      }))
+    };
+    const router = createOperationPermissionHttpRouter({ platform, securityPermissions, logger: getRuntimeLoggerMock() });
+    const serverAudience = "console.example.test";
+
+    const mismatch = await callRouter(router, {
+      method: "POST",
+      path: "/api/operation-permission/v1/api-keys",
+      serverAudience,
+      body: { policy: { audience: { serverAudience: "attacker.example.test" } } }
+    });
+    expect(mismatch.response.statusCode).toBe(400);
+    expect(JSON.parse(mismatch.response.body).error.code).toBe("api_key_audience_mismatch");
+    expect(create).not.toHaveBeenCalled();
+
+    await callRouter(router, {
+      method: "POST",
+      path: "/api/operation-permission/v1/api-keys",
+      serverAudience,
+      body: { policy: { audience: { targetIds: [], connectorPackageIds: [] } } }
+    });
+    expect(create.mock.calls[0][0].policy.audience.serverAudience).toBe(serverAudience);
+
+    const missingOrigin = await callRouter(router, {
+      method: "POST",
+      path: "/api/operation-permission/v1/api-keys/key-fixture/rotate"
+    });
+    expect(missingOrigin.response.statusCode).toBe(503);
+    expect(JSON.parse(missingOrigin.response.body).error.code).toBe("api_key_audience_unavailable");
+    expect(rotate).not.toHaveBeenCalled();
+
+    await callRouter(router, {
+      method: "POST",
+      path: "/api/operation-permission/v1/api-keys/key-fixture/rotate",
+      serverAudience
+    });
+    expect(rotate).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the safe layered outcome while redacting every continuation identifier", async () : Promise<any> => {

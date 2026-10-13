@@ -129,11 +129,20 @@ export function canAccessJob(job: any = null, authSession: any = null) : any {
   if (workspaceId && subject.allowedWorkspaceIds.includes(workspaceId)) {
     return true;
   }
+  const jobTenantId: any = String(job.ownerTenantId || job.tenantId || job.owner?.tenantId || "").trim();
+  if (jobTenantId && subject.tenantId && jobTenantId !== subject.tenantId) {
+    return false;
+  }
   const ownerIds: any = jobOwnerIds(job);
   if (ownerIds.length === 0) {
     return false;
   }
-  const callerIds: any = [subject.subjectId, subject.userId, subject.username].filter(Boolean);
+  const user: any = authSession?.user || {};
+  const callerIds: any = [user.subjectId, user.userId].map((value?: any) : any => String(value || "").trim()).filter(Boolean);
+  if (jobTenantId === subject.tenantId) {
+    const username: any = String(user.username || "").trim();
+    if (username) callerIds.push(username);
+  }
   return callerIds.some((callerId?: any) : any => ownerIds.includes(callerId));
 }
 

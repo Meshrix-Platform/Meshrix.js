@@ -2,6 +2,20 @@
 import { actorFrom, objectOrNull, protocolPayload, result } from "./shared.ts";
 import { runCheckpointWorkspaceFileRestore } from "./workspace-runtime-helpers.ts";
 
+function publicCheckpointMarkerResult(value: unknown): any {
+  const record = objectOrNull(value);
+  const payload = objectOrNull(record?.payload);
+  if (!record) return value;
+  if (record.ok === false || record.status >= 400 || record.error || payload?.error) {
+    return {
+      ok: false,
+      errorCode: "checkpoint_marker_restore_failed",
+      error: "Checkpoint restore marker could not be saved."
+    };
+  }
+  return value;
+}
+
 export function checkpointNodeTimestamp(node: Record<string, any> = {}) : any {
   const parsed: any = Date.parse(node.completedAt || node.updatedAt || node.startedAt || node.createdAt || "");
   return Number.isFinite(parsed) ? parsed : 0;
@@ -70,10 +84,20 @@ export async function workspaceOperationRevertPlan({ input = {}, context = {}, d
   if (!treeId) {
     return { ok: false, status: 400, error: "revert 需要 workspaceId 或 treeId。" };
   }
-  const tree: any = await checkpointTreeApi.loadCheckpointTree({
-    userDataPath: context.userDataPath,
-    treeId
-  });
+  let tree: any;
+  try {
+    tree = await checkpointTreeApi.loadCheckpointTree({
+      userDataPath: context.userDataPath,
+      treeId
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 500,
+      errorCode: "checkpoint_tree_load_failed",
+      error: "The workspace checkpoint could not be loaded."
+    };
+  }
   if (!tree) {
     return { ok: false, status: 404, error: "workspace checkpoint tree 不存在。" };
   }
@@ -118,17 +142,27 @@ export async function workspaceOperationRevertPlan({ input = {}, context = {}, d
       dryRun
     }]
   };
-  const fileRestore: any = await runCheckpointWorkspaceFileRestore({
-    plan: restorePlan,
-    input: {
-      ...input,
-      workspaceId: restoreSnapshot.workspaceId || workspaceId || tree.ownerId || "",
-      operationId: dryRun ? "workspace.operation.revert.scope" : "workspace.operation.revert.apply",
-      reason: input.reason || "workspace operation revert"
-    },
-    context,
-    dryRun
-  });
+  let fileRestore: any;
+  try {
+    fileRestore = await runCheckpointWorkspaceFileRestore({
+      plan: restorePlan,
+      input: {
+        ...input,
+        workspaceId: restoreSnapshot.workspaceId || workspaceId || tree.ownerId || "",
+        operationId: dryRun ? "workspace.operation.revert.scope" : "workspace.operation.revert.apply",
+        reason: input.reason || "workspace operation revert"
+      },
+      context,
+      dryRun
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      errorCode: "workspace_file_restore_failed",
+      error: "Workspace file restore is temporarily unavailable."
+    };
+  }
   if (fileRestore && fileRestore.payload?.ok !== true) {
     return {
       ok: false,
@@ -145,7 +179,11 @@ export async function workspaceOperationRevertPlan({ input = {}, context = {}, d
       actor: actorFrom(context.authSession, input),
       mode: "workspace-operation-revert",
       reason: input.reason || "workspace operation revert"
-    }).catch((error?: any) : any => ({ error: error?.message || String(error) }));
+    }).catch(() : any => ({
+      ok: false,
+      errorCode: "checkpoint_marker_restore_failed",
+      error: "Checkpoint restore marker could not be saved."
+    }));
   }
   return {
     ok: true,
@@ -164,7 +202,7 @@ export async function workspaceOperationRevertPlan({ input = {}, context = {}, d
       updatedAt: ""
     },
     workspaceFileRestore: fileRestore?.payload || null,
-    checkpointMarker: markerRestore,
+    checkpointMarker: publicCheckpointMarkerResult(markerRestore),
     actions: restorePlan.actions
   };
 }
@@ -246,6 +284,7 @@ export async function executeWorkspaceAuditOperation({ operationId, input = {}, 
         scope: reversibleItems.map((item?: any) : any => ({
           ...publicWorkspaceAuditItem(item)
         })),
+        ...(revertPlan.errorCode ? { errorCode: revertPlan.errorCode } : {}),
         error: revertPlan.error
       }));
     }

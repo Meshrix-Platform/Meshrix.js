@@ -265,7 +265,7 @@ export function normalizeClientIp(request?: any, {
   return clientIpFromRequest(request, { unknown: "unknown", trustedProxies });
 }
 
-export function resolveRequestSubjectKey(request?: any, consoleAuth: any = null) : any {
+export function resolveRequestSubjectKey(request?: any, consoleAuth: any = null, clientIp: any = "") : any {
   if (consoleAuth && typeof consoleAuth.getSessionFromRequest === "function") {
     const session: any = consoleAuth.getSessionFromRequest(request);
     if (session?.user?.username) {
@@ -273,10 +273,15 @@ export function resolveRequestSubjectKey(request?: any, consoleAuth: any = null)
     }
   }
 
-  return "subject:anonymous";
+  // Unauthenticated traffic (including pre-authorization API-key requests) is
+  // budgeted per source so one anonymous caller cannot exhaust a bucket shared
+  // with other sources or with already-authenticated principals.
+  const source: any = String(clientIp || "").trim() ||
+    clientIpFromRequest(request, { unknown: "unknown" });
+  return `subject:anonymous:${source}`;
 }
 
-export function resolveRequestTenantKey(request?: any, consoleAuth: any = null) : any {
+export function resolveRequestTenantKey(request?: any, consoleAuth: any = null, clientIp: any = "") : any {
   if (consoleAuth && typeof consoleAuth.getSessionFromRequest === "function") {
     const session: any = consoleAuth.getSessionFromRequest(request);
     const tenantId: any = String(session?.user?.tenantId || "").trim();
@@ -284,7 +289,9 @@ export function resolveRequestTenantKey(request?: any, consoleAuth: any = null) 
     const username: any = String(session?.user?.username || "").trim();
     if (username) return `tenant-subject:${username}`;
   }
-  return "tenant:anonymous";
+  const source: any = String(clientIp || "").trim() ||
+    clientIpFromRequest(request, { unknown: "unknown" });
+  return `tenant:anonymous:${source}`;
 }
 
 export function sendRateLimitResponse(response?: any, details: Record<string, any> = {}) : any {
@@ -311,6 +318,40 @@ export function routeFromRequestUrl(value: any = "") : any {
   } catch {
     return value || "/";
   }
+}
+
+const METRIC_ROUTE_LITERALS: any = new Set<any>([
+  "/",
+  "/console",
+  "/index.html",
+  "/mcp",
+  "/api/rpc",
+  "/api/healthz",
+  "/.well-known/meshrix/mcp.json",
+  "/api/mcp/discovery",
+  "/api/mcp/handshake"
+]);
+
+// Metrics and suppression keys must never carry attacker-controlled path
+// segments: registered routes resolve to their declared template, a small set
+// of platform paths maps to fixed literals, and everything else collapses to
+// one bounded "unmatched" bucket.
+export function requestRouteTemplate({ method = "", pathname = "/", registryTemplate = "" }: Record<string, any> = {}) : any {
+  const template: any = String(registryTemplate || "").trim();
+  if (template) {
+    return template;
+  }
+  const route: any = String(pathname || "/");
+  if (METRIC_ROUTE_LITERALS.has(route)) {
+    return route;
+  }
+  if (route.startsWith("/api/plugins/v1/console-sandboxes/")) {
+    return "/api/plugins/v1/console-sandboxes/:ref";
+  }
+  if (route.startsWith("/api/plugins/v1/console-bridges/")) {
+    return "/api/plugins/v1/console-bridges/:ref";
+  }
+  return "unmatched";
 }
 
 export function metricTransportForRoute(route: any = "") : any {

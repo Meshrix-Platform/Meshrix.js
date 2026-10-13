@@ -1,4 +1,10 @@
 import { logRuntimeEvent } from "#meshrix/runtime-logger";
+import {
+  authSubjectFromSession,
+  canAccessAllJobs,
+  canAccessJob,
+  requestOwnerSubjectFromSession
+} from "./jobs-controller-access.ts";
 
 export function createSystemControllerContexts({
   userDataPath,
@@ -88,6 +94,15 @@ export function createSystemControllerContexts({
       modelDecisionRuntime,
       strategyManagementProvider,
       jobWorkflowProvider,
+      canAccessJob,
+      canAccessAllUploadSessions: () : boolean => canAccessAllJobs(authSubjectFromSession(authSession)),
+      canAccessUploadSession: async (sessionId?: any) : Promise<any> => {
+        if (canAccessAllJobs(authSubjectFromSession(authSession))) return true;
+        if (typeof uploadSessionStore.hasUploadSessionOwnerAccess !== "function") return false;
+        return uploadSessionStore.hasUploadSessionOwnerAccess(sessionId, {
+          owner: requestOwnerSubjectFromSession(authSession)
+        });
+      },
       workQueueObservation,
       contextRuntime,
       getListenUrl,

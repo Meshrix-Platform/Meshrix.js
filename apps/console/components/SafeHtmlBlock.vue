@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { sanitizeHtmlContent, safeMediaSrc, safeLinkHref } from "../lib/rendering";
+import { SAFE_HTML_TAGS, sanitizeHtmlContent, safeMediaSrc, safeLinkHref } from "../lib/rendering";
 
 defineOptions({ inheritAttrs: false });
 
@@ -15,7 +15,7 @@ const props = withDefaults(
   },
 );
 
-const markdownSafeTags = new Set(["a", "article", "aside", "b", "blockquote", "br", "caption", "code", "col", "colgroup", "dd", "del", "div", "em", "figcaption", "figure", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "li", "ol", "p", "pre", "section", "span", "strong", "sub", "sup", "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul", "iframe"]);
+const markdownSafeTags = new Set([...SAFE_HTML_TAGS, "iframe"]);
 
 const markdownSafeAttributes = new Set([
   "alt",
@@ -51,8 +51,8 @@ function normalizeIframeElement(element: Element) {
 }
 
 function sanitizeEvidenceHtml(rawHtml: string) {
-  if (typeof DOMParser !== "function") {
-    return rawHtml || "";
+  if (typeof document === "undefined" || typeof document.createElement !== "function") {
+    return "";
   }
   const template = document.createElement("template");
   template.innerHTML = rawHtml || "";

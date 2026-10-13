@@ -9,6 +9,7 @@ import {
   serverAppearancePresetDirectory,
   validateAppearancePresetConfig
 } from "../../../packages/server-runtime/src/composition/console-domain/appearance-presets/appearance-preset-store.ts";
+import { createSystemControllerAppearancePresetHandlers } from "../../../packages/protocols/http/controllers/system-controller-appearance-preset-handlers.ts";
 
 let userDataPath: any;
 
@@ -32,6 +33,25 @@ function validPreset(id: any = "agent-preview") : any {
       warning: "#b45309",
       danger: "#b91c1c"
     }
+  };
+}
+
+function capturedJsonResponse() {
+  const response: Record<string, any> = {
+    statusCode: 0,
+    headers: {},
+    body: "",
+    writeHead(statusCode: number, headers: Record<string, string>) {
+      this.statusCode = statusCode;
+      this.headers = headers;
+    },
+    end(body = "") {
+      this.body = String(body);
+    }
+  };
+  return {
+    response,
+    payload: () => JSON.parse(response.body)
   };
 }
 
@@ -86,5 +106,59 @@ describe("appearance preset store", () : any => {
     expect(listed.configs.map((config?: any) : any => config.id)).toEqual(["valid-preview"]);
     expect(listed.errors).toHaveLength(1);
     expect(listed.errors[0]).toContain("broken.json");
+    expect(listed.errors[0]).not.toContain(userDataPath);
+  });
+
+  it("projects only the logical directory and stable errors through the HTTP controller", async () : Promise<any> => {
+    const absoluteDirectory = path.join(userDataPath, "private-host-directory", "appearance-presets");
+    const catalog = {
+      listServerAppearancePresetConfigs: async () => ({ directory: absoluteDirectory, configs: [], errors: [] }),
+      importServerAppearancePresetConfig: async () => ({
+        directory: absoluteDirectory,
+        fileName: "agent-preview.json",
+        config: validPreset(),
+        configs: [validPreset()],
+        errors: []
+      }),
+      parseAppearancePresetConfigText: (value: string) => JSON.parse(value)
+    };
+    const handlers = createSystemControllerAppearancePresetHandlers({
+      parseJsonBody: () => ({ config: validPreset() }),
+      userDataPath,
+      appearancePresetCatalog: catalog
+    });
+
+    const listed = capturedJsonResponse();
+    await handlers.handleAppearancePresets({ response: listed.response });
+    expect(listed.response.statusCode).toBe(200);
+    expect(listed.payload().directory).toBe("appearance-presets");
+    expect(JSON.stringify(listed.payload())).not.toContain(absoluteDirectory);
+
+    const imported = capturedJsonResponse();
+    await handlers.handleImportAppearancePreset({
+      requestBody: Buffer.from("{}"),
+      response: imported.response
+    });
+    expect(imported.response.statusCode).toBe(200);
+    expect(imported.payload().directory).toBe("appearance-presets");
+    expect(JSON.stringify(imported.payload())).not.toContain(absoluteDirectory);
+
+    const failingHandlers = createSystemControllerAppearancePresetHandlers({
+      userDataPath,
+      appearancePresetCatalog: {
+        ...catalog,
+        listServerAppearancePresetConfigs: async () => {
+          throw new Error(`EACCES: denied at ${absoluteDirectory}`);
+        }
+      }
+    });
+    const failed = capturedJsonResponse();
+    await failingHandlers.handleAppearancePresets({ response: failed.response });
+    expect(failed.response.statusCode).toBe(503);
+    expect(failed.payload()).toMatchObject({
+      ok: false,
+      code: "appearance_preset_list_failed"
+    });
+    expect(JSON.stringify(failed.payload())).not.toContain(absoluteDirectory);
   });
 });

@@ -3,6 +3,7 @@
  * Enforces consistency between declared policy and signer presence.
  * Does not invent user-configuration defaults.
  */
+import { isDevelopmentMeshrixSignerSecret } from "../../../packages/foundation/src/proof/proof-substrate/constants.ts";
 
 const VALID_POLICIES: any = new Set<any>(["development", "production", ""]);
 
@@ -24,6 +25,13 @@ export function evaluateEvidencePolicyReadiness({
       ok: false,
       reason:
         `MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY must be "development" or "production", got "${policy}".`
+    };
+  }
+
+  if (policy === "production" && isDevelopmentMeshrixSignerSecret(secret)) {
+    return {
+      ok: false,
+      reason: "Production evidence policy rejects the development signer; configure a production signer."
     };
   }
 

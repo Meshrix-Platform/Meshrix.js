@@ -1,5 +1,7 @@
 import { sendJson } from "#meshrix/http-utils";
 
+const APPEARANCE_PRESET_DIRECTORY_LABEL = "appearance-presets";
+
 function parseBody(parseJsonBody?: any, requestBody?: any) : any {
   return requestBody?.length > 0 ? parseJsonBody(requestBody) : {};
 }
@@ -18,17 +20,19 @@ function isAppearancePresetConfigError(error?: any) : any {
   return error?.name === "AppearancePresetConfigError" && Array.isArray(error.errors);
 }
 
-function errorPayload(error?: any) : any {
+function errorPayload(error?: any, fallbackCode = "appearance_preset_operation_failed") : any {
   if (isAppearancePresetConfigError(error)) {
     return {
       ok: false,
-      error: error.message,
+      code: "appearance_preset_invalid",
+      error: "外观预设配置无效。",
       errors: error.errors
     };
   }
   return {
     ok: false,
-    error: error instanceof Error ? error.message : "Appearance preset import failed."
+    code: fallbackCode,
+    error: "外观预设操作暂时无法完成。"
   };
 }
 
@@ -39,7 +43,9 @@ function assertAppearancePresetCatalog(appearancePresetCatalog?: any) : any {
     typeof appearancePresetCatalog.importServerAppearancePresetConfig !== "function" ||
     typeof appearancePresetCatalog.parseAppearancePresetConfigText !== "function"
   ) {
-    throw new Error("Appearance preset catalog service is unavailable.");
+    throw Object.assign(new Error("Appearance preset catalog service is unavailable."), {
+      code: "appearance_preset_service_unavailable"
+    });
   }
 }
 
@@ -55,13 +61,13 @@ export function createSystemControllerAppearancePresetHandlers({
         const result: any = await appearancePresetCatalog.listServerAppearancePresetConfigs({ userDataPath });
         sendJson(response, 200, {
           ok: true,
-          directory: result.directory,
+          directory: APPEARANCE_PRESET_DIRECTORY_LABEL,
           configs: result.configs,
           presets: result.configs,
           errors: result.errors
         });
       } catch (error: any) {
-        sendJson(response, 503, errorPayload(error));
+        sendJson(response, 503, errorPayload(error, "appearance_preset_list_failed"));
       }
     },
 
@@ -75,7 +81,7 @@ export function createSystemControllerAppearancePresetHandlers({
         });
         sendJson(response, 200, {
           ok: true,
-          directory: result.directory,
+          directory: APPEARANCE_PRESET_DIRECTORY_LABEL,
           fileName: result.fileName,
           config: result.config,
           configs: result.configs,
@@ -83,8 +89,13 @@ export function createSystemControllerAppearancePresetHandlers({
           errors: result.errors
         });
       } catch (error: any) {
-        const status: any = error?.message === "Appearance preset catalog service is unavailable." ? 503 : 400;
-        sendJson(response, status, errorPayload(error));
+        const validationError = isAppearancePresetConfigError(error);
+        const serviceUnavailable = error?.code === "appearance_preset_service_unavailable";
+        const status = validationError ? 400 : serviceUnavailable ? 503 : 500;
+        sendJson(response, status, errorPayload(
+          error,
+          serviceUnavailable ? "appearance_preset_service_unavailable" : "appearance_preset_import_failed"
+        ));
       }
     }
   };

@@ -62,13 +62,25 @@ export function workspaceFileSnapshotFromCheckpointPlan(plan: Record<string, any
   };
 }
 
+function publicWorkspaceFileRestoreError(status: number): string {
+  if (status === 403) return "The workspace is not available for checkpoint restore.";
+  if (status === 404) return "The checkpoint workspace could not be found.";
+  if (status === 409) return "The workspace changed since this checkpoint. Refresh and try again.";
+  if (status >= 500) return "Workspace file restore is temporarily unavailable.";
+  return "The checkpoint does not contain a usable workspace file snapshot.";
+}
+
 export async function runCheckpointWorkspaceFileRestore({ plan, input = {}, context = {}, dryRun }: Record<string, any>) : Promise<any> {
   const restoreTarget: any = workspaceFileSnapshotFromCheckpointPlan(plan, input);
   if (!restoreTarget) {
     return null;
   }
   if (!restoreTarget.workspaceId) {
-    return result(400, { error: "checkpoint 文件快照缺少 workspaceId。" });
+    return result(400, {
+      ok: false,
+      code: "workspace_checkpoint_snapshot_invalid",
+      error: "The checkpoint does not identify a workspace."
+    });
   }
   const { method, error } = requireAgentWorkspaceMethod(
     context.agentWorkspace,
@@ -76,7 +88,11 @@ export async function runCheckpointWorkspaceFileRestore({ plan, input = {}, cont
     "工作空间文件恢复接口不可用。"
   );
   if (error) {
-    return error;
+    return result(error.status || 503, {
+      ok: false,
+      code: "workspace_file_restore_unavailable",
+      error: "Workspace file restore is temporarily unavailable."
+    });
   }
   const operationResult: any = await method({
     ...input,
@@ -88,7 +104,18 @@ export async function runCheckpointWorkspaceFileRestore({ plan, input = {}, cont
     actor: actorFrom(context.authSession, input),
     ...workspaceAccessOptions(context.authSession)
   });
-  return result(operationResult.ok ? 200 : operationResult.status || 400, operationResult);
+  if (operationResult?.ok !== true) {
+    const requestedStatus = Number(operationResult?.status || 400);
+    const status = Number.isInteger(requestedStatus) && requestedStatus >= 400 && requestedStatus <= 599
+      ? requestedStatus
+      : 400;
+    return result(status, {
+      ok: false,
+      code: "workspace_file_restore_failed",
+      error: publicWorkspaceFileRestoreError(status)
+    });
+  }
+  return result(200, operationResult);
 }
 
 export function applyWorkspaceRuntimeContext(payload: Record<string, any> = {}, agentWorkspace: any = null, options: Record<string, any> = {}) : any {

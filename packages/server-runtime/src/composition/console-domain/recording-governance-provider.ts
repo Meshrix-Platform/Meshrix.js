@@ -62,18 +62,30 @@ function classifiedPolicyError(error: unknown): RecordingGovernanceError {
   const message = error instanceof Error ? error.message : String(error || "");
   if (error instanceof RecordingGovernanceError) return error;
   if (error instanceof RecordingSinkError) {
-    return new RecordingGovernanceError(error.code, message);
+    return new RecordingGovernanceError(error.code, "Recording storage operation failed.");
   }
   if (message.startsWith("RECORDING_POLICY_IDENTITY_CHANGED")) {
-    return new RecordingGovernanceError("recording_policy_identity_changed", message);
+    return new RecordingGovernanceError(
+      "recording_policy_identity_changed",
+      "The recording policy identity cannot be changed."
+    );
   }
   if (message.startsWith("RECORDING_POLICY_REVISION_NOT_ADVANCED")) {
-    return new RecordingGovernanceError("recording_policy_revision_not_advanced", message);
+    return new RecordingGovernanceError(
+      "recording_policy_revision_not_advanced",
+      "The next policy revision must advance."
+    );
   }
   if (message.startsWith("RECORDING_POLICY_CHANGE_DENIED")) {
-    return new RecordingGovernanceError("recording_policy_change_denied", message);
+    return new RecordingGovernanceError(
+      "recording_policy_change_denied",
+      "The current role cannot change the recording policy."
+    );
   }
-  return new RecordingGovernanceError("recording_policy_invalid", message);
+  return new RecordingGovernanceError(
+    "recording_governance_unavailable",
+    "Recording governance is temporarily unavailable."
+  );
 }
 
 export function normalizeRecordingTenantId(value?: unknown): string {
@@ -141,6 +153,7 @@ export function createRecordingGovernanceProvider(options: Record<string, unknow
   const sinkOptions = isPlainObjectInput(options.sink) ? options.sink : {};
   const policyOptions = isPlainObjectInput(options.policy) ? options.policy : {};
   const reservationTtlMs = options.reservationTtlMs;
+  const retentionSweepMs = options.retentionSweepMs;
   const stores = new Map<string, any>();
 
   function genesisPolicy(): UnknownRecord {
@@ -191,7 +204,8 @@ export function createRecordingGovernanceProvider(options: Record<string, unknow
             sink: defaultSink(),
             ...(persisted ? {} : { policy: genesisPolicy() }),
             now,
-            ...(reservationTtlMs === undefined ? {} : { reservationTtlMs })
+            ...(reservationTtlMs === undefined ? {} : { reservationTtlMs }),
+            ...(retentionSweepMs === undefined ? {} : { retentionSweepMs })
           });
     } catch (error: unknown) {
       throw classifiedPolicyError(error);
@@ -204,9 +218,13 @@ export function createRecordingGovernanceProvider(options: Record<string, unknow
     return {
       custody: "enterprise_local",
       durable: true,
-      decryptionAuthority: "organization",
-      decryptionAuthorityNote:
-        "Recorded content decryption and audit access are controlled by the organization at its own key boundary; this console never holds or derives decryption material."
+      // Truthful custody: recorded bytes are unencrypted private files under
+      // this deployment's recording root (owner-only permissions). The
+      // operating organization — and anyone with filesystem access to the
+      // recording root — can read them; no separate key boundary exists.
+      contentAccess: "organization",
+      contentAccessNote:
+        "Recorded content is stored unencrypted in private local files under this deployment's recording root. The operating organization and its filesystem administrators can read recorded content; no separate encryption or key boundary exists."
     };
   }
 
@@ -313,7 +331,8 @@ export function createRecordingGovernanceProvider(options: Record<string, unknow
       } catch (error: unknown) {
         health.integrity = {
           intact: false,
-          error: error instanceof Error ? error.message : String(error || "")
+          errorCode: "recording_integrity_check_failed",
+          error: "Recording integrity verification failed."
         };
       }
     }

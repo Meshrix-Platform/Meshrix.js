@@ -41,6 +41,8 @@ import { createProtocolEventBus } from "../../../packages/protocols/pubsub/event
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { createOperationProofSubstrate } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
 import { createOperationAuditStore } from "../../../packages/foundation/src/security/operation-audit.ts";
+import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+import { operationAuditTestProjectionOptions } from "./support/operation-audit-test-key.ts";
 import { RELEASE_JOURNEY_FIXTURE_BYTES } from "../../../tools/server-scripts/lib/release-journey-fixture.ts";
 
 const POSIX: any = process.platform !== "win32";
@@ -412,7 +414,10 @@ itPosix("accepts a scoped API key raw PUT through the registered HTTP dispatcher
     })
   };
   const proofSubstrate: any = createOperationProofSubstrate({ userDataPath: fixture.root });
-  const operationAuditStore: any = createOperationAuditStore({ userDataPath: fixture.root });
+  const operationAuditStore: any = createOperationAuditStore({
+    userDataPath: fixture.root,
+    ...operationAuditTestProjectionOptions(fixture.root)
+  });
   resourceClosers.push(async () : Promise<any> => {
     proofSubstrate.close();
     operationAuditStore.close();
@@ -1496,6 +1501,7 @@ describe("upload opaque no-exec custody", () : any => {
     const root: any = await tempRoot();
     const composition: any = await createServerCompositionRoot({
       userDataPath: root,
+      secretKeyProvider: createMemoryLocalSecretKeyProvider(),
       runtimeLogger: {
         debug() : any {},
         error() : any {},

@@ -67,6 +67,41 @@ describe("jobs controller access default deny", () : any => {
     expect(canAccessJob(JOB, scopedApiKeySession())).toBe(true);
   });
 
+  it("denies implicit owner matches across tenants but keeps explicit shares and global administrators", () : any => {
+    const privateJob: Record<string, any> = {
+      ...JOB,
+      id: "job-cross-tenant",
+      ownerSubjectId: "shared-identity",
+      ownerUserId: "shared-identity",
+      ownerUsername: "same-name",
+      ownerTenantId: "tenant-b",
+      workspaceId: "workspace-b"
+    };
+    const otherTenantSession: Record<string, any> = {
+      user: {
+        subjectId: "shared-identity",
+        userId: "shared-identity",
+        username: "same-name",
+        tenantId: "tenant-a",
+        allowedWorkspaceIds: []
+      }
+    };
+
+    expect(canAccessJob(privateJob, otherTenantSession)).toBe(false);
+    expect(canAccessJob(privateJob, {
+      user: { userId: "other-user", username: "same-name" }
+    })).toBe(false);
+    expect(canAccessJob(privateJob, {
+      user: { ...otherTenantSession.user, allowedJobIds: [privateJob.id] }
+    })).toBe(true);
+    expect(canAccessJob(privateJob, {
+      user: { ...otherTenantSession.user, allowedWorkspaceIds: [privateJob.workspaceId] }
+    })).toBe(true);
+    expect(canAccessJob(privateJob, {
+      user: { ...otherTenantSession.user, roleId: "owner" }
+    })).toBe(true);
+  });
+
   it("denies a raw object when identity is absent and keeps bound API Key access", async () : Promise<any> => {
     const rawObjectEntry: Record<string, any> = {
       rawObject: {

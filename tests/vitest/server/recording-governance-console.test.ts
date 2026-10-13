@@ -111,7 +111,7 @@ describe("recording governance provider", (): any => {
     expect(Object.keys(snapshot.policy.categories)).toHaveLength(0);
     expect(snapshot.sink.custody).toBe("enterprise_local");
     expect(snapshot.sink.durable).toBe(true);
-    expect(snapshot.authority.decryptionAuthority).toBe("organization");
+    expect(snapshot.authority.contentAccess).toBe("organization");
     expect(snapshot.sinkState.available).toBe(true);
     expect(snapshot.pendingObligations).toEqual([]);
   });
@@ -260,7 +260,7 @@ describe("recording governance executor", (): any => {
     });
     expect(out.status).toBe(200);
     expect(out.payload.snapshot.policy.policyRevision).toBe(1);
-    expect(out.payload.snapshot.authority.decryptionAuthority).toBe("organization");
+    expect(out.payload.snapshot.authority.contentAccess).toBe("organization");
     expect(out.payload.snapshot.sink.custody).toBe("enterprise_local");
   });
 
@@ -380,6 +380,27 @@ describe("recording governance executor", (): any => {
     expect(out.payload.code).toBe("recording_policy_invalid");
   });
 
+  it("maps storage initialization errors to stable public errors", async (): Promise<any> => {
+    const diagnosticNeedle = "synthetic-private-recording-root";
+    const provider = makeProvider({
+      sinkFactory: () => {
+        throw Object.assign(new Error(`EACCES: denied at ${diagnosticNeedle}`), { code: "ENOENT" });
+      }
+    });
+    const out = await executeRecordingGovernanceOperation({
+      operationId: "recording_governance.policy.get",
+      input: {},
+      context: context(provider, session(["recording:read"]))
+    });
+
+    expect(out.status).toBe(503);
+    expect(out.payload).toMatchObject({
+      code: "recording_governance_unavailable",
+      error: "Recording governance is temporarily unavailable."
+    });
+    expect(JSON.stringify(out.payload)).not.toContain(diagnosticNeedle);
+  });
+
   it("reports sink health with custody and capacity truth", async (): Promise<any> => {
     const provider = makeProvider();
     const out = await executeRecordingGovernanceOperation({
@@ -390,7 +411,7 @@ describe("recording governance executor", (): any => {
     expect(out.status).toBe(200);
     expect(out.payload.health.state.available).toBe(true);
     expect(out.payload.health.sink.custody).toBe("enterprise_local");
-    expect(out.payload.health.authority.decryptionAuthority).toBe("organization");
+    expect(out.payload.health.authority.contentAccess).toBe("organization");
     expect(out.payload.health.integrity.intact).toBe(true);
     expect(out.payload.health.policyRevision).toBe(1);
   });

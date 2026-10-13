@@ -136,7 +136,7 @@ export function createOperationPermissionHttpRouter({
     return String(user.userId || user.subjectId || user.username || user.roleId || "console").trim() || "console";
   }
 
-  async function handleOperationPermissionHttpRequest({ request, response, requestBody, url, method, signal = null }: Record<string, any>) : Promise<any> {
+  async function handleOperationPermissionHttpRequest({ request, response, requestBody, url, method, signal = null, serverAudience = "" }: Record<string, any>) : Promise<any> {
     const isOperationPermissionRequest: any = url.pathname.startsWith(OPERATION_PERMISSION_API_PREFIX);
     if (!isOperationPermissionRequest) {
       return false;
@@ -224,14 +224,21 @@ export function createOperationPermissionHttpRouter({
           });
         }
       }
-      const requestHost: any = String(request?.headers?.host || request?.headers?.[":authority"] || "")
-        .split(",")[0]
-        .trim();
+      const configuredServerAudience = String(serverAudience || "").trim();
+      if (!configuredServerAudience) {
+        return complete(503, {
+          schemaVersion: "v0.0.1:schema:definition-1",
+          error: {
+            code: "api_key_audience_unavailable",
+            message: "The configured API Key audience is unavailable."
+          }
+        });
+      }
       return complete(200, {
         schemaVersion: "v0.0.1:schema:definition-1",
         ...scopes,
         mcpToolSelection,
-        ...(requestHost ? { serverAudience: requestHost } : {})
+        serverAudience: configuredServerAudience
       });
     }
 
@@ -252,8 +259,37 @@ export function createOperationPermissionHttpRouter({
       const payload: any = parseJsonBody(requestBody);
       const authorization: any = await requireConsole(request, response, normalizedMethod, url, ["console:read"], payload);
       if (!authorization) return true;
+      const configuredServerAudience = String(serverAudience || "").trim();
+      if (!configuredServerAudience) {
+        return complete(503, {
+          schemaVersion: "v0.0.1:schema:definition-1",
+          error: {
+            code: "api_key_audience_unavailable",
+            message: "The configured API Key audience is unavailable."
+          }
+        });
+      }
+      const policy = plainObject(payload.policy);
+      const audience = plainObject(policy.audience);
+      const suppliedAudience = String(audience.serverAudience || "").trim();
+      if (suppliedAudience && suppliedAudience !== configuredServerAudience) {
+        return complete(400, {
+          schemaVersion: "v0.0.1:schema:definition-1",
+          error: {
+            code: "api_key_audience_mismatch",
+            message: "The API Key audience must match this service's configured origin."
+          }
+        });
+      }
       const result: any = await platform.apiKeyDistributionProvider.create({
         ...payload,
+        policy: {
+          ...policy,
+          audience: {
+            ...audience,
+            serverAudience: configuredServerAudience
+          }
+        },
         subjectId: resolvedByFromAuthorization(authorization)
       });
       return completeOneTimeApiKey(201, { schemaVersion: "v0.0.1:schema:definition-1", ...result });
@@ -264,6 +300,15 @@ export function createOperationPermissionHttpRouter({
       const payload: any = parseJsonBody(requestBody);
       const authorization: any = await requireConsole(request, response, normalizedMethod, url, ["console:read"], payload);
       if (!authorization) return true;
+      if (!String(serverAudience || "").trim()) {
+        return complete(503, {
+          schemaVersion: "v0.0.1:schema:definition-1",
+          error: {
+            code: "api_key_audience_unavailable",
+            message: "The configured API Key audience is unavailable."
+          }
+        });
+      }
       const result: any = await platform.apiKeyDistributionProvider.rotate({
         ...payload,
         keyId: decodeURIComponent(apiKeyRotateMatch[1]),

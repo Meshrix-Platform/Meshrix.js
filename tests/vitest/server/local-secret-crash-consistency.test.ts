@@ -39,12 +39,14 @@ const target: Readonly<Record<string, any>> = Object.freeze({
     serviceId: "fixture-service",
     scopes: ["fixture:read"],
     allowedHosts: ["service.example.test"],
-    allowedProtocols: ["https"]
+    allowedProtocols: ["https"],
+    allowedOrigins: ["https://service.example.test"]
   }
 });
 const expectedScope: Readonly<Record<string, any>> = Object.freeze({
   serviceId: "fixture-service",
   requiredScopes: ["fixture:read"],
+  origin: "https://service.example.test",
   host: "service.example.test",
   protocol: "https"
 });

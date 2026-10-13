@@ -11,6 +11,7 @@ import {
   createMeshrixSignerKeyRing,
   createOperationProofSubstrate
 } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
+import { DEVELOPMENT_MESHRIX_SIGNER_SECRET } from "../../../packages/foundation/src/proof/proof-substrate/constants.ts";
 
 describe("operation proof evidence policy readiness", () : any => {
   it("signs with the active generation and verifies retained historical generations", async () : Promise<any> => {
@@ -71,6 +72,15 @@ describe("operation proof evidence policy readiness", () : any => {
     })).not.toThrow();
   });
 
+  it("rejects the development signer in production preflight", () : any => {
+    const result: any = evaluateEvidencePolicyReadiness({
+      evidencePolicy: "production",
+      signerSecret: DEVELOPMENT_MESHRIX_SIGNER_SECRET
+    });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/rejects the development signer/u);
+  });
+
   it("passes for development policy without a signer", () : any => {
     expect(evaluateEvidencePolicyReadiness({
       evidencePolicy: "development",
@@ -102,6 +112,29 @@ describe("operation proof evidence policy readiness", () : any => {
     })).toThrowError(expect.objectContaining({
       code: "operation_proof_signer_required"
     }));
+  });
+
+  it("rejects the public development signer in production configuration", () : any => {
+    expect(() : any => createOperationProofSubstrate({
+      dataDir: path.join(os.tmpdir(), "meshrix-proof-development-secret-unused"),
+      evidencePolicy: "production",
+      signerSecret: DEVELOPMENT_MESHRIX_SIGNER_SECRET
+    })).toThrowError(expect.objectContaining({
+      code: "operation_proof_signer_development_secret"
+    }));
+
+    const developmentSigner: any = createMeshrixSigner();
+    try {
+      expect(() : any => createOperationProofSubstrate({
+        dataDir: path.join(os.tmpdir(), "meshrix-proof-development-signer-unused"),
+        evidencePolicy: "production",
+        signer: developmentSigner
+      })).toThrowError(expect.objectContaining({
+        code: "operation_proof_signer_development_secret"
+      }));
+    } finally {
+      developmentSigner.close();
+    }
   });
 
   it("loads a production signer from external file custody and rejects in-data custody", async () : Promise<any> => {

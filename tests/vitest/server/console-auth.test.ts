@@ -1,5 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
+import { MemoryLockManager } from "@meshrix/foundation/concurrency/lock-manager";
+import { createOperationProofSubstrate } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
+import { createOperationRouteIndex } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
+import * as authSupport from "../../../packages/foundation/src/security/auth/console-auth-support.ts";
+import { createSystemController } from "../../../packages/protocols/http/controllers/system-controller.ts";
+import { dispatchRegisteredHttpOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
+import { dispatchRpcOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-rpc.ts";
+import { createCapturedResponse, parseCapturedResult } from "../../../packages/server-runtime/src/composition/dispatch-operation-captured-response.ts";
+import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
+import { executeConsoleAuthOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/console-auth-executor.ts";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -83,6 +93,20 @@ function credentialFor(label?: any) : any {
   return [label, "fixture", "credential"].join("-");
 }
 
+function collectObjectKeys(value: unknown, keys = new Set<string>()) : Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) collectObjectKeys(item, keys);
+    return keys;
+  }
+  if (value && typeof value === "object") {
+    for (const [key, child] of Object.entries(value)) {
+      keys.add(key);
+      collectObjectKeys(child, keys);
+    }
+  }
+  return keys;
+}
+
 const PLUGIN_FEATURE_SCOPE_GRANTS: Readonly<Record<string, any>> = Object.freeze({
   "sample-feature": Object.freeze({
     maintainer: ["sample_plugin:read", "sample_plugin:write"],
@@ -106,6 +130,40 @@ describe("console auth boundary behavior", () : any => {
       await expect(auth.ensureInitialOwner({ username: "owner", password: credentialFor("replacement") }))
         .resolves.toEqual({ created: false });
       await expect(auth.login({ username: "owner", password }, makeRequest())).resolves.toBeTruthy();
+    });
+  });
+
+  it("blocks common passwords only when credentials are created or reset", async () : Promise<any> => {
+    await withTempAuth(async (auth?: any) : Promise<any> => {
+      await expect(auth.ensureInitialOwner({ username: "owner", password: "Password123" }))
+        .rejects.toThrow(/密码过于常见/u);
+      await expect(auth.createUser({ username: "new-user", password: "Welcome1234" }))
+        .rejects.toThrow(/密码过于常见/u);
+      expect(auth.listUsers()).toHaveLength(0);
+
+      const strongPassword = credentialFor("password-manager-owner");
+      const initial: any = await auth.ensureInitialOwner({ username: "owner", password: strongPassword });
+      await expect(auth.updateUser(initial.user.userId, { newPassword: "QwertyUiop" }))
+        .rejects.toThrow(/密码过于常见/u);
+      await expect(auth.login({ username: "owner", password: strongPassword }, makeRequest()))
+        .resolves.toMatchObject({ session: { user: { username: "owner" } } });
+
+      const legacyPassword = "Password123";
+      const legacyCredential = await authSupport.hashPassword(legacyPassword);
+      auth.db.prepare(`
+        INSERT INTO console_users (
+          user_id, username, password_hash, salt, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        "legacy-weak-password-fixture",
+        "legacy-user",
+        legacyCredential.passwordHash,
+        legacyCredential.salt,
+        new Date().toISOString(),
+        new Date().toISOString()
+      );
+      await expect(auth.login({ username: "legacy-user", password: legacyPassword }, makeRequest()))
+        .resolves.toMatchObject({ session: { user: { username: "legacy-user" } } });
     });
   });
 
@@ -324,6 +382,72 @@ describe("console auth boundary behavior", () : any => {
     });
   });
 
+  it("omits oidc and role policy from an anonymous session summary", async () : Promise<any> => {
+    await withTempAuth(async (auth?: any) : Promise<any> => {
+      const initial: any = await auth.ensureInitialOwner();
+      auth.setOidcConfig({
+        enabled: true,
+        issuer: "https://issuer.example.invalid",
+        clientId: "console-client",
+        redirectUri: "https://console.example.invalid/oidc/callback",
+        allowedDomains: ["example.invalid"],
+        roleMapping: { group: "owner" }
+      });
+
+      const anonymous: any = auth.getSummary(makeRequest());
+      expect(anonymous.session).toMatchObject({ authenticated: false, user: null });
+      expect(anonymous).not.toHaveProperty("roles");
+      expect(anonymous).not.toHaveProperty("oidc");
+      const anonymousKeys: any = collectObjectKeys(anonymous);
+      expect(anonymousKeys.has("oidc")).toBe(false);
+      expect(anonymousKeys.has("scopes")).toBe(false);
+      expect(anonymousKeys.has("resourcePolicies")).toBe(false);
+      expect(JSON.stringify(anonymous)).not.toContain("issuer.example.invalid");
+      expect(JSON.stringify(anonymous)).not.toContain("console-client");
+      expect(auth.getOidcConfig()).toMatchObject({
+        enabled: true,
+        issuer: "https://issuer.example.invalid",
+        clientId: "console-client"
+      });
+
+      const viewer: any = await auth.createUser({
+        username: "session.viewer",
+        password: credentialFor("session-viewer"),
+        roleId: "viewer"
+      });
+      const viewerLogin: any = await auth.login({
+        username: viewer.username,
+        password: credentialFor("session-viewer")
+      }, makeRequest());
+      const viewerSummary: any = auth.getSummary(makeRequest({
+        cookie: authCookieHeader(viewerLogin)
+      }));
+      expect(viewerSummary).not.toHaveProperty("oidc");
+      expect(viewerSummary.roles).toHaveLength(3);
+      expect(viewerSummary.roles).toEqual(expect.arrayContaining([
+        { roleId: "owner", label: "Owner" },
+        { roleId: "maintainer", label: "Maintainer" },
+        { roleId: "viewer", label: "Viewer" }
+      ]));
+      for (const role of viewerSummary.roles) {
+        expect(Object.keys(role).sort()).toEqual(["label", "roleId"]);
+      }
+
+      const ownerLogin: any = await auth.login({
+        username: initial.username,
+        password: initial.password
+      }, makeRequest());
+      const ownerSummary: any = auth.getSummary(makeRequest({
+        cookie: authCookieHeader(ownerLogin)
+      }));
+      expect(collectObjectKeys(ownerSummary).has("oidc")).toBe(false);
+      expect(ownerSummary.roles.find((role?: any) : any => role.roleId === "owner")?.scopes)
+        .toContain("auth:admin");
+      expect(ownerSummary.roles.find((role?: any) : any => role.roleId === "viewer"))
+        .toHaveProperty("resourcePolicies");
+    });
+  });
+
   it("reuses one request session snapshot and coalesces activity writes", async () : Promise<any> => {
     await withTempAuth(async (auth?: any) : Promise<any> => {
       const initial: any = await auth.ensureInitialOwner();
@@ -428,29 +552,96 @@ describe("console auth boundary behavior", () : any => {
     });
   });
 
-  it("records concurrent password failures atomically and cannot bypass account lockout", async () : Promise<any> => {
-    await withTempAuth(async (auth?: any) : Promise<any> => {
-      const initial: any = await auth.ensureInitialOwner();
-      const attempts: any = await Promise.allSettled(
-        Array.from({ length: 10 }, () : any => auth.login({
-          username: initial.username,
-          password: credentialFor("concurrent-wrong")
-        }, makeRequest()))
-      );
+  it("does not let ten concurrent guesses lock a known account or another user", async () => {
+    await withTempAuth(async (auth: any) => {
+      const initial = await auth.ensureInitialOwner();
+      const attempts = await Promise.allSettled(Array.from({ length: 10 }, () => auth.login({
+        username: initial.username, password: credentialFor("concurrent-wrong")
+      }, makeRequest({ remoteAddress: "10.0.0.21" }))));
+      expect(attempts.every(({ status }) => status === "rejected")).toBe(true);
+      const ok = await auth.login({ username: initial.username, password: initial.password }, makeRequest({ remoteAddress: "10.0.0.21" }));
+      expect(ok.session?.user?.username).toBe(initial.username);
+      expect(auth.listSessions()).toHaveLength(1);
+    });
+  });
 
-      expect(attempts.every(({ status }: Record<string, any>) : any => status === "rejected")).toBe(true);
-      const row: any = auth.db.prepare(`
-        SELECT failed_attempts, locked_until
-        FROM console_users
-        WHERE username = ?
-      `).get(initial.username);
-      expect(row.failed_attempts).toBe(0);
-      expect(Date.parse(row.locked_until)).toBeGreaterThan(Date.now());
-      await expect(auth.login({
-        username: initial.username,
-        password: initial.password
-      }, makeRequest())).rejects.toThrow("账户已被临时锁定");
-      expect(auth.listSessions()).toHaveLength(0);
+  it("recovers after nine mistakes on the same source and ignores historical account locks", async () => {
+    await withTempAuth(async (auth: any, userDataPath: string) => {
+      const initial = await auth.ensureInitialOwner();
+      const request = makeRequest({ remoteAddress: "10.0.0.31" });
+      for (let index = 0; index < 9; index++) {
+        await expect(auth.login({ username: initial.username, password: credentialFor("mistake") }, request)).rejects.toThrow("用户名或密码错误。");
+      }
+      auth.db.exec("ALTER TABLE console_users ADD COLUMN locked_until TEXT NOT NULL DEFAULT ''; ALTER TABLE console_users ADD COLUMN failed_attempts INTEGER NOT NULL DEFAULT 0");
+      auth.db.prepare("UPDATE console_users SET locked_until = ?, failed_attempts = 10 WHERE username = ?")
+        .run("2099-01-01T00:00:00.000Z", initial.username);
+      const ok = await auth.login({ username: initial.username, password: initial.password }, request);
+      expect(ok.session?.user?.username).toBe(initial.username);
+      await auth.close();
+      const reopened = createConsoleAuth({ userDataPath, tagManagementStore: auth.tagManagementStore });
+      try {
+        const restored: any = await reopened.login({ username: initial.username, password: initial.password }, request);
+        expect(restored.session.user.username).toBe(initial.username);
+        expect(reopened.db.prepare("SELECT locked_until FROM console_users WHERE username = ?").get(initial.username).locked_until).toBe("2099-01-01T00:00:00.000Z");
+      } finally { await reopened.close(); }
+    });
+  });
+
+  it("unifies real HTTP/RPC login routes, denies before scrypt and restores cookies/retry", async () => {
+    await withTempAuth(async (auth: any, userDataPath: string) => {
+      const initial = await auth.ensureInitialOwner();
+      const proof = createOperationProofSubstrate({ dataDir: path.join(userDataPath, "proof-fixture"), signerSecret: "synthetic-test-signer-material".repeat(3), evidencePolicy: "development" });
+      const lockManager = new MemoryLockManager();
+      const controllers = { system: createSystemController({ userDataPath, securityPermissions: auth,
+        consoleDomainServices: { executeConsoleDomainOperation: executeConsoleAuthOperation, uploadSessionStore: { resolveUploadSessionFiles() {}, deleteUploadSession() {} } },
+        settingsPort: { loadSettings: () => ({}), saveSettings: () => {}, normalizeSettings: (value: any) => value, getSettingsPath: () => "" },
+        discoveryPort: { saveDiscoveryConfig: () => {} }, getListenUrl: () => "http://console.local", getDiscoveryState: () => ({})
+      }) };
+      const logger = { debug() {}, info() {}, warn() {}, error() {} };
+      const invoke = async (rpc: boolean, password: string, username = initial.username) => {
+        const request: any = makeRequest({ remoteAddress: "10.0.0.51", method: "POST" });
+        request.url = rpc ? "/api/rpc" : "/api/auth/login";
+        const response = createCapturedResponse();
+        const input = { username, password };
+        const common = { operations: SERVER_API_OPERATIONS, routeIndex: createOperationRouteIndex(SERVER_API_OPERATIONS), controllers, request, response,
+          authorizeOperation: (value: any) => auth.authorizeOperation(value), operationProofSubstrate: proof, lockManager, logger, concurrencyScope: "login-budget-production" };
+        if (rpc) await dispatchRpcOperation({ ...common, requestBody: Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "auth.login", params: input })) });
+        else await dispatchRegisteredHttpOperation({ ...common, method: "POST", url: new URL("http://console.local/api/auth/login"), requestBody: Buffer.from(JSON.stringify(input)) });
+        return { response, payload: parseCapturedResult({ captured: response, operation: {} }) };
+      };
+      const started = Date.now();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(started);
+      try {
+        for (let index = 0; index < 40; index++) {
+          const result = await invoke(Boolean(index % 2), credentialFor("budget-wrong"), index % 3 ? initial.username : "missing-user");
+          expect(index % 2 ? result.payload.error?.code : result.response.statusCode, `transport index ${index}`).toBe(401);
+        }
+        const verify = vi.spyOn(authSupport, "verifyPassword");
+        const rejected = await invoke(true, initial.password);
+        expect(rejected.payload.error?.code).toBe(429);
+        expect(rejected.response.getHeader("Retry-After")).toBe("60");
+        expect(verify).not.toHaveBeenCalled();
+        verify.mockRestore();
+        vi.setSystemTime(started + 60_001);
+        const recovered = await invoke(true, initial.password);
+        expect(recovered.payload.error).toBeUndefined();
+        expect(recovered.payload.result.session?.user?.username).toBe(initial.username);
+        expect(recovered.response.getHeader("Set-Cookie")).toHaveLength(2);
+      } finally { vi.useRealTimers(); await lockManager.destroy(); await proof.close(); }
+    });
+  });
+
+  it("does not charge successful shared-NAT users against the guessing quota", async () => {
+    await withTempAuth(async (auth: any) => {
+      const initial = await auth.ensureInitialOwner();
+      const peer = await auth.createUser({ username: "nat.peer", password: credentialFor("nat-peer"), roleId: "viewer" });
+      const request = makeRequest({ remoteAddress: "10.0.0.61" });
+      for (let index = 0; index < 45; index++) {
+        const result = await auth.login(index % 2 ? { username: peer.username, password: credentialFor("nat-peer") } : { username: initial.username, password: initial.password }, request);
+        expect(result.session?.user).toBeTruthy();
+      }
+      expect(auth.listSessions().length).toBeGreaterThan(40);
     });
   });
 
@@ -859,6 +1050,32 @@ describe("console auth boundary behavior", () : any => {
       }
       expect(auth.listAudit({ limit: 0 }).length).toBeGreaterThanOrEqual(1);
       expect(auth.roleList().map((role?: any) : any => role.roleId)).toContain("owner");
+    });
+  });
+
+  it("removes expired Console audit rows while retaining recent events", async () : Promise<any> => {
+    await withTempAuth(async (auth?: any) : Promise<any> => {
+      await auth.ensureInitialOwner({
+        username: "owner",
+        password: credentialFor("audit-retention-owner")
+      });
+      const expiredAuditId = "fixture-expired-console-audit";
+      auth.db.prepare(`
+        INSERT INTO console_audit_log (audit_id, created_at)
+        VALUES (?, ?)
+      `).run(expiredAuditId, new Date(Date.now() - 91 * 24 * 60 * 60 * 1000).toISOString());
+
+      auth.audit({
+        operationId: "console.audit.retention.fixture",
+        action: "read",
+        status: "ok"
+      });
+
+      expect(auth.db.prepare(`
+        SELECT audit_id FROM console_audit_log WHERE audit_id = ?
+      `).get(expiredAuditId)).toBeUndefined();
+      expect(auth.listAudit().some((item?: any) : any => item.operationId === "console.audit.retention.fixture"))
+        .toBe(true);
     });
   });
 

@@ -10,6 +10,7 @@ import {
 import {
   assertServerToken,
   hashClientString,
+  isServerToken,
   serverToken
 } from "#meshrix/client-strings";
 import { queueStateMutation } from "#meshrix/state-coordinator";
@@ -87,6 +88,7 @@ interface UploadSessionStore {
   createOrResumeUploadSession(input?: Omit<CreateUploadSessionInput, "userDataPath" | "custodyPort" | "custodyDescribe">): Promise<UnknownRecord>;
   appendUploadSessionChunk(input?: Omit<AppendUploadSessionInput, "userDataPath" | "custodyPort" | "custodyDescribe">): Promise<UnknownRecord>;
   getUploadSession(sessionId: string, options?: SessionOptions): Promise<unknown>;
+  hasUploadSessionOwnerAccess(sessionId: string, options?: Pick<SessionOptions, "owner">): Promise<boolean>;
   resolveUploadSessionFiles(sessionId: string, options?: SessionOptions): Promise<unknown>;
   buildCheckpointReceiptFromUploadSession(sessionId: string, options?: SessionOptions): Promise<unknown>;
   deleteUploadSession(sessionId: string): Promise<void>;
@@ -638,6 +640,17 @@ export async function getUploadSession(userDataPath: string, sessionId: string, 
   );
 }
 
+export async function hasUploadSessionOwnerAccess(
+  userDataPath: string,
+  sessionId: string,
+  ownerInput: unknown
+): Promise<boolean> {
+  if (!isServerToken(sessionId, "upload_session")) return false;
+  const meta = await loadSessionMeta(userDataPath, sessionId);
+  if (!meta) return false;
+  return uploadSessionOwnerAccess(meta, normalizeUploadSessionOwner(ownerInput)).ok;
+}
+
 export async function appendUploadSessionChunk({
   userDataPath,
   custodyPort,
@@ -1122,6 +1135,9 @@ export function createUploadSessionStore({
         ...options,
         custodyDescribe: describeCustody
       });
+    },
+    hasUploadSessionOwnerAccess(sessionId: string, options: Pick<SessionOptions, "owner"> = {}) {
+      return hasUploadSessionOwnerAccess(root, sessionId, options.owner);
     },
     resolveUploadSessionFiles(sessionId: string, options: SessionOptions = {}) {
       return resolveUploadSessionFiles(root, sessionId, {

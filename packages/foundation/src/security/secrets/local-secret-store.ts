@@ -21,14 +21,18 @@ import {
 } from "./local-secret-key-provider.ts";
 
 export const LOCAL_SECRET_STORE_VERSION = "v0.0.1:risk-control:local-secret-store-2";
+const OPERATION_AUDIT_PROJECTION_SECRET_REF = "secret://meshrix/system/operation-audit-projection";
+const OPERATION_AUDIT_PROJECTION_SEED_SCOPE = "internal:operation-audit-projection";
+const OPERATION_AUDIT_PROJECTION_SALT = "meshrix.js/operation-audit-projection/salt/v1";
+const OPERATION_AUDIT_PROJECTION_INFO = "meshrix.js/operation-audit-projection/key/v1";
 
 const TARGET_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
 const SECRET_REF_PATTERN = /^secret:\/\/[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._~-]*)*$/u;
 const HOST_PATTERN = /^(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?|[a-f0-9:]+)$/iu;
 const MAX_SECRET_PAYLOAD_BYTES = 1024 * 1024;
 const TARGET_KEYS = new Set(["provider", "family", "authType", "secretRef", "scope"]);
-const TARGET_SCOPE_KEYS = new Set(["serviceId", "scopes", "allowedHosts", "allowedProtocols"]);
-const EXPECTED_SCOPE_KEYS = new Set(["serviceId", "requiredScopes", "host", "protocol"]);
+const TARGET_SCOPE_KEYS = new Set(["serviceId", "scopes", "allowedHosts", "allowedProtocols", "allowedOrigins"]);
+const EXPECTED_SCOPE_KEYS = new Set(["serviceId", "requiredScopes", "host", "protocol", "origin"]);
 
 interface SecretObject extends Record<string, unknown> {
   secretRef?: unknown;
@@ -42,8 +46,10 @@ interface SecretObject extends Record<string, unknown> {
   requiredScopes?: unknown;
   allowedHosts?: unknown;
   allowedProtocols?: unknown;
+  allowedOrigins?: unknown;
   host?: unknown;
   protocol?: unknown;
+  origin?: unknown;
   revision?: unknown;
   credentialConfigured?: unknown;
   status?: unknown;
@@ -230,7 +236,7 @@ function explicitTextList(
   return values;
 }
 
-function explicitTargetScope(scope: unknown = null): SecretObject {
+function explicitTargetScope(scope: unknown = null, { requireOrigin = false }: { requireOrigin?: boolean } = {}): SecretObject {
   if (!scope || typeof scope !== "object" || Array.isArray(scope)) {
     throw targetContractError("scope", "Meshrix.js local secret target requires an explicit scope object.");
   }
@@ -255,12 +261,27 @@ function explicitTargetScope(scope: unknown = null): SecretObject {
   if (allowedProtocols.some((protocol)  => !TARGET_ID_PATTERN.test(protocol))) {
     throw targetContractError("scope.allowedProtocols");
   }
+  const originRequired = requireOrigin || allowedHosts.length > 0 || allowedProtocols.some((protocol) => protocol === "http" || protocol === "https");
+  const allowedOrigins = Object.hasOwn(scopeRecord, "allowedOrigins")
+    ? explicitTextList(scopeRecord.allowedOrigins, "scope.allowedOrigins", { normalize: normalizedOrigin, allowEmpty: !originRequired })
+    : [];
+  if (allowedOrigins.some((origin) => !origin || !/^https?:\/\//u.test(origin)) || (originRequired && allowedOrigins.length === 0)) {
+    throw targetContractError("scope.allowedOrigins", "Meshrix.js HTTP header secrets require exact allowed origins.");
+  }
+  for (const originValue of allowedOrigins) {
+    const origin = new URL(originValue);
+    if ((allowedHosts.length > 0 && !allowedHosts.includes(normalizedHost(origin.hostname))) ||
+        (allowedProtocols.length > 0 && !allowedProtocols.includes(protocolName(origin.protocol)))) {
+      throw targetContractError("scope.allowedOrigins", "Allowed origins must match the declared host and protocol scopes.");
+    }
+  }
   const output: Record<string, unknown> = {
     serviceId,
     scopes,
     allowedHosts,
     allowedProtocols
   };
+  if (Object.hasOwn(scopeRecord, "allowedOrigins") || requireOrigin) output.allowedOrigins = allowedOrigins;
   return output;
 }
 
@@ -270,12 +291,13 @@ export function validateLocalSecretTarget(target: unknown = null): SecretTarget 
   }
   assertKnownKeys(target, TARGET_KEYS, "target");
   const targetRecord = target as SecretObject;
+  const family = explicitTargetId(targetRecord.family, "family");
   return {
     provider: explicitTargetId(targetRecord.provider, "provider"),
-    family: explicitTargetId(targetRecord.family, "family"),
+    family,
     authType: explicitTargetId(targetRecord.authType, "authType"),
     secretRef: assertSecretRef(targetRecord.secretRef),
-    scope: explicitTargetScope(targetRecord.scope)
+    scope: explicitTargetScope(targetRecord.scope, { requireOrigin: family === "http-header" })
   };
 }
 
@@ -362,6 +384,18 @@ function protocolName(value: unknown = ""): string {
   return text(value).toLowerCase().replace(/:$/, "");
 }
 
+function normalizedOrigin(value: unknown = ""): string {
+  const raw = text(value);
+  try {
+    const url = new URL(raw);
+    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password && url.origin === raw
+      ? url.origin
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 function assertScopeTextMatch({
   scope = {},
   expected = {},
@@ -442,6 +476,14 @@ function assertSecretScopeAllowed({
     error.secretRef = secretRef;
     throw error;
   }
+  if (expected.origin !== undefined && !normalizedOrigin(expected.origin)) {
+    const error = new Error("Meshrix.js local secret expected origin is invalid.") as LocalSecretError;
+    error.code = "local_secret_scope_invalid";
+    error.statusCode = 403;
+    error.secretRef = secretRef;
+    error.field = "origin";
+    throw error;
+  }
   const scope = effectiveSecretScope(entry.metadata);
   try {
     assertScopeTextMatch({ scope, expected, field: "serviceId", reasonCode: "service_id_mismatch" });
@@ -461,6 +503,19 @@ function assertSecretScopeAllowed({
       reasonCode: "protocol_not_allowed",
       missingReasonCode: "protocol_required"
     });
+    // Older secret records did not retain allowedOrigins. Their existing
+    // service/host/protocol checks remain, while the manifest's typed origin
+    // binding narrows each use. New HTTP-header secrets require this list.
+    if (expected.origin !== undefined && Object.hasOwn(scope, "allowedOrigins")) {
+      assertScopeListIncludes({
+        scope,
+        scopeField: "allowedOrigins",
+        expectedValue: expected.origin,
+        normalize: normalizedOrigin,
+        reasonCode: "origin_not_allowed",
+        missingReasonCode: "origin_required"
+      });
+    }
     for (const requestedScope of cleanTextList(expected.requiredScopes)) {
       assertScopeListIncludes({
         scope,
@@ -749,6 +804,9 @@ async function writeLocalSecret({
 }
 
 export async function initializeLocalSecret(input: SecretWriteInput = {}) {
+  assertPublicSecretReference(input.target && typeof input.target === "object"
+    ? (input.target as Record<string, unknown>).secretRef
+    : "");
   return withMutationLock(input.dataDir ?? "", (mutationLock)  => writeLocalSecret({
     ...input,
     operation: "initialize",
@@ -757,6 +815,9 @@ export async function initializeLocalSecret(input: SecretWriteInput = {}) {
 }
 
 export async function rotateLocalSecret(input: SecretWriteInput = {}) {
+  assertPublicSecretReference(input.target && typeof input.target === "object"
+    ? (input.target as Record<string, unknown>).secretRef
+    : "");
   return withMutationLock(input.dataDir ?? "", (mutationLock)  => writeLocalSecret({
     ...input,
     operation: "rotate",
@@ -1034,13 +1095,14 @@ async function revokeLocalSecretUnlocked({
 }
 
 export async function revokeLocalSecret(input: SecretRevokeInput = {}) {
+  assertPublicSecretReference(input.secretRef);
   return withMutationLock(input.dataDir ?? "", (mutationLock)  => revokeLocalSecretUnlocked({
     ...input,
     mutationLock
   }));
 }
 
-export async function resolveLocalSecretPayload({
+async function resolveLocalSecretPayloadRecord({
   dataDir = "",
   secretRef = "",
   expectedRevision = undefined,
@@ -1128,6 +1190,143 @@ export async function listLocalSecretEntries({ dataDir = "" }: { dataDir?: strin
   const paths = localSecretStorePaths({ dataDir });
   const registry = await readRegistry(paths.dataDir);
   return Object.values(registry.refs)
+    .filter((entry) => text(entry.secretRef) !== OPERATION_AUDIT_PROJECTION_SECRET_REF)
     .sort((left, right)  => String(left.provider || left.secretRef).localeCompare(String(right.provider || right.secretRef)))
     .map(publicLocalSecretEntry);
+}
+
+function isOperationAuditProjectionSecretRef(value: unknown): boolean {
+  return typeof value === "string" && value === OPERATION_AUDIT_PROJECTION_SECRET_REF;
+}
+
+function assertPublicSecretReference(value: unknown): void {
+  if (!isOperationAuditProjectionSecretRef(value)) return;
+  const error = new Error("Meshrix.js local secret reference is not available for credential operations.") as LocalSecretError;
+  error.code = "local_secret_not_configured";
+  throw error;
+}
+
+function operationAuditProjectionSecretTarget(): SecretTarget {
+  return Object.freeze({
+    provider: "meshrix",
+    family: "internal-key",
+    authType: "hmac-projection-key",
+    secretRef: OPERATION_AUDIT_PROJECTION_SECRET_REF,
+    scope: Object.freeze({
+      serviceId: "meshrix-core",
+      scopes: Object.freeze([OPERATION_AUDIT_PROJECTION_SEED_SCOPE]),
+      allowedHosts: Object.freeze([]),
+      allowedProtocols: Object.freeze([])
+    })
+  });
+}
+
+function operationAuditProjectionKeyError(): Error & { code: string } {
+  const error = new Error("Meshrix.js operation-audit projection custody is unavailable.") as Error & { code: string };
+  error.code = "operation_audit_projection_key_unavailable";
+  return error;
+}
+
+function decodeOperationAuditSeed(value: unknown): Buffer {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/u.test(value)) {
+    throw operationAuditProjectionKeyError();
+  }
+  const seed = Buffer.from(value, "base64url");
+  if (seed.length !== 32 || seed.toString("base64url") !== value) {
+    seed.fill(0);
+    throw operationAuditProjectionKeyError();
+  }
+  return seed;
+}
+
+function deriveOperationAuditProjectionKey(seed: Buffer): Buffer {
+  return Buffer.from(crypto.hkdfSync(
+    "sha256",
+    seed,
+    OPERATION_AUDIT_PROJECTION_SALT,
+    OPERATION_AUDIT_PROJECTION_INFO,
+    32
+  ));
+}
+
+async function loadOperationAuditProjectionSeed({
+  dataDir,
+  keyProvider
+}: {
+  dataDir: string;
+  keyProvider: LocalSecretKeyProvider;
+}): Promise<Buffer> {
+  const resolved = await resolveLocalSecretPayloadRecord({
+    dataDir,
+    secretRef: OPERATION_AUDIT_PROJECTION_SECRET_REF,
+    expectedScope: Object.freeze({
+      serviceId: "meshrix-core",
+      requiredScopes: Object.freeze([OPERATION_AUDIT_PROJECTION_SEED_SCOPE])
+    }),
+    keyProvider
+  });
+  if (
+    resolved.provider !== "meshrix" ||
+    resolved.family !== "internal-key" ||
+    resolved.authType !== "hmac-projection-key"
+  ) {
+    throw operationAuditProjectionKeyError();
+  }
+  return decodeOperationAuditSeed(resolved.payload?.seed);
+}
+
+export async function ensureOperationAuditProjectionKey({
+  dataDir = "",
+  keyProvider = null,
+  allowInitialize = false
+}: {
+  dataDir?: string;
+  keyProvider?: LocalSecretKeyProvider | null;
+  allowInitialize?: boolean;
+} = {}): Promise<Readonly<{ key: Buffer; keyId: string }>> {
+  if (!keyProvider || typeof keyProvider.loadKey !== "function") {
+    throw operationAuditProjectionKeyError();
+  }
+  const resolvedDataDir = localSecretStorePaths({ dataDir }).dataDir;
+  let seed: Buffer;
+  try {
+    seed = await loadOperationAuditProjectionSeed({ dataDir: resolvedDataDir, keyProvider });
+  } catch (error: unknown) {
+    if (errorCode(error) !== "local_secret_not_configured" || !allowInitialize) {
+      if (errorCode(error) === "local_secret_not_configured") throw operationAuditProjectionKeyError();
+      throw error;
+    }
+    const initialSeed = crypto.randomBytes(32);
+    try {
+      try {
+        await withMutationLock(resolvedDataDir, (mutationLock) => writeLocalSecret({
+          dataDir: resolvedDataDir,
+          keyProvider,
+          target: operationAuditProjectionSecretTarget(),
+          payload: Object.freeze({ seed: initialSeed.toString("base64url") }),
+          operation: "initialize",
+          mutationLock
+        }));
+      } catch (initializeError: unknown) {
+        if (errorCode(initializeError) !== "local_secret_already_configured") throw initializeError;
+      }
+      seed = await loadOperationAuditProjectionSeed({ dataDir: resolvedDataDir, keyProvider });
+    } finally {
+      initialSeed.fill(0);
+    }
+  }
+  try {
+    const key = deriveOperationAuditProjectionKey(seed);
+    return Object.freeze({
+      key,
+      keyId: `sha256:${crypto.createHash("sha256").update(key).digest("hex")}`
+    });
+  } finally {
+    seed.fill(0);
+  }
+}
+
+export async function resolveLocalSecretPayload(input: SecretResolveInput = {}) {
+  assertPublicSecretReference(input.secretRef);
+  return resolveLocalSecretPayloadRecord(input);
 }

@@ -17,11 +17,13 @@ The agents package owns agent-facing runtime behavior that is not specific to on
 
 ## Model credential custody
 
-Model records persist only encrypted credential references. Set
-`MESHRIX_MODEL_CREDENTIAL_MASTER_KEY` to deployment-managed key material of at
-least 32 characters before saving or loading a model credential. The key is
-never written to the registry; changing an agent provider or endpoint clears
-the old credential binding and requires an explicit replacement.
+Model records persist only encrypted credential references. The local file-backed
+secret provider reads its 32-byte master key from the external file named by
+`MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE`; keep that file outside the governed data
+directory and restrict access to the service owner. Configure the file path, not
+the key bytes, in the process environment. The key is never written to the
+registry; changing an agent provider or endpoint clears the old credential
+binding and requires an explicit replacement.
 
 ## Verification
 

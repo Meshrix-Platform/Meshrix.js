@@ -4,14 +4,19 @@ import path from "node:path";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import {
   irreversibleSecurityDigest,
+  logRuntimeEvent,
   summarizeSecurityValue
 } from "../../observability/runtime-logger.ts";
 import { MESHRIX_ROOT_ORGANIZATION_ID } from "../authorization/organization-model.ts";
+import { clientIpFromRequest } from "../trusted-client-ip.ts";
 import {
   CONSOLE_CSRF_COOKIE,
   CONSOLE_SESSION_COOKIE,
-  LOGIN_LOCKOUT_MS,
-  LOGIN_MAX_ATTEMPTS,
+  LOGIN_SOURCE_MAX_IN_FLIGHT,
+  LOGIN_MAX_IN_FLIGHT,
+  LOGIN_SOURCE_ATTEMPT_LIMIT,
+  LOGIN_SOURCE_ATTEMPT_STATE_MAX_KEYS,
+  LOGIN_SOURCE_ATTEMPT_WINDOW_MS,
   SESSION_ACTIVITY_WRITE_INTERVAL_MS,
   SESSION_INACTIVITY_TTL_MS,
   SESSION_TTL_MS,
@@ -27,6 +32,7 @@ import {
   nowIso,
   parseCookies,
   parseJson,
+  projectConsoleSessionRoles,
   publicUser,
   randomToken,
   safeRequestMethod,
@@ -89,6 +95,11 @@ const SECURITY_METADATA_REASONS = new Set([
   "metadata-only-key",
   "sensitive-key"
 ]);
+// Match Operation Audit defaults while keeping Console cleanup bounded.
+const CONSOLE_AUDIT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const CONSOLE_AUDIT_MAX_ROWS = 250_000;
+const CONSOLE_AUDIT_RETENTION_BATCH_SIZE = 512;
+const CONSOLE_AUDIT_RETENTION_SWEEP_INTERVAL = 128;
 
 interface HttpRequestLike {
   method?: string;
@@ -645,7 +656,8 @@ export {
   createConsoleRoleCatalog,
   buildConsoleOperationAuthorizationInput,
   buildConsoleOperationAuthorizationContext,
-  normalizeTenantId
+  normalizeTenantId,
+  projectConsoleSessionRoles
 } from "./console-auth-support.ts";
 
 export type ConsoleAuthOptions = Omit<ConsoleAuthResourceOptions, "consoleRoles"> & {
@@ -681,6 +693,7 @@ interface ConsoleAuthContract {
     options?: { fresh?: boolean }
   ): ConsoleSession | null;
   getSummary(request?: HttpRequestLike | null): Record<string, unknown>;
+  configureLoginAdmission(input: { limit: number; windowMs: number }): void;
   login(
     input?: Record<string, unknown>,
     request?: HttpRequestLike
@@ -733,32 +746,145 @@ function createConsoleAuthImplementation({
   } = resources;
   let requestSessionCache = new WeakMap<object, ConsoleSession | null>();
   const sessionAuthoritySources = new WeakMap<object, DurableAuthoritySource>();
-
-  const recordFailedLoginStmt = db.prepare(`
-    UPDATE console_users
-    SET failed_attempts = CASE
-          WHEN COALESCE(failed_attempts, 0) + 1 >= ? THEN 0
-          ELSE COALESCE(failed_attempts, 0) + 1
-        END,
-        locked_until = CASE
-          WHEN COALESCE(failed_attempts, 0) + 1 >= ? THEN ?
-          ELSE ''
-        END,
-        updated_at = ?
-    WHERE user_id = ?
-      AND enabled = 1
-      AND password_hash = ?
-      AND salt = ?
-      AND (COALESCE(locked_until, '') = '' OR locked_until <= ?)
+  const countConsoleAuditRowsStmt = db.prepare("SELECT COUNT(*) AS count FROM console_audit_log");
+  const deleteExpiredConsoleAuditRowsStmt = db.prepare(`
+    DELETE FROM console_audit_log
+    WHERE audit_id IN (
+      SELECT audit_id FROM console_audit_log
+      WHERE created_at < ?
+      ORDER BY created_at ASC
+      LIMIT ?
+    )
   `);
+  const deleteOldestConsoleAuditRowsStmt = db.prepare(`
+    DELETE FROM console_audit_log
+    WHERE audit_id IN (
+      SELECT audit_id FROM console_audit_log
+      ORDER BY created_at ASC
+      LIMIT ?
+    )
+  `);
+  const pruneConsoleAuditRowsTxn = db.transaction((rowCount: number, cutoff: string) => {
+    let retainedRows = Math.max(0, rowCount);
+    const expired = deleteExpiredConsoleAuditRowsStmt.run(
+      cutoff,
+      CONSOLE_AUDIT_RETENTION_BATCH_SIZE
+    );
+    const expiredRows = Number(expired.changes || 0);
+    retainedRows = Math.max(0, retainedRows - expiredRows);
+
+    const excessRows = Math.max(0, retainedRows - CONSOLE_AUDIT_MAX_ROWS);
+    const remainingBatch = Math.max(0, CONSOLE_AUDIT_RETENTION_BATCH_SIZE - expiredRows);
+    if (excessRows > 0 && remainingBatch > 0) {
+      const capacityTrim = deleteOldestConsoleAuditRowsStmt.run(
+        Math.min(excessRows, remainingBatch)
+      );
+      retainedRows = Math.max(0, retainedRows - Number(capacityTrim.changes || 0));
+    }
+    return retainedRows;
+  });
+  let consoleAuditRowCount: number | null = null;
+  let consoleAuditsSinceRetentionSweep = 0;
+  let consoleAuditRetentionFailureReported = false;
+
+  function maintainConsoleAuditRetention(): void {
+    if (consoleAuditRowCount === null) {
+      consoleAuditRowCount = Number((countConsoleAuditRowsStmt.get() as { count?: number } | undefined)?.count || 0);
+      consoleAuditsSinceRetentionSweep = CONSOLE_AUDIT_RETENTION_SWEEP_INTERVAL;
+    } else {
+      consoleAuditRowCount += 1;
+      consoleAuditsSinceRetentionSweep += 1;
+    }
+    if (consoleAuditsSinceRetentionSweep < CONSOLE_AUDIT_RETENTION_SWEEP_INTERVAL) return;
+    consoleAuditsSinceRetentionSweep = 0;
+
+    try {
+      consoleAuditRowCount = pruneConsoleAuditRowsTxn(
+        consoleAuditRowCount,
+        new Date(Date.now() - CONSOLE_AUDIT_RETENTION_MS).toISOString()
+      );
+      consoleAuditRetentionFailureReported = false;
+    } catch {
+      if (!consoleAuditRetentionFailureReported) {
+        logRuntimeEvent("warn", "console.audit.retention_failed", {
+          code: "console_audit_retention_failed"
+        });
+        consoleAuditRetentionFailureReported = true;
+      }
+    }
+  }
+
+  // Login admission state lives beside the credential check so every transport
+  // (HTTP route, RPC dispatch, plugin console) shares one per-source budget and
+  // no transport can bypass the throttle by reaching the provider directly.
+  const loginSourceAttempts = new Map<string, { count: number; expiresAt: number; active: number }>();
+  let loginSourceAttemptLimit = LOGIN_SOURCE_ATTEMPT_LIMIT;
+  let loginSourceAttemptWindowMs = LOGIN_SOURCE_ATTEMPT_WINDOW_MS;
+  let activeLoginChecks = 0;
+  let loginSourcePrunedAt = 0;
+
+  function configureLoginAdmission({ limit, windowMs }: { limit: number; windowMs: number }): void {
+    if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isSafeInteger(windowMs) || windowMs < 1000) {
+      throw new TypeError("Login admission requires a positive limit and window.");
+    }
+    loginSourceAttemptLimit = limit;
+    loginSourceAttemptWindowMs = windowMs;
+  }
+
+  function loginAdmissionError(retryAfterSec: number) {
+    return Object.assign(new Error("登录尝试过于频繁，请稍后重试。"), {
+      statusCode: 429, reasonCode: "login_rate_limited", retryAfterSec
+    });
+  }
+
+  function admitLoginCheck(key: string) {
+    const now = Date.now();
+    let entry = loginSourceAttempts.get(key);
+    if (!entry || entry.expiresAt <= now) {
+      // Retain active reservations across a window rollover. No timer cancels
+      // an admitted password check; capacity is released only by its finally.
+      if (!entry && loginSourceAttempts.size >= LOGIN_SOURCE_ATTEMPT_STATE_MAX_KEYS && now - loginSourcePrunedAt >= 1000) {
+        loginSourcePrunedAt = now;
+        for (const [source, state] of loginSourceAttempts) {
+          if (state.expiresAt <= now && state.active === 0) loginSourceAttempts.delete(source);
+        }
+      }
+      if (!entry && loginSourceAttempts.size >= LOGIN_SOURCE_ATTEMPT_STATE_MAX_KEYS) {
+        throw loginAdmissionError(1);
+      }
+      entry = { count: 0, expiresAt: now + loginSourceAttemptWindowMs, active: entry?.active || 0 };
+      loginSourceAttempts.set(key, entry);
+    }
+    if (entry.count >= loginSourceAttemptLimit) {
+      throw loginAdmissionError(Math.max(1, Math.ceil((entry.expiresAt - now) / 1000)));
+    }
+    if (entry.active >= LOGIN_SOURCE_MAX_IN_FLIGHT || activeLoginChecks >= LOGIN_MAX_IN_FLIGHT) {
+      throw loginAdmissionError(1);
+    }
+    entry.count += 1;
+    entry.active += 1;
+    activeLoginChecks += 1;
+    let released = false;
+    return (authenticated: boolean) => {
+      if (released) return;
+      released = true;
+      const current = loginSourceAttempts.get(key);
+      if (current) {
+        current.active -= 1;
+        // Successful users behind a shared NAT do not spend the failure quota.
+        if (authenticated && current === entry) current.count = Math.max(0, current.count - 1);
+      }
+      activeLoginChecks -= 1;
+    };
+  }
+
   const completeSuccessfulLoginStmt = db.prepare(`
     UPDATE console_users
-    SET last_login_at = ?, updated_at = ?, failed_attempts = 0, locked_until = ''
+    SET last_login_at = ?, updated_at = ?
     WHERE user_id = ?
       AND enabled = 1
       AND password_hash = ?
       AND salt = ?
-      AND (COALESCE(locked_until, '') = '' OR locked_until <= ?)
   `);
   const insertConsoleSessionStmt = db.prepare(`
     INSERT INTO console_sessions (
@@ -785,8 +911,7 @@ function createConsoleAuthImplementation({
       createdAt,
       userRow.user_id,
       userRow.password_hash,
-      userRow.salt,
-      createdAt
+      userRow.salt
     );
     if (updated.changes !== 1) return false;
     insertConsoleSessionStmt.run(
@@ -1569,74 +1694,71 @@ function createConsoleAuthImplementation({
     input: Record<string, unknown> = {},
     request?: HttpRequestLike
   )  {
-    const username = normalizeUsername(input.username);
-    const password = String(input.password || "");
-    const userRow = getUserByUsernameStmt.get(username);
-    if (!userRow || !userRow.enabled) {
-      // Constant-time guard: don't reveal whether username exists.
-      await verifyPassword("__sentinel__", "salt", "hash").catch(()  => {});
-      throw new Error("用户名或密码错误。");
+    const sourceKey = clientIpFromRequest(request, { unknown: "unknown" });
+    const releaseCheck = admitLoginCheck(sourceKey);
+    let authenticated = false;
+    try {
+      let username = "";
+      try {
+        username = normalizeUsername(input.username);
+      } catch {
+        username = "";
+      }
+      const candidate = String(input.password || "");
+      const password = candidate.length <= 256 ? candidate : "__invalid_password__";
+      const userRow = username ? getUserByUsernameStmt.get(username) : null;
+      if (!userRow || !userRow.enabled) {
+        // Constant-time guard: don't reveal whether username exists.
+        await verifyPassword("__sentinel__", "salt", "hash").catch(()  => {});
+        throw new Error("用户名或密码错误。");
+      }
+
+      const verified = await verifyPassword(password, userRow.salt, userRow.password_hash);
+      const ok = candidate.length <= 256 && verified;
+      if (!ok) {
+        throw new Error("用户名或密码错误。");
+      }
+
+      const token = randomToken();
+      // M-3: CSRF is HMAC-derived from the session token — not stored in DB
+      const csrfToken = computeCsrfToken(token);
+      const sessionId = stableId("console_session", userRow.user_id, Date.now(), crypto.randomUUID());
+      const createdAt = nowIso();
+      const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+      const committed = commitSuccessfulLogin({
+        userRow,
+        sessionId,
+        tokenHash: hashToken(token),
+        userAgentHash: hashToken(request?.headers?.["user-agent"] || ""),
+        createdAt,
+        expiresAt
+      });
+      if (!committed) {
+        throw new Error("用户名或密码错误。");
+      }
+
+      // H-1: delete the initial-credentials file now that the owner has logged in
+      fsp.unlink(path.join(rootPath, "initial-credentials.txt")).catch(()  => {});
+
+      const session = sessionFromToken(token);
+      authenticated = true;
+      return {
+        session,
+        csrfToken,
+        cookies: [
+          cookieHeader(CONSOLE_SESSION_COOKIE, token, request, {
+            httpOnly: true,
+            maxAge: Math.floor(SESSION_TTL_MS / 1000)
+          }),
+          cookieHeader(CONSOLE_CSRF_COOKIE, csrfToken, request, {
+            httpOnly: false,
+            maxAge: Math.floor(SESSION_TTL_MS / 1000)
+          })
+        ]
+      };
+    } finally {
+      releaseCheck(authenticated);
     }
-
-    // Check lockout before touching the password.
-    const lockedUntil = userRow.locked_until ? new Date(userRow.locked_until).getTime() : 0;
-    if (lockedUntil > Date.now()) {
-      const remainingMin = Math.ceil((lockedUntil - Date.now()) / 60_000);
-      throw new Error(`账户已被临时锁定，请 ${remainingMin} 分钟后重试。`);
-    }
-
-    const ok = await verifyPassword(password, userRow.salt, userRow.password_hash);
-    if (!ok) {
-      const failedAt = nowIso();
-      recordFailedLoginStmt.run(
-        LOGIN_MAX_ATTEMPTS,
-        LOGIN_MAX_ATTEMPTS,
-        new Date(Date.now() + LOGIN_LOCKOUT_MS).toISOString(),
-        failedAt,
-        userRow.user_id,
-        userRow.password_hash,
-        userRow.salt,
-        failedAt
-      );
-      throw new Error("用户名或密码错误。");
-    }
-
-    const token = randomToken();
-    // M-3: CSRF is HMAC-derived from the session token — not stored in DB
-    const csrfToken = computeCsrfToken(token);
-    const sessionId = stableId("console_session", userRow.user_id, Date.now(), crypto.randomUUID());
-    const createdAt = nowIso();
-    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-    const committed = commitSuccessfulLogin({
-      userRow,
-      sessionId,
-      tokenHash: hashToken(token),
-      userAgentHash: hashToken(request?.headers?.["user-agent"] || ""),
-      createdAt,
-      expiresAt
-    });
-    if (!committed) {
-      throw new Error("用户名或密码错误。");
-    }
-
-    // H-1: delete the initial-credentials file now that the owner has logged in
-    fsp.unlink(path.join(rootPath, "initial-credentials.txt")).catch(()  => {});
-
-    const session = sessionFromToken(token);
-    return {
-      session,
-      csrfToken,
-      cookies: [
-        cookieHeader(CONSOLE_SESSION_COOKIE, token, request, {
-          httpOnly: true,
-          maxAge: Math.floor(SESSION_TTL_MS / 1000)
-        }),
-        cookieHeader(CONSOLE_CSRF_COOKIE, csrfToken, request, {
-          httpOnly: false,
-          maxAge: Math.floor(SESSION_TTL_MS / 1000)
-        })
-      ]
-    };
   }
 
   function logout(request?: HttpRequestLike)  {
@@ -1889,6 +2011,7 @@ function createConsoleAuthImplementation({
       stringifyJson(errorProjection),
       nowIso()
     );
+    maintainConsoleAuditRetention();
   }
 
   function listAudit({ limit = 100, userId = "", status = "" }: AuditQuery = {})  {
@@ -2141,7 +2264,7 @@ function createConsoleAuthImplementation({
 
   function getSummary(request: HttpRequestLike | null = null)  {
     const session = request ? getSessionFromRequest(request) : null;
-    return {
+    const summary: Record<string, unknown> = {
       enabled: hasUsers(),
       bootstrap: getBootstrapStatus(),
       session: session
@@ -2156,10 +2279,13 @@ function createConsoleAuthImplementation({
             csrfToken: "",
             expiresAt: "",
             user: null
-          },
-      roles: roleList(),
-      oidc: getOidcConfig()
+          }
     };
+    const roles = projectConsoleSessionRoles(roleList(), session);
+    if (roles !== undefined) {
+      summary.roles = roles;
+    }
+    return summary;
   }
 
   return {
@@ -2179,6 +2305,7 @@ function createConsoleAuthImplementation({
       revokeDeferredProtectedSinkAuthority,
       getSessionFromRequest,
       getSummary,
+      configureLoginAdmission,
       login,
       logout,
       rotateSession,

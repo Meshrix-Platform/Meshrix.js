@@ -1,4 +1,11 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import {
+  browseServerPath,
+  createPathBrowserRoots
+} from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/path-browser.ts";
 
 let executeConsoleDomainOperation: any;
 
@@ -149,6 +156,26 @@ describe("console domain auth and authorization facade coverage", () : any => {
     const fallbackProvider: any = createAuthProvider({ getConsoleSummary: undefined });
     await expect(runOperation("auth.session", { context: { request, securityPermissions: fallbackProvider } }))
       .resolves.toMatchObject({ status: 200, payload: { source: "summary" } });
+    const disclosingProvider: any = createAuthProvider({
+      getConsoleSummary: vi.fn(() : any => ({
+        enabled: true,
+        session: { authenticated: false, csrfToken: "", expiresAt: "", user: null },
+        roles: [{
+          roleId: "owner",
+          label: "Owner",
+          scopes: ["auth:admin"],
+          resourcePolicies: [{ resourceType: "workspace" }]
+        }],
+        oidc: { issuer: "https://issuer.example.invalid", clientId: "console-client" }
+      }))
+    });
+    const anonymousSession: any = await runOperation("auth.session", {
+      context: { request, securityPermissions: disclosingProvider }
+    });
+    expect(anonymousSession.status).toBe(200);
+    expect(anonymousSession.payload).not.toHaveProperty("oidc");
+    expect(anonymousSession.payload).not.toHaveProperty("roles");
+    expect(JSON.stringify(anonymousSession.payload)).not.toMatch(/scopes|resourcePolicies|issuer\.example/);
 
     await expect(runOperation("auth.login", {
       input: { username: "alice", password: "secret", remember: true },
@@ -158,7 +185,10 @@ describe("console domain auth and authorization facade coverage", () : any => {
       payload: {
         ok: true,
         csrfToken: "csrf-1",
-        roles: expect.arrayContaining([expect.objectContaining({ roleId: "maintainer" })])
+        roles: [
+          { roleId: "maintainer", label: "maintainer" },
+          { roleId: "viewer", label: "viewer" }
+        ]
       }
     });
     expect(authProvider.audit).toHaveBeenCalledWith(expect.objectContaining({
@@ -168,13 +198,24 @@ describe("console domain auth and authorization facade coverage", () : any => {
 
     const failedProvider: any = createAuthProvider({
       login: vi.fn(async () : Promise<any> => {
-        throw new Error("bad credentials");
+        throw new Error("EACCES: synthetic-private-path; synthetic-secret-password");
       })
     });
+    const failedLoginLog = vi.fn();
     await expect(runOperation("auth.login", {
-      input: { username: "alice" },
-      context: { request, securityPermissions: failedProvider, appendConsoleOperationLog: vi.fn() }
+      input: { username: "alice", password: "synthetic-secret-password" },
+      context: { request, securityPermissions: failedProvider, appendConsoleOperationLog: failedLoginLog }
     })).resolves.toMatchObject({ status: 401, payload: { error: "用户名或密码错误。" } });
+    expect(failedProvider.audit).toHaveBeenCalledWith(expect.objectContaining({
+      reasonCode: "console_login_failed",
+      error: "用户名或密码错误。"
+    }));
+    expect(failedLoginLog).toHaveBeenCalledWith(expect.objectContaining({
+      event: "console.auth.login.failed",
+      error: "用户名或密码错误。"
+    }));
+    expect(JSON.stringify(failedLoginLog.mock.calls)).not.toContain("synthetic-private-path");
+    expect(JSON.stringify(failedLoginLog.mock.calls)).not.toContain("synthetic-secret-password");
 
     await expect(runOperation("auth.logout", { context }))
       .resolves.toMatchObject({ status: 200, payload: { ok: true } });
@@ -267,6 +308,7 @@ describe("console domain auth and authorization facade coverage", () : any => {
   });
 
   it("covers workspace audit query, history, and revert scope payloads", async () : Promise<any> => {
+    const diagnosticNeedle = "synthetic-checkpoint-private-path";
     const checkpointTreeApi: Record<string, any> = {
       checkpointTreeId: vi.fn(() : any => "tree-workspace-1"),
       loadCheckpointTree: vi.fn(async () : Promise<any> => ({
@@ -300,7 +342,10 @@ describe("console domain auth and authorization facade coverage", () : any => {
             }
           }
         }
-      }))
+      })),
+      restoreCheckpointTree: vi.fn(async () : Promise<any> => {
+        throw new Error(`EACCES: denied at ${diagnosticNeedle}`);
+      })
     };
     const agentWorkspace: Record<string, any> = {
       restoreWorkspaceFiles: vi.fn(async (input?: any) : Promise<any> => ({
@@ -351,6 +396,137 @@ describe("console domain auth and authorization facade coverage", () : any => {
       status: 200,
       payload: { candidateCount: 0, reversibleCount: 0, canApply: false }
     });
+
+    const applied = await runOperation("workspace.operation.revert.apply", {
+      input: { auditId: "audit-1", workspaceId: "workspace-1" },
+      context
+    });
+    expect(applied).toMatchObject({
+      status: 200,
+      payload: {
+        revert: {
+          applied: true,
+          checkpointMarker: {
+            ok: false,
+            errorCode: "checkpoint_marker_restore_failed",
+            error: "Checkpoint restore marker could not be saved."
+          }
+        }
+      }
+    });
+    expect(JSON.stringify(applied.payload)).not.toContain(diagnosticNeedle);
+
+    checkpointTreeApi.loadCheckpointTree.mockRejectedValueOnce(
+      new Error(`EACCES: checkpoint snapshot at ${diagnosticNeedle}`)
+    );
+    const failedRevert = await runOperation("workspace.operation.revert.scope", {
+      input: { auditId: "audit-1", workspaceId: "workspace-1" },
+      context
+    });
+    expect(failedRevert).toMatchObject({
+      status: 500,
+      payload: {
+        errorCode: "checkpoint_tree_load_failed",
+        error: "The workspace checkpoint could not be loaded."
+      }
+    });
+    expect(JSON.stringify(failedRevert.payload)).not.toContain(diagnosticNeedle);
+  });
+
+  it("keeps filesystem diagnostics out of path-browser responses", async () : Promise<any> => {
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-path-browser-private-error-"));
+    const diagnosticNeedle = "synthetic-path-browser-private-root";
+    const roots = createPathBrowserRoots({ userDataPath });
+    const privateDataRoot = roots.find((root?: any) : any => root.label === "Meshrix.js 数据目录");
+    const readDirectory = vi.spyOn(fs, "readdir").mockRejectedValueOnce(
+      new Error(`EACCES: denied at ${diagnosticNeedle}`) as any
+    );
+    try {
+      const result = await browseServerPath({
+        requestedPath: `${privateDataRoot.id}:/`,
+        userDataPath
+      });
+      expect(result.errorCode).toBe("path_browser_read_failed");
+      expect(result.error).toBe("无法读取目录，请检查访问权限或目录是否仍存在。");
+      expect(JSON.stringify(result)).not.toContain(diagnosticNeedle);
+      expect(JSON.stringify(result)).not.toContain(userDataPath);
+    } finally {
+      readDirectory.mockRestore();
+      await fs.rm(userDataPath, { recursive: true, force: true });
+    }
+  });
+
+  it("redacts checkpoint provider and workspace restore failures", async () : Promise<any> => {
+    const diagnosticNeedle = "synthetic-checkpoint-private-root";
+    const checkpointTreeApi: Record<string, any> = {
+      diffCheckpointTree: vi.fn(async () : Promise<any> => {
+        throw new Error(`EACCES: denied at ${diagnosticNeedle}`);
+      }),
+      previewCheckpointRestore: vi.fn(async () : Promise<any> => ({
+        treeId: "tree-workspace-1",
+        nodeId: "root",
+        actions: [],
+        target: {
+          metadata: {
+            workspaceId: "workspace-1",
+            workspaceFileSnapshot: {
+              workspaceId: "workspace-1",
+              deleteExtraneous: true,
+              files: []
+            }
+          }
+        }
+      })),
+      restoreCheckpointTree: vi.fn(async () : Promise<any> => {
+        throw new Error(`EACCES: denied at ${diagnosticNeedle}`);
+      })
+    };
+    const agentWorkspace = {
+      restoreWorkspaceFiles: vi.fn(async () : Promise<any> => ({
+        ok: false,
+        status: 409,
+        error: `Workspace conflict at ${diagnosticNeedle}`
+      }))
+    };
+    const context = { checkpointTreeApi, agentWorkspace };
+
+    const diff = await runOperation("workspace.checkpoint.diff", {
+      input: { treeId: "tree-workspace-1" },
+      context
+    });
+    expect(diff).toMatchObject({
+      status: 404,
+      payload: { code: "checkpoint_diff_failed", error: "Checkpoint diff could not be completed." }
+    });
+    expect(JSON.stringify(diff.payload)).not.toContain(diagnosticNeedle);
+
+    const preview = await runOperation("workspace.checkpoint.restore.preview", {
+      input: { treeId: "tree-workspace-1", workspaceId: "workspace-1" },
+      context
+    });
+    expect(preview).toMatchObject({
+      status: 409,
+      payload: {
+        code: "workspace_file_restore_failed",
+        error: "The workspace changed since this checkpoint. Refresh and try again."
+      }
+    });
+    expect(JSON.stringify(preview.payload)).not.toContain(diagnosticNeedle);
+
+    const restored = await runOperation("workspace.checkpoint.restore", {
+      input: { treeId: "tree-workspace-1", workspaceId: "workspace-1" },
+      context: {
+        checkpointTreeApi: {
+          previewCheckpointRestore: vi.fn(async () : Promise<any> => ({ treeId: "tree-workspace-1", nodeId: "root", actions: [] })),
+          restoreCheckpointTree: checkpointTreeApi.restoreCheckpointTree
+        }
+      }
+    });
+    expect(restored).toMatchObject({
+      status: 404,
+      payload: { code: "checkpoint_restore_failed", error: "Checkpoint restore could not be completed." }
+    });
+    expect(JSON.stringify(restored.payload)).not.toContain(diagnosticNeedle);
   });
 
   it("covers authorization facade unavailable, list, upsert, revoke, and workspace asset branches", async () : Promise<any> => {

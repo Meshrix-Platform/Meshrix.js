@@ -1,4 +1,5 @@
 
+import { projectConsoleSessionRoles } from "@meshrix/foundation/security/auth/console-auth";
 import { hashClientString } from "@meshrix/foundation/security/client-strings";
 import { appendConsoleLog, errorPayload, result } from "./shared.ts";
 
@@ -18,6 +19,29 @@ export function loginInputSummary(input: Record<string, any> = {}, request: any 
   };
 }
 
+
+function publicAuthSessionBody(summary: unknown) : unknown {
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+    return summary;
+  }
+  const record = summary as Record<string, unknown>;
+  const session = record.session && typeof record.session === "object" && !Array.isArray(record.session)
+    ? record.session as { authenticated?: boolean; user?: { scopes?: readonly unknown[] } | null }
+    : null;
+  const body: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (key === "oidc" || key === "roles") continue;
+    body[key] = value;
+  }
+  if (session?.authenticated === true && session.user) {
+    const roles = projectConsoleSessionRoles(
+      Array.isArray(record.roles) ? record.roles : [],
+      session
+    );
+    if (roles !== undefined) body.roles = roles;
+  }
+  return body;
+}
 
 export async function executeConsoleAuthOperation({ operationId, input = {}, context }: Record<string, any>) : Promise<any> {
   const id: any = String(operationId || "");
@@ -53,9 +77,10 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
   const authSession: any = context.authSession || null;
 
   if (id === "auth.session") {
-    return result(200, authProvider.getConsoleSummary
+    const summary = typeof authProvider.getConsoleSummary === "function"
       ? authProvider.getConsoleSummary(request)
-      : authProvider.getSummary(request));
+      : authProvider.getSummary(request);
+    return result(200, publicAuthSessionBody(summary));
   }
   if (id === "auth.login") {
     const inputSummary: any = loginInputSummary(input, request);
@@ -82,15 +107,26 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
           expiresAt: login.session?.expiresAt || ""
         }
       });
+      const roles = projectConsoleSessionRoles(
+        typeof authProvider.roleList === "function" ? authProvider.roleList() : [],
+        login.session
+      );
       return result(200, {
         __headers: { "Set-Cookie": login.cookies },
         ok: true,
         session: login.session,
         csrfToken: login.csrfToken,
-        roles: authProvider.roleList()
+        ...(roles !== undefined ? { roles } : {})
       });
     } catch (error: any) {
-      const message: any = error instanceof Error ? error.message : "登录失败。";
+      if (error?.statusCode === 429) {
+        return result(429, {
+          __headers: { "Retry-After": String(Math.max(1, Number(error.retryAfterSec) || 1)) },
+          error: "登录尝试过于频繁，请稍后重试。",
+          reasonCode: "login_rate_limited",
+          retryAfterSec: Math.max(1, Number(error.retryAfterSec) || 1)
+        });
+      }
       const publicMessage: any = "用户名或密码错误。";
       authProvider.audit({
         operationId: "auth.login",
@@ -98,15 +134,16 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
         method: "POST",
         path: "/api/auth/login",
         status: "failed",
+        reasonCode: "console_login_failed",
         target: inputSummary,
-        error: message
+        error: publicMessage
       });
       await appendConsoleLog(context, {
         operationId: "auth.login.session",
         event: "console.auth.login.failed",
         status: "failed",
         input: inputSummary,
-        error: message
+        error: publicMessage
       });
       return result(401, { error: publicMessage });
     }

@@ -136,7 +136,9 @@ export async function listServerAppearancePresetConfigs({ userDataPath }: Record
       const config: any = parseAppearancePresetConfigText(await fs.readFile(filePath, "utf8"));
       configs.push(config);
     } catch (error: any) {
-      const message: any = error instanceof Error ? error.message : "invalid preset config";
+      const message = error instanceof AppearancePresetConfigError
+        ? error.errors.join("; ")
+        : "unable to read preset configuration";
       errors.push(`${entry.name}: ${message}`);
     }
   }

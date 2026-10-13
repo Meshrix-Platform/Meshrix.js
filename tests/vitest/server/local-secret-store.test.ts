@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   initializeLocalSecret,
+  ensureOperationAuditProjectionKey,
   listLocalSecretEntries,
   resolveLocalSecretPayload,
   revokeLocalSecret,
@@ -18,6 +19,12 @@ import {
 import {
   createMemoryLocalSecretKeyProvider
 } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+import {
+  createOperationAuditStore
+} from "../../../packages/foundation/src/security/operation-audit.ts";
+import {
+  operationAuditProjectionKeyId
+} from "../../../packages/foundation/src/security/operation-audit-projection.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const cliEntrypoint: any = path.join(repoRoot, "apps", "server", "bin", "meshrix.ts");
@@ -43,7 +50,8 @@ function targetContract(overrides: Record<string, any> = {}) : any {
       serviceId: "fixture-service",
       scopes: ["gateway:read", "gateway:write"],
       allowedHosts: ["api.example.test"],
-      allowedProtocols: ["https"]
+      allowedProtocols: ["https"],
+      allowedOrigins: ["https://api.example.test"]
     },
     ...overrides
   };
@@ -53,6 +61,7 @@ function expectedScope(overrides: Record<string, any> = {}) : any {
   return {
     serviceId: "fixture-service",
     requiredScopes: ["gateway:read"],
+    origin: "https://api.example.test",
     host: "api.example.test",
     protocol: "https",
     ...overrides
@@ -153,6 +162,174 @@ describe("local secret target contract", () : any => {
 });
 
 describe("local secret lifecycle", () : any => {
+  it("keeps the internal audit projection key hidden and stable through master-key rotation", async () : Promise<any> => {
+    const currentKeyProvider: any = createMemoryLocalSecretKeyProvider({
+      key: Buffer.alloc(32, 0x41)
+    });
+    const nextKeyProvider: any = createMemoryLocalSecretKeyProvider({
+      key: Buffer.alloc(32, 0x42)
+    });
+    let initialAuditKey: Buffer | null = null;
+    try {
+      const initial: any = await ensureOperationAuditProjectionKey({
+        dataDir,
+        keyProvider: currentKeyProvider,
+        allowInitialize: true
+      });
+      initialAuditKey = Buffer.from(initial.key);
+      expect(initial.key).toHaveLength(32);
+      expect(initial.keyId).toMatch(/^sha256:[0-9a-f]{64}$/u);
+      initial.key.fill(0);
+
+      await initializeLocalSecret({
+        dataDir,
+        target,
+        payload: { token: MATERIAL_ALPHA },
+        keyProvider: currentKeyProvider
+      });
+      expect(await listLocalSecretEntries({ dataDir })).toHaveLength(1);
+      await expect(resolveLocalSecretPayload({
+        dataDir,
+        secretRef: "secret://meshrix/system/operation-audit-projection",
+        expectedScope: {
+          serviceId: "meshrix-core",
+          requiredScopes: ["internal:operation-audit-projection"]
+        },
+        keyProvider: currentKeyProvider
+      })).rejects.toMatchObject({ code: "local_secret_not_configured" });
+      await expect(initializeLocalSecret({
+        dataDir,
+        target: {
+          provider: "meshrix",
+          family: "internal-key",
+          authType: "hmac-projection-key",
+          secretRef: "secret://meshrix/system/operation-audit-projection",
+          scope: {
+            serviceId: "meshrix-core",
+            scopes: ["internal:operation-audit-projection"],
+            allowedHosts: [],
+            allowedProtocols: []
+          }
+        },
+        payload: { seed: "replacement-must-be-rejected" },
+        keyProvider: currentKeyProvider
+      })).rejects.toMatchObject({ code: "local_secret_not_configured" });
+
+      const rotation: any = await rotateLocalSecretMasterKey({
+        dataDir,
+        currentKeyProvider,
+        nextKeyProvider
+      });
+      expect(rotation).toMatchObject({ ok: true, action: "rotate-master-key" });
+      const afterRotation: any = await ensureOperationAuditProjectionKey({
+        dataDir,
+        keyProvider: nextKeyProvider,
+        allowInitialize: false
+      });
+      expect(afterRotation.keyId).toBe(initial.keyId);
+      expect(afterRotation.key).toEqual(initialAuditKey);
+      afterRotation.key.fill(0);
+      await expect(resolveLocalSecretPayload({
+        dataDir,
+        secretRef: SECRET_REF,
+        expectedScope: expectedScope(),
+        keyProvider: nextKeyProvider
+      })).resolves.toMatchObject({ payload: { token: MATERIAL_ALPHA } });
+    } finally {
+      initialAuditKey?.fill(0);
+      currentKeyProvider.close();
+      nextKeyProvider.close();
+    }
+  });
+
+  it("preserves audit filtering and idempotent replay after actual master-key rotation", async () : Promise<any> => {
+    const currentKeyProvider: any = createMemoryLocalSecretKeyProvider({ key: Buffer.alloc(32, 0x51) });
+    const nextKeyProvider: any = createMemoryLocalSecretKeyProvider({ key: Buffer.alloc(32, 0x52) });
+    const entry: any = {
+      auditId: "audit-after-master-rotation",
+      operationId: "synthetic.rotation.probe",
+      transport: "test",
+      status: "ok",
+      tenantId: "synthetic-tenant",
+      traceId: "synthetic-trace",
+      actor: { userId: "synthetic-user" },
+      input: { value: "synthetic-input" }
+    };
+    let before: any = null;
+    let after: any = null;
+    let firstStore: any = null;
+    let rotatedStore: any = null;
+    try {
+      before = await ensureOperationAuditProjectionKey({
+        dataDir,
+        keyProvider: currentKeyProvider,
+        allowInitialize: true
+      });
+      firstStore = createOperationAuditStore({
+        userDataPath: dataDir,
+        projectionKey: before.key,
+        projectionKeyId: before.keyId
+      });
+      await firstStore.ready();
+      await firstStore.appendIdempotent(entry);
+      await firstStore.close();
+      firstStore = null;
+      before.key.fill(0);
+
+      await rotateLocalSecretMasterKey({ dataDir, currentKeyProvider, nextKeyProvider });
+      after = await ensureOperationAuditProjectionKey({
+        dataDir,
+        keyProvider: nextKeyProvider,
+        allowInitialize: false
+      });
+      expect(after.keyId).toBe(operationAuditProjectionKeyId(after.key));
+      rotatedStore = createOperationAuditStore({
+        userDataPath: dataDir,
+        projectionKey: after.key,
+        projectionKeyId: after.keyId
+      });
+      await rotatedStore.ready();
+      await expect(rotatedStore.list({
+        userId: "synthetic-user",
+        tenantId: "synthetic-tenant",
+        traceId: "synthetic-trace",
+        limit: 10
+      })).resolves.toMatchObject([{
+        auditId: entry.auditId,
+        operationId: entry.operationId
+      }]);
+      await expect(rotatedStore.appendIdempotent(entry)).resolves.toMatchObject({
+        auditId: entry.auditId,
+        replayed: true
+      });
+    } finally {
+      await firstStore?.close().catch(() => undefined);
+      await rotatedStore?.close().catch(() => undefined);
+      before?.key.fill(0);
+      after?.key.fill(0);
+      currentKeyProvider.close();
+      nextKeyProvider.close();
+    }
+  });
+
+  it("does not create an internal audit seed when the caller disallows initialization", async () : Promise<any> => {
+    const provider: any = createMemoryLocalSecretKeyProvider({
+      key: Buffer.alloc(32, 0x43)
+    });
+    try {
+      await expect(ensureOperationAuditProjectionKey({
+        dataDir,
+        keyProvider: provider,
+        allowInitialize: false
+      })).rejects.toMatchObject({ code: "operation_audit_projection_key_unavailable" });
+      await expect(fs.access(path.join(dataDir, "secrets", "registry.json"))).rejects.toMatchObject({
+        code: "ENOENT"
+      });
+    } finally {
+      provider.close();
+    }
+  });
+
   it("atomically re-encrypts every active value under a distinct master key", async () : Promise<any> => {
     const currentKeyProvider: any = createMemoryLocalSecretKeyProvider({
       key: Buffer.alloc(32, 0x11)
@@ -301,6 +478,7 @@ describe("local secret lifecycle", () : any => {
       expectedScope({ host: "other.example.test" }),
       expectedScope({ protocol: "" }),
       expectedScope({ protocol: "http" }),
+      expectedScope({ origin: "https://api.example.test:8443" }),
       expectedScope({ requiredScopes: ["gateway:maintain"] })
     ]) {
       await expect(resolveLocalSecretPayload({

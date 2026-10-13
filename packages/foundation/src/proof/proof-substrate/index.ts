@@ -10,6 +10,10 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 import {
+  DEVELOPMENT_MESHRIX_SIGNER_SECRET,
+  isDevelopmentMeshrixSignerSecret
+} from "./constants.ts";
+import {
   canonicalDecode,
   cidForBytes,
   createRepairPlanner,
@@ -272,6 +276,11 @@ export const OPERATION_PROOF_SUBSTRATE_MODES = Object.freeze({
 } as const);
 
 const DEFAULT_EVIDENCE_POLICY = "development";
+const DEVELOPMENT_HMAC_SIGNERS = new WeakSet<object>();
+
+function isDevelopmentSigner(signer?: MeshrixSigner | false | null): boolean {
+  return typeof signer === "object" && signer !== null && DEVELOPMENT_HMAC_SIGNERS.has(signer);
+}
 const SIGNER_SECRET_PATTERN = /^[0-9a-f]{64}$/u;
 const MESHRIX_ASPECT_PROTOCOL = "pactium.v0.3.meshrix-aspect";
 const MESHRIX_POLICY_EXTENSION = "meshrix.policy";
@@ -333,7 +342,7 @@ interface MeshrixSignerOptions {
 
 export function createMeshrixSigner({
   signerId = "meshrix-local",
-  secret = "meshrix-development-signer",
+  secret = DEVELOPMENT_MESHRIX_SIGNER_SECRET,
   algorithm = "",
   privateKey = "",
   publicKey = ""
@@ -378,11 +387,12 @@ export function createMeshrixSigner({
   const retainedSecret = Buffer.isBuffer(secret)
     ? Buffer.from(secret)
     : Buffer.from(String(secret || ""), "utf8");
+  const usesDevelopmentSecret = isDevelopmentMeshrixSignerSecret(secret);
   let closed = false;
   const assertOpen = ()  => {
     if (closed) throw new Error("Meshrix.js signer is closed.");
   };
-  return Object.freeze({
+  const signer: MeshrixSigner = Object.freeze({
     protocol: MESHRIX_ASPECT_PROTOCOL,
     signerId,
     algorithm: "hmac-sha256",
@@ -402,6 +412,8 @@ export function createMeshrixSigner({
       retainedSecret.fill(0);
     }
   });
+  if (usesDevelopmentSecret) DEVELOPMENT_HMAC_SIGNERS.add(signer as object);
+  return signer;
 }
 
 interface MeshrixSignerKeyRingOptions {
@@ -634,7 +646,7 @@ function signerConfigured({ signer = null, signerSecret = "", evidencePolicy = "
   signer?: MeshrixSigner | false | null; signerSecret?: string; evidencePolicy?: string;
 } = {}): boolean {
   if (evidencePolicy !== "production") return true;
-  if (signer === false) return false;
+  if (signer === false || isDevelopmentSigner(signer) || isDevelopmentMeshrixSignerSecret(signerSecret)) return false;
   return Boolean(signer) || text(signerSecret) !== "";
 }
 
@@ -1284,6 +1296,15 @@ function createMeshrixAspect({
   signerSecret = ""
 }: MeshrixAspectOptions) {
   const hasExplicitSignerSecret = text(signerSecret) !== "";
+  if (
+    evidencePolicy === "production" &&
+    (isDevelopmentSigner(signer) || (signer !== false && isDevelopmentMeshrixSignerSecret(signerSecret)))
+  ) {
+    throw Object.assign(
+      new Error("Meshrix.js production evidence policy rejects the development signer."),
+      { code: "operation_proof_signer_development_secret" }
+    );
+  }
   const resolvedSigner = signer === false
     ? null
     : signer || (hasExplicitSignerSecret || evidencePolicy !== "production"
@@ -1293,7 +1314,7 @@ function createMeshrixAspect({
   const genericRepairPlanner = requireRepairPlanner(createRepairPlanner());
 
   function assertProductionReady()  {
-    if (evidencePolicy === "production" && !resolvedSigner) {
+    if (!signerConfigured({ signer: resolvedSigner, signerSecret, evidencePolicy })) {
       throw new Error("Meshrix.js production evidence policy requires an explicit signer or signerSecret.");
     }
   }
@@ -1677,6 +1698,15 @@ export function createOperationProofSubstrate({
     runtimeOptions,
     dataDir: resolvedDataDir,
   });
+  if (
+    resolvedEvidencePolicy === "production" &&
+    (isDevelopmentSigner(signer) || (signer !== false && isDevelopmentMeshrixSignerSecret(resolvedSignerSecret)))
+  ) {
+    throw proofConfigurationError(
+      "operation_proof_signer_development_secret",
+      "Meshrix.js production operation-proof evidence rejects the development signer.",
+    );
+  }
   if (!signerConfigured({
     signer,
     signerSecret: resolvedSignerSecret,

@@ -40,6 +40,24 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = Object.freeze({
   capacity_exceeded: 503
 });
 
+const PUBLIC_ERROR_BY_CODE: Readonly<Record<string, string>> = Object.freeze({
+  tenant_id_invalid: "Tenant identifier is invalid.",
+  recording_policy_expected_revision_invalid: "The expected policy revision is invalid.",
+  recording_policy_invalid: "The recording policy is invalid. Review its fields and try again.",
+  recording_policy_revision_invalid: "The policy revision is invalid.",
+  recording_policy_change_denied: "The current role cannot change the recording policy.",
+  recording_policy_revision_conflict: "The recording policy changed. Refresh and try again.",
+  recording_policy_identity_changed: "The recording policy identity cannot be changed.",
+  recording_policy_revision_not_advanced: "The next policy revision must advance.",
+  recording_governance_unavailable: "Recording governance is temporarily unavailable.",
+  recording_policy_required: "The recording policy is unavailable.",
+  recording_sink_unavailable: "The recording store is temporarily unavailable.",
+  sink_unavailable: "The recording store is temporarily unavailable.",
+  sink_write_failed: "The recording could not be written.",
+  capacity_exceeded: "The recording store has reached its configured capacity.",
+  recording_governance_failed: "Recording governance operation failed."
+});
+
 function recordingProvider(context: Record<string, any> = {}): any {
   const provider = context.recordingGovernanceProvider;
   if (!provider || typeof provider.describe !== "function"
@@ -80,9 +98,16 @@ function effectiveTenant(context: Record<string, any> = {}, input: Record<string
 
 function recordingErrorResult(error: any): any {
   if (error instanceof RecordingGovernanceError || typeof error?.code === "string") {
-    const code = String(error.code || "recording_governance_unavailable");
+    const candidateCode = String(error.code || "recording_governance_failed");
+    const code = Object.prototype.hasOwnProperty.call(STATUS_BY_CODE, candidateCode) ||
+      candidateCode === "recording_governance_failed"
+      ? candidateCode
+      : "recording_governance_failed";
     const status = STATUS_BY_CODE[code] || 500;
-    const payload: Record<string, any> = { code, error: error.message || "Recording governance operation failed." };
+    const payload: Record<string, any> = {
+      code,
+      error: PUBLIC_ERROR_BY_CODE[code] || PUBLIC_ERROR_BY_CODE.recording_governance_failed
+    };
     if (code === "recording_policy_revision_conflict" && Number(error.currentRevision) > 0) {
       payload.currentRevision = Number(error.currentRevision);
     }

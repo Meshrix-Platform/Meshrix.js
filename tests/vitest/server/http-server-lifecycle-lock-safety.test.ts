@@ -9,7 +9,8 @@ import {
 import {
   createHttpApplicationAssemblyCloser,
   registerPluginContributionLifecycle,
-  registerPluginOwnerGrantLifecycle
+  registerPluginOwnerGrantLifecycle,
+  resolveToolSkillPublicOrigin
 } from "../../../packages/server-runtime/src/composition/http-application-assembly.ts";
 
 function createHarness({ openAdmission = true, transportLimits = {} }: Record<string, any> = {}) : any {
@@ -43,6 +44,38 @@ function createHarness({ openAdmission = true, transportLimits = {} }: Record<st
     applicationAssembly
   };
 }
+
+describe("HTTP application public origin", () : any => {
+  it("uses the canonical trusted production ingress origin", () : any => {
+    expect(resolveToolSkillPublicOrigin({
+      ingressContract: { enabled: true, publicOrigin: "https://meshrix.example.test" },
+      resolvedListenUrl: "http://127.0.0.1:8080"
+    })).toBe("https://meshrix.example.test");
+  });
+
+  it("fails closed rather than falling back to the listener URL for an incomplete production contract", () : any => {
+    expect(() => resolveToolSkillPublicOrigin({
+      ingressContract: { enabled: true },
+      resolvedListenUrl: "http://127.0.0.1:8080"
+    })).toThrowError(expect.objectContaining({ code: "tool_skill_public_origin_unavailable" }));
+  });
+
+  it("normalizes a local listener URL to its bare origin", () : any => {
+    expect(resolveToolSkillPublicOrigin({
+      ingressContract: { enabled: false },
+      resolvedListenUrl: "http://localhost:8080/console/"
+    })).toBe("http://localhost:8080");
+  });
+
+  it("rejects credentialed or non-HTTP listener URLs", () : any => {
+    expect(() => resolveToolSkillPublicOrigin({
+      resolvedListenUrl: "https://user:secret@example.test"
+    })).toThrowError(expect.objectContaining({ code: "tool_skill_public_origin_invalid" }));
+    expect(() => resolveToolSkillPublicOrigin({
+      resolvedListenUrl: "file:///tmp/meshrix"
+    })).toThrowError(expect.objectContaining({ code: "tool_skill_public_origin_invalid" }));
+  });
+});
 
 describe("HTTP shutdown lock safety", () : any => {
   it("bounds active request cost and preserves reserved credit for light control work", () : any => {

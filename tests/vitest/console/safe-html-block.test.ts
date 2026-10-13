@@ -66,6 +66,26 @@ describe("SafeHtmlBlock", () : any => {
     expect(images[1].attributes("loading")).toBe("lazy");
   });
 
+  it("strips non-allowlisted tags such as base and details in markdown mode", () : any => {
+    const wrapper: any = mountBlock({
+      source: "markdownToSafeHtml",
+      html: `
+        <base href="https://evil.test/">
+        <details><summary>spoof</summary><p>hidden</p></details>
+        <form><input value="x"><button>go</button></form>
+        <svg><a xlink:href="javascript:alert(1)">x</a></svg>
+        <p>kept <strong>text</strong></p>
+      `,
+    });
+    expect(wrapper.find("base").exists()).toBe(false);
+    expect(wrapper.find("details").exists()).toBe(false);
+    expect(wrapper.find("form").exists()).toBe(false);
+    expect(wrapper.find("input").exists()).toBe(false);
+    expect(wrapper.find("svg").exists()).toBe(false);
+    expect(wrapper.find("strong").exists()).toBe(true);
+    expect(wrapper.text()).toContain("kept text");
+  });
+
   it("sanitizes evidence html while allowing normalized iframe, links and images", () : any => {
     const wrapper: any = mountBlock({
       source: "renderEvidenceReadableHtml",

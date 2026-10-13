@@ -1,4 +1,16 @@
 import fs from "node:fs";
+import { createOperationRouteIndex } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
+import { createConsoleAuth } from "../../../packages/foundation/src/security/auth/console-auth.ts";
+import { createTagStoreAdapter } from "../../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
+import { dispatchRegisteredHttpOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
+import { sendJson } from "../../../packages/protocols/http/http-utils.ts";
+import { modernHttpRequest } from "../gateway/support.ts";
+import { EventEmitter } from "node:events";
+import { Readable } from "node:stream";
+import { createHttpServerRequestHandler } from "../../../apps/server/runtime/http-server-routes.ts";
+import { createFixedWindowRateLimiter } from "../../../apps/server/runtime/http-server-middleware.ts";
+import { authenticateMcpApiKey, authenticateMcpApiKeyAdmission } from "../../../packages/capabilities/src/skills/mcp-api-key-authentication.ts";
+import { createRequestBodyAdmissionController } from "../../../packages/protocols/http/http-utils.ts";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -156,6 +168,87 @@ function harness(catalogOverrides: Record<string, any> = {}): any {
 }
 
 describe("scoped API Key distribution", () : any => {
+  it("recognizes real Keys before body retention and isolates source, subjects and organization budgets", async () => {
+    const current = harness();
+    const tagManagementStore = createTagStoreAdapter({ userDataPath: current.directory });
+    const cookieAuth = createConsoleAuth({ userDataPath: current.directory, tagManagementStore });
+    try {
+      const owner = await cookieAuth.ensureInitialOwner();
+      const login: any = await cookieAuth.login({ username: owner.username, password: owner.password }, { socket: { remoteAddress: "127.0.0.1" }, headers: {} });
+      const cookie = login.cookies.map((value: string) => value.split(";")[0]).join("; ");
+      const create = (organizationNodeId: string) => current.provider.create({ subjectId: "admin", workloadDisplayName: "Admission fixture", organizationNodeId,
+        expiresAt: "2026-08-04T00:00:00.000Z", policy: policy("catalog-1", { audience: { serverAudience: "meshrix.invalid", targetIds: ["server"], connectorPackageIds: [] } }) });
+      const first = await create("child");
+      const peer = await create("child");
+      const otherTenant = await create("issuer");
+      const limiter = (limit: number) => createFixedWindowRateLimiter({ limit, windowMs: 60000 });
+      const bodyAdmission = createRequestBodyAdmissionController({ maxInFlightRequests: 8, maxInFlightRequestsPerTenant: 2, maxInFlightRequestsPerSubject: 1 });
+      const anonymousLease = bodyAdmission.acquire({ tenantKey: "tenant:anonymous:127.0.0.1", subjectKey: "subject:anonymous:127.0.0.1", contentLength: 2 });
+      const handler = createHttpServerRequestHandler({ activeApiOperations: SERVER_API_OPERATIONS.filter((operation: any) => operation.id === "auth.session"), consoleAuth: cookieAuth,
+        controllers: { system: { handleAuthSession({ request, response }: any) { sendJson(response, 200, cookieAuth.getSummary(request)); } } }, distPath: "",
+        registeredCoreProvider: { findProxyRegisteredApiRequest: () => null, dispatchRegisteredHttpOperation: (input: any) => dispatchRegisteredHttpOperation({ ...input, routeIndex: createOperationRouteIndex(input.operations) }) },
+        getDiscoveryState: () => ({}), getListenUrl: () => "http://127.0.0.1", getOperationPermissionPlatform: () => null,
+        lifecycle: { beginRequest: () => new AbortController(), endRequest() {}, markSocketActive() {}, markSocketIdle() {} },
+        rateLimits: { windowMs: 60000 }, runtimeLogger: { debug() {}, info() {}, warn() {}, error() {} },
+        subjectRateLimiter: limiter(1), tenantRateLimiter: limiter(2), ipRateLimiter: limiter(1),
+        securityPermissions: cookieAuth, toolSkillManagementProvider: { authenticateAdmission: ({ request }: any) => authenticateMcpApiKeyAdmission({ request, serverAudience: "meshrix.invalid", apiKeyDistributionProvider: current.provider }) },
+        requestBodyAdmissionController: bodyAdmission, platformMcpGatewayAdapter: {
+          async handle({ rawRequest, requestBody, url, method }: any) {
+            const authentication = await authenticateMcpApiKey({ request: rawRequest, requestBody, url, method, serverAudience: "meshrix.invalid", apiKeyDistributionProvider: current.provider });
+            if (!authentication.ok) return { status: 401, body: { denied: true } };
+            const principal = authentication.apiKeyAuthorization;
+            const charge = rawRequest.__meshrixPrincipalAdmission({ credentialKind: "api-key", subjectId: principal.workloadPrincipalId, tenantId: principal.organizationNodeId });
+            return charge.allowed ? { status: 200, body: { jsonrpc: "2.0", id: 1, result: { tools: [] } } } : { status: 429, body: {} };
+          }
+        } });
+      const invoke = async (apiKey?: string, sessionCookie = "") => {
+        let bodyReads = 0;
+        const message = modernHttpRequest("tools/list", 1);
+        const body = JSON.stringify(message.body);
+        const request: any = new Readable({ read() { bodyReads++; this.push(body); this.push(null); } });
+        request.method = sessionCookie ? "GET" : "POST"; request.url = sessionCookie ? "/api/auth/session" : "/mcp";
+        request.headers = { ...message.headers, host: "meshrix.invalid", "content-length": String(Buffer.byteLength(body)), ...(apiKey ? { "x-meshrix.js-api-key": apiKey } : {}), ...(sessionCookie ? { cookie: sessionCookie } : {}) };
+        request.socket = { remoteAddress: "127.0.0.1" };
+        const response: any = new EventEmitter();
+        response.statusCode = 200; response.headers = {};
+        response.setHeader = (name: string, value: any) => { response.headers[name.toLowerCase()] = value; };
+        response.getHeader = (name: string) => response.headers[name.toLowerCase()];
+        response.writeHead = (status: number, headers: any) => { response.statusCode = status; Object.assign(response.headers, headers); };
+        response.write = () => {};
+        response.end = () => response.emit("finish");
+        await handler(request, response);
+        return { status: response.statusCode, bodyReads };
+      };
+      // Anonymous body capacity/source traffic cannot charge either valid Key.
+      expect((await invoke()).status).toBe(429);
+      expect((await invoke(first.apiKey)).status).toBe(200);
+      expect((await invoke(first.apiKey))).toMatchObject({ status: 429, bodyReads: 0 });
+      expect((await invoke(peer.apiKey)).status).toBe(200);
+      expect((await invoke(otherTenant.apiKey)).status).toBe(200);
+      expect((await invoke(undefined, cookie)).status).toBe(200);
+      const third = await create("child");
+      expect((await invoke(third.apiKey))).toMatchObject({ status: 429, bodyReads: 0 });
+      const invalid = first.apiKey.slice(0, -1) + (first.apiKey.endsWith("A") ? "B" : "A");
+      expect((await invoke(invalid))).toMatchObject({ status: 429, bodyReads: 0 });
+      anonymousLease.release();
+    } finally { await cookieAuth.close(); tagManagementStore.close(); await current.close(); }
+  });
+
+  it("keeps narrow admission separate from signed process authorization and effect permits", async () => {
+    const current = harness();
+    try {
+      const created = await current.provider.create({ subjectId: "admin", workloadDisplayName: "Signed admission", organizationNodeId: "child", expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", { processIdentity: { mode: "required", allowedPublicKeyFingerprints: ["sha256:fixture"] } }) });
+      const input = { credential: created.apiKey, serverAudience: "https://meshrix.invalid", targetId: "server", connectorPackageId: null };
+      const admission = await current.provider.authenticateAdmission(input);
+      expect(admission).toEqual({ credentialKind: "api-key-admission", subjectId: created.record.workloadPrincipalId, tenantId: "child" });
+      await expect(current.provider.authenticateRuntime({ ...input, processIdentityEvidence: null })).rejects.toMatchObject({ code: "api_key_process_identity_required" });
+      await expect(current.provider.authorizeOperation({ authorization: admission, operation: { toolId: "tools.echo" } })).rejects.toMatchObject({ code: "api_key_invalid" });
+      await current.provider.revoke({ subjectId: "admin", keyId: created.record.keyId, expectedLifecycleRevision: created.record.lifecycleRevision, reasonCode: "administrator_request" });
+      await expect(current.provider.authenticateAdmission(input)).rejects.toMatchObject({ code: "api_key_inactive" });
+    } finally { await current.close(); }
+  });
+
   it("authorizes selected Core and exact upstream operations through one restricted API Key", async () : Promise<any> => {
     const coreResource: any = {
       capabilityDomain: "runtime",
@@ -967,6 +1060,39 @@ describe("scoped API Key distribution", () : any => {
       } finally {
         await reopenedStore.close();
       }
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("admits an MCP client that omits optional identity headers and denies a presented mismatch", async () : Promise<any> => {
+    const current: any = harness();
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Optional identity worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          audience: {
+            serverAudience: "https://meshrix.invalid",
+            targetIds: ["server"],
+            connectorPackageIds: ["package.codex"]
+          }
+        })
+      });
+      const admit = (targetId: unknown, connectorPackageId: unknown) : Promise<any> => current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId,
+        connectorPackageId,
+        processIdentityEvidence: null
+      });
+      await expect(admit("", "")).resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(admit(null, null)).resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(admit("server", "package.codex")).resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(admit("other", null)).rejects.toMatchObject({ code: "api_key_policy_denied", statusCode: 403 });
+      await expect(admit("server", "package.other")).rejects.toMatchObject({ code: "api_key_policy_denied", statusCode: 403 });
     } finally {
       await current.close();
     }

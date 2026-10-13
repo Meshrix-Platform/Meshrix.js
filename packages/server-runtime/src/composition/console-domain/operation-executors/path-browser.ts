@@ -224,6 +224,7 @@ export async function browseServerPath({
       : currentPath;
   let entries: any[] = [];
   let error: any = "";
+  let errorCode = "";
 
   try {
     const directoryEntries: any = await fs.readdir(currentPath, { withFileTypes: true });
@@ -253,7 +254,8 @@ export async function browseServerPath({
       return left.name.localeCompare(right.name, "zh-CN");
     });
   } catch (browseError: any) {
-    error = browseError instanceof Error ? browseError.message : "无法读取目录。";
+    errorCode = "path_browser_read_failed";
+    error = "无法读取目录，请检查访问权限或目录是否仍存在。";
   }
 
   return {
@@ -267,6 +269,7 @@ export async function browseServerPath({
     roots: publicPathBrowserRoots(roots),
     entries,
     truncated: entries.length >= PATH_BROWSER_MAX_ENTRIES,
-    error
+    error,
+    errorCode
   };
 }

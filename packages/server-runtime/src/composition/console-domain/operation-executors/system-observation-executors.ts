@@ -29,6 +29,10 @@ import {
   sampleCapabilityPackStoreFor
 } from "./registry-services.ts";
 
+function publicCheckpointError(status: number, code: string, message: string): any {
+  return result(status, { ok: false, code, error: message });
+}
+
 // --- Relay traffic metrics (system.relay_traffic) ------------------------------
 //
 // The private relay worker exports `GET /admin/metrics` as Prometheus text
@@ -42,12 +46,38 @@ const RELAY_TRAFFIC_FETCH_TIMEOUT_MS: any = 8_000;
 const RELAY_TRAFFIC_HISTORY_INTERVAL_MS: any = 15_000;
 const RELAY_TRAFFIC_HISTORY_LIMIT: any = 240;
 const RELAY_TRAFFIC_HISTORY_FILE_NAME: any = "relay-traffic-history.json";
+// Ingestion bounds: the exposition endpoint is remote input. The body is
+// capped while streaming, and the parser only keeps the bounded
+// `meshrix_relay_*` projection instead of materializing an arbitrary
+// remote-controlled metric set.
+const RELAY_TRAFFIC_MAX_BODY_BYTES: any = 262_144;
+const RELAY_TRAFFIC_METRIC_PREFIX: any = "meshrix_relay_";
+const RELAY_TRAFFIC_MAX_METRICS: any = 64;
+const RELAY_TRAFFIC_MAX_SAMPLES: any = 128;
+const RELAY_TRAFFIC_MAX_LABELS: any = 16;
+const RELAY_TRAFFIC_MAX_NAME_BYTES: any = 128;
+const RELAY_TRAFFIC_MAX_VALUE_BYTES: any = 256;
+const RELAY_TRAFFIC_MAX_LINE_BYTES: any = 8_192;
+const RELAY_TRAFFIC_HISTORY_MAX_BYTES: any = 1_048_576;
+const RELAY_TRAFFIC_HISTORY_SUMS_LIMIT: any = 64;
 
 const relayTrafficHistory: Array<{ t: number; sums: Record<string, number> }> = [];
 let relayTrafficHistoryAppendedAt: any = 0;
 // The file the ring was last loaded from ("" = not loaded yet). Resolution
 // is per-call so the "1" shorthand can follow context.userDataPath.
 let relayTrafficHistoryLoadedFrom: any = "";
+// History durability truth surfaced in every response: "disabled" (no
+// persist target), "durable" (last load/write succeeded) or "degraded"
+// (a load or write failed; the in-memory ring still serves but restart
+// loses history until a later write succeeds).
+const relayTrafficPersistence: { state: string; reason: string } = {
+  state: "disabled",
+  reason: ""
+};
+
+function relayTrafficPersistenceSnapshot() : any {
+  return { state: relayTrafficPersistence.state, ...(relayTrafficPersistence.reason ? { reason: relayTrafficPersistence.reason } : {}) };
+}
 
 /**
  * `MESHRIX_RELAY_TRAFFIC_PERSIST` selects where the history ring survives:
@@ -82,22 +112,37 @@ function loadRelayTrafficHistory(filePath: any) : any {
   relayTrafficHistoryLoadedFrom = filePath;
   let parsed: any = null;
   try {
+    // A missing file is a clean start, not degradation; an existing file
+    // that cannot be stat/read/parse within the byte budget is reported
+    // degraded instead of silently dropping to an empty ring.
+    const stat: any = fs.statSync(filePath);
+    if (stat.size > RELAY_TRAFFIC_HISTORY_MAX_BYTES) {
+      throw new Error("persisted history exceeds the byte limit");
+    }
     parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") {
+      relayTrafficPersistence.state = "degraded";
+      relayTrafficPersistence.reason = "load_failed";
+    }
     return;
   }
   if (!Array.isArray(parsed)) {
+    relayTrafficPersistence.state = "degraded";
+    relayTrafficPersistence.reason = "load_failed";
     return;
   }
   const restored: any = [];
-  for (const entry of parsed) {
+  // Only the tail can ever be kept; validate that window rather than the
+  // whole unbounded file.
+  for (const entry of parsed.slice(-RELAY_TRAFFIC_HISTORY_LIMIT)) {
     const t: any = Number(entry?.t);
     const sums: any = entry?.sums;
     if (!Number.isFinite(t) || !sums || typeof sums !== "object" || Array.isArray(sums)) {
       continue;
     }
     const cleanSums: Record<string, number> = {};
-    for (const [name, value] of Object.entries(sums)) {
+    for (const [name, value] of Object.entries(sums).slice(0, RELAY_TRAFFIC_HISTORY_SUMS_LIMIT)) {
       const numeric: any = Number(value);
       if (Number.isFinite(numeric)) {
         cleanSums[name] = numeric;
@@ -114,12 +159,17 @@ function loadRelayTrafficHistory(filePath: any) : any {
     ...restored.slice(-RELAY_TRAFFIC_HISTORY_LIMIT)
   );
   relayTrafficHistoryAppendedAt = restored[restored.length - 1].t;
+  relayTrafficPersistence.state = "durable";
+  relayTrafficPersistence.reason = "";
 }
 
 /**
  * Persist the whole ring (≤240 small entries) via a tmp+rename write so a
  * torn file is never observed. A persistence failure must never break the
- * operation — the in-memory ring keeps serving.
+ * operation — the in-memory ring keeps serving — but it is surfaced through
+ * `persistence.state` so the panel can show "degraded" instead of reporting
+ * normal while restart would lose history. A later successful write
+ * restores "durable".
  */
 function persistRelayTrafficHistory(filePath: any) : any {
   if (!filePath) {
@@ -130,8 +180,11 @@ function persistRelayTrafficHistory(filePath: any) : any {
     const temporaryPath: any = `${filePath}.${process.pid}.tmp`;
     fs.writeFileSync(temporaryPath, `${JSON.stringify(relayTrafficHistory)}\n`, "utf8");
     fs.renameSync(temporaryPath, filePath);
+    relayTrafficPersistence.state = "durable";
+    relayTrafficPersistence.reason = "";
   } catch {
-    // Honest degradation: keep serving the in-memory ring.
+    relayTrafficPersistence.state = "degraded";
+    relayTrafficPersistence.reason = "write_failed";
   }
 }
 
@@ -139,7 +192,7 @@ function parseExpositionLabelSet(source: any) : any {
   const labels: Record<string, string> = {};
   let index = 0;
   const text: any = String(source || "");
-  while (index < text.length) {
+  while (index < text.length && Object.keys(labels).length < RELAY_TRAFFIC_MAX_LABELS) {
     const nameStart: any = index;
     while (index < text.length && text[index] !== "=") {
       index += 1;
@@ -164,7 +217,7 @@ function parseExpositionLabelSet(source: any) : any {
     }
     index += 1;
     if (name) {
-      labels[name] = value;
+      labels[name] = value.slice(0, RELAY_TRAFFIC_MAX_VALUE_BYTES);
     }
     while (index < text.length && (text[index] === "," || text[index] === " ")) {
       index += 1;
@@ -173,6 +226,13 @@ function parseExpositionLabelSet(source: any) : any {
   return labels;
 }
 
+/**
+ * Bounded v0.0.4 projection: only `meshrix_relay_*` series are kept, and
+ * per-metric/series/label/line limits stop an oversized or hostile
+ * exposition from expanding unbounded server memory. Truncation is
+ * deterministic — extra lines, series and labels are dropped, never
+ * partially parsed into misleading values.
+ */
 function parseRelayMetricsExposition(body: any) : any {
   const metrics: any = new Map<string, any>();
   const metricFor: any = (name: any) : any => {
@@ -184,17 +244,20 @@ function parseRelayMetricsExposition(body: any) : any {
     return metric;
   };
   for (const rawLine of String(body || "").split("\n")) {
+    if (metrics.size >= RELAY_TRAFFIC_MAX_METRICS) {
+      break;
+    }
     const line: any = rawLine.trim();
-    if (!line) {
+    if (!line || line.length > RELAY_TRAFFIC_MAX_LINE_BYTES) {
       continue;
     }
     if (line.startsWith("#")) {
       const helpMatch: any = /^#\s+HELP\s+(\S+)\s*(.*)$/u.exec(line);
-      if (helpMatch) {
+      if (helpMatch && helpMatch[1].startsWith(RELAY_TRAFFIC_METRIC_PREFIX)) {
         metricFor(helpMatch[1]).help = helpMatch[2] || "";
       }
       const typeMatch: any = /^#\s+TYPE\s+(\S+)\s*(\S*)/u.exec(line);
-      if (typeMatch) {
+      if (typeMatch && typeMatch[1].startsWith(RELAY_TRAFFIC_METRIC_PREFIX)) {
         metricFor(typeMatch[1]).type = typeMatch[2] || "";
       }
       continue;
@@ -216,11 +279,18 @@ function parseRelayMetricsExposition(body: any) : any {
       name = spaceIndex < 0 ? line : line.slice(0, spaceIndex);
       rest = spaceIndex < 0 ? "" : line.slice(spaceIndex + 1).trim();
     }
-    const value: any = Number(rest.split(/\s+/u)[0]);
-    if (!name || !Number.isFinite(value)) {
+    if (!name.startsWith(RELAY_TRAFFIC_METRIC_PREFIX) || name.length > RELAY_TRAFFIC_MAX_NAME_BYTES) {
       continue;
     }
-    metricFor(name).samples.push({
+    const value: any = Number(rest.split(/\s+/u)[0]);
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+    const metric: any = metricFor(name);
+    if (metric.samples.length >= RELAY_TRAFFIC_MAX_SAMPLES) {
+      continue;
+    }
+    metric.samples.push({
       labels: parseExpositionLabelSet(labelsText),
       value
     });
@@ -251,13 +321,52 @@ function recordRelayTrafficHistory(sums: any = {}, now: any = Date.now(), persis
   persistRelayTrafficHistory(persistPath);
 }
 
+/**
+ * Read the exposition body under the byte cap. Streaming bodies abort at
+ * the limit; mock/text bodies are measured the same way. Over-limit input
+ * fails closed with `metrics_response_invalid`, never a partial parse.
+ */
+async function readExpositionBody(response: any) : Promise<any> {
+  const stream: any = response?.body;
+  if (stream && typeof stream.getReader === "function") {
+    const reader: any = stream.getReader();
+    const chunks: any = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk: any = typeof value === "string" ? Buffer.from(value, "utf8") : Buffer.from(value || []);
+      total += chunk.length;
+      if (total > RELAY_TRAFFIC_MAX_BODY_BYTES) {
+        try { await reader.cancel(); } catch { /* best-effort */ }
+        return null;
+      }
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString("utf8");
+  }
+  const text: any = await response.text();
+  if (Buffer.byteLength(String(text || ""), "utf8") > RELAY_TRAFFIC_MAX_BODY_BYTES) {
+    return null;
+  }
+  return String(text || "");
+}
+
 async function loadRelayTrafficMetrics(context: any = {}) : Promise<any> {
   const metricsUrl: any = String(process.env.MESHRIX_RELAY_METRICS_URL || "").trim();
   if (!metricsUrl) {
     return result(200, { configured: false });
   }
   const persistPath: any = relayTrafficPersistPath(context);
+  if (!persistPath) {
+    relayTrafficPersistence.state = "disabled";
+    relayTrafficPersistence.reason = "";
+  } else if (relayTrafficPersistence.state === "disabled") {
+    // First call with a configured target: durable until proven degraded.
+    relayTrafficPersistence.state = "durable";
+  }
   loadRelayTrafficHistory(persistPath);
+  const persistence: any = () : any => relayTrafficPersistenceSnapshot();
   const adminToken: any = String(process.env.MESHRIX_RELAY_ADMIN_TOKEN || "").trim();
   let response: any = null;
   try {
@@ -272,7 +381,8 @@ async function loadRelayTrafficMetrics(context: any = {}) : Promise<any> {
     return result(200, {
       configured: true,
       error: "relay_unreachable",
-      history: [...relayTrafficHistory]
+      history: [...relayTrafficHistory],
+      persistence: persistence()
     });
   }
   if (!response.ok) {
@@ -280,16 +390,32 @@ async function loadRelayTrafficMetrics(context: any = {}) : Promise<any> {
       configured: true,
       error: "relay_unreachable",
       status: Number(response.status || 0),
-      history: [...relayTrafficHistory]
+      history: [...relayTrafficHistory],
+      persistence: persistence()
     });
   }
-  const metrics: any = parseRelayMetricsExposition(await response.text());
+  let body: any = null;
+  try {
+    body = await readExpositionBody(response);
+  } catch {
+    body = null;
+  }
+  if (body === null) {
+    return result(200, {
+      configured: true,
+      error: "metrics_response_invalid",
+      history: [...relayTrafficHistory],
+      persistence: persistence()
+    });
+  }
+  const metrics: any = parseRelayMetricsExposition(body);
   recordRelayTrafficHistory(relayMetricSums(metrics), Date.now(), persistPath);
   return result(200, {
     configured: true,
     fetchedAt: new Date().toISOString(),
     metrics,
-    history: [...relayTrafficHistory]
+    history: [...relayTrafficHistory],
+    persistence: persistence()
   });
 }
 
@@ -325,37 +451,44 @@ export async function executeSystemObservationOperation({ operationId, input = {
 
   const checkpointTreeApi: any = context.checkpointTreeApi;
   if (!checkpointTreeApi) {
-    return result(503, { error: "工作队列 checkpoint 接口未注册。" });
+    return publicCheckpointError(503, "checkpoint_tree_unavailable", "工作队列 checkpoint 接口暂不可用。");
   }
   if (id === "system.checkpoint_trees.list" || id === "workspace.checkpoint.tree.list") {
-    const trees: any = await checkpointTreeApi.listCheckpointTrees({
-      userDataPath: context.userDataPath,
-      ownerId: input.ownerId || input["owner-id"] || input.workspaceId || input["workspace-id"] || input.workspaceRef || input["workspace-ref"] || "",
-      kind: input.kind || "",
-      limit: Number(input.limit || 100)
-    });
-    return result(200, {
-      schemaVersion: "v0.0.1:schema:definition-1",
-      count: trees.length,
-      items: trees.map((tree?: any) : any => checkpointTreeApi.checkpointTreeSummary(tree))
-    });
+    try {
+      const trees: any = await checkpointTreeApi.listCheckpointTrees({
+        userDataPath: context.userDataPath,
+        ownerId: input.ownerId || input["owner-id"] || input.workspaceId || input["workspace-id"] || input.workspaceRef || input["workspace-ref"] || "",
+        kind: input.kind || "",
+        limit: Number(input.limit || 100)
+      });
+      return result(200, {
+        schemaVersion: "v0.0.1:schema:definition-1",
+        count: trees.length,
+        items: trees.map((tree?: any) : any => checkpointTreeApi.checkpointTreeSummary(tree))
+      });
+    } catch {
+      return publicCheckpointError(500, "checkpoint_tree_list_failed", "Checkpoint trees could not be listed.");
+    }
   }
   if (id === "system.checkpoint_trees.get" || id === "workspace.checkpoint.node.get") {
     const treeId: any = String(input.treeId || input["tree-id"] || input.id || "").trim();
-    const tree: any = await checkpointTreeApi.loadCheckpointTree({
-      userDataPath: context.userDataPath,
-      treeId
-    });
-    if (!tree) {
-      return result(404, {
-        error: "checkpoint tree 不存在。"
+    let tree: any;
+    try {
+      tree = await checkpointTreeApi.loadCheckpointTree({
+        userDataPath: context.userDataPath,
+        treeId
       });
+    } catch {
+      return publicCheckpointError(500, "checkpoint_tree_load_failed", "The checkpoint tree could not be loaded.");
+    }
+    if (!tree) {
+      return publicCheckpointError(404, "checkpoint_tree_not_found", "The checkpoint tree could not be found.");
     }
     return result(200, tree);
   }
   if (id === "workspace.checkpoint.diff") {
     if (typeof checkpointTreeApi.diffCheckpointTree !== "function") {
-      return result(503, { error: "checkpoint diff 接口不可用。" });
+      return publicCheckpointError(503, "checkpoint_diff_unavailable", "Checkpoint diff is temporarily unavailable.");
     }
     try {
       return result(200, protocolPayload(await checkpointTreeApi.diffCheckpointTree({
@@ -366,13 +499,13 @@ export async function executeSystemObservationOperation({ operationId, input = {
         fromNodeId: input.fromNodeId || input["from-node-id"] || "",
         toNodeId: input.toNodeId || input["to-node-id"] || ""
       })));
-    } catch (error: any) {
-      return result(404, errorPayload(error, "checkpoint diff 失败。"));
+    } catch {
+      return publicCheckpointError(404, "checkpoint_diff_failed", "Checkpoint diff could not be completed.");
     }
   }
   if (id === "workspace.checkpoint.scope.query") {
     if (typeof checkpointTreeApi.queryCheckpointScope !== "function") {
-      return result(503, { error: "checkpoint scope 接口不可用。" });
+      return publicCheckpointError(503, "checkpoint_scope_unavailable", "Checkpoint scope is temporarily unavailable.");
     }
     try {
       return result(200, protocolPayload(await checkpointTreeApi.queryCheckpointScope({
@@ -380,13 +513,13 @@ export async function executeSystemObservationOperation({ operationId, input = {
         treeId: input.treeId || input["tree-id"] || input.id || "",
         nodeId: input.nodeId || input["node-id"] || input.checkpointNodeId || ""
       })));
-    } catch (error: any) {
-      return result(404, errorPayload(error, "checkpoint scope 查询失败。"));
+    } catch {
+      return publicCheckpointError(404, "checkpoint_scope_query_failed", "Checkpoint scope could not be queried.");
     }
   }
   if (id === "workspace.checkpoint.restore.preview") {
     if (typeof checkpointTreeApi.previewCheckpointRestore !== "function") {
-      return result(503, { error: "checkpoint restore preview 接口不可用。" });
+      return publicCheckpointError(503, "checkpoint_restore_preview_unavailable", "Checkpoint restore preview is temporarily unavailable.");
     }
     try {
       const restorePlan: any = await checkpointTreeApi.previewCheckpointRestore({
@@ -419,13 +552,13 @@ export async function executeSystemObservationOperation({ operationId, input = {
           : restorePlan.actions,
         workspaceFileRestore: fileRestore?.payload
       }));
-    } catch (error: any) {
-      return result(404, errorPayload(error, "checkpoint restore preview 失败。"));
+    } catch {
+      return publicCheckpointError(404, "checkpoint_restore_preview_failed", "Checkpoint restore could not be previewed.");
     }
   }
   if (id === "workspace.checkpoint.restore") {
     if (typeof checkpointTreeApi.restoreCheckpointTree !== "function") {
-      return result(503, { error: "checkpoint restore 接口不可用。" });
+      return publicCheckpointError(503, "checkpoint_restore_unavailable", "Checkpoint restore is temporarily unavailable.");
     }
     try {
       const restorePlan: any = typeof checkpointTreeApi.previewCheckpointRestore === "function"
@@ -470,8 +603,8 @@ export async function executeSystemObservationOperation({ operationId, input = {
           : markerRestore.actions,
         workspaceFileRestore: fileRestore?.payload
       }));
-    } catch (error: any) {
-      return result(404, errorPayload(error, "checkpoint restore 失败。"));
+    } catch {
+      return publicCheckpointError(404, "checkpoint_restore_failed", "Checkpoint restore could not be completed.");
     }
   }
 

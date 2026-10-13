@@ -211,8 +211,33 @@ export const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 export const SESSION_INACTIVITY_TTL_MS = 1000 * 60 * 60 * 2;
 export const SESSION_ACTIVITY_WRITE_INTERVAL_MS = 1000 * 60;
 export const TOKEN_PREFIX = "sac_";
-export const LOGIN_MAX_ATTEMPTS = 10;
-export const LOGIN_LOCKOUT_MS = 1000 * 60 * 15; // 15 minutes
+// Canonical login admission is shared by HTTP, RPC and plugin dispatch.
+export const LOGIN_SOURCE_ATTEMPT_LIMIT = 40;
+export const LOGIN_SOURCE_ATTEMPT_WINDOW_MS = 1000 * 60;
+export const LOGIN_SOURCE_ATTEMPT_STATE_MAX_KEYS = 10_000;
+export const LOGIN_SOURCE_MAX_IN_FLIGHT = 4;
+export const LOGIN_MAX_IN_FLIGHT = 16;
+
+const COMMON_PASSWORDS = new Set([
+  "1234567890",
+  "12345678901",
+  "abc1234567",
+  "admin123456",
+  "changeme1234",
+  "dragon12345",
+  "football123",
+  "iloveyou123",
+  "letmein1234",
+  "monkey12345",
+  "p@ssw0rd123",
+  "password123",
+  "password1234",
+  "password12345",
+  "password123!",
+  "qwerty12345",
+  "qwertyuiop",
+  "welcome1234"
+]);
 
 export function nowIso()  {
   return new Date().toISOString();
@@ -247,6 +272,9 @@ export function normalizePassword(value?: unknown): string {
   const password = String(value || "");
   if (password.length < 10 || password.length > 256) {
     throw new Error("密码长度需为 10-256 位。");
+  }
+  if (COMMON_PASSWORDS.has(password.toLowerCase())) {
+    throw new Error("密码过于常见，请选择不易猜测的密码。");
   }
   return password;
 }
@@ -521,9 +549,7 @@ export function ensureSchema(db: Database.Database): void {
       attributes_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      last_login_at TEXT NOT NULL DEFAULT '',
-      failed_attempts INTEGER NOT NULL DEFAULT 0,
-      locked_until TEXT NOT NULL DEFAULT ''
+      last_login_at TEXT NOT NULL DEFAULT ''
     );`
   );
 
@@ -623,4 +649,28 @@ export function ensureSchema(db: Database.Database): void {
       db.pragma("user_version = 1");
     })();
   }
+}
+
+const AUTH_ADMIN_SCOPE = "auth:admin";
+
+export function projectConsoleSessionRoles(
+  roles: readonly unknown[] | null | undefined,
+  session: { user?: { scopes?: readonly unknown[] } | null } | null | undefined
+): unknown[] | undefined {
+  if (!session) return undefined;
+  const entries = Array.isArray(roles) ? roles : [];
+  const scopes = session.user?.scopes;
+  if (Array.isArray(scopes) && scopes.includes(AUTH_ADMIN_SCOPE)) {
+    return [...entries];
+  }
+  return entries.map((role) => {
+    const record = role && typeof role === "object" && !Array.isArray(role)
+      ? role as Record<string, unknown>
+      : {};
+    const roleId = String(record.roleId || "");
+    return {
+      roleId,
+      label: String(record.label || roleId)
+    };
+  });
 }

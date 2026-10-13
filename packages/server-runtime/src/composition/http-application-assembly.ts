@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 
 import { createJobsController } from "#meshrix/protocols/http/controllers/jobs-controller";
 import { createSystemController } from "#meshrix/protocols/http/controllers/system-controller";
-import { createFileLocalSecretKeyProvider } from "@meshrix/foundation/security/secrets/local-secret-key-provider";
 import { requirePlatformInterface } from "./platform-registry.ts";
 import { createBatchDeletionCoordinator } from "../jobs/batch-deletion-coordinator.ts";
 import { resolveArchiveBatchIdentity } from "../jobs/archive-batch-id.ts";
@@ -37,6 +36,32 @@ const API_KEY_AUDIENCE_MAX_RISK: Readonly<Record<string, string>> = Object.freez
   medium: "safe_write",
   high: "repair_write"
 });
+
+export function resolveToolSkillPublicOrigin({ ingressContract, resolvedListenUrl }: Record<string, any> = {}) : string {
+  const configuredOrigin: any = ingressContract?.enabled === true
+    ? ingressContract.publicOrigin
+    : resolvedListenUrl;
+  let parsed: URL;
+  try {
+    parsed = new URL(String(configuredOrigin || ""));
+  } catch {
+    throw Object.assign(new Error("The server public origin is unavailable."), {
+      code: "tool_skill_public_origin_unavailable"
+    });
+  }
+  if ((parsed.protocol !== "https:" && parsed.protocol !== "http:") || parsed.username || parsed.password) {
+    throw Object.assign(new Error("The server public origin is invalid."), {
+      code: "tool_skill_public_origin_invalid"
+    });
+  }
+  const origin: any = parsed.origin;
+  if (ingressContract?.enabled === true && origin !== ingressContract.publicOrigin) {
+    throw Object.assign(new Error("The configured production public origin is not canonical."), {
+      code: "tool_skill_public_origin_invalid"
+    });
+  }
+  return origin;
+}
 
 function apiKeyAudienceEvaluationInput(authorization: any): any {
   const policy: any = authorization?.policy || {};
@@ -125,9 +150,8 @@ export function createHttpApplicationAssemblyCloser({
           ownerFailures.push(true);
         }
       };
-      // The Core-owned supervisor has an internal hard deadline and absorbs
-      // adapter close failures. A third-party integration may never veto Core
-      // dependency shutdown.
+      // The supervisor retains adapter ownership until invocations and close
+      // attempts settle. Only then may their Core dependencies shut down.
       await integrationTaskSupervisor?.shutdown?.().catch(() : any => {});
       const jobWorkflowProvider: any = getJobWorkflowProvider();
       if (jobWorkflowProvider !== jobManager && typeof jobWorkflowProvider?.close === "function") {
@@ -365,9 +389,7 @@ export async function createHttpApplicationAssembly({
     compositionRoot.operationProofSubstrate ||
     null;
   let agentWorkspaceRef: any = null;
-  const localSecretKeyProvider: any = createFileLocalSecretKeyProvider({
-    dataDir: userDataPath
-  });
+  const localSecretKeyProvider: any = compositionRoot.localSecretKeyProvider;
   const consoleOperationProviders: any = await createServerConsoleOperationProviders({
     userDataPath,
     securityPermissions,
@@ -413,6 +435,8 @@ export async function createHttpApplicationAssembly({
   });
   let discoveryState: any = await loadDiscoveryConfig(userDataPath);
   let listenUrl: any = "";
+  let requestIngressContract: any = null;
+  let requestHandlerConfigured: any = false;
   let controllersRef: any = null;
   let operationPermissionPlatformRef: any = null;
   let toolSkillManagementProviderRef: any = null;
@@ -666,6 +690,16 @@ export async function createHttpApplicationAssembly({
 
   async function activateListeningEndpoint({ resolvedListenUrl, discoveryOptions = {} }: Record<string, any>) : Promise<any> {
     listenUrl = resolvedListenUrl;
+    const publicOrigin: any = resolveToolSkillPublicOrigin({
+      ingressContract: requestIngressContract,
+      resolvedListenUrl
+    });
+    toolSkillManagementProvider.configurePublicOrigin(publicOrigin);
+    if (toolSkillManagementProvider.getPublicOrigin() !== publicOrigin) {
+      throw Object.assign(new Error("The server public origin could not be activated."), {
+        code: "tool_skill_public_origin_activation_failed"
+      });
+    }
     discoveryState = await resolveDiscoveryState(userDataPath, {
       listenUrl,
       serverLabel,
@@ -694,6 +728,11 @@ export async function createHttpApplicationAssembly({
     if (typeof handlerFactory !== "function") {
       throw new TypeError("HTTP application assembly requires a request handler factory.");
     }
+    if (requestHandlerConfigured) {
+      throw new Error("HTTP application assembly request handler is already configured.");
+    }
+    requestHandlerConfigured = true;
+    requestIngressContract = ingressContract;
     return handlerFactory({
       activeApiOperations,
       getActiveApiOperations,
