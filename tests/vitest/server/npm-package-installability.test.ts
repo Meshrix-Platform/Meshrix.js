@@ -442,27 +442,52 @@ describe("npm artifact installability source", () : any => {
         { name: rootPackage.name, version: rootPackage.version, directory: ".", root: true }
       ]
     };
-    const bundleFiles = (manifest?: any) : string[] => [
-      "package.json",
-      "LICENSE",
-      ...manifest.bundleDependencies.flatMap((name?: any) : string[] => [
-        `node_modules/${name}/package.json`,
-        `node_modules/${name}/LICENSE`
-      ]),
-      ...(manifest.name === rootPackage.name ? ["THIRD_PARTY_NOTICES.md"] : [])
-    ];
+    const bundleFiles = async (manifest?: any) : Promise<string[]> => {
+      const expected: any = new Set<string>(manifest.bundleDependencies);
+      const queue: any[] = [...expected];
+      while (queue.length) {
+        const name: any = queue.shift();
+        const lockEntry: any = ROOT_LOCK.packages[`node_modules/${name}`] || {};
+        let workspaceManifest: any = {};
+        if (lockEntry.link && String(lockEntry.resolved || "").startsWith("packages/")) {
+          workspaceManifest = JSON.parse(await fs.readFile(
+            path.join(REPO_ROOT, String(lockEntry.resolved), "package.json"), "utf8"
+          ));
+        }
+        const dependencyNames: any = {
+          ...(workspaceManifest.dependencies || {}),
+          ...(workspaceManifest.optionalDependencies || {}),
+          ...(lockEntry.dependencies || {}),
+          ...(lockEntry.optionalDependencies || {})
+        };
+        for (const dependencyName of Object.keys(dependencyNames)) {
+          if (expected.has(dependencyName)) continue;
+          expected.add(dependencyName);
+          queue.push(dependencyName);
+        }
+      }
+      return [
+        "package.json",
+        "LICENSE",
+        ...[...expected].flatMap((name: any) : string[] => [
+          `node_modules/${name}/package.json`,
+          `node_modules/${name}/LICENSE`
+        ]),
+        ...(manifest.name === rootPackage.name ? ["THIRD_PARTY_NOTICES.md"] : [])
+      ];
+    };
     const artifacts: any[] = [
       {
         name: gatewayManifest.name,
         version: gatewayManifest.version,
         manifest: gatewayManifest,
-        files: bundleFiles(gatewayManifest)
+        files: await bundleFiles(gatewayManifest)
       },
       {
         name: rootPackage.name,
         version: rootPackage.version,
         manifest: rootPackage,
-        files: bundleFiles(rootPackage)
+        files: await bundleFiles(rootPackage)
       }
     ];
 
@@ -470,7 +495,8 @@ describe("npm artifact installability source", () : any => {
       rootDir: REPO_ROOT,
       rootPackage,
       releaseSet,
-      packedArtifacts: artifacts
+      packedArtifacts: artifacts,
+      lockfile: ROOT_LOCK
     })).resolves.toMatchObject({
       publicPackageCount: 2,
       privateWorkspaceCount: rootPackage.bundleDependencies.length,
