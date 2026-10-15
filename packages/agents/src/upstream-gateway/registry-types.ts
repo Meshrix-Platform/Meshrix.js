@@ -884,6 +884,7 @@ export interface UpstreamGatewayRuntime {
   persist(): Promise<UpstreamGatewayRuntimeFlushResult>;
   close(): Promise<Readonly<{ ok: true }>>;
   getRefactorInstrumentation(): UpstreamGatewayRuntimeInstrumentation;
+  getShedMetricDimensions(): number;
 }
 
 // ── Durable runtime records ──────────────────────────────────────────────
