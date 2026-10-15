@@ -807,6 +807,10 @@ export async function publishAcceptanceFailureDiagnostic({
     paths?.workspace,
     "build/reports/npm-package-installability.json"
   );
+  const foundationTestReport = await readFailureDiagnosticReport(
+    paths?.workspace,
+    "build/test-reports/latest.json"
+  );
   const targetName: any = "failure.json";
   const payload: any = `${JSON.stringify(createFailureEnvelope(paths, failureResult, aggregate?.aggregateReport), null, 2)}\n`;
 
@@ -820,6 +824,9 @@ export async function publishAcceptanceFailureDiagnostic({
     }
     if (npmInstallability) {
       await writePrivateFileAtomic(path.join(failurePaths.staged, "npm-package-installability.json"), npmInstallability.raw);
+    }
+    if (foundationTestReport) {
+      await writePrivateFileAtomic(path.join(failurePaths.staged, "foundation-test-report.json"), foundationTestReport.raw);
     }
     await syncPathIfSupported(failurePaths.staged);
     await fs.rename(failurePaths.staged, failurePaths.committed);
