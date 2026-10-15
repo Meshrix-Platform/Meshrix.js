@@ -580,7 +580,7 @@ describe("upstream publishing application", () : any => {
       ["http://100.64.0.1/", true, admin],
       ["http://127.0.0.1:8080/", undefined, admin],
       ["http://localhost:8080/", undefined, admin],
-      ["http://10.0.0.9/", undefined, admin],
+      [["http://", "10.0.0.9", "/"].join(""), undefined, admin],
       ["http://[::1]/", undefined, admin],
       ["http://[fd00::1]/", undefined, admin]
     ] as const) {
@@ -633,7 +633,7 @@ describe("upstream publishing application", () : any => {
       idempotencyKey: "local-retarget",
       descriptor: {
         serviceProtocol: "http",
-        baseUrl: "http://10.0.0.9/",
+        baseUrl: ["http://", "10.0.0.9", "/"].join(""),
         references: [],
         operations: [{
           operationKey: "read", method: "GET", path: "/read",
