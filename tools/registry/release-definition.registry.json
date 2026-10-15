@@ -34,8 +34,7 @@
       "apps/mcp-gateway-installer/package.json",
       "apps/entry/package.json",
       "apps/entry-gui/package.json",
-      "apps/console/package.json",
-      "workers/private-relay/package.json"
+      "apps/console/package.json"
     ]
   },
   "container": {

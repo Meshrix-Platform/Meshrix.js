@@ -5,11 +5,18 @@
   "profiles": {
     "gateway-benchmark": {
       "description": "Deterministic real-MCP benchmark harness correctness (not a performance verdict)",
-      "suites": ["gateway.benchmark-node", "gateway.benchmark-correctness", "gateway.performance-observation", "repo.script-registry"]
+      "suites": [
+        "gateway.benchmark-node",
+        "gateway.benchmark-correctness",
+        "gateway.performance-observation",
+        "repo.script-registry"
+      ]
     },
     "product-distribution": {
       "description": "Canonical two-product archives, installed dependency boundary and runtime image contents",
-      "suites": ["repo.product-distribution"]
+      "suites": [
+        "repo.product-distribution"
+      ]
     },
     "core-baseline": {
       "description": "Shared repository and foundation baseline",
@@ -40,7 +47,9 @@
     },
     "core-public": {
       "description": "Core verifier gate",
-      "trackedArtifacts": ["docs/verification/regression.html"],
+      "trackedArtifacts": [
+        "docs/verification/regression.html"
+      ],
       "execution": {
         "mergeVitestProcesses": true,
         "cachePassedResults": true,
@@ -76,36 +85,64 @@
             "lanes": [
               {
                 "id": "frontend",
-                "suites": ["regression.frontend-build", "regression.frontend-functional"]
+                "suites": [
+                  "regression.frontend-build",
+                  "regression.frontend-functional"
+                ]
               },
               {
                 "id": "backend-build",
-                "suites": ["regression.backend-build"]
+                "suites": [
+                  "regression.backend-build"
+                ]
               },
               {
                 "id": "backend-server-shard-a",
-                "dependsOn": ["backend-build"],
-                "suites": ["regression.backend-server-shard-a"]
+                "dependsOn": [
+                  "backend-build"
+                ],
+                "suites": [
+                  "regression.backend-server-shard-a"
+                ]
               },
               {
                 "id": "backend-server-shard-b",
-                "dependsOn": ["backend-build"],
-                "suites": ["regression.backend-server-shard-b"]
+                "dependsOn": [
+                  "backend-build"
+                ],
+                "suites": [
+                  "regression.backend-server-shard-b"
+                ]
               },
               {
                 "id": "backend-worker-thread",
-                "dependsOn": ["backend-server-shard-a", "backend-server-shard-b"],
-                "suites": ["regression.backend-worker-thread"]
+                "dependsOn": [
+                  "backend-server-shard-a",
+                  "backend-server-shard-b"
+                ],
+                "suites": [
+                  "regression.backend-worker-thread"
+                ]
               },
               {
                 "id": "backend-unit",
-                "dependsOn": ["backend-build"],
-                "suites": ["regression.backend-unit"]
+                "dependsOn": [
+                  "backend-build"
+                ],
+                "suites": [
+                  "regression.backend-unit"
+                ]
               },
               {
                 "id": "backend-contract",
-                "dependsOn": ["backend-build"],
-                "suites": ["regression.backend-contract", "foundation.checkpoint-tree", "foundation.state-machine"]
+                "dependsOn": [
+                  "backend-build"
+                ],
+                "suites": [
+                  "regression.backend-contract",
+                  "foundation.checkpoint-tree",
+                  "foundation.state-machine"
+                ]
               }
             ]
           },
@@ -113,18 +150,49 @@
             "id": "interface",
             "label": "Frontend and backend interoperability contracts",
             "lanes": [
-              { "id": "api-contract", "suites": ["regression.frontend-backend-interface", "architecture.protocol-boundary"] },
-              { "id": "gateway", "suites": ["gateway.external"] },
-              { "id": "evidence", "suites": ["release.acceptance-ledger-anchor"] }
+              {
+                "id": "api-contract",
+                "suites": [
+                  "regression.frontend-backend-interface",
+                  "architecture.protocol-boundary"
+                ]
+              },
+              {
+                "id": "gateway",
+                "suites": [
+                  "gateway.external"
+                ]
+              },
+              {
+                "id": "evidence",
+                "suites": [
+                  "release.acceptance-ledger-anchor"
+                ]
+              }
             ]
           },
           {
             "id": "platform",
             "label": "Parallel platform extension adaptation",
             "lanes": [
-              { "id": "services", "suites": ["regression.platform-services"] },
-              { "id": "plugins", "suites": ["regression.platform-runtime-plugins"] },
-              { "id": "agent-adapters", "suites": ["regression.platform-client-adapters"] }
+              {
+                "id": "services",
+                "suites": [
+                  "regression.platform-services"
+                ]
+              },
+              {
+                "id": "plugins",
+                "suites": [
+                  "regression.platform-runtime-plugins"
+                ]
+              },
+              {
+                "id": "agent-adapters",
+                "suites": [
+                  "regression.platform-client-adapters"
+                ]
+              }
             ]
           }
         ]
@@ -462,14 +530,69 @@
             "id": "engineering-delivery",
             "label": "Package consumption and applicable sandbox verification",
             "lanes": [
-              { "id": "gateway-focused", "suites": ["gateway.task-001"] },
-              { "id": "product-distribution", "dependsOn": ["gateway-focused"], "suites": ["repo.product-distribution"] },
-              { "id": "npm-prepare", "dependsOn": ["product-distribution"], "suites": ["release.npm-package-prepare"] },
-              { "id": "npm-consumer", "dependsOn": ["npm-prepare"], "suites": ["release.npm-package-installability"] },
-              { "id": "sandbox-provider", "suites": ["execution-sandbox.provider-resolution"] },
-              { "id": "sandbox-runtime", "dependsOn": ["sandbox-provider"], "suites": ["execution-sandbox.controlled-runtime"] },
-              { "id": "sandbox-convergence", "dependsOn": ["sandbox-runtime"], "suites": ["execution-sandbox.convergence-final"] },
-              { "id": "runner-contract", "suites": ["repo.unified-test-runner"] }
+              {
+                "id": "gateway-focused",
+                "suites": [
+                  "gateway.task-001"
+                ]
+              },
+              {
+                "id": "product-distribution",
+                "dependsOn": [
+                  "gateway-focused"
+                ],
+                "suites": [
+                  "repo.product-distribution"
+                ]
+              },
+              {
+                "id": "npm-prepare",
+                "dependsOn": [
+                  "product-distribution"
+                ],
+                "suites": [
+                  "release.npm-package-prepare"
+                ]
+              },
+              {
+                "id": "npm-consumer",
+                "dependsOn": [
+                  "npm-prepare"
+                ],
+                "suites": [
+                  "release.npm-package-installability"
+                ]
+              },
+              {
+                "id": "sandbox-provider",
+                "suites": [
+                  "execution-sandbox.provider-resolution"
+                ]
+              },
+              {
+                "id": "sandbox-runtime",
+                "dependsOn": [
+                  "sandbox-provider"
+                ],
+                "suites": [
+                  "execution-sandbox.controlled-runtime"
+                ]
+              },
+              {
+                "id": "sandbox-convergence",
+                "dependsOn": [
+                  "sandbox-runtime"
+                ],
+                "suites": [
+                  "execution-sandbox.convergence-final"
+                ]
+              },
+              {
+                "id": "runner-contract",
+                "suites": [
+                  "repo.unified-test-runner"
+                ]
+              }
             ]
           }
         ]
@@ -486,26 +609,75 @@
   },
   "suites": [
     {
-      "id": "gateway.benchmark-node", "label": "Installed independent Node package correctness",
-      "owner": "platform", "package": "repo", "level": "integration",
-      "command": "node", "args": ["--test", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/privacy.test.mjs", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/schedule.test.mjs", ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/transport.test.mjs"],
-      "sideEffects": "network-service", "requiredServices": [],
-      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+      "id": "gateway.benchmark-node",
+      "label": "Installed independent Node package correctness",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "--test",
+        ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/privacy.test.mjs",
+        ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/schedule.test.mjs",
+        ".cache/gateway-benchmark/node_modules/meshrix-node-benchmark/test/transport.test.mjs"
+      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
     },
     {
-      "id": "repo.product-distribution", "label": "Fresh build and actual pack/install/source/image exclusion",
-      "owner": "platform", "package": "repo", "level": "integration",
-      "command": "npm", "args": ["exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=product-distribution", "vitest", "run", "tests/vitest/server/distribution-policy.test.ts", "tests/vitest/server/distribution-artifacts.test.ts", "--maxWorkers=1"],
-      "sideEffects": "network-service", "requiredServices": [],
-      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+      "id": "repo.product-distribution",
+      "label": "Fresh build and actual pack/install/source/image exclusion",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "exec",
+        "--offline",
+        "--",
+        "cross-env",
+        "MESHRIX_VITEST_SCOPE=product-distribution",
+        "vitest",
+        "run",
+        "tests/vitest/server/distribution-policy.test.ts",
+        "tests/vitest/server/distribution-artifacts.test.ts",
+        "--maxWorkers=1"
+      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
     },
     {
       "id": "gateway.benchmark-correctness",
       "label": "Network benchmark harness and failure-accounting correctness",
-      "owner": "platform", "package": "repo", "level": "integration",
-      "command": "npm", "args": ["exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=gateway-performance", "vitest", "run", "tests/vitest/gateway/performance/benchmark.test.ts", "tests/vitest/gateway/performance/benchmark-boundary.test.ts", "tests/vitest/gateway/performance/benchmark-package.test.ts", "tests/vitest/server/package-script-registry.test.ts", "--maxWorkers=2"],
-      "sideEffects": "network-service", "requiredServices": [],
-      "flakePolicy": "fail", "coverageContribution": false, "artifacts": []
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "exec",
+        "--offline",
+        "--",
+        "cross-env",
+        "MESHRIX_VITEST_SCOPE=gateway-performance",
+        "vitest",
+        "run",
+        "tests/vitest/gateway/performance/benchmark.test.ts",
+        "tests/vitest/gateway/performance/benchmark-boundary.test.ts",
+        "tests/vitest/gateway/performance/benchmark-package.test.ts",
+        "tests/vitest/server/package-script-registry.test.ts",
+        "--maxWorkers=2"
+      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
     },
     {
       "id": "regression.environment",
@@ -514,7 +686,10 @@
       "package": "repo",
       "level": "architecture",
       "command": "npm",
-      "args": ["run", "typecheck"],
+      "args": [
+        "run",
+        "typecheck"
+      ],
       "sideEffects": "none",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -528,12 +703,17 @@
       "package": "console",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "build:web"],
+      "args": [
+        "run",
+        "build:web"
+      ],
       "sideEffects": "build-output",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
-      "artifacts": ["build/dist/index.html"]
+      "artifacts": [
+        "build/dist/index.html"
+      ]
     },
     {
       "id": "regression.frontend-functional",
@@ -542,7 +722,10 @@
       "package": "console",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "test:functional:frontend"],
+      "args": [
+        "run",
+        "test:functional:frontend"
+      ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -556,12 +739,17 @@
       "package": "server-runtime",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "build:node"],
+      "args": [
+        "run",
+        "build:node"
+      ],
       "sideEffects": "build-output",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
-      "artifacts": ["dist/apps/server/bin/meshrix.js"]
+      "artifacts": [
+        "dist/apps/server/bin/meshrix.js"
+      ]
     },
     {
       "id": "regression.backend-server-shard-a",
@@ -570,7 +758,12 @@
       "package": "server-runtime",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "test:functional:backend:server", "--", "shard-a"],
+      "args": [
+        "run",
+        "test:functional:backend:server",
+        "--",
+        "shard-a"
+      ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -584,7 +777,12 @@
       "package": "server-runtime",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "test:functional:backend:server", "--", "shard-b"],
+      "args": [
+        "run",
+        "test:functional:backend:server",
+        "--",
+        "shard-b"
+      ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -598,7 +796,10 @@
       "package": "server-runtime",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "test:functional:backend:worker-thread"],
+      "args": [
+        "run",
+        "test:functional:backend:worker-thread"
+      ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -612,7 +813,10 @@
       "package": "foundation",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "test:functional:backend:unit"],
+      "args": [
+        "run",
+        "test:functional:backend:unit"
+      ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -626,7 +830,10 @@
       "package": "contracts",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "test:functional:backend:contract"],
+      "args": [
+        "run",
+        "test:functional:backend:contract"
+      ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -640,7 +847,10 @@
       "package": "repo",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "test:interface"],
+      "args": [
+        "run",
+        "test:interface"
+      ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -654,7 +864,10 @@
       "package": "repo",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "verify:local-services"],
+      "args": [
+        "run",
+        "verify:local-services"
+      ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -668,12 +881,17 @@
       "package": "server-runtime",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "test:platform:runtime-plugins"],
+      "args": [
+        "run",
+        "test:platform:runtime-plugins"
+      ],
       "sideEffects": "build-output",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": ["build/packages/packages.json"]
+      "artifacts": [
+        "build/packages/packages.json"
+      ]
     },
     {
       "id": "regression.platform-client-adapters",
@@ -682,7 +900,10 @@
       "package": "protocols",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "verify:local-client-adapters"],
+      "args": [
+        "run",
+        "verify:local-client-adapters"
+      ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
@@ -802,75 +1023,6 @@
       "flakePolicy": "fail",
       "coverageContribution": false,
       "artifacts": []
-    },
-    {
-      "id": "workers.private-relay-typecheck",
-      "label": "Private relay Worker TypeScript surface check",
-      "owner": "platform",
-      "package": "repo",
-      "level": "integration",
-      "command": "npm",
-      "args": [
-        "--prefix",
-        "workers/private-relay",
-        "run",
-        "typecheck"
-      ],
-      "sideEffects": "none",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [],
-      "triggerPaths": [
-        "workers/private-relay",
-        "packages/contracts/src/private-relay"
-      ]
-    },
-    {
-      "id": "workers.private-relay-build",
-      "label": "Private relay Worker bundle compile via wrangler deploy --dry-run (local only, never uploads)",
-      "owner": "platform",
-      "package": "repo",
-      "level": "integration",
-      "command": "npm",
-      "args": [
-        "--prefix",
-        "workers/private-relay",
-        "run",
-        "build"
-      ],
-      "sideEffects": "temp-files",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [],
-      "triggerPaths": [
-        "workers/private-relay",
-        "packages/contracts/src/private-relay"
-      ]
-    },
-    {
-      "id": "workers.private-relay-workerd",
-      "label": "Private relay Workerd/Durable Objects runtime suite (vitest-pool-workers, local workerd only)",
-      "owner": "platform",
-      "package": "repo",
-      "level": "integration",
-      "command": "npm",
-      "args": [
-        "--prefix",
-        "workers/private-relay",
-        "run",
-        "test"
-      ],
-      "sideEffects": "temp-files",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [],
-      "triggerPaths": [
-        "workers/private-relay",
-        "packages/contracts/src/private-relay"
-      ]
     },
     {
       "id": "contracts.enterprise-recording",
@@ -999,7 +1151,10 @@
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [],
-      "triggerPaths": ["packages/foundation/src", "tests/security/local-path-boundary.test.ts"]
+      "triggerPaths": [
+        "packages/foundation/src",
+        "tests/security/local-path-boundary.test.ts"
+      ]
     },
     {
       "id": "repo.local-info-hygiene",
@@ -1158,7 +1313,16 @@
       "flakePolicy": "fail",
       "coverageContribution": false,
       "artifacts": [],
-      "triggerPaths": ["tests/run.ts", "tools/scripts/local-ci.ts", "tools/scripts/lib", "tools/registry", "tests/vitest/server/unified-test-runner-execution.test.ts", "tests/vitest/server/changed-suite-selection.test.ts", "tests/vitest/server/test-runner-dry-run.test.ts", "tests/vitest/server/local-ci.test.ts"]
+      "triggerPaths": [
+        "tests/run.ts",
+        "tools/scripts/local-ci.ts",
+        "tools/scripts/lib",
+        "tools/registry",
+        "tests/vitest/server/unified-test-runner-execution.test.ts",
+        "tests/vitest/server/changed-suite-selection.test.ts",
+        "tests/vitest/server/test-runner-dry-run.test.ts",
+        "tests/vitest/server/local-ci.test.ts"
+      ]
     },
     {
       "id": "repo.source-organization-analysis",
@@ -1231,7 +1395,10 @@
       "flakePolicy": "fail",
       "coverageContribution": false,
       "artifacts": [],
-      "triggerPaths": ["packages/foundation/src", "tests/unit/foundation/checkpoint-tree.test.ts"]
+      "triggerPaths": [
+        "packages/foundation/src",
+        "tests/unit/foundation/checkpoint-tree.test.ts"
+      ]
     },
     {
       "id": "foundation.storage-object-lifecycle",
@@ -1477,7 +1644,10 @@
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [],
-      "triggerPaths": ["packages/foundation/src", "tests/unit/foundation/state-machine.test.ts"]
+      "triggerPaths": [
+        "packages/foundation/src",
+        "tests/unit/foundation/state-machine.test.ts"
+      ]
     },
     {
       "id": "console.event-routing",
@@ -1849,8 +2019,13 @@
       "level": "integration",
       "command": "npm",
       "args": [
-        "exec", "--offline", "--", "cross-env", "MESHRIX_VITEST_SCOPE=gateway-performance",
-        "vitest", "run",
+        "exec",
+        "--offline",
+        "--",
+        "cross-env",
+        "MESHRIX_VITEST_SCOPE=gateway-performance",
+        "vitest",
+        "run",
         "tests/vitest/gateway/performance/gateway-performance-observation.test.ts",
         "tests/vitest/gateway/performance/mcp-gateway-load-phase.test.ts"
       ],
@@ -2184,7 +2359,17 @@
       "flakePolicy": "fail",
       "coverageContribution": false,
       "artifacts": [],
-      "triggerPaths": ["packages/server-runtime/src", "tests/vitest/server/controlled-execution-sandbox.test.ts", "tests/vitest/server/execution-launcher-boundary.test.ts", "tests/vitest/server/oci-sandbox-backend.test.ts", "tests/vitest/server/opaque-sandbox-custody.test.ts", "tests/vitest/server/sandbox-configured-workload.test.ts", "tests/vitest/server/sandbox-streaming-input.test.ts", "tests/vitest/server/trusted-sandbox-provider-receipt-store.test.ts", "tests/vitest/server/trusted-sandbox-provider-resolver.test.ts"]
+      "triggerPaths": [
+        "packages/server-runtime/src",
+        "tests/vitest/server/controlled-execution-sandbox.test.ts",
+        "tests/vitest/server/execution-launcher-boundary.test.ts",
+        "tests/vitest/server/oci-sandbox-backend.test.ts",
+        "tests/vitest/server/opaque-sandbox-custody.test.ts",
+        "tests/vitest/server/sandbox-configured-workload.test.ts",
+        "tests/vitest/server/sandbox-streaming-input.test.ts",
+        "tests/vitest/server/trusted-sandbox-provider-receipt-store.test.ts",
+        "tests/vitest/server/trusted-sandbox-provider-resolver.test.ts"
+      ]
     },
     {
       "id": "execution-sandbox.controlled-runtime",
@@ -2197,7 +2382,10 @@
         "tools/server-scripts/verify-controlled-execution-sandbox.ts"
       ],
       "sideEffects": "container",
-      "platforms": ["darwin", "linux"],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
       "requiredServices": [
         "docker",
         "oci-conformance-native-image"
@@ -2594,12 +2782,21 @@
       "package": "root",
       "level": "integration",
       "command": "npm",
-      "args": ["run", "release:publish-npm", "--", "--prepare", "--artifact-dir", "build/release/npm-set"],
+      "args": [
+        "run",
+        "release:publish-npm",
+        "--",
+        "--prepare",
+        "--artifact-dir",
+        "build/release/npm-set"
+      ],
       "sideEffects": "build-output",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
-      "artifacts": ["build/release/npm-set/meshrix-release-set.json"]
+      "artifacts": [
+        "build/release/npm-set/meshrix-release-set.json"
+      ]
     },
     {
       "id": "release.npm-package-installability",
@@ -3221,7 +3418,10 @@
       "flakePolicy": "fail",
       "coverageContribution": false,
       "artifacts": [],
-      "triggerPaths": ["packages/gateway/src", "tests/vitest/gateway"]
+      "triggerPaths": [
+        "packages/gateway/src",
+        "tests/vitest/gateway"
+      ]
     },
     {
       "id": "entry.identity-recovery",
@@ -3380,37 +3580,6 @@
         "packages/contracts/src/private-relay",
         "tests/vitest/peer-client",
         "tests/vitest/peer-integration"
-      ]
-    },
-    {
-      "id": "peer.workerd-e2e",
-      "label": "Peer mailbox real Workerd E2E: two enrolled device identities exchange Signal-encrypted request/progress/result through a wrangler-dev private relay (resume, dedup, receipt honesty, revocation refusal, retention-gap tombstones)",
-      "owner": "platform",
-      "package": "repo",
-      "level": "integration",
-      "command": "npm",
-      "args": [
-        "run",
-        "vitest",
-        "--",
-        "tests/vitest/peer-integration/peer-workerd-e2e.test.ts"
-      ],
-      "sideEffects": "network-service",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [],
-      "triggerPaths": [
-        "apps/entry-gui/src/main",
-        "apps/entry-gui/src/shared",
-        "apps/mcp-gateway-installer/src/private-endpoint",
-        "packages/entry-transport",
-        "packages/peer-client",
-        "packages/peer-crypto",
-        "packages/contracts/src/private-relay",
-        "tests/vitest/peer-client",
-        "tests/vitest/peer-integration",
-        "workers/private-relay"
       ]
     }
   ]

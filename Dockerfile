@@ -33,7 +33,6 @@ COPY plugins/agents/meshrix-self-maintenance/package.json ./plugins/agents/meshr
 COPY plugins/agents/openclaw/package.json ./plugins/agents/openclaw/package.json
 COPY plugins/agents/opencode/package.json ./plugins/agents/opencode/package.json
 COPY plugins/agents/pi/package.json ./plugins/agents/pi/package.json
-COPY workers/private-relay/package.json ./workers/private-relay/package.json
 COPY vendor ./vendor
 RUN rm -f "${ROOTFS}etc/apt/apt.conf.d/docker-clean"
 

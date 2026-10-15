@@ -10,8 +10,7 @@ const definitionPath: any = "tools/registry/release-definition.registry.json";
  * remain an explicit, reviewed list.
  */
 const GOVERNED_WORKSPACE_BOUNDARIES: any = new Map([
-  ["plugins/agents/*", "plugins/agents"],
-  ["workers/*", "workers"]
+  ["plugins/agents/*", "plugins/agents"]
 ]);
 const RELEASE_SEMVER_PATTERN: any =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?$/u;

@@ -21,8 +21,7 @@
     "apps/mcp-gateway-installer",
     "apps/entry",
     "apps/entry-gui",
-    "apps/console",
-    "workers/*"
+    "apps/console"
   ],
   "imports": {
     "#meshrix/agents/agent-memory/index": {

@@ -2,9 +2,9 @@
  * Canonical proof transcripts for the private-relay recovery wire.
  *
  * The vault transcript byte shapes are fixed by the recovery-vault
- * implementation (workers/private-relay/src/vault-crypto.ts) — UTF-8,
- * "|"-joined, fixed field order — and duplicated here because the installed
- * entry is a separate runtime that must not import worker internals:
+ * implementation (maintained in the separate private operations repository) —
+ * UTF-8, "|"-joined, fixed field order — and duplicated here because the
+ * installed entry is a separate runtime that must not import hosted internals:
  *
  * - vault_fetch: "meshrix.private-relay.vault|vault_fetch|<vaultId>|<keyId>|<nonce>|<issuedAt>"
  * - vault_write: "meshrix.private-relay.vault|vault_write|<vaultId>|<writerKeyId>|<nonce>|<expectedRevision>|<snapshotDigest>"

@@ -1,5 +1,0 @@
-# Local workerd/miniflare state and dev-only files
-.wrangler/
-.dev.vars
-.dev.vars.*
-*.log

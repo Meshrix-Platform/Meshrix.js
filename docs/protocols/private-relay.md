@@ -14,8 +14,8 @@ This file owns protocol shape and semantics. Runtime implementations (Workerd
 relay, endpoint gateway, installed entry) are separate deliveries and consume
 these schemas rather than redefining them. The actual Workerd relay's
 build/check/deploy boundary, privacy projection, operational error taxonomy
-and cost honesty live in
-[Private Relay Operations](private-relay-operations.md).
+and cost honesty are maintained in the private operations repository and are
+not part of the public source.
 
 ## Schema versions
 
@@ -234,8 +234,7 @@ unacknowledged ids; unknown delivery state stays explicit.
 
 ### Mailbox runtime behavior (`NODE-MAILBOX-RUNTIME`)
 
-The Workerd runtime implements this wire inside
-`workers/private-relay` as `MailboxDO` — one SQLite-backed Durable Object
+The hosted Workerd runtime implements this wire as `MailboxDO` — one SQLite-backed Durable Object
 per `(tenantId, routeId, deviceId)` recipient partition. Peer kinds travel
 as request/response on the same admitted `forward`-purpose session socket
 the frame channel uses; they are never forwarded peer-to-peer and never
@@ -379,7 +378,7 @@ honest state surface, inner-channel dispatch over pinned TLS and signal drain.
 | Peer mailbox wire schemas, corpus, receipt taxonomy | `NODE-PEER-WIRE` (`packages/contracts/src/private-relay/private-relay-peer.ts`) |
 | Mailbox Durable Object runtime | `NODE-MAILBOX-RUNTIME` |
 | Relay runtime admission/forwarding (Workerd/DO) | `NODE-RELAY-RUNTIME` |
-| Relay metrics exposition, directory inventory fan-out | `NODE-METRICS-EXPORT` (`workers/private-relay/`) |
+| Relay metrics exposition, directory inventory fan-out | `NODE-METRICS-EXPORT` (hosted relay runtime) |
 | Endpoint gateway transitions, operation recovery execution | `NODE-ENDPOINT-GATEWAY` |
 | Endpoint trust/recovery proof implementation | `NODE-ENDPOINT-GATEWAY` |
 | Endpoint packaging/start/stop/state surface | `NODE-ENDPOINT-PROFILE` (`apps/mcp-gateway-installer/src/private-endpoint/`) |
