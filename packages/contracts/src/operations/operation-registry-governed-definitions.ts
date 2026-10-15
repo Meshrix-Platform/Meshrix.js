@@ -91,7 +91,7 @@ function upstreamGatewayOperation({
   scopes,
   risk = "read_only",
   maxParallel = undefined,
-  timeoutMs = 30_000,
+  timeoutMs,
   params = [],
   query = [],
   required = [],
@@ -121,13 +121,15 @@ function upstreamGatewayOperation({
       maxParallel: maxParallel === undefined ? (risk === "read_only" ? 64 : 1) : maxParallel,
       cost: risk === "read_only" ? 1 : 2
     },
-    execution: {
-      timeoutMs: timeoutMs === null
-        ? null
-        : typeof timeoutMs === "number" && Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 2_147_483_647
-          ? timeoutMs
-          : (() : never => { throw new TypeError("Operation execution timeout must be a positive whole number within the supported timer range."); })()
-    },
+    execution: timeoutMs === undefined
+      ? {}
+      : {
+          timeoutMs: timeoutMs === null
+            ? null
+            : typeof timeoutMs === "number" && Number.isSafeInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 2_147_483_647
+              ? timeoutMs
+              : (() : never => { throw new TypeError("Operation execution timeout must be a positive whole number within the supported timer range."); })()
+        },
     safety: {
       risk,
       requiresConfirmation: risk === "repair_write" || risk === "destructive",

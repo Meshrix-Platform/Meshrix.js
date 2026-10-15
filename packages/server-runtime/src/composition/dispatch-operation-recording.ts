@@ -25,6 +25,7 @@ import {
   recordingProducerForPort,
   sanitizeRecordingRef
 } from "@meshrix/foundation/recording/producer";
+import { captureRecordingContentFields } from "@meshrix/foundation/recording/content-capture";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { firstText, compactStrings } from "./dispatch-operation-support.ts";
 
@@ -168,7 +169,7 @@ export function createDispatchOperationRecorder({
     return approved ? "approval" : "policy_decision";
   }
 
-  function contentFields(): string[] {
+  function contentCapture(): ReturnType<typeof captureRecordingContentFields> {
     // The tenant-scoped selection is looked up under the producing tenant:
     // single-sink producers ignore the second argument, while the composed
     // tenant router resolves that tenant's own live policy revision.
@@ -176,12 +177,14 @@ export function createDispatchOperationRecorder({
       "content",
       resolvedSession?.tenantRef || tenantRefFor()
     );
-    if (!selection) return [];
-    const allow = new Set<string>((selection.fieldAllow as readonly string[]) || []);
-    if (!allow.size || !operationInput || typeof operationInput !== "object" || Array.isArray(operationInput)) {
-      return [];
-    }
-    return Object.keys(operationInput).filter((key: string) : boolean => allow.has(key));
+    // fieldAllow selects the top-level fields; fieldRedact and the forbidden
+    // key set are applied recursively before serialization, so nothing
+    // sensitive reaches artifact custody inside an allowed field's value.
+    return captureRecordingContentFields(operationInput, selection);
+  }
+
+  function contentFields(): string[] {
+    return contentCapture()?.fieldNames || [];
   }
 
   /**
@@ -238,11 +241,10 @@ export function createDispatchOperationRecorder({
     builders.content = {
       fieldNames: contentFields(),
       build: () : UnknownRecord | null => {
-        const names = contentFields();
-        if (!names.length) return null;
-        const captured: Record<string, any> = {};
-        for (const name of names) captured[name] = operationInput[name];
-        const bytes = Buffer.from(canonicalJson(captured), "utf8");
+        const capture = contentCapture();
+        if (!capture?.fieldNames.length) return null;
+        const names = capture.fieldNames;
+        const bytes = Buffer.from(canonicalJson(capture.captured), "utf8");
         // Custody re-checks the live policy: an off flip between the admit
         // above and this put throws `category_disabled` and captures nothing.
         const artifact = sessionFor().putArtifact({ bytes });

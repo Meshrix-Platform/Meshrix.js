@@ -144,7 +144,7 @@ type ParsedSpec<T extends ParserSpec> = Readonly<{
 }>;
 type RecoveryParser = (value?: unknown) => Readonly<UnknownRecord> | null;
 
-const KIND_PARSERS: Record<string, RecoveryParser> = {};
+const KIND_PARSERS: Record<string, RecoveryParser> = Object.create(null);
 
 function isPlainObject(value?: unknown): value is UnknownRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;

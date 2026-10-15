@@ -50,12 +50,19 @@ const appearancePresetClientMock: any = vi.hoisted(() : any => ({
   fetchServerAppearancePresetConfigs: vi.fn(),
   importServerAppearancePresetText: vi.fn(),
 }));
+const operationPermissionClientMock: any = vi.hoisted(() : any => ({
+  getOperationPermissionAudit: vi.fn(),
+  getOperationPermissionCatalog: vi.fn(),
+  getOperationPermissionGrants: vi.fn(),
+  getOperationPermissionMetrics: vi.fn(),
+}));
 
 vi.mock("../../../apps/console/lib/auth-client", () : any => authClientMock);
 vi.mock("../../../apps/console/lib/console-state-client", () : any => consoleStateClientMock);
 vi.mock("../../../apps/console/lib/server-events-client", () : any => serverEventsClientMock);
 vi.mock("../../../apps/console/lib/context-compiler-client", () : any => contextCompilerClientMock);
 vi.mock("../../../apps/console/lib/appearance-presets-client", () : any => appearancePresetClientMock);
+vi.mock("../../../apps/console/lib/operation-permission-client", () : any => operationPermissionClientMock);
 
 const TestRoute: any = defineComponent({
   name: "TestRoute",
@@ -90,16 +97,6 @@ function makeAuthSummary(): ConsoleAuthSummary {
       },
     },
     roles: [],
-    oidc: {
-      enabled: false,
-      issuer: "",
-      clientId: "",
-      clientSecretConfigured: false,
-      redirectUri: "",
-      allowedDomains: [],
-      roleMapping: {},
-      updatedAt: "",
-    },
   };
 }
 
@@ -222,6 +219,15 @@ function createTestRouter(): Router {
           accessPolicy: routeAccessPolicyForAdminView("modules"),
         },
       },
+      {
+        path: "/admin/tool-list",
+        component: TestRoute,
+        meta: {
+          viewId: "admin",
+          adminView: "toolList",
+          accessPolicy: routeAccessPolicyForAdminView("toolList"),
+        },
+      },
     ],
   });
 }
@@ -249,6 +255,19 @@ beforeEach(() : any => {
     configs: [],
     errors: [],
   });
+  operationPermissionClientMock.getOperationPermissionAudit.mockResolvedValue({ items: [] });
+  operationPermissionClientMock.getOperationPermissionCatalog.mockResolvedValue({
+    fingerprint: "catalog-fingerprint",
+    profiles: [],
+    scopes: [],
+    toolGroups: [],
+    tools: [],
+    toolsets: [],
+  });
+  operationPermissionClientMock.getOperationPermissionGrants.mockResolvedValue({ grants: [] });
+  operationPermissionClientMock.getOperationPermissionMetrics.mockResolvedValue({
+    metrics: { byRisk: {}, byStatus: {} },
+  });
 });
 
 afterEach(() : any => {
@@ -258,12 +277,70 @@ afterEach(() : any => {
 });
 
 describe("useConsole to useServerConsoleShell integration", () : any => {
+  it("loads the tool-list route once on entry and keeps explicit refresh", async () : Promise<any> => {
+    const router: any = createTestRouter();
+    await router.push("/admin/tool-list");
+    await router.isReady();
+
+    const initialState: any = makeConsoleState("tools");
+    initialState.features.activeFeatureIds.push("operation-permission-core");
+    consoleStateClientMock.getServerConsoleState.mockResolvedValue(initialState);
+    serverEventsClientMock.subscribeEvents.mockImplementation(() : any => new Promise<EventSubscriptionResponse>(() : any => {}));
+
+    let shell!: ConsoleShell;
+    const Harness: any = defineComponent({
+      name: "ToolListRouteHarness",
+      setup() : any {
+        shell = useServerConsoleShell();
+        return () : any => h("div");
+      },
+    });
+    wrapper = mount(Harness, { global: { plugins: [router] } });
+
+    await waitForCondition(
+      () : any => shell.runtime.consoleState.value?.server.url === initialState.server.url &&
+        operationPermissionClientMock.getOperationPermissionMetrics.mock.calls.length === 1,
+      "tool-list route did not finish its initial permission refresh",
+    );
+    for (const request of [
+      operationPermissionClientMock.getOperationPermissionAudit,
+      operationPermissionClientMock.getOperationPermissionCatalog,
+      operationPermissionClientMock.getOperationPermissionGrants,
+      operationPermissionClientMock.getOperationPermissionMetrics,
+    ]) {
+      expect(request).toHaveBeenCalledTimes(1);
+    }
+
+    await router.replace({ path: "/admin/tool-list", query: { search: "gateway" } });
+    await flushPromises();
+    for (const request of [
+      operationPermissionClientMock.getOperationPermissionAudit,
+      operationPermissionClientMock.getOperationPermissionCatalog,
+      operationPermissionClientMock.getOperationPermissionGrants,
+      operationPermissionClientMock.getOperationPermissionMetrics,
+    ]) {
+      expect(request).toHaveBeenCalledTimes(1);
+    }
+
+    await shell.refresh.refreshCurrentPage();
+    for (const request of [
+      operationPermissionClientMock.getOperationPermissionAudit,
+      operationPermissionClientMock.getOperationPermissionCatalog,
+      operationPermissionClientMock.getOperationPermissionGrants,
+      operationPermissionClientMock.getOperationPermissionMetrics,
+    ]) {
+      expect(request).toHaveBeenCalledTimes(2);
+    }
+  });
+
   it("loads server appearance presets only after authentication", async () : Promise<any> => {
     const isAuthenticated: any = ref(false);
+    const setIntervalSpy: any = vi.spyOn(window, "setInterval");
+    let preferences: any = null;
     const Harness: any = defineComponent({
       name: "ConsoleShellPreferencesHarness",
       setup() : any {
-        useConsoleShellPreferences({ isAuthenticated });
+        preferences = useConsoleShellPreferences({ isAuthenticated });
         return () : any => h("div");
       },
     });
@@ -271,11 +348,17 @@ describe("useConsole to useServerConsoleShell integration", () : any => {
 
     await flushPromises();
     expect(appearancePresetClientMock.fetchServerAppearancePresetConfigs).not.toHaveBeenCalled();
+    expect(setIntervalSpy).not.toHaveBeenCalled();
 
     isAuthenticated.value = true;
     await nextTick();
     await flushPromises();
     expect(appearancePresetClientMock.fetchServerAppearancePresetConfigs).toHaveBeenCalledTimes(1);
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+
+    await preferences.refreshAppearancePresetConfigs();
+    await flushPromises();
+    expect(appearancePresetClientMock.fetchServerAppearancePresetConfigs).toHaveBeenCalledTimes(2);
   });
 
   it("runs real actions, applies refresh and event state, and falls back from a restricted route", async () : Promise<any> => {

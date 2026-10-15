@@ -69,11 +69,11 @@ const enabled = await runtimeModule.activatePlugin({
       enabled: true,
       downstream: {
         adapter: "caddy", endpointRefs: ["caddy.existing"], maxConcurrency: 2, maxRatePerSecond: 20,
-        maxQueueDepth: 2, timeoutMs: 100, circuitFailureThreshold: 2, circuitResetMs: 100
+        maxQueueDepth: 2, circuitFailureThreshold: 2, circuitResetMs: 100
       },
       upstream: {
         adapter: "direct", endpointRefs: ["direct.explicit"], maxConcurrency: 2, maxRatePerSecond: 20,
-        maxQueueDepth: 2, timeoutMs: 100, circuitFailureThreshold: 2, circuitResetMs: 100
+        maxQueueDepth: 2, circuitFailureThreshold: 2, circuitResetMs: 100
       }
     },
     gatewayTransport: async (request: Record<string, unknown>) => {

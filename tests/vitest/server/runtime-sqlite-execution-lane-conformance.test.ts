@@ -12,6 +12,8 @@ import { createAuthorizationStore } from "../../../packages/foundation/src/secur
 import { createOperationPermissionStore } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
 import { createApiKeyDistributionProvider } from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution.ts";
 import { createMemoryApiKeyVerifierKeyProvider } from "../../../packages/foundation/src/security/authorization/api-key-verifier-key-provider.ts";
+import { operationAuditTestProjectionOptions } from "./support/operation-audit-test-key.ts";
+import { createSqliteExecutionLane } from "../../../packages/foundation/src/storage/sqlite-execution-lane.ts";
 
 const roots: any[] = [];
 
@@ -48,6 +50,138 @@ function apiKeyOwnerPermissions() {
 describe("typed SQLite execution lane", () : any => {
   afterEach(async () : Promise<any> => {
     await Promise.all(roots.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
+  });
+
+  it("expires only queued work and drains accepted work before close", async () : Promise<any> => {
+    let releaseActive!: () => void;
+    let signalStarted!: () => void;
+    const started = new Promise<void>((resolve) => { signalStarted = resolve; });
+    const activeGate = new Promise<void>((resolve) => { releaseActive = resolve; });
+    let dispatchCount = 0;
+    const lane = createSqliteExecutionLane({
+      owner: "sqlite-lane-lifecycle-test",
+      workerUrl: new URL("./fixtures/sqlite-execution-lane-worker.ts", import.meta.url),
+      allowedCommands: ["work", "close"],
+      maxPending: 2,
+      maxPendingBytes: 4096,
+      hostHandlers: {
+        "test.wait": async () => {
+          dispatchCount += 1;
+          signalStarted();
+          await activeGate;
+          return { completed: true };
+        }
+      }
+    });
+
+    const active = lane.execute("work", { request: "active" }, { deadlineMs: 10 });
+    await started;
+    const queued = lane.execute("work", { request: "queued" }, { deadlineMs: 30 });
+    await expect(queued).rejects.toMatchObject({ code: "sqlite_lane_deadline_exceeded" });
+    expect(dispatchCount).toBe(1);
+
+    let closeFinished = false;
+    const closing = lane.close().then(() => { closeFinished = true; });
+    await expect(lane.execute("work", { request: "after-close" })).rejects.toMatchObject({ code: "sqlite_lane_closed" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(closeFinished).toBe(false);
+
+    releaseActive();
+    await expect(active).resolves.toEqual({ completed: true });
+    await closing;
+    expect(dispatchCount).toBe(1);
+    expect(lane.getStats()).toMatchObject({ closed: true, writerWorkers: 0, pending: 0 });
+  });
+
+  it("rejects oversized serialized requests before dispatch", async () : Promise<any> => {
+    let dispatchCount = 0;
+    const lane = createSqliteExecutionLane({
+      owner: "sqlite-lane-payload-capacity-test",
+      workerUrl: new URL("./fixtures/sqlite-execution-lane-worker.ts", import.meta.url),
+      allowedCommands: ["work", "close"],
+      maxPending: 8,
+      maxPendingBytes: 16,
+      hostHandlers: {
+        "test.wait": async () => {
+          dispatchCount += 1;
+          return { completed: true };
+        }
+      }
+    });
+    await expect(lane.execute("work", { request: "this is too large" }))
+      .rejects.toMatchObject({ code: "sqlite_lane_capacity_exceeded" });
+    expect(lane.getStats()).toMatchObject({ pending: 0, pendingBytes: 0 });
+    await lane.close();
+    expect(dispatchCount).toBe(0);
+  });
+
+  it("closes at full capacity after FIFO work drains and seals admission immediately", async () : Promise<any> => {
+    let releaseActive!: () => void;
+    let signalFirstStarted!: () => void;
+    const firstStarted = new Promise<void>((resolve) => { signalFirstStarted = resolve; });
+    const firstGate = new Promise<void>((resolve) => { releaseActive = resolve; });
+    const observed = new Map<string, number>();
+    const lane = createSqliteExecutionLane({
+      owner: "sqlite-lane-close-drain-test",
+      workerUrl: new URL("./fixtures/sqlite-execution-lane-worker.ts", import.meta.url),
+      allowedCommands: ["work", "close"],
+      maxPending: 2,
+      maxPendingBytes: 4096,
+      hostHandlers: {
+        "test.wait": async (payload) => {
+          const request = payload as { request?: string };
+          const requestId = String(request.request || "");
+          observed.set(requestId, (observed.get(requestId) || 0) + 1);
+          if (requestId === "first") {
+            signalFirstStarted();
+            await firstGate;
+          }
+          return { request: requestId };
+        }
+      }
+    });
+
+    const first = lane.execute("work", { request: "first" });
+    await firstStarted;
+    const second = lane.execute("work", { request: "second" });
+    expect(lane.getStats().pending).toBe(2);
+    const closing = lane.close();
+    expect(lane.close()).toBe(closing);
+    await expect(lane.execute("work", { request: "late" })).rejects.toMatchObject({ code: "sqlite_lane_closed" });
+    expect(lane.getStats().pending).toBe(2);
+
+    releaseActive();
+    await expect(first).resolves.toEqual({ request: "first" });
+    await expect(second).resolves.toEqual({ request: "second" });
+    await closing;
+    expect(Array.from(observed.entries())).toEqual([["first", 1], ["second", 1]]);
+    expect(lane.getStats()).toMatchObject({ closed: true, writerWorkers: 0, pending: 0 });
+  });
+
+  it("counts commands queued during worker readiness and rejects overflow before dispatch", async () : Promise<any> => {
+    let dispatchCount = 0;
+    const lane = createSqliteExecutionLane({
+      owner: "sqlite-lane-ready-capacity-test",
+      workerUrl: new URL("./fixtures/sqlite-execution-lane-worker.ts", import.meta.url),
+      workerData: { readyAfterMs: 30 },
+      allowedCommands: ["work", "close"],
+      maxPending: 1,
+      maxPendingBytes: 4096,
+      requiresReadyHandshake: true,
+      hostHandlers: {
+        "test.wait": async () => {
+          dispatchCount += 1;
+          return { completed: true };
+        }
+      }
+    });
+    const accepted = lane.execute("work", { request: "accepted" });
+    await expect(lane.execute("work", { request: "overflow" })).rejects.toMatchObject({ code: "sqlite_lane_capacity_exceeded" });
+    expect(lane.getStats().pending).toBe(1);
+    const closing = lane.close();
+    await expect(accepted).resolves.toEqual({ completed: true });
+    await closing;
+    expect(dispatchCount).toBe(1);
   });
 
   it("owns one queue writer and transports only bounded discriminated commands", async () : Promise<any> => {
@@ -90,8 +224,9 @@ describe("typed SQLite execution lane", () : any => {
     roots.push(root);
     const store: any = createOperationAuditStore({
       userDataPath: root,
+      ...operationAuditTestProjectionOptions(root),
       maxPending: 8,
-      maxPendingBytes: 256
+      maxPendingBytes: 4096
     });
     try {
       expect(store.db).toBeUndefined();
@@ -99,7 +234,7 @@ describe("typed SQLite execution lane", () : any => {
         owner: "mandatory-evidence-operation-audit",
         writerWorkers: 1,
         maxPending: 8,
-        maxPendingBytes: 256
+        maxPendingBytes: 4096
       });
       expect(await store.append({
         operationId: "audit.owner.probe",

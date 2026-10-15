@@ -1,8 +1,6 @@
 import { queueIdentityGenerator } from "./identity.ts";
 import { systemQueueTimeSource } from "./time-source.ts";
 
-export const WORK_QUEUE_HANDLER_MAX_DURATION_MS = 15 * 60 * 1000;
-
 interface QueueRecord { [key: string]: unknown }
 interface QueueLease extends QueueRecord { leaseId: string; expiresAtMs?: number }
 interface QueueCheckpoint extends QueueRecord { checkpointSeq?: number }
@@ -124,7 +122,7 @@ export function createQueueWorkerRuntime({
   errorExplainer = null,
   enableErrorExplanation = false,
   leaseRenewIntervalMs = 0,
-  maxHandlerDurationMs = WORK_QUEUE_HANDLER_MAX_DURATION_MS,
+  maxHandlerDurationMs = null,
   logger = null
 }: {
   store?: QueueStore; handlers?: QueueHandler | Map<string, QueueHandler> | Record<string, QueueHandler>; workerId?: unknown;
@@ -138,10 +136,9 @@ export function createQueueWorkerRuntime({
   const queueStore = store;
   const registeredHandlers = normalizeHandlerMap(handlers);
   const runtimeWorkerId = toText(workerId || identityGenerator.workerId());
-  const runtimeHandlerDurationLimitMs = asPositiveInt(
-    maxHandlerDurationMs,
-    WORK_QUEUE_HANDLER_MAX_DURATION_MS
-  );
+  const runtimeHandlerDurationLimitMs = maxHandlerDurationMs === null || maxHandlerDurationMs === undefined
+    ? null
+    : asPositiveInt(maxHandlerDurationMs);
 
   function registerHandler(key: unknown, handler: QueueHandler) {
     if (typeof handler !== "function") {
@@ -249,6 +246,7 @@ export function createQueueWorkerRuntime({
     let activeLease: QueueLease = { ...lease };
     let activeCheckpoint: QueueCheckpoint | null = workItem.checkpoint || null;
     let leaseLostError: QueueRuntimeError | null = null;
+    let handlerReturnedAfterAbort = false;
     let renewalPromise: Promise<StoreResult> = Promise.resolve({});
     let renewalTimer: ReturnType<typeof setTimeout> | null = null;
     let handlerTimer: ReturnType<typeof setTimeout> | null = null;
@@ -270,9 +268,7 @@ export function createQueueWorkerRuntime({
       if (settled || stopped) {
         throw queueRuntimeError("queue_worker_settled", "Cannot renew a settled queue work item.");
       }
-      if (executionController.signal.aborted) {
-        throw executionController.signal.reason || queueRuntimeError("queue_worker_aborted", "Queue worker execution was aborted.");
-      }
+      if (leaseLostError) throw leaseLostError;
       renewalPromise = renewalPromise.then(async () => {
         const renewed = await queueStore.progress({
           ...input,
@@ -298,6 +294,16 @@ export function createQueueWorkerRuntime({
       }
     };
 
+    const assertHandlerMayMutate = (): void => {
+      if (leaseLostError) throw leaseLostError;
+      if (executionController.signal.aborted) {
+        throw executionController.signal.reason || queueRuntimeError(
+          "queue_worker_aborted",
+          "Queue worker execution was aborted."
+        );
+      }
+    };
+
     const initialRemainingMs = Math.max(1, Number(activeLease.expiresAtMs || 0) - Number(timeSource.nowMs()));
     const requestedRenewInterval = Number(leaseRenewIntervalMs || 0);
     const renewalInterval = Math.max(
@@ -308,7 +314,7 @@ export function createQueueWorkerRuntime({
       )
     );
     const scheduleRenewal = (): void => {
-      if (stopped || settled || executionController.signal.aborted) return;
+      if (stopped || settled || leaseLostError) return;
       renewalTimer = setTimeout(() => {
         renewalTimer = null;
         void renewLease({ extendMs: initialRemainingMs, reason: "lease_renewal" })
@@ -319,22 +325,16 @@ export function createQueueWorkerRuntime({
     };
     scheduleRenewal();
 
-    handlerTimer = setTimeout(() => {
-      if (!executionController.signal.aborted) {
-        executionController.abort(queueRuntimeError(
-          "queue_handler_timeout",
-          "Queue worker handler exceeded the server duration limit."
-        ));
-      }
-    }, runtimeHandlerDurationLimitMs);
-    const executionAborted = new Promise<never>((_resolve, reject) => {
-      const rejectAborted = (): void => reject(
-        executionController.signal.reason ||
-        queueRuntimeError("queue_worker_aborted", "Queue worker execution was aborted.")
-      );
-      if (executionController.signal.aborted) rejectAborted();
-      else executionController.signal.addEventListener("abort", rejectAborted, { once: true });
-    });
+    if (runtimeHandlerDurationLimitMs !== null) {
+      handlerTimer = setTimeout(() => {
+        if (!executionController.signal.aborted) {
+          executionController.abort(queueRuntimeError(
+            "queue_handler_timeout",
+            "Queue worker handler exceeded the explicitly configured duration limit."
+          ));
+        }
+      }, runtimeHandlerDurationLimitMs);
+    }
 
     const context: WorkerContext = {
       workerId: runtimeWorkerId,
@@ -349,14 +349,19 @@ export function createQueueWorkerRuntime({
       signal: executionController.signal,
       payloadRef: workItem.payloadRef,
       ownerRef: workItem.ownerRef,
-      renewLease,
+      renewLease(input: QueueRecord = {}): Promise<StoreResult> {
+        assertHandlerMayMutate();
+        return renewLease(input);
+      },
       async progress(input: QueueRecord = {}): Promise<StoreResult> {
+        assertHandlerMayMutate();
         if (settled) {
           throw new Error("Cannot progress a settled queue work item.");
         }
         return renewLease(input);
       },
       async saveCheckpoint(checkpointRef?: unknown, input: QueueRecord = {}): Promise<StoreResult> {
+        assertHandlerMayMutate();
         if (settled) {
           throw new Error("Cannot checkpoint a settled queue work item.");
         }
@@ -372,6 +377,7 @@ export function createQueueWorkerRuntime({
         return result;
       },
       async complete(input: QueueRecord = {}): Promise<StoreResult> {
+        assertHandlerMayMutate();
         if (settled) {
           throw new Error("Queue work item already settled.");
         }
@@ -384,6 +390,7 @@ export function createQueueWorkerRuntime({
         });
       },
       async retry(input: QueueRecord = {}): Promise<StoreResult> {
+        assertHandlerMayMutate();
         if (settled) {
           throw new Error("Queue work item already settled.");
         }
@@ -396,6 +403,7 @@ export function createQueueWorkerRuntime({
         });
       },
       async cancelRunning(input: QueueRecord = {}): Promise<StoreResult> {
+        assertHandlerMayMutate();
         if (settled) {
           throw new Error("Queue work item already settled.");
         }
@@ -408,6 +416,7 @@ export function createQueueWorkerRuntime({
         });
       },
       async fail(input: QueueRecord = {}): Promise<StoreResult> {
+        assertHandlerMayMutate();
         if (settled) {
           throw new Error("Queue work item already settled.");
         }
@@ -422,19 +431,30 @@ export function createQueueWorkerRuntime({
     };
 
     try {
-      const outcome = await Promise.race([
-        resolvedHandler({
-          workItem,
-          lease: activeLease,
-          payloadRef: workItem.payloadRef,
-          ownerRef: workItem.ownerRef
-        }, context),
-        executionAborted
-      ]);
+      if (executionController.signal.aborted) {
+        throw executionController.signal.reason || queueRuntimeError(
+          "queue_worker_aborted",
+          "Queue worker execution was aborted before dispatch."
+        );
+      }
+      const outcome = await resolvedHandler({
+        workItem,
+        lease: activeLease,
+        payloadRef: workItem.payloadRef,
+        ownerRef: workItem.ownerRef
+      }, context);
       if (settled) {
         return { settled: true, workItemId: workItem.workItemId };
       }
+      if (executionController.signal.aborted) {
+        handlerReturnedAfterAbort = true;
+        throw executionController.signal.reason || queueRuntimeError(
+          "queue_worker_aborted",
+          "Queue worker handler returned after cancellation was requested."
+        );
+      }
       await renewLease({ extendMs: initialRemainingMs, reason: "handler_terminal_fence" });
+      assertHandlerMayMutate();
       settled = true;
       const result = await applyOutcome({
         workItem,
@@ -459,7 +479,7 @@ export function createQueueWorkerRuntime({
       if (executionController.signal.aborted) {
         settled = true;
         const explained = explainError(error, { workItem, lease: activeLease });
-        const provablyTerminable = resolvedHandler.terminable === true;
+        const provablyTerminable = resolvedHandler.terminable === true && !handlerReturnedAfterAbort;
         try {
           if (provablyTerminable) {
             const result = await queueStore.retry({

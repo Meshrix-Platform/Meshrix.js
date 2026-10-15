@@ -12,8 +12,7 @@ import {
   createQueuePushDispatcher,
   createQueueWorkerRuntime,
   createSqliteWorkQueueStore,
-  DEFAULT_QUEUE_POLICY,
-  WORK_QUEUE_HANDLER_MAX_DURATION_MS
+  DEFAULT_QUEUE_POLICY
 } from "../../packages/foundation/src/work-queue/index.ts";
 import {
   assertNoSensitiveReportLeak,
@@ -661,7 +660,6 @@ async function main() : Promise<any> {
         maxTransitionsPerWorkItem: DEFAULT_QUEUE_POLICY.retention.maxTransitionsPerWorkItem
       },
       exercisedDefinitionOverrides: FIXTURE_CEILINGS,
-      workerHandlerDurationMs: WORK_QUEUE_HANDLER_MAX_DURATION_MS,
       exercisedWorkerHandlerDurationMs: EXERCISED_HANDLER_DURATION_MS,
       verifierBudgets: VERIFIER_BUDGETS
     },

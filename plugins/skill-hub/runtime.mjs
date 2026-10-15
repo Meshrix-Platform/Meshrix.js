@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import {
   PLUGIN_MCP_TOOL_BINDINGS,
   SKILL_HUB_WORKSPACE_BINDING_FIELDS,
@@ -38,14 +40,14 @@ export function validateSkillHubConfiguration(configuration = {}) {
   if (configuration.enabled !== true) throw new TypeError("Skill Hub enabled must be a boolean.");
   assertKnownFields(configuration.service, SERVICE_FIELDS, "Skill Hub service configuration");
   const serviceRef = String(configuration.service.serviceRef || "").trim();
-  const timeoutMs = Number(configuration.service.timeoutMs);
   if (!/^[a-z][a-z0-9._:-]{2,127}$/u.test(serviceRef)) {
     throw new TypeError("Skill Hub serviceRef is invalid.");
   }
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 120_000) {
+  const timeoutMs = configuration.service.timeoutMs;
+  if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 120_000)) {
     throw new TypeError("Skill Hub timeoutMs must be between 100 and 120000.");
   }
-  return Object.freeze({ enabled: true, serviceRef, timeoutMs });
+  return Object.freeze({ enabled: true, serviceRef, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
 }
 
 function emptyContributions() {
@@ -103,14 +105,15 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
     const workspaceBinding = bindExplicitWorkspace(operation.id, input);
     if (!workspaceBinding.ok) return failure("skill_hub_workspace_binding_invalid", 400);
     const requestInput = workspaceBinding.input;
+    const invocationId = crypto.randomUUID();
     if (SANDBOX_OPERATIONS.has(operation.id)) {
-      return executeRemoteSandboxOperation({ operation, input: requestInput, call, signal, host, remote });
+      return executeRemoteSandboxOperation({ operation, input: requestInput, call, signal, host, remote, invocationId });
     }
     if (SANDBOX_STATUS_OPERATIONS.has(operation.id)) {
       return sandboxStatusOperation({ operation, input: requestInput, host });
     }
     if (operation.id === "skill_hub.permission.grant") {
-      const prepared = await remote.request({ operation, input: requestInput, call, signal, host, phase: "prepare" });
+      const prepared = await remote.request({ operation, input: requestInput, call, signal, host, phase: "prepare", invocationId });
       if (prepared.statusCode >= 400) return prepared;
       const loanRecord = prepared.body?.loanRecord;
       if (!loanRecord || typeof host.operationPermissionGrant?.recordPluginGrant !== "function") {
@@ -137,10 +140,11 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
         signal,
         host,
         phase: "commit",
+        invocationId,
         operationPermissionReceipt: receipt
       });
     }
-    return remote.request({ operation, input: requestInput, call, signal, host });
+    return remote.request({ operation, input: requestInput, call, signal, host, invocationId });
   }
 
   const operations = {};

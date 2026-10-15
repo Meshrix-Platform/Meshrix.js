@@ -9,6 +9,7 @@ import {
   MemoryLockManager
 } from "#meshrix/foundation/concurrency/lock-manager";
 import { createStorageKernel } from "#meshrix/foundation/storage/storage-kernel";
+import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
 import { createCorePlatformProvider } from "#meshrix/server-runtime/composition/core-platform-provider";
 import { createServerCompositionRoot } from "#meshrix/server-runtime/composition/composition-root";
 import {
@@ -686,6 +687,7 @@ describe("canonical operation dispatcher locking", () : any => {
 
     await expect(createServerCompositionRoot({
       userDataPath,
+      secretKeyProvider: createMemoryLocalSecretKeyProvider(),
       runtimeLogger: { debug() : any {}, info() : any {}, warn() : any {}, error() : any {} },
       operationLockManager,
       pluginHostPorts: { pluginControlledExecutionAuthority }

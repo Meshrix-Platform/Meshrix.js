@@ -74,11 +74,19 @@ Accept a closed, versioned command containing only supported fields. The command
 - health and timeout policy.
 
 For `serviceProtocol: "mcp"`, the portable descriptor admits remote HTTP only.
-The modern upstream HTTP path uses `server/discover` at `2026-07-28` without
-initialize or session state. The legacy stateful/ephemeral HTTP and internal
-stdio paths use their legacy initialize/session lifecycle; internal stdio is
-not a portable descriptor transport. The legacy
+The modern upstream HTTP path sends `tools/list` directly at `2026-07-28`;
+`server/discover` is optional and is not probed automatically. Requests are
+self-describing and do not use initialize/session state. JSON and Streamable
+HTTP event streams are accepted; event streams are read incrementally through
+the matching validated result and then cancelled. The legacy
+stateful/ephemeral HTTP and internal stdio paths use their legacy
+initialize/session lifecycle; internal stdio is not a portable descriptor
+transport. The legacy
 `MCP_SUPPORTED_PROTOCOL_VERSIONS` list does not define the modern HTTP version.
+
+Public remote endpoints must use HTTPS. HTTP is permitted only for explicitly
+enabled private or loopback targets; that transport is plaintext, including
+typed credentials, and must not be described as end-to-end encrypted.
 
 Reject unknown fields, duplicate object keys, invalid Unicode or control characters, excessive sizes, excessive nesting, invalid identifiers, overlapping operation keys, unsupported schema constructs, unsafe targets, and policy references outside the subject's authority.
 
@@ -181,9 +189,11 @@ compatibility.
 
 #### Declarative configuration credentials
 
-The server composition may load services from `<userDataPath>/upstream-config/services.json`. This file is protected local configuration input and must be managed separately from the encrypted secret store. An entry without authentication remains unauthenticated; an entry using bearer authentication requires the configured external local-secret key provider. The loader obtains each service identity and authoritative reference set from the publishing application, prepares the complete credential in the local secret store, then submits one ordinary revision-checked create or replace containing the descriptor and typed reference. Credential values and raw configuration are never copied into a publishing command, manifest, audit event, log, or public diagnostic. Non-sensitive MCP request-context headers remain supported; credential-bearing custom header names are rejected.
+The server composition may load services from `<userDataPath>/upstream-config/services.json`. The flat `name/type/url/headers` form supports the published `auth: { type: "bearer", token }` shorthand; its `headers` field remains limited to non-sensitive MCP request-context fields. The `{ name, descriptor }` form supports a complete descriptor with existing typed Local Secret references.
 
-An unchanged credential reuses its active typed reference. A changed credential is stored under the next service-revision reference, so the existing candidate and published service continue to use the old value until the replacement is accepted. Failed preparation or publication does not invalidate the existing binding, and an unchanged file is retried. Cleanup consults both candidate and published references and revokes only unused entries with their current secret revision; an uncommitted next-revision preparation remains reusable for an idempotent retry. Services are applied one entry at a time; the file does not imply a cross-service transaction.
+The loader normalizes bearer input through the existing encrypted Local Secret Store using the external master-key provider. It binds the credential to the publishing owner's generated service identity, endpoint host, protocol and revision, then submits only a typed reference through the ordinary revision-checked publishing application. Unchanged credentials are reused. A replacement is prepared separately, preserving the old candidate and published references until the new publication is authoritative. Cleanup rechecks both snapshots and revokes only unused loader-generated references, including abandoned unbound candidates; it does not delete records or alter unrelated operator-provisioned credentials.
+
+The loader verifies supplied typed references at the declared service, host, protocol, scopes and revision. Credential values and raw config never enter publishing commands, manifests, audit events, logs or public diagnostics. The input file remains user-owned plaintext and is not rewritten; restrict its permissions or use typed references to omit bearer material from it. Invalid input, unavailable custody and publication failure preserve the effective service and leave unchanged input eligible for retry. Services are applied one entry at a time; the file does not imply a cross-service transaction.
 
 ### File-system isolation
 

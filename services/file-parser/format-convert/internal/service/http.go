@@ -1,17 +1,23 @@
 package service
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -26,6 +32,21 @@ import (
 
 const (
 	multipartOverheadAllowance = 1 << 20
+)
+
+// Archive-based formats (currently only OOXML .docx) are decompression-bomb
+// vectors: a small upload can expand into gigabytes inside the converter.
+// These budgets bound member count, expanded bytes, and compression ratio
+// before any converter process is launched. The expanded budget scales with
+// the upload ceiling but never drops below a floor that comfortably covers
+// legitimate XML-heavy documents.
+const (
+	maxArchiveMembers          = 2048
+	maxArchiveExpansionFactor  = 8
+	minArchiveExpandedBytes    = 32 << 20
+	maxArchiveCompressionRatio = 100
+	zipEncryptedMemberFlag     = 0x1
+	archiveContentTypesEntry   = "[Content_Types].xml"
 )
 
 const (
@@ -82,7 +103,7 @@ func NewHTTPHandler(config Config, converter Converter, logger *slog.Logger, fun
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/", instrumented)
 	if options.metricsHandler != nil {
-		rootMux.Handle("GET /metrics", options.metricsHandler)
+		rootMux.Handle("GET /metrics", service.authenticated(options.metricsHandler))
 	}
 	return securityHeaders(rootMux)
 }
@@ -109,7 +130,41 @@ func (service *HTTPService) ready(writer http.ResponseWriter, _ *http.Request) {
 	writeJSON(writer, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (service *HTTPService) authenticated(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if !service.authorized(request) {
+			writeError(writer, http.StatusUnauthorized, "authentication_required")
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
+}
+
+func (service *HTTPService) authorized(request *http.Request) bool {
+	if !validBearerToken(service.config.AuthToken) {
+		return false
+	}
+	values := request.Header.Values("Authorization")
+	if len(values) != 1 {
+		return false
+	}
+	value := values[0]
+	separator := strings.IndexByte(value, ' ')
+	if separator <= 0 || !strings.EqualFold(value[:separator], "Bearer") {
+		return false
+	}
+	token := value[separator+1:]
+	if len(token) != len(service.config.AuthToken) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(token), []byte(service.config.AuthToken)) == 1
+}
+
 func (service *HTTPService) convert(writer http.ResponseWriter, request *http.Request) {
+	if !service.authorized(request) {
+		writeError(writer, http.StatusUnauthorized, "authentication_required")
+		return
+	}
 	startedAt := time.Now()
 	outcome := "error"
 	errorCode := "internal_error"
@@ -124,6 +179,27 @@ func (service *HTTPService) convert(writer http.ResponseWriter, request *http.Re
 		errorCode = code
 		writeError(writer, status, code)
 	}
+	var release func()
+	err := service.runStage(request.Context(), "capacity.acquire", inputFormat, targetFormat, func(ctx context.Context) error {
+		var acquireErr error
+		release, acquireErr = service.admission.acquire(ctx)
+		return acquireErr
+	})
+	if err != nil {
+		if errors.Is(err, errAdmissionFull) {
+			writer.Header().Set("Retry-After", "1")
+			fail(http.StatusServiceUnavailable, "conversion_capacity_exhausted")
+		} else if errors.Is(err, errAdmissionTimeout) {
+			writer.Header().Set("Retry-After", "1")
+			fail(http.StatusServiceUnavailable, "conversion_queue_timed_out")
+		} else if errors.Is(err, context.Canceled) {
+			fail(http.StatusRequestTimeout, "conversion_cancelled")
+		} else {
+			fail(http.StatusInternalServerError, "conversion_capacity_unavailable")
+		}
+		return
+	}
+	defer release()
 	request.Body = http.MaxBytesReader(writer, request.Body, service.config.MaxUploadBytes+multipartOverheadAllowance)
 
 	workDir, err := os.MkdirTemp(service.config.TempRoot, "format-convert-")
@@ -152,7 +228,7 @@ func (service *HTTPService) convert(writer http.ResponseWriter, request *http.Re
 	targetFormat = input.targetFormat
 	service.telemetry.inputBytes.Record(request.Context(), inputBytes, metric.WithAttributes(attribute.String("format_convert.input_format", inputFormat)))
 	if err := service.runStage(request.Context(), "input.validate", inputFormat, targetFormat, func(context.Context) error {
-		status, code = validateConversionInput(input)
+		status, code = validateConversionInput(input, service.config.MaxUploadBytes)
 		if code != "" {
 			return errors.New("input validation failed")
 		}
@@ -162,8 +238,7 @@ func (service *HTTPService) convert(writer http.ResponseWriter, request *http.Re
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(request.Context(), service.config.ConversionTimeout)
-	defer cancel()
+	ctx := request.Context()
 	conversionResult, err := service.convertInput(ctx, input, workDir)
 	if err != nil {
 		publicCode := publicErrorCode(err)
@@ -290,15 +365,15 @@ func (service *HTTPService) convertInput(ctx context.Context, input conversionIn
 			return conversionOutput{path: docxPath, fileName: baseName + ".docx", mediaType: docxMediaType}, nil
 		}
 		var pdfPath string
-		err := service.convertWithAdmission(ctx, "txt", input.targetFormat, docxPath, workDir, &pdfPath)
+		err := service.convertLibreOffice(ctx, "txt", input.targetFormat, docxPath, workDir, &pdfPath)
 		return conversionOutput{path: pdfPath, fileName: baseName + ".pdf", mediaType: pdfMediaType}, err
 	}
 	var pdfPath string
-	err := service.convertWithAdmission(ctx, formatAttribute(input.extension), input.targetFormat, input.path, workDir, &pdfPath)
+	err := service.convertLibreOffice(ctx, formatAttribute(input.extension), input.targetFormat, input.path, workDir, &pdfPath)
 	return conversionOutput{path: pdfPath, fileName: baseName + ".pdf", mediaType: pdfMediaType}, err
 }
 
-func (service *HTTPService) convertWithAdmission(
+func (service *HTTPService) convertLibreOffice(
 	ctx context.Context,
 	inputFormat string,
 	targetFormat string,
@@ -306,15 +381,6 @@ func (service *HTTPService) convertWithAdmission(
 	workDir string,
 	outputPath *string,
 ) error {
-	var release func()
-	if err := service.runStage(ctx, "capacity.acquire", inputFormat, targetFormat, func(stageContext context.Context) error {
-		var acquireErr error
-		release, acquireErr = service.admission.acquire(stageContext)
-		return acquireErr
-	}); err != nil {
-		return err
-	}
-	defer release()
 	activeAttributes := metric.WithAttributes(
 		attribute.String("format_convert.input_format", inputFormat),
 		attribute.String("format_convert.target_format", targetFormat),
@@ -418,17 +484,150 @@ func receiveConversionRequest(request *http.Request, workDir string, maxBytes in
 	return input, 0, ""
 }
 
-func validateConversionInput(input conversionInput) (int, string) {
+func validateConversionInput(input conversionInput, maxUploadBytes int64) (int, string) {
 	if input.extension != ".doc" && input.extension != ".docx" && input.extension != ".txt" {
 		return http.StatusUnsupportedMediaType, "unsupported_input_format"
 	}
 	if input.extension != ".txt" && !hasWordSignature(input.path, input.extension) {
 		return http.StatusUnsupportedMediaType, "input_signature_invalid"
 	}
+	if input.extension == ".docx" {
+		if status, code := validateArchiveStructure(input.path, maxUploadBytes); code != "" {
+			return status, code
+		}
+	}
 	if input.targetFormat != "pdf" && !(input.extension == ".txt" && input.targetFormat == "docx") {
 		return http.StatusBadRequest, "unsupported_conversion"
 	}
 	return 0, ""
+}
+
+// Validate actual decompression, CRC and package references before starting Office.
+func validateArchiveStructure(filename string, maxUploadBytes int64) (int, string) {
+	archive, err := zip.OpenReader(filename)
+	if err != nil {
+		return http.StatusUnsupportedMediaType, "input_signature_invalid"
+	}
+	defer archive.Close()
+	cap := uint64(maxUploadBytes) * maxArchiveExpansionFactor
+	if cap < minArchiveExpandedBytes {
+		cap = minArchiveExpandedBytes
+	}
+	remaining := int64(cap)
+	members := 0
+	if err := inspectOfficeArchive(&archive.Reader, &remaining, &members, 0, true); err != nil {
+		return http.StatusUnsupportedMediaType, "input_archive_unsafe"
+	}
+	return 0, ""
+}
+
+func inspectOfficeArchive(archive *zip.Reader, remaining *int64, members *int, depth int, requireOffice bool) error {
+	if depth > 8 {
+		return errors.New("archive nesting exceeds resource budget")
+	}
+	names := make(map[string]bool)
+	packageNames := make(map[string]bool, len(archive.File))
+	for _, member := range archive.File {
+		packageNames[member.Name] = true
+	}
+	contentTypes := false
+	for _, member := range archive.File {
+		*members++
+		name := member.Name
+		if *members > maxArchiveMembers || member.Flags&zipEncryptedMemberFlag != 0 ||
+			strings.ContainsAny(name, "\\\x00") || strings.HasPrefix(name, "/") || strings.Contains(name, ":") ||
+			path.Clean(strings.TrimSuffix(name, "/")) != strings.TrimSuffix(name, "/") ||
+			name == ".." || strings.HasPrefix(name, "../") || names[name] ||
+			member.Mode()&os.ModeSymlink != 0 || (!member.Mode().IsRegular() && !member.FileInfo().IsDir()) {
+			return errors.New("unsafe archive member")
+		}
+		names[name] = true
+		if name == archiveContentTypesEntry {
+			contentTypes = true
+		}
+		if member.FileInfo().IsDir() {
+			continue
+		}
+		if member.UncompressedSize64 > uint64(*remaining) ||
+			(member.CompressedSize64 > 0 && member.UncompressedSize64/member.CompressedSize64 > maxArchiveCompressionRatio) {
+			return errors.New("archive expansion exceeds resource budget")
+		}
+		reader, err := member.Open()
+		if err != nil {
+			return err
+		}
+		data, err := io.ReadAll(io.LimitReader(reader, *remaining+1))
+		closeErr := reader.Close()
+		if err != nil || closeErr != nil || int64(len(data)) > *remaining {
+			return errors.New("invalid archive expansion")
+		}
+		*remaining -= int64(len(data))
+		if strings.HasSuffix(strings.ToLower(name), ".xml") || strings.HasSuffix(strings.ToLower(name), ".rels") {
+			decoder := xml.NewDecoder(bytes.NewReader(data))
+			for {
+				token, err := decoder.Token()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					return errors.New("invalid package XML")
+				}
+				if _, ok := token.(xml.Directive); ok {
+					return errors.New("package XML directives are unsafe")
+				}
+				if start, ok := token.(xml.StartElement); ok && start.Name.Local == "Relationship" {
+					var mode, target, kind string
+					for _, attr := range start.Attr {
+						switch attr.Name.Local {
+						case "TargetMode":
+							mode = attr.Value
+						case "Target":
+							target = attr.Value
+						case "Type":
+							kind = attr.Value
+						}
+					}
+					if strings.EqualFold(mode, "External") && !strings.HasSuffix(kind, "/hyperlink") {
+						return errors.New("external package content is unsafe")
+					}
+					targetURL, parseErr := url.Parse(target)
+					if !strings.EqualFold(mode, "External") {
+						if parseErr != nil || targetURL.Scheme != "" || targetURL.Host != "" || strings.ContainsAny(targetURL.Path, "\\\x00") {
+							return errors.New("unsafe package reference")
+						}
+						// OPC absolute targets name package parts, never host filesystem paths.
+						if path.IsAbs(targetURL.Path) {
+							if !packageNames[strings.TrimPrefix(path.Clean(targetURL.Path), "/")] {
+								return errors.New("absolute target is not a package part")
+							}
+						} else {
+							partDirectory := path.Dir(name)
+							if path.Base(partDirectory) == "_rels" {
+								partDirectory = path.Dir(partDirectory)
+							}
+							resolved := path.Clean(path.Join(partDirectory, targetURL.Path))
+							if resolved == ".." || strings.HasPrefix(resolved, "../") {
+								return errors.New("package reference escapes root")
+							}
+						}
+					}
+				}
+			}
+		}
+		if len(data) >= 4 && bytes.Equal(data[:4], []byte{'P', 'K', 3, 4}) {
+			nested, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+			if err != nil {
+				return err
+			}
+			if err := inspectOfficeArchive(nested, remaining, members, depth+1, false); err != nil {
+				return err
+			}
+		}
+	}
+	if requireOffice && !contentTypes {
+		return errors.New("Office package missing content types")
+	}
+	return nil
 }
 
 func safeBaseName(input string) string {

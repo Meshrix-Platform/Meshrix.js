@@ -60,6 +60,7 @@ const RECORDING_CONFIG_KEYS: readonly string[] = Object.freeze([
   "sinkId",
   "budgets",
   "reservationTtlMs",
+  "retentionSweepMs",
   "policy"
 ]);
 
@@ -114,6 +115,7 @@ export function normalizeRecordingRuntimeConfig(
   sinkId: string;
   budgets: UnknownRecord;
   reservationTtlMs: number | undefined;
+  retentionSweepMs: number | undefined;
   policy: { policyId: string; issuerRole: string; configurerRoles: string[] };
 } {
   const dataRoot = path.resolve(String(userDataPath || "").trim() || ".");
@@ -167,6 +169,16 @@ export function normalizeRecordingRuntimeConfig(
     }
     reservationTtlMs = ttl;
   }
+  let retentionSweepMs: number | undefined;
+  if (input.retentionSweepMs !== undefined) {
+    const sweep = Number(input.retentionSweepMs);
+    if (!Number.isSafeInteger(sweep) || sweep < 0 || sweep > 24 * 60 * 60 * 1000) {
+      throw invalidConfig(
+        "runtimeOptions.recording.retentionSweepMs must be an integer between 0 and 86400000."
+      );
+    }
+    retentionSweepMs = sweep;
+  }
   const policyInput = input.policy === undefined ? {} : input.policy;
   if (!isPlainObject(policyInput)) {
     throw invalidConfig("runtimeOptions.recording.policy must be a plain object.");
@@ -200,6 +212,7 @@ export function normalizeRecordingRuntimeConfig(
     sinkId,
     budgets: Object.freeze(budgets),
     reservationTtlMs,
+    retentionSweepMs,
     policy: Object.freeze({ policyId, issuerRole, configurerRoles })
   });
 }
@@ -394,6 +407,7 @@ export function createEnterpriseRecordingAuthority(options: UnknownRecord = {}):
     sink: { sinkId: config.sinkId, budgets: config.budgets },
     policy: config.policy,
     reservationTtlMs: config.reservationTtlMs,
+    retentionSweepMs: config.retentionSweepMs,
     now: options.now,
     sinkFactory: options.sinkFactory
   });

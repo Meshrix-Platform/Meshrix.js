@@ -75,7 +75,7 @@ function normalizeRisk(operation: Record<string, any> = {}) : any {
   return operation.readOnly === false ? "safe_write" : "read_only";
 }
 
-function operationTimeoutMs(operation: Record<string, any> = {}, fallback: any = 30_000) : any {
+function operationTimeoutMs(operation: Record<string, any> = {}, fallback: any = undefined) : any {
   const sources: any[] = [operation.execution, operation.target, operation.safety, operation];
   const source: any = sources.find((candidate?: any) => candidate && Object.hasOwn(candidate, "timeoutMs"));
   if (!source) return fallback;

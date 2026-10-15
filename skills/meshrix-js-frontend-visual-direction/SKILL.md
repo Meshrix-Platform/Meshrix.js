@@ -11,6 +11,12 @@ Meshrix.js. Delivery closure decisions belong to `$meshrix-js-delivery-closure`;
 architecture reassembly diagnostics belong to
 `$meshrix-js-architecture-reassembly`.
 
+The canonical index of every frontend design surface and art asset is
+[docs/design/README.md](../../docs/design/README.md). Shared art masters live
+under `assets/`; consumers reference or sync from that store instead of
+keeping copies. Consult the index before locating or adding any design
+resource.
+
 ## Converge frontend quality
 
 - Reuse an approved product system for ordinary UI work. Do not reopen visual

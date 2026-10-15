@@ -21,11 +21,15 @@ export const ORGANIZATION_GOVERNANCE_MANAGEMENT_ACTIONS: readonly string[] = Obj
 // Console-auth membership records use this stable identifier. It is not template state.
 export const MESHRIX_ROOT_ORGANIZATION_ID = "meshrix-root";
 
-const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
-export const ORGANIZATION_TEMPLATE_CATALOG_DIRECTORY = path.resolve(
-  moduleDirectory,
-  "../../../config/organization-governance"
-);
+// `import.meta.url` is undefined inside bundled non-Node runtimes (workerd);
+// the catalog directory is only ever dereferenced by Node-side filesystem
+// template loading, so it degrades to a harmless placeholder there.
+const moduleDirectory = typeof import.meta.url === "string" && import.meta.url
+  ? path.dirname(fileURLToPath(import.meta.url))
+  : "";
+export const ORGANIZATION_TEMPLATE_CATALOG_DIRECTORY = moduleDirectory
+  ? path.resolve(moduleDirectory, "../../../config/organization-governance")
+  : "";
 const IDENTIFIER = /^[a-z0-9][a-z0-9._:-]{0,159}$/u;
 const NODE_TYPES: ReadonlySet<string> = new Set(["group", "organization", "department", "team"]);
 const TAG_KINDS: ReadonlySet<string> = new Set(["organization", "group", "role", "custom"]);

@@ -28,7 +28,7 @@ function serialize(value: unknown, seen: WeakSet<object>): string {
     return JSON.stringify(value.toISOString());
   }
   if (typeof Buffer !== "undefined" && Buffer.isBuffer(value)) {
-    return JSON.stringify(value.toString("base64"));
+    return JSON.stringify(Buffer.from(value as Uint8Array).toString("base64"));
   }
   if (seen.has(value)) throw new TypeError("Cyclic canonical JSON value");
   seen.add(value);

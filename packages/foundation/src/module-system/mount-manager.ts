@@ -362,6 +362,7 @@ export async function createMountManager({
   let observedPluginLifecycleGeneration: any = 1;
   const lifecycleListeners: any = new Set<any>();
   const lifecycleAdmissions: any = new Map<any, any>();
+  const startupPluginProcessHosts: any = new Set<any>();
 
   try {
     pluginRuntime = await activatePluginDeployment({
@@ -388,15 +389,17 @@ export async function createMountManager({
         if (clock && (clock.id !== "ClockPort" || typeof clock.now !== "function")) {
           throw new Error(`Plugin ${manifest.id} clock port is invalid.`);
         }
+        const pluginProcessHost: any = typeof pluginHostPorts.pluginProcessHostForPlugin === "function"
+          ? await pluginHostPorts.pluginProcessHostForPlugin({ pluginId: manifest.id })
+          : await createIsolatedPluginProcessHost();
+        startupPluginProcessHosts.add(pluginProcessHost);
         return {
         pluginData: await preparePluginDataCapability(userDataPath, manifest.id),
         lifecycleStatePort,
         opaquePayloadCustody: createHostOpaquePayloadCustody({ ttlMs: HOST_OPAQUE_PAYLOAD_TTL_MS }),
         configuration: normalizedRuntimeOptions.pluginConfigurations[manifest.id] || Object.freeze({}),
         productionActivation: true,
-        pluginProcessHost: typeof pluginHostPorts.pluginProcessHostForPlugin === "function"
-          ? await pluginHostPorts.pluginProcessHostForPlugin({ pluginId: manifest.id })
-          : await createIsolatedPluginProcessHost(),
+        pluginProcessHost,
         ...(clock ? { clock } : {}),
         ...(artifactSigner ? { artifactSigner } : {}),
         ...(pluginHostPorts.pluginInvocationAuthorizationAuthority
@@ -427,6 +430,7 @@ export async function createMountManager({
         };
       }
     });
+    startupPluginProcessHosts.clear();
     currentRuntimeOptions = normalizeRuntimeOptions({
       ...normalizedRuntimeOptions,
       mountModules: {
@@ -445,6 +449,12 @@ export async function createMountManager({
       try {
         await pluginRuntime.close();
       } catch {
+        throw new MountManagerStartupRollbackError();
+      }
+    } else {
+      const cleanup = await Promise.allSettled([...startupPluginProcessHosts].map((host?: any) : any => host.close()));
+      startupPluginProcessHosts.clear();
+      if (cleanup.some((result?: any) : any => result.status === "rejected")) {
         throw new MountManagerStartupRollbackError();
       }
     }

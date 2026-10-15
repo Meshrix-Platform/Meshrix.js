@@ -1,6 +1,7 @@
-import { readFile } from "node:fs/promises";
+import { readFile, mkdir, lstat, chmod, writeFile, link, unlink, open } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { createPrivateKey, createPublicKey } from "node:crypto";
+import { createPrivateKey, createPublicKey, createHash, randomBytes } from "node:crypto";
 import { createSecureContext as createTlsContext } from "node:tls";
 import {
   PRIVATE_RELAY_MODES,
@@ -56,6 +57,8 @@ export interface PrivateEndpointConfig {
   readonly sessionUrl: string;
   /** Environment variable that carries the relay bearer credential. */
   readonly credentialEnv: string;
+  /** Resolved relay bearer/admission credential. Never included in check output. */
+  readonly relayCredential: string;
   /** Relay-visible admission for this endpoint (role is fixed `endpoint`). */
   readonly admission: RelayAdmissionInput;
   /** EndpointTrustBinding-shaped record consumed by the identity store enrollment. */
@@ -69,21 +72,27 @@ export interface PrivateEndpointConfig {
     readonly authorities: readonly RecoveryAuthorityConfig[];
     readonly signingKey?: string;
   };
+  /** Present only after an operator has claimed this endpoint with an account. */
+  readonly account?: {
+    readonly origin: string;
+    readonly signingKey: string;
+    readonly endpointPinRef: string;
+    readonly endpointSpkiPin: string;
+    readonly vaultId: string;
+  };
   /** Absolute path to the existing gateway profile configuration file. */
   readonly gatewayConfigPath: string;
   readonly reconnect: {
     readonly initialDelayMs: number;
     readonly maxDelayMs: number;
   };
-  /** Optional loopback-only admin/state listener (direct local control channel). */
+  /** Every configured loopback admin listener requires a bearer credential. */
   readonly adminListen?: { readonly host: string; readonly port: number };
-  /**
-   * Optional environment variable carrying the admin bearer token. When set,
-   * every loopback admin route (`/status`, `/healthz`, `/metrics`, `/peer/*`)
-   * requires `Authorization: Bearer <token>`; when absent the surface stays
-   * loopback-only with no credential check, exactly as before.
-   */
+  /** Resolved secret, never included in status/check output. */
+  readonly adminToken?: string;
   readonly adminTokenEnv?: string;
+  /** Owner-only default credential location, also usable by local callers. */
+  readonly adminTokenFile?: string;
   /** Opt-in peer messaging block — absent (or disabled) means the peer stack is never started. */
   readonly peer?: PrivateEndpointPeerConfig;
 }
@@ -97,9 +106,9 @@ export interface PrivateEndpointConfig {
  *    outbox/inbox), resolved relative to the config file. Default
  *    `<configDir>/peer-state`. Owner-only permissions are enforced by the
  *    file stores at creation.
- *  - `peerId` — optional explicit crypto peer id. The default derives
- *    `peer:<tenantId>:<routeId>:<deviceId>` from the admission identity so a
- *    remote operator can predict and verify the binding out of band.
+ *  - `peerId` — optional explicit crypto peer id. The default is the shared
+ *    deterministic derivation from the admission identity, including escaped
+ *    personal tenant IDs, so paired devices verify the same route binding.
  */
 export interface PrivateEndpointPeerConfig {
   readonly storageDir: string;
@@ -125,6 +134,17 @@ function boundedPublicKey(value: unknown, label: string): string {
     throw endpointConfigError("private_endpoint_key_invalid", `${label} is not a parseable SPKI public key.`);
   }
   return value;
+}
+
+function boundedPinRef(value: unknown, label: string): string {
+  const isOpaque = typeof value === "string" && OPAQUE_ID.test(value);
+  const isCanonicalDigest = typeof value === "string" && /^[A-Za-z0-9_-]{43}$/u.test(value)
+    && Buffer.from(value, "base64url").byteLength === 32
+    && Buffer.from(value, "base64url").toString("base64url") === value;
+  if (!isOpaque && !isCanonicalDigest) {
+    throw endpointConfigError("private_endpoint_account_pin_invalid", `${label} must be a bounded SPKI pin reference.`);
+  }
+  return value as string;
 }
 
 function safeInteger(value: unknown, label: string, minimum: number, maximum: number): number {
@@ -221,7 +241,18 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
   const relay = provided.relay;
   if (!record(relay)) throw endpointConfigError("private_endpoint_relay_invalid", "Private endpoint needs a relay section.");
   const base = relayBaseUrl(relay.url);
-  const credentialEnv = environmentBinding(relay.credential, "Relay credential");
+  const credentialReference = relay.credential;
+  let credentialEnv = "";
+  let relayCredential: string;
+  if (typeof credentialReference === "string" && credentialReference.startsWith("file:")) {
+    relayCredential = (await materialReference(credentialReference, "Relay credential", baseDir)).trim();
+    if (relayCredential.length < 32 || relayCredential.length > 8192 || /\s/u.test(relayCredential)) {
+      throw endpointConfigError("private_endpoint_credential_invalid", "Relay credential file must contain one opaque token.");
+    }
+  } else {
+    credentialEnv = environmentBinding(credentialReference, "Relay credential");
+    relayCredential = process.env[credentialEnv]!;
+  }
 
   // --- endpoint admission + trust binding -------------------------------
   const endpoint = provided.endpoint;
@@ -262,6 +293,43 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
   });
   if (!parseEndpointTrustBinding(trustBinding)) {
     throw endpointConfigError("private_endpoint_trust_invalid", "Endpoint trust binding does not satisfy the wire contract.");
+  }
+
+  // --- optional managed-account authority ---------------------------------
+  const accountSection = provided.account;
+  let account: PrivateEndpointConfig["account"];
+  if (accountSection !== undefined) {
+    if (admission.mode !== "personal") {
+      throw endpointConfigError("team_not_available", "Account-managed team endpoints require an available paid team subscription.");
+    }
+    if (!record(accountSection)) throw endpointConfigError("private_endpoint_account_invalid", "Account binding must be an object.");
+    let origin: URL | null = null;
+    if (typeof accountSection.origin === "string") {
+      try { origin = new URL(accountSection.origin); }
+      catch { throw endpointConfigError("account_authority_origin_invalid", "Account authority origin must be a bare HTTPS origin."); }
+    }
+    if (!origin || origin.protocol !== "https:" || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) {
+      throw endpointConfigError("account_authority_origin_invalid", "Account authority origin must be an HTTPS origin without a path or credentials.");
+    }
+    const signingKey = await materialReference(accountSection.signingKey, "Account device signing key", baseDir);
+    try {
+      const key = createPrivateKey(signingKey);
+      if (key.asymmetricKeyType !== "ed25519") throw new Error("wrong key type");
+    } catch {
+      throw endpointConfigError("private_endpoint_account_key_invalid", "Account device signing key must be an Ed25519 private key.");
+    }
+    const endpointPinRef = boundedPinRef(accountSection.endpointPinRef, "Account endpointPinRef");
+    const endpointSpkiPin = boundedPinRef(accountSection.endpointSpkiPin, "Account endpointSpkiPin");
+    if (endpointPinRef !== endpointSpkiPin) {
+      throw endpointConfigError("private_endpoint_account_pin_invalid", "Account endpoint pin reference must equal the configured inner TLS SPKI pin.");
+    }
+    account = Object.freeze({
+      origin: origin.origin,
+      signingKey,
+      endpointPinRef,
+      endpointSpkiPin,
+      vaultId: boundedOpaqueId(accountSection.vaultId, "Account vaultId")
+    });
   }
 
   // --- inner TLS identity ------------------------------------------------
@@ -336,6 +404,8 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
   const admin = provided.admin;
   let adminListen: PrivateEndpointConfig["adminListen"];
   let adminTokenEnv: string | undefined;
+  let adminToken: string | undefined;
+  let adminTokenFile: string | undefined;
   if (admin !== undefined) {
     if (!record(admin) || !record(admin.listen)) {
       throw endpointConfigError("private_endpoint_admin_invalid", "Admin section needs a listen object.");
@@ -347,8 +417,20 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
     const port = admin.listen.port === undefined ? 0 : safeInteger(admin.listen.port, "Admin listen port", 0, 65_535);
     adminListen = Object.freeze({ host, port });
     if (admin.token !== undefined) {
-      adminTokenEnv = environmentBinding(admin.token, "Admin bearer token");
+      if (typeof admin.token === "string" && ENV_BINDING.test(admin.token)) {
+        adminTokenEnv = environmentBinding(admin.token, "Admin bearer token");
+      }
+      if (typeof admin.token === "string" && admin.token.startsWith("file:")) {
+        adminTokenFile = resolve(baseDir, admin.token.slice(5));
+      }
+      adminToken = (await materialReference(admin.token, "Admin bearer token", baseDir)).trim();
+      if (!adminToken || /[\r\n]/u.test(adminToken)) {
+        throw endpointConfigError("private_endpoint_credential_invalid", "Admin bearer token is empty or malformed.");
+      }
     }
+  }
+  if (account && !adminListen) {
+    throw endpointConfigError("private_endpoint_account_admin_required", "Managed-account endpoints require a loopback admin listener with an authenticated bearer for invitation issuance.");
   }
 
   // --- optional peer messaging ---------------------------------------------
@@ -381,18 +463,68 @@ export async function loadPrivateEndpointConfig(path: string): Promise<PrivateEn
     }
   }
 
+  if (adminListen && !adminToken) {
+    const stem = createHash("sha256").update(`${admission.tenantId}\n${admission.routeId}\n${admission.deviceId}`).digest("hex").slice(0, 24);
+    adminTokenFile = resolve(baseDir, ".meshrix-private-endpoint-secrets", `admin-${stem}.token`);
+    adminToken = await provisionAdminToken(adminTokenFile);
+  }
+
   return Object.freeze({
     relayBaseUrl: base,
     sessionUrl: `${base.origin}${base.pathname === "/" ? "" : base.pathname.replace(/\/$/u, "")}/session/${admission.tenantId}/${admission.routeId}`,
     credentialEnv,
+    relayCredential,
     admission,
     trustBinding,
     innerTls: Object.freeze({ key: tlsKey, cert: tlsCert, ...(handshakeTimeoutMs ? { handshakeTimeoutMs } : {}) }),
     recovery: Object.freeze({ authorities: Object.freeze(authorities), ...(signingKey ? { signingKey } : {}) }),
+    ...(account ? { account } : {}),
     gatewayConfigPath,
     reconnect: Object.freeze({ initialDelayMs, maxDelayMs }),
     ...(adminListen ? { adminListen } : {}),
     ...(adminTokenEnv ? { adminTokenEnv } : {}),
+    ...(adminToken ? { adminToken } : {}),
+    ...(adminTokenFile ? { adminTokenFile } : {}),
     ...(peerConfig ? { peer: peerConfig } : {})
   });
+}
+
+/** Atomically install one persistent credential; concurrent check/serve callers reuse it. */
+async function provisionAdminToken(path: string): Promise<string> {
+  const directory = dirname(path);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const directoryStat = await lstat(directory);
+  if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink()) {
+    throw endpointConfigError("private_endpoint_admin_unsafe", "Admin credential directory must be a private directory.");
+  }
+  await chmod(directory, 0o700);
+  try { return await readAdminTokenFile(path); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  const temporary = `${path}.${randomBytes(12).toString("hex")}.tmp`;
+  try {
+    await writeFile(temporary, `${randomBytes(32).toString("base64url")}\n`, { mode: 0o600, flag: "wx" });
+    await link(temporary, path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "EEXIST") throw error;
+    });
+  } finally {
+    await unlink(temporary).catch(() => undefined);
+  }
+  return readAdminTokenFile(path);
+}
+
+async function readAdminTokenFile(path: string): Promise<string> {
+  const file = await open(path, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+  try {
+    const stat = await file.stat();
+    if (!stat.isFile() || stat.size > 256 || (process.platform !== "win32" && (stat.mode & 0o077) !== 0)) {
+      throw endpointConfigError("private_endpoint_admin_unsafe", "Admin credential must be an owner-only regular file.");
+    }
+    const token = (await file.readFile("utf8")).trim();
+    if (!/^[A-Za-z0-9_-]{43}$/u.test(token)) {
+      throw endpointConfigError("private_endpoint_credential_invalid", "Generated admin credential is malformed.");
+    }
+    return token;
+  } finally {
+    await file.close();
+  }
 }

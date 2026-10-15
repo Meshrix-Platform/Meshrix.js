@@ -35,10 +35,9 @@ const EXTERNAL_SERVICE_REQUEST_FIELDS: any = new Set<any>([
   "serviceRef",
   "operationRef",
   "input",
-  "idempotencyKey",
-  "timeoutMs"
+  "idempotencyKey"
 ]);
-const EXTERNAL_SERVICE_OPTIONS_FIELDS: any = new Set<any>(["signal"]);
+const EXTERNAL_SERVICE_OPTIONS_FIELDS: any = new Set<any>(["signal", "timeoutMs"]);
 const EXTERNAL_SERVICE_REFERENCE_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
 const EXTERNAL_SERVICE_MAX_REQUEST_BYTES: any = 2 * 1024 * 1024;
 const EXTERNAL_SERVICE_MAX_RESPONSE_BYTES: any = 8 * 1024 * 1024;
@@ -373,6 +372,36 @@ function bindSkillHubExternalServiceRequest({ requestInput, record, serviceRef, 
   return Object.freeze({ requestInput: boundInput, idempotencyKey: boundIdempotencyKey });
 }
 
+function bindModelGatewayIdempotencyKey({ requestInput, record, serviceRef, operationRef, idempotencyKey, call }: Record<string, any>) : any {
+  if (record.pluginId !== "model-gateway" || record.id !== "model_gateway.call") {
+    return Object.freeze({ requestInput, idempotencyKey });
+  }
+  const callerKey: any = String(requestInput.idempotencyKey || "").trim();
+  if (!callerKey || callerKey !== idempotencyKey) {
+    throw pluginExternalServiceError("plugin_external_service_idempotency_invalid", 400);
+  }
+  const user: any = call.authSession?.user || {};
+  const subjectIdentity: any = String(user.subjectId || user.userId || "").trim();
+  if (!subjectIdentity) {
+    throw pluginExternalServiceError("plugin_external_service_subject_required", 403);
+  }
+  const tenantIdentity: any = String(
+    user.tenantId || user.organizationNodeId || user.organizationId || "local"
+  ).trim() || "local";
+  const boundIdempotencyKey: any = `model_gateway:${createHash("sha256").update(canonicalPluginRequest({
+    domain: "meshrix.model_gateway.principal-scoped-idempotency",
+    serviceRef,
+    operationRef,
+    subject: subjectIdentity,
+    tenant: tenantIdentity,
+    idempotencyKey: callerKey
+  })).digest("hex")}`;
+  return Object.freeze({
+    requestInput: Object.freeze({ ...requestInput, idempotencyKey: boundIdempotencyKey }),
+    idempotencyKey: boundIdempotencyKey
+  });
+}
+
 function externalServiceRequestFacade(source?: any, record?: any, call?: any) : any {
   return Object.freeze({
     async request(input: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
@@ -399,13 +428,14 @@ function externalServiceRequestFacade(source?: any, record?: any, call?: any) : 
       if (idempotencyKey.length > 256 || /[\u0000-\u001f\u007f]/u.test(idempotencyKey)) {
         throw pluginExternalServiceError("plugin_external_service_idempotency_invalid", 400);
       }
-      const requestedTimeout: any = input.timeoutMs === undefined ? 0 : Number(input.timeoutMs);
-      if (requestedTimeout !== 0 && (!Number.isSafeInteger(requestedTimeout) || requestedTimeout < 100 || requestedTimeout > 300_000)) {
-        throw pluginExternalServiceError("plugin_external_service_timeout_invalid", 400);
-      }
       const callSignal: any = call.signal || call.operationLock?.signal || null;
       if (options.signal !== undefined && options.signal !== callSignal) {
         throw pluginExternalServiceError("plugin_external_service_signal_invalid", 400);
+      }
+      const requestedTimeout: any = options.timeoutMs;
+      if (requestedTimeout !== undefined &&
+          (!Number.isSafeInteger(requestedTimeout) || requestedTimeout < 1 || requestedTimeout > 2_147_483_647)) {
+        throw pluginExternalServiceError("plugin_external_service_timeout_invalid", 400);
       }
       const user: any = call.authSession?.user || {};
       const runtimeAuthorization: any = call.request?.__meshrixToolRuntimeAuthorization ||
@@ -421,6 +451,16 @@ function externalServiceRequestFacade(source?: any, record?: any, call?: any) : 
       });
       requestInput = skillHubBinding.requestInput;
       idempotencyKey = skillHubBinding.idempotencyKey;
+      const modelGatewayBinding: any = bindModelGatewayIdempotencyKey({
+        requestInput,
+        record,
+        serviceRef,
+        operationRef,
+        idempotencyKey,
+        call
+      });
+      requestInput = modelGatewayBinding.requestInput;
+      idempotencyKey = modelGatewayBinding.idempotencyKey;
       if (Buffer.byteLength(canonicalPluginRequest(requestInput), "utf8") > EXTERNAL_SERVICE_MAX_REQUEST_BYTES) {
         throw pluginExternalServiceError("plugin_external_service_input_too_large", 413);
       }
@@ -433,7 +473,7 @@ function externalServiceRequestFacade(source?: any, record?: any, call?: any) : 
           operationRef,
           input: requestInput,
           ...(idempotencyKey ? { idempotencyKey } : {}),
-          ...(requestedTimeout ? { timeoutMs: requestedTimeout } : {}),
+          ...(requestedTimeout === undefined ? {} : { timeoutMs: requestedTimeout }),
           governance: Object.freeze({
             authorizationContextDigest: governance.authorizationContextDigest,
             riskDecisionRef: governance.riskDecisionRef,

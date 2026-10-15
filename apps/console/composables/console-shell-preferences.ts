@@ -47,7 +47,6 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
   const languageMode: any = ref<ConsoleLocale>("zh-CN");
   let consoleDomLocalizer: ConsoleDomLocalizer | null = null;
   let unsubscribeAppearancePresetCatalogChanges: (() => void) | null = null;
-  let appearancePresetCatalogPollTimer: number | null = null;
   let appearancePresetCatalogRefreshInFlight: any = false;
   let appearancePresetCatalogFingerprint: any = "";
   let appearancePreferencesMounted: any = false;
@@ -286,14 +285,6 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
     if (options.isAuthenticated.value) {
       void refreshAppearancePresetConfigs({ silent: true, preferStored: true });
     }
-    if (typeof window !== "undefined") {
-      appearancePresetCatalogPollTimer = window.setInterval(() : any => {
-        if (!options.isAuthenticated.value || document.visibilityState === "hidden") {
-          return;
-        }
-        void refreshAppearancePresetConfigs({ silent: true, refreshBuiltIn: false });
-      }, 2500);
-    }
   });
 
   watch(options.isAuthenticated, (authenticated?: any) : any => {
@@ -312,10 +303,6 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
     appearancePreferencesMounted = false;
     unsubscribeAppearancePresetCatalogChanges?.();
     unsubscribeAppearancePresetCatalogChanges = null;
-    if (appearancePresetCatalogPollTimer !== null) {
-      window.clearInterval(appearancePresetCatalogPollTimer);
-      appearancePresetCatalogPollTimer = null;
-    }
     consoleDomLocalizer?.disconnect();
     consoleDomLocalizer = null;
   });

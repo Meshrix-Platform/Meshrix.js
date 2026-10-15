@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -146,44 +147,62 @@ describe("standalone upstream transport lifetimes", () => {
 
   it("keeps an HTTP call pending beyond the retired operation limit and completes it normally", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const response = deferred<Response>();
-    const fetchMock = vi.fn((_url: string, _init: RequestInit) => response.promise);
-    vi.stubGlobal("fetch", fetchMock);
+    const received = deferred<void>();
+    const releaseResponse = deferred<void>();
+    const server = createServer(async (_request, response) => {
+      received.resolve();
+      await releaseResponse.promise;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ jsonrpc: "2.0", id: "long-call", result: { ok: true } }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("fixture_listener_address_missing");
     const timeout = vi.spyOn(AbortSignal, "timeout");
     let settled = false;
-    const pending = fetchRpc("http://127.0.0.1:4123/mcp", { jsonrpc: "2.0", id: "long-call" }, {}).then((value) => {
+    const pending = fetchRpc(`http://127.0.0.1:${address.port}/mcp`, { jsonrpc: "2.0", id: "long-call" }, {}).then((value) => {
       settled = true;
       return value;
     });
+    try {
+      await received.promise;
+      await vi.advanceTimersByTimeAsync(30_001);
+      expect(settled).toBe(false);
+      expect(timeout).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(30_001);
-    expect(settled).toBe(false);
-    expect(timeout).not.toHaveBeenCalled();
-
-    response.resolve(new Response(JSON.stringify({ jsonrpc: "2.0", id: "long-call", result: { ok: true } }), { status: 200 }));
-    await expect(pending).resolves.toMatchObject({ status: 200, body: { result: { ok: true } } });
-    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ signal: undefined, redirect: "manual" });
+      releaseResponse.resolve();
+      await expect(pending).resolves.toMatchObject({ status: 200, body: { result: { ok: true } } });
+    } finally {
+      releaseResponse.resolve();
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
   });
 
   it("passes caller cancellation through HTTP without combining it with a timer", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const controller = new AbortController();
     const timeout = vi.spyOn(AbortSignal, "timeout");
-    let receivedSignal: AbortSignal | null | undefined;
-    const fetchMock = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
-      receivedSignal = init.signal;
-      const abort = () => reject(new DOMException("Aborted", "AbortError"));
-      if (init.signal?.aborted) abort();
-      else init.signal?.addEventListener("abort", abort, { once: true });
-    }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const pending = fetchRpc("http://127.0.0.1:4123/mcp", { jsonrpc: "2.0", id: "cancel-call" }, {}, controller.signal);
-    controller.abort();
-
-    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
-    expect(receivedSignal).toBe(controller.signal);
-    expect(timeout).not.toHaveBeenCalled();
+    const received = deferred<void>();
+    const releaseResponse = deferred<void>();
+    const server = createServer(async (_request, response) => {
+      received.resolve();
+      await releaseResponse.promise;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ jsonrpc: "2.0", id: "cancel-call", result: { ok: true } }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("fixture_listener_address_missing");
+    const pending = fetchRpc(`http://127.0.0.1:${address.port}/mcp`, { jsonrpc: "2.0", id: "cancel-call" }, {}, controller.signal);
+    try {
+      await received.promise;
+      controller.abort();
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      expect(timeout).not.toHaveBeenCalled();
+    } finally {
+      releaseResponse.resolve();
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
   });
 
   it("keeps a stdio request pending beyond the retired limit, then clears it on response", async () => {

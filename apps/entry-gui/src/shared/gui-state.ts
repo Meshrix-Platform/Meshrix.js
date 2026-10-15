@@ -11,12 +11,13 @@
  * snapshot so a future field cannot silently leak a secret-shaped value; both
  * the main-process emitter and the tests run it on every snapshot.
  */
-export const GUI_STATE_SCHEMA_VERSION = "v0.0.1:entry-gui:state-1";
+export const GUI_STATE_SCHEMA_VERSION = "v0.0.1:entry-gui:state-3";
 
 export type GuiPairingPhase =
   | "idle"
   | "invite_ready"
   | "challenge_issued"
+  | "authorization_required"
   | "proof_submitted"
   | "enrolled"
   | "refused"
@@ -30,6 +31,7 @@ export interface GuiInviteSummary {
   readonly endpointRouteId: string;
   readonly tenantId: string;
   readonly mode: "personal" | "enterprise";
+  readonly endpointDeviceId: string;
   readonly endpointPrincipalRef: string;
   /** The endpoint's inner-channel SPKI pin — the decrypting party's trust anchor. */
   readonly endpointSpkiPin: string;
@@ -50,7 +52,7 @@ export interface GuiPairingView {
 
 export type GuiRouteState = "reachable" | "unreachable" | "draining" | "unknown";
 
-export type GuiRevocationState = "none" | "local_revoked" | "remote_pending" | "remote_applied";
+export type GuiRevocationState = "none" | "local_revoked" | "remote_pending" | "remote_applied" | "authority_pending" | "enforcement_pending";
 
 export interface GuiConnectionView {
   readonly connectionId: string;
@@ -60,6 +62,7 @@ export interface GuiConnectionView {
   readonly mode: "personal" | "enterprise";
   /** Decrypting party — the endpoint principal that terminates the inner TLS. */
   readonly endpointPrincipalRef: string;
+  readonly endpointDeviceId: string | null;
   /** Pinned SPKI fingerprint of the decrypting party, displayed verbatim. */
   readonly endpointSpkiPin: string;
   readonly deviceId: string;
@@ -71,14 +74,26 @@ export interface GuiConnectionView {
   readonly revocation: GuiRevocationState;
   readonly vaultId: string | null;
   readonly capabilityGrantRef: string;
+  /** Account recovery or epoch change invalidated this local enrollment. */
+  readonly rePairRequired: boolean;
 }
 
 export type GuiRecoveryState =
   | "not_configured"
   | "awaiting_save"
+  | "account_authorization_required"
+  | "account_writer_pending"
   | "ready"
   | "backup_unreadable"
   | "rotation_pending";
+
+export type GuiVaultWriterRegistrationState =
+  | "unmanaged"
+  | "prepare_pending"
+  | "authorization_required"
+  | "service_pending"
+  | "complete"
+  | "older_snapshot_preserved";
 
 export interface GuiRotationEndpointView {
   readonly endpointRouteId: string;
@@ -92,6 +107,11 @@ export interface GuiRecoveryView {
   readonly generation: number | null;
   /** True once the key text was revealed through the one-shot display. */
   readonly keyRevealed: boolean;
+  readonly writerRegistration: {
+    readonly state: GuiVaultWriterRegistrationState;
+    readonly candidateGeneration: number | null;
+    readonly detail: string | null;
+  };
   readonly backup: {
     readonly lastSuccessAt: string | null;
     readonly lastCommittedRevision: number | null;
@@ -128,6 +148,67 @@ export interface GuiMcpSetupView {
   readonly configuredPath: string | null;
 }
 
+export interface GuiAccountView {
+  readonly state: "unconfigured" | "signed_out" | "authenticated" | "transaction_pending" | "recovery_required";
+  readonly accountId: string | null;
+  readonly authEpoch: number | null;
+  readonly transactionId: string | null;
+  readonly transactionPurpose: "login" | "step_up" | null;
+  readonly actionPurpose: "pair_device" | "grant_access" | null;
+  readonly originAvailable: boolean;
+  readonly custodyAvailable: boolean;
+  readonly notice: string | null;
+}
+
+/** Redacted profile-level personal endpoint status. No credentials or keys. */
+export interface GuiPersonalEndpointView {
+  readonly state: "unregistered" | "enrolled" | "connecting" | "connected" | "unreachable" | "revoked" | "action_required";
+  readonly tenantId: string | null;
+  readonly routeId: string | null;
+  readonly deviceId: string | null;
+  readonly fingerprint: string | null;
+  readonly relayState: "reachable" | "unreachable" | "unknown";
+  readonly canCreatePairingInvite: boolean;
+}
+
+/** Safe Agent catalog projection; executable details and environment stay local. */
+export interface GuiAgentSummary {
+  readonly id: string;
+  readonly displayName: string;
+  readonly enabled: boolean;
+  readonly permissionMode: "ask" | "allow_list" | "deny_all";
+}
+
+/** Durable application history projection; prompt, result and permission payload are fetched explicitly. */
+export interface GuiApplicationSummary {
+  readonly operationId: string;
+  readonly direction: "outbound" | "inbound";
+  readonly targetLabel: string;
+  readonly agentLabel: string;
+  readonly status: string;
+  readonly transportStatus: string;
+  readonly updatedAt: string;
+}
+
+export interface GuiApplicationView {
+  readonly destinations: readonly {
+    readonly handle: string;
+    readonly label: string;
+    readonly reachable: boolean;
+  }[];
+  readonly agents: readonly GuiAgentSummary[];
+  readonly operations: readonly GuiApplicationSummary[];
+}
+
+export interface GuiGrantView {
+  readonly connectionId: string | null;
+  readonly availableScopes: readonly string[];
+  readonly targetScopes: readonly string[];
+  readonly grantRef: string | null;
+  readonly status: "idle" | "catalog_ready" | "authorization_required" | "granted";
+  readonly notice: string | null;
+}
+
 export interface GuiLifecycleView {
   readonly state: "starting" | "ready" | "stopping" | "stopped";
   /** Application-owned data directory (informational). */
@@ -155,6 +236,10 @@ export interface GuiState {
   readonly recoveryImport: GuiRecoveryImportView;
   readonly connections: readonly GuiConnectionView[];
   readonly mcp: GuiMcpSetupView;
+  readonly account: GuiAccountView;
+  readonly personalEndpoint: GuiPersonalEndpointView;
+  readonly applications: GuiApplicationView;
+  readonly grant: GuiGrantView;
   /** Bounded human-readable notices (never secret material). */
   readonly notices: readonly string[];
 }

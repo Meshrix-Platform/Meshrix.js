@@ -23,6 +23,7 @@ beforeEach(() : any => {
 describe("approval side navigation", () : any => {
   it("loads the all-items projection before scrolling to a historical approval", async () : Promise<any> => {
     const selectApprovalFlowStatus: any = vi.fn(async () : Promise<any> => {});
+    const refreshPendingOperations: any = vi.fn(async () : Promise<any> => {});
     const target: any = document.createElement("div");
     target.id = "approval-pendingOperation:history-operation";
     target.scrollIntoView = vi.fn();
@@ -44,7 +45,7 @@ describe("approval side navigation", () : any => {
             completedAt: "2026-01-01T00:01:00.000Z",
           },
         ]),
-        refreshOperationPermissionPendingOperations: vi.fn(async () : Promise<any> => {}),
+        refreshOperationPermissionPendingOperations: refreshPendingOperations,
         selectApprovalFlowStatus,
       },
       returnToPrimarySideNav: vi.fn(),
@@ -61,6 +62,7 @@ describe("approval side navigation", () : any => {
     };
     const wrapper: any = mount(ConsoleSideNavDirectory);
 
+    expect(refreshPendingOperations).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain("已处理");
     expect(wrapper.text()).toContain("Convert document");
     expect(wrapper.text()).toContain("受限写入");
@@ -77,5 +79,32 @@ describe("approval side navigation", () : any => {
       block: "start",
       behavior: "smooth",
     });
+  });
+
+  it("uses the workspace page's shared state without starting another list read", () : void => {
+    const loadWorkspaces: any = vi.fn(async () : Promise<any> => {});
+    sideNavContextMock.current = {
+      activeSideNavDirectory: ref("workspaces"),
+      approvalFlowConsole: {
+        operationPermissionPendingOperations: ref([]),
+        refreshOperationPermissionPendingOperations: vi.fn(async () : Promise<any> => {}),
+        selectApprovalFlowStatus: vi.fn(async () : Promise<any> => {}),
+      },
+      returnToPrimarySideNav: vi.fn(),
+      setSideNavDirectoryWidth: vi.fn(),
+      showSideNavDirectory: ref(true),
+      sideNavDirectoryMinWidth: 220,
+      sideNavDirectoryWidth: ref(220),
+      workspacesConsole: {
+        load: loadWorkspaces,
+        panel: ref("list"),
+        selectedId: ref(""),
+        workspaces: ref([]),
+      },
+    };
+
+    mount(ConsoleSideNavDirectory);
+
+    expect(loadWorkspaces).not.toHaveBeenCalled();
   });
 });

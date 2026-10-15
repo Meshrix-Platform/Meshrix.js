@@ -82,33 +82,16 @@ function candidate(dataRoot: string, peerUrl: string, mode: string, risk = "safe
 
 async function controlledPeer(counterPath: string) {
   let nextCallGate: ReturnType<typeof deferred> | null = null;
-  let nextDiscoveryGate: ReturnType<typeof deferred> | null = null;
   const callGates = new Set<ReturnType<typeof deferred>>();
   let observedCalls = 0;
-  let observedDiscoveries = 0;
   const calledNames: string[] = [];
   let nextCallResult: Record<string, any> | null = null;
   const callWaiters: Array<{ count: number; resolve: (count: number) => void }> = [];
-  const discoveryWaiters: Array<{ count: number; resolve: (count: number) => void }> = [];
   const server = http.createServer(async (request, response) => {
     try {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
       const wire = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      if (wire.method === "server/discover") {
-        observedDiscoveries += 1;
-        for (const waiter of discoveryWaiters.splice(0)) {
-          if (observedDiscoveries >= waiter.count) waiter.resolve(observedDiscoveries);
-          else discoveryWaiters.push(waiter);
-        }
-        const gate = nextDiscoveryGate;
-        nextDiscoveryGate = null;
-        if (gate) await gate.promise;
-        if (response.destroyed) return;
-        response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify({ jsonrpc: "2.0", id: wire.id, result: { resultType: "complete", supportedVersions: ["2026-07-28"] } }));
-        return;
-      }
       if (wire.method === "tools/list") {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({ jsonrpc: "2.0", id: wire.id, result: { resultType: "complete", tools: [{
@@ -169,12 +152,6 @@ async function controlledPeer(counterPath: string) {
       nextCallGate = gate;
       return gate;
     },
-    holdNextDiscovery() {
-      const gate = deferred();
-      callGates.add(gate);
-      nextDiscoveryGate = gate;
-      return gate;
-    },
     setNextCallResult(result: Record<string, any>) {
       nextCallResult = result;
     },
@@ -184,10 +161,6 @@ async function controlledPeer(counterPath: string) {
     async waitForCall(count: number) {
       if (observedCalls >= count) return observedCalls;
       return new Promise<number>((resolve) => callWaiters.push({ count, resolve }));
-    },
-    async waitForDiscovery(count: number) {
-      if (observedDiscoveries >= count) return observedDiscoveries;
-      return new Promise<number>((resolve) => discoveryWaiters.push({ count, resolve }));
     },
     async count() {
       try { return Number(await fs.readFile(counterPath, "utf8")) || 0; } catch { return 0; }
@@ -248,21 +221,19 @@ describe("platform discovered-tool durable dispatch intent", () => {
     await readOnly.process.stop();
   }, 20_000);
 
-  it("rechecks platform authority after held modern discovery before tools/call", async () => {
+  it("rechecks platform authority after held durable intent before tools/call", async () => {
     const root = await makeRoot();
     const peer = await controlledPeer(path.join(root, "peer-effect-count"));
     peers.push(peer);
-    const started = await startCandidate(path.join(root, "discovery-revoked-candidate"), peer.url, "normal");
-    const discovery = peer.holdNextDiscovery();
-    started.process.send({ type: "call", arguments: { label: "revoke-during-discovery" } });
+    const started = await startCandidate(path.join(root, "intent-revoked-candidate"), peer.url, "hold-after-intent");
+    started.process.send({ type: "call", arguments: { label: "revoke-after-intent" } });
     const intent = await started.process.waitFor("intent");
     expect(intent.ledgerEventId).toBeTruthy();
-    await peer.waitForDiscovery(2);
     expect(await peer.count()).toBe(0);
 
     started.process.send({ type: "revoke-authority" });
     await started.process.waitFor("authority-revoked");
-    discovery.resolve();
+    started.process.send({ type: "release-intent" });
 
     const marker = await started.process.waitFor("dispatch-marker");
     const terminal = await started.process.waitFor("terminal");

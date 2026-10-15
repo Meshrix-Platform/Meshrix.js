@@ -400,7 +400,8 @@ function directFinalSinkAuthorization() {
         subjectId: "admitted-lifetime-direct-subject",
         username: "Lifetime direct caller",
         roleId: "owner",
-        scopes: ["gateway:write"]
+        scopes: ["gateway:write"],
+        dynamicCapabilities: ["cap:upstream:lifetime-http:tools-call-lookup"]
       }
     },
     grant: { id: "admitted-lifetime-direct-grant", revision: "1" },
@@ -640,9 +641,7 @@ describe("admitted upstream execution lifetime", () => {
     expect(settled).toBe(false);
     expect(wire.method).toBe("tools/call");
     expect(requests.map((item) => item.method)).toEqual([
-      "server/discover",
       "tools/list",
-      "server/discover",
       "tools/call"
     ]);
 

@@ -1,6 +1,5 @@
 import { queueIdentityGenerator } from "./identity.ts";
 import { computeDeterministicRetryDelay, DEFAULT_QUEUE_POLICY } from "./policies.ts";
-import { systemQueueTimeSource } from "./time-source.ts";
 
 interface QueueRecord { [key: string]: unknown }
 interface WorkItem extends QueueRecord { workItemId?: string; queueDefinitionId?: string; attempt?: number; lease?: QueueLease }
@@ -11,9 +10,7 @@ interface QueueStore {
   cancelRunning(input: QueueRecord): Promise<unknown>;
   fail?(input: QueueRecord): Promise<unknown>;
   progress(input: QueueRecord): Promise<unknown>;
-  writeFallbackCoordinatorState?(input: QueueRecord): unknown;
 }
-interface QueueTimeSource { nowMs(): number }
 interface QueueIdentityGenerator { fallbackTaskId(): string }
 interface QueueLogger { error?(event: string, facts: object): void }
 interface FallbackRetryPolicy { maxAttempts: number; initialDelayMs: number; multiplier: number; maxDelayMs: number }
@@ -67,13 +64,12 @@ function sleep(ms?: unknown): Promise<void> {
 
 export function createQueueFallbackCoordinator({
   store,
-  timeSource = systemQueueTimeSource,
   identityGenerator = queueIdentityGenerator,
   policy = DEFAULT_QUEUE_POLICY,
   fallback = null,
   logger = null
 }: {
-  store?: QueueStore; timeSource?: QueueTimeSource; identityGenerator?: QueueIdentityGenerator; policy?: QueueRecord;
+  store?: QueueStore; identityGenerator?: QueueIdentityGenerator; policy?: QueueRecord;
   fallback?: FallbackHandler | null; logger?: QueueLogger | null;
 } = {}) {
   if (!store || typeof store.retry !== "function") {
@@ -82,16 +78,6 @@ export function createQueueFallbackCoordinator({
   const queueStore = store;
   const resolvedPolicy = mergePolicy(policy);
   const locks = new Set<string>();
-
-  function writeState(input: QueueRecord = {}): unknown {
-    if (typeof queueStore.writeFallbackCoordinatorState !== "function") {
-      return null;
-    }
-    return queueStore.writeFallbackCoordinatorState({
-      ...input,
-      nowMs: input.nowMs ?? timeSource.nowMs()
-    });
-  }
 
   function lock(workItemId?: unknown): () => boolean {
     const key = toText(workItemId);
@@ -194,20 +180,6 @@ export function createQueueFallbackCoordinator({
     const maxAttempts = Math.max(1, asInt(input.maxAttempts, resolvedPolicy.fallbackRetry.maxAttempts));
     let lastError: unknown = input.error || null;
     try {
-      writeState({
-        fallbackTaskId,
-        workItemId,
-        status: "running",
-        attempt: 0,
-        maxAttempts,
-        reason: input.reason || "fallback_started",
-        state: {
-          workItemId,
-          leaseId,
-          startedAtMs: timeSource.nowMs()
-        }
-      });
-
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
         try {
           const result = await executeFallbackAction({
@@ -218,18 +190,6 @@ export function createQueueFallbackCoordinator({
             leaseId,
             fallbackTaskId,
             attempt
-          });
-          writeState({
-            fallbackTaskId,
-            workItemId,
-            status: "committed",
-            attempt,
-            maxAttempts,
-            reason: input.reason || "fallback_committed",
-            state: {
-              result,
-              committedAtMs: timeSource.nowMs()
-            }
           });
           return {
             fallbackTaskId,
@@ -244,18 +204,6 @@ export function createQueueFallbackCoordinator({
             workItemId,
             attempt,
             error: summarizeError(error)
-          });
-          writeState({
-            fallbackTaskId,
-            workItemId,
-            status: attempt >= maxAttempts ? "exhausted" : "retrying",
-            attempt,
-            maxAttempts,
-            reason: "fallback_attempt_failed",
-            lastError: summarizeError(error),
-            state: {
-              failedAtMs: timeSource.nowMs()
-            }
           });
           if (attempt < maxAttempts) {
             await sleep(computeDeterministicRetryDelay({

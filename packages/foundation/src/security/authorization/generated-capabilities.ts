@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:f1cce01116c45712
+ * Hash: sha256:6f69d17176b0dddc
  * Generated at: 2026-06-30T09:41:12.260Z
  *
  * To modify capabilities: edit source operation definitions or Operation Permission catalog mappings, then run the generator.
  */
-export const GENERATED_CAPABILITIES_HASH = "sha256:f1cce01116c45712";
+export const GENERATED_CAPABILITIES_HASH = "sha256:6f69d17176b0dddc";
 
 export const KERNEL_API_OPERATION_IDS = Object.freeze([
   "cap:api:readiness.baseline.status",
@@ -170,6 +170,7 @@ export const KERNEL_API_OPERATION_IDS = Object.freeze([
   "cap:api:discovery.check_in",
   "cap:api:discovery.clients",
   "cap:api:discovery.clients.alignment_command",
+  "cap:api:discovery.clients.enrollment_token",
   "cap:api:discovery.get_config",
   "cap:api:discovery.set_config",
   "cap:api:runtime.info",
@@ -714,6 +715,7 @@ export const CAPABILITY_RISK_MAP = Object.freeze({
   "cap:api:discovery.check_in": "safe_write",
   "cap:api:discovery.clients": "read_only",
   "cap:api:discovery.clients.alignment_command": "repair_write",
+  "cap:api:discovery.clients.enrollment_token": "safe_write",
   "cap:api:discovery.get_config": "read_only",
   "cap:api:discovery.set_config": "repair_write",
   "cap:api:runtime.info": "read_only",

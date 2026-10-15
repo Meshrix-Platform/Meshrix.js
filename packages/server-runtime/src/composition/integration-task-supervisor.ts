@@ -2,10 +2,6 @@ const DEFAULT_LIMITS: Readonly<Record<string, any>> = Object.freeze({
   maxAdapters: 32,
   maxConcurrent: 4,
   maxQueued: 64,
-  connectTimeoutMs: 5_000,
-  taskTimeoutMs: 30_000,
-  closeTimeoutMs: 5_000,
-  shutdownTimeoutMs: 10_000,
   maxConnectAttempts: 3,
   retryBaseDelayMs: 250,
   retryMaxDelayMs: 5_000
@@ -62,34 +58,18 @@ function normalizeLimits(options: Record<string, any> = {}) : any {
     10_000,
     "maxQueued"
   );
-  const connectTimeoutMs: any = boundedInteger(
-    options.connectTimeoutMs,
-    DEFAULT_LIMITS.connectTimeoutMs,
-    10,
-    300_000,
-    "connectTimeoutMs"
-  );
-  const taskTimeoutMs: any = boundedInteger(
-    options.taskTimeoutMs,
-    DEFAULT_LIMITS.taskTimeoutMs,
-    10,
-    900_000,
-    "taskTimeoutMs"
-  );
-  const closeTimeoutMs: any = boundedInteger(
-    options.closeTimeoutMs,
-    DEFAULT_LIMITS.closeTimeoutMs,
-    10,
-    120_000,
-    "closeTimeoutMs"
-  );
-  const shutdownTimeoutMs: any = boundedInteger(
-    options.shutdownTimeoutMs,
-    DEFAULT_LIMITS.shutdownTimeoutMs,
-    closeTimeoutMs,
-    300_000,
-    "shutdownTimeoutMs"
-  );
+  const connectTimeoutMs: any = options.connectTimeoutMs === undefined || options.connectTimeoutMs === null
+    ? undefined
+    : boundedInteger(options.connectTimeoutMs, undefined, 10, 300_000, "connectTimeoutMs");
+  const taskTimeoutMs: any = options.taskTimeoutMs === undefined || options.taskTimeoutMs === null
+    ? undefined
+    : boundedInteger(options.taskTimeoutMs, undefined, 10, 900_000, "taskTimeoutMs");
+  const closeTimeoutMs: any = options.closeTimeoutMs === undefined || options.closeTimeoutMs === null
+    ? undefined
+    : boundedInteger(options.closeTimeoutMs, undefined, 10, 120_000, "closeTimeoutMs");
+  const shutdownTimeoutMs: any = options.shutdownTimeoutMs === undefined || options.shutdownTimeoutMs === null
+    ? undefined
+    : boundedInteger(options.shutdownTimeoutMs, undefined, 10, 300_000, "shutdownTimeoutMs");
   const maxConnectAttempts: any = boundedInteger(
     options.maxConnectAttempts,
     DEFAULT_LIMITS.maxConnectAttempts,
@@ -284,33 +264,40 @@ async function runBoundedInvocation({
   forwardAbort(supervisorSignal, "shutdown");
   if (externalSignal) forwardAbort(externalSignal, "external");
 
-  let settleAbort: any;
-  const aborted: any = new Promise((resolve?: any) : any => {
-    settleAbort = () : any => resolve(createAbortOutcome(controller, flags));
-    if (controller.signal.aborted) {
-      settleAbort();
-      return;
-    }
-    controller.signal.addEventListener("abort", settleAbort, { once: true });
-    listeners.push(() : any => controller.signal.removeEventListener("abort", settleAbort));
-  });
-  const timeout: any = setTimeout(() : any => {
-    flags.timedOut = true;
-    if (!controller.signal.aborted) controller.abort();
-  }, timeoutMs);
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  if (timeoutMs !== undefined && timeoutMs !== null) {
+    timeout = setTimeout(() : any => {
+      flags.timedOut = true;
+      if (!controller.signal.aborted) controller.abort();
+    }, timeoutMs);
+  }
 
+  let invocationStarted = false;
   const invocation: any = Promise.resolve()
-    .then(() : any => invoke(controller.signal))
+    .then(() : any => {
+      if (controller.signal.aborted) throw new Error("Integration invocation was cancelled before dispatch.");
+      invocationStarted = true;
+      return invoke(controller.signal);
+    })
     .then(
-      (value?: any) : any => ({ kind: "succeeded", value }),
+      (value?: any) : any => (controller.signal.aborted
+        ? {
+            ...createAbortOutcome(controller, flags),
+            value,
+            lateSettlement: invocationStarted ? "fulfilled" : undefined
+          }
+        : { kind: "succeeded", value }),
       () : any => (controller.signal.aborted
-        ? createAbortOutcome(controller, flags)
+        ? {
+            ...createAbortOutcome(controller, flags),
+            lateSettlement: invocationStarted ? "rejected" : undefined
+          }
         : { kind: "failed" })
     );
   try {
-    return await Promise.race([invocation, aborted]);
+    return await invocation;
   } finally {
-    clearTimeout(timeout);
+    if (timeout) clearTimeout(timeout);
     for (const removeListener of listeners) removeListener();
   }
 }
@@ -465,14 +452,22 @@ export function createIntegrationTaskSupervisor(options: Record<string, any> = {
         ? record.descriptor.connect({ adapterId: record.id, signal })
         : null
     });
-    if (outcome.kind === "succeeded" && lifecycleState === "running") {
+    if (outcome.lateSettlement === "fulfilled") {
       record.connection = outcome.value ?? null;
-      record.state = "ready";
-      record.code = "integration_ready";
-      safeLog(logger, "info", "integration.adapter.ready", {
-        adapterId: record.id,
-        connectAttempts: record.connectAttempts
-      });
+    }
+    if (outcome.kind === "succeeded") {
+      record.connection = outcome.value ?? null;
+      if (lifecycleState === "running") {
+        record.state = "ready";
+        record.code = "integration_ready";
+        safeLog(logger, "info", "integration.adapter.ready", {
+          adapterId: record.id,
+          connectAttempts: record.connectAttempts
+        });
+      } else {
+        record.state = "stopping";
+        record.code = "integration_stopping";
+      }
       return;
     }
     if (outcome.kind === "timeout" || outcome.kind === "cancelled") {
@@ -522,11 +517,12 @@ export function createIntegrationTaskSupervisor(options: Record<string, any> = {
       })
     });
     record.runningTasks = Math.max(0, record.runningTasks - 1);
-    if (outcome.kind === "succeeded") {
+    if (outcome.kind === "succeeded" || outcome.lateSettlement === "fulfilled") {
       record.completedTasks += 1;
-      return outcome.value;
+      if (outcome.kind === "succeeded") return outcome.value;
+    } else {
+      record.failedTasks += 1;
     }
-    record.failedTasks += 1;
     if (outcome.kind === "timeout" || outcome.kind === "cancelled") {
       record.fenced = true;
       record.state = "degraded";
@@ -625,12 +621,14 @@ export function createIntegrationTaskSupervisor(options: Record<string, any> = {
         )
       );
     }
-    const effectiveTimeoutMs: any = timeoutMs === undefined
+    const requestedTimeoutMs: any = timeoutMs === undefined || timeoutMs === null
+      ? undefined
+      : boundedInteger(timeoutMs, undefined, 10, 900_000, "timeoutMs");
+    const effectiveTimeoutMs: any = requestedTimeoutMs === undefined
       ? limits.taskTimeoutMs
-      : Math.min(
-          limits.taskTimeoutMs,
-          boundedInteger(timeoutMs, limits.taskTimeoutMs, 10, limits.taskTimeoutMs, "timeoutMs")
-        );
+      : limits.taskTimeoutMs === undefined
+        ? requestedTimeoutMs
+        : Math.min(limits.taskTimeoutMs, requestedTimeoutMs);
     return new Promise((resolve?: any, reject?: any) : any => {
       enqueue({
         type: "task",
@@ -675,7 +673,13 @@ export function createIntegrationTaskSupervisor(options: Record<string, any> = {
         : null);
     if (!close || record.connectAttempts === 0) return "not_required";
     const closeController: any = new AbortController();
-    const timeout: any = setTimeout(() : any => closeController.abort(), timeoutMs);
+    let timedOut = false;
+    const timeout: ReturnType<typeof setTimeout> | null = timeoutMs === undefined || timeoutMs === null
+      ? null
+      : setTimeout(() : any => {
+          timedOut = true;
+          closeController.abort();
+        }, timeoutMs);
     const invocation: any = Promise.resolve()
       .then(() : any => close({
         adapterId: record.id,
@@ -683,15 +687,11 @@ export function createIntegrationTaskSupervisor(options: Record<string, any> = {
         signal: closeController.signal
       }))
       .then(() : any => "closed", () : any => "failed");
-    const aborted: any = new Promise((resolve?: any) : any => {
-      closeController.signal.addEventListener("abort", () : any => resolve("timeout"), {
-        once: true
-      });
-    });
     try {
-      return await Promise.race([invocation, aborted]);
+      const outcome: any = await invocation;
+      return timedOut ? "timeout" : outcome;
     } finally {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
     }
   }
 
@@ -716,26 +716,19 @@ export function createIntegrationTaskSupervisor(options: Record<string, any> = {
       }
       if (!supervisorAbort.signal.aborted) supervisorAbort.abort();
 
-      let activeDeadlineTimer: any;
-      const activeDeadline: any = new Promise((resolve?: any) : any => {
-        activeDeadlineTimer = setTimeout(resolve, limits.shutdownTimeoutMs);
-      });
-      try {
-        await Promise.race([
-          Promise.allSettled([...activeJobs]),
-          activeDeadline
-        ]);
-      } finally {
-        clearTimeout(activeDeadlineTimer);
-      }
+      await Promise.allSettled([...activeJobs]);
 
       const closeStartedAt: any = Date.now();
       const closeResults: any = await Promise.all(records.map(async (record?: any) : Promise<any> => {
-        const remaining: any = Math.max(
-          10,
-          limits.shutdownTimeoutMs - (Date.now() - closeStartedAt)
-        );
-        return closeRecord(record, Math.min(limits.closeTimeoutMs, remaining));
+        const remaining: any = limits.shutdownTimeoutMs === undefined
+          ? undefined
+          : Math.max(0, limits.shutdownTimeoutMs - (Date.now() - closeStartedAt));
+        const timeoutMs: any = limits.closeTimeoutMs === undefined
+          ? remaining
+          : remaining === undefined
+            ? limits.closeTimeoutMs
+            : Math.min(limits.closeTimeoutMs, remaining);
+        return closeRecord(record, timeoutMs);
       }));
       closeResults.forEach((result?: any, index?: any) : any => {
         const record: any = records[index];

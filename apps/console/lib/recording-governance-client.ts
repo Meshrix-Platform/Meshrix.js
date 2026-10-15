@@ -65,8 +65,8 @@ export type RecordingPendingObligation = {
 export type RecordingAuthority = {
   custody: string;
   durable: boolean;
-  decryptionAuthority: string;
-  decryptionAuthorityNote: string;
+  contentAccess: string;
+  contentAccessNote: string;
 };
 
 export type RecordingGovernanceSnapshot = {

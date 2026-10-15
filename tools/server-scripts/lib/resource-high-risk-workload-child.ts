@@ -6,6 +6,7 @@ import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 
 import { createEndpointTrafficController } from "../../../packages/agents/src/upstream-gateway/endpoint-traffic.ts";
 import { createOperationAuditStore } from "../../../packages/foundation/src/security/operation-audit.ts";
+import { operationAuditProjectionKeyId } from "../../../packages/foundation/src/security/operation-audit-projection.ts";
 import {
   openStoredObjectReadStream,
   putStoredObjectFromFile
@@ -479,9 +480,13 @@ async function runEndpointScenario() : Promise<any> {
 }
 
 async function runAuditScenario() : Promise<any> {
+  const projectionKey: Buffer = crypto.randomBytes(32);
   const store: any = createOperationAuditStore({
-    userDataPath: path.join(rootPath, "audit")
+    userDataPath: path.join(rootPath, "audit"),
+    projectionKey,
+    projectionKeyId: operationAuditProjectionKeyId(projectionKey)
   });
+  projectionKey.fill(0);
   try {
     await store.setRetentionPolicy({
       retentionDays: 1,

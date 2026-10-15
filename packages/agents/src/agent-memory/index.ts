@@ -9,6 +9,7 @@ import {
   stateFileKey,
   waitForStateIdle
 } from "@meshrix/foundation/storage/state-coordinator";
+import { readJsonlTail as readBoundedJsonlTail } from "#meshrix/foundation/storage/bounded-jsonl";
 
 export const AGENT_MEMORY_PROTOCOL_VERSION = "v0.0.1:agent:memory-1";
 
@@ -146,44 +147,19 @@ function positiveInteger(value: unknown, fallback: number, maximum = Number.MAX_
   return Math.min(parsed, maximum);
 }
 
-function parseJsonLines(text?: unknown): UnknownRecord[] {
-  const records: UnknownRecord[] = [];
-  for (const line of String(text || "").split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const record: unknown = JSON.parse(trimmed);
-      if (record && typeof record === "object" && !Array.isArray(record)) records.push(record as UnknownRecord);
-    } catch {
-      // A malformed historical line must not hide newer valid memory records.
-    }
-  }
-  return records;
-}
-
 async function readJsonlTail(filePath: string, limit = 50, maxScanBytes = DEFAULT_MAX_SCAN_BYTES): Promise<UnknownRecord[]> {
-  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
   try {
-    handle = await fs.open(filePath, "r");
-    const stat = await handle.stat();
-    const scanBytes = Math.min(
-      stat.size,
-      positiveInteger(maxScanBytes, DEFAULT_MAX_SCAN_BYTES, 64 * 1024 * 1024)
-    );
-    const start = Math.max(0, stat.size - scanBytes);
-    const buffer = Buffer.allocUnsafe(scanBytes);
-    if (scanBytes > 0) await handle.read(buffer, 0, scanBytes, start);
-    let content = buffer.toString("utf8");
-    if (start > 0) {
-      const firstLineBreak = content.indexOf("\n");
-      content = firstLineBreak >= 0 ? content.slice(firstLineBreak + 1) : "";
-    }
-    return parseJsonLines(content)
-      .slice(-Math.max(1, Math.min(Number(limit || 50), 1000)));
+    const records = await readBoundedJsonlTail(filePath, {
+      limit: Math.max(1, Math.min(Math.trunc(Number(limit || 50) || 50), 1000)),
+      maxScanBytes: positiveInteger(maxScanBytes, DEFAULT_MAX_SCAN_BYTES, 64 * 1024 * 1024),
+      ignoreMalformed: true,
+      healTornTail: false,
+      waitForIdle: false,
+      filter: (value) => value !== null && typeof value === "object" && !Array.isArray(value)
+    });
+    return records as UnknownRecord[];
   } catch {
     return [];
-  } finally {
-    await handle?.close().catch(() => null);
   }
 }
 

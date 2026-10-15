@@ -99,7 +99,7 @@ const sinkHealthLabel = computed(() => {
 
     <section class="surface-card">
       <div class="section-header">
-        <h4>{{ recordingGovernanceText("汇集托管与解密边界", "Sink Custody and Decryption Boundary") }}</h4>
+        <h4>{{ recordingGovernanceText("汇集托管与访问边界", "Sink Custody and Access Boundary") }}</h4>
       </div>
       <dl class="recording-facts">
         <div>
@@ -111,8 +111,8 @@ const sinkHealthLabel = computed(() => {
           <dd>{{ (sink?.durable ?? true) ? recordingGovernanceText("是", "Yes") : recordingGovernanceText("否", "No") }}</dd>
         </div>
         <div>
-          <dt>{{ recordingGovernanceText("解密权限", "Decryption Authority") }}</dt>
-          <dd>{{ authority?.decryptionAuthority || "organization" }}</dd>
+          <dt>{{ recordingGovernanceText("读取权限", "Content Access") }}</dt>
+          <dd>{{ authority?.contentAccess || "organization" }}</dd>
         </div>
         <div>
           <dt>{{ recordingGovernanceText("汇集标识", "Sink ID") }}</dt>
@@ -120,9 +120,9 @@ const sinkHealthLabel = computed(() => {
         </div>
       </dl>
       <p class="recording-note">
-        {{ authority?.decryptionAuthorityNote || recordingGovernanceText(
-          "录制内容的解密与审计访问由组织在其自身密钥边界控制；本控制台不持有解密材料。",
-          "Recorded content decryption and audit access are controlled by the organization at its own key boundary; this console never holds decryption material.") }}
+        {{ authority?.contentAccessNote || recordingGovernanceText(
+          "录制内容以未加密形式存放在本部署录制根目录下的私有本地文件中；运行本部署的组织及其文件系统管理员可读取录制内容，不存在独立的加密或密钥边界。",
+          "Recorded content is stored unencrypted in private local files under this deployment's recording root. The operating organization and its filesystem administrators can read recorded content; no separate encryption or key boundary exists.") }}
       </p>
       <p class="recording-note">
         {{ recordingGovernanceText(

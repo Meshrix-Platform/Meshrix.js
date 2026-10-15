@@ -79,7 +79,6 @@ function createHandler({ requestBodyAdmissionController, dispatchRegisteredHttpO
       markSocketActive: vi.fn(),
       markSocketIdle: vi.fn()
     },
-    loginRateLimiter: { shouldAllow: () : any => ({ allowed: true }) },
     operationAuditStore: null,
     operationConcurrencyScope: "test-request-body-admission",
     proxyApiRequest: vi.fn(),

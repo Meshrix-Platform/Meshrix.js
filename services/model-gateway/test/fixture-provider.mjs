@@ -101,6 +101,8 @@ function sendJson(response, status, payload) {
 export async function startFixtureProvider(options = {}) {
   let openAiCalls = 0;
   let anthropicCalls = 0;
+  const openAiBodies = [];
+  const anthropicBodies = [];
   const held = new Map();
 
   const releaseHeld = (model) => {
@@ -147,6 +149,7 @@ export async function startFixtureProvider(options = {}) {
       }
       if (request.method === "POST" && url.pathname === "/v1/chat/completions") {
         openAiCalls += 1;
+        openAiBodies.push(body);
         if (scenario === "provider-fault") {
           sendJson(response, 503, providerFault());
           return;
@@ -164,6 +167,7 @@ export async function startFixtureProvider(options = {}) {
       }
       if (request.method === "POST" && url.pathname === "/v1/messages") {
         anthropicCalls += 1;
+        anthropicBodies.push(body);
         if (scenario === "provider-fault") {
           sendJson(response, 503, providerFault());
           return;
@@ -193,7 +197,9 @@ export async function startFixtureProvider(options = {}) {
     baseUrl,
     port: server.address().port,
     openAiCalls: () => openAiCalls,
+    openAiRequestBodies: () => [...openAiBodies],
     anthropicCalls: () => anthropicCalls,
+    anthropicRequestBodies: () => [...anthropicBodies],
     release: releaseHeld,
     close: () => new Promise((resolve) => {
       for (const model of [...held.keys()]) releaseHeld(model);

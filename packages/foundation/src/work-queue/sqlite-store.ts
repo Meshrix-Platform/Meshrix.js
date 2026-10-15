@@ -125,7 +125,7 @@ export interface SqliteWorkQueueStore {
   acknowledgeTermination: StoreCommand; recordSinkReceipt: StoreCommand; reconcileInDoubt: StoreCommand;
   inspect: StoreCommand; rebuildProjection: StoreCommand; registerQueueDefinition: StoreCommand;
   setQueueControl: StoreCommand; pause: StoreCommand; resume: StoreCommand; drain: StoreCommand;
-  getQueueControl: StoreCommand; writeFallbackCoordinatorState: StoreCommand;
+  getQueueControl: StoreCommand;
   writeSnapshotState: StoreCommand; writeCompactionState: StoreCommand;
   writeInternalHealthState: StoreCommand;
   recordBackgroundWrite(aspectType?: unknown, input?: WorkQueueCommandInput): unknown;
@@ -1549,28 +1549,6 @@ function createSqliteWorkQueueStoreFromDatabase({
     },
     getQueueControl,
     recordBackgroundWrite,
-    writeFallbackCoordinatorState(input: WorkQueueCommandInput = {}) {
-      const nowMs = nowFrom(timeSource, input.nowMs);
-      const fallbackTaskId = toText(input.fallbackTaskId || input.entityId || identityGenerator.fallbackTaskId());
-      if (input.workItemId) {
-        statements.insertFallbackTask.run({
-          fallback_task_id: fallbackTaskId,
-          work_item_id: toText(input.workItemId),
-          state: toText(input.state?.state || input.status || "queued"),
-          attempt: asInt(input.attempt, 0),
-          max_attempts: asInt(input.maxAttempts, resolvedPolicy.fallbackRetry.maxAttempts),
-          reason: toText(input.reason),
-          decision_json: jsonString(input.state || input.decision || {}, {}),
-          created_at_ms: nowMs,
-          updated_at_ms: nowMs
-        });
-      }
-      return recordBackgroundWrite("fallback_coordinator", {
-        ...input,
-        entityId: fallbackTaskId,
-        nowMs
-      });
-    },
     writeSnapshotState(input: WorkQueueCommandInput = {}) {
       return recordBackgroundWrite("snapshot", input);
     },

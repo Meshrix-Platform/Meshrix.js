@@ -86,8 +86,11 @@ job handler owner for that deployment mode.
 
 Dispatch checks cancellation before claim and gives every locally leased item
 its own abort signal. Local cancellation signals the handler before committing
-the durable queue terminal; handler timeout or cooperative interruption returns
-the item through the current lease fence instead of waiting for lease expiry.
+the durable queue terminal. An explicit handler budget or cooperative
+interruption requests cancellation; the runtime keeps the lease and worker
+occupied until the handler promise settles, then applies the current lease
+fence. A late successful result is retained; an unconfirmed interrupted result
+enters `in_doubt` instead of being replayed.
 
 The governed recovery operation is `jobs.work_queue.recover_failed`. Successful
 enqueue and the shared background scheduler request bounded dispatch

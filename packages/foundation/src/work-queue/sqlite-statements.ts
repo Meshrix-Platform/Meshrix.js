@@ -288,9 +288,6 @@ export function prepareSqliteWorkQueueStatements(database: Database.Database): R
     deleteJournalByWorkItem: database.prepare(`
       DELETE FROM work_queue_transition_journal WHERE work_item_id = ?
     `),
-    deleteFallbackTasksByWorkItem: database.prepare(`
-      DELETE FROM work_queue_fallback_tasks WHERE work_item_id = ?
-    `),
     deleteWorkItem: database.prepare(
       "DELETE FROM work_items WHERE work_item_id = ?",
     ),
@@ -481,15 +478,6 @@ export function prepareSqliteWorkQueueStatements(database: Database.Database): R
       ON CONFLICT(health_key) DO UPDATE SET
         state_json = excluded.state_json,
         updated_at_ms = excluded.updated_at_ms
-    `),
-    insertFallbackTask: database.prepare(`
-      INSERT OR REPLACE INTO work_queue_fallback_tasks (
-        fallback_task_id, work_item_id, state, attempt, max_attempts,
-        reason, decision_json, created_at_ms, updated_at_ms
-      ) VALUES (
-        @fallback_task_id, @work_item_id, @state, @attempt, @max_attempts,
-        @reason, @decision_json, @created_at_ms, @updated_at_ms
-      )
     `),
     upsertQueueControl: database.prepare(`
       INSERT INTO work_queue_controls (

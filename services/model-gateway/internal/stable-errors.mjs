@@ -5,9 +5,10 @@ const ERROR_SPECS = Object.freeze({
   budget_exceeded: { type: "quota", status: 429, retryable: false },
   invalid_request: { type: "internal", status: 400, retryable: false },
   model_not_found: { type: "model", status: 404, retryable: false },
-  provider_unavailable: { type: "provider", status: 503, retryable: true },
+  provider_unavailable: { type: "provider", status: 503, retryable: false },
   cancelled: { type: "cancelled", status: 499, retryable: false },
-  settlement_uncertain: { type: "overload", status: 409, retryable: true },
+  settlement_uncertain: { type: "overload", status: 409, retryable: false },
+  completed_response_unavailable: { type: "completed", status: 409, retryable: false },
   internal_error: { type: "internal", status: 500, retryable: false }
 });
 
@@ -34,7 +35,8 @@ export function openAiError(payload) {
       message: payload.error.message,
       type: payload.error.code,
       param: null,
-      code: payload.error.code
+      code: payload.error.code,
+      ...(payload.error.service_call_id ? { service_call_id: payload.error.service_call_id } : {})
     }
   };
 }
@@ -46,6 +48,7 @@ export function anthropicError(payload) {
       type: payload.error.type,
       message: payload.error.message
     },
+    ...(payload.error.service_call_id ? { service_call_id: payload.error.service_call_id } : {}),
     request_id: payload.error.requestId
   };
 }

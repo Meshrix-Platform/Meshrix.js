@@ -282,6 +282,37 @@ describe("vault client + snapshot sync", () => {
     return { material, vault, client };
   }
 
+  it("keeps capacity refusal retryable without an extra recovery fetch and reuses the exact snapshot", async () => {
+    const { material, vault } = materialAndVault();
+    let reject = true;
+    const messages: Record<string, unknown>[] = [];
+    const client = new RecoveryVaultClient({ transport: { async post(input) {
+      messages.push(input.message);
+      if (reject) return { status: 429, body: { error: "rate_limited", retryable: true } };
+      return vault.post(input);
+    } } });
+    const sync = new SnapshotSynchronizer({ vault: client });
+    const input = { vaultId: VAULT_ID, bundle: bundleFixture(material), material, generation: 3 };
+    expect(await sync.publish(input)).toEqual({ outcome: "refused", retryable: true });
+    expect(messages).toHaveLength(1);
+    reject = false;
+    expect((await sync.publish(input)).outcome).toBe("committed");
+    expect(messages).toHaveLength(2);
+    expect(messages[1]?.snapshot).toEqual(messages[0]?.snapshot);
+    expect(vault.current?.revision).toBe(1);
+  });
+
+  it("does not send a write before pending operation persistence succeeds", async () => {
+    const { material, vault, client } = materialAndVault();
+    const sync = new SnapshotSynchronizer({ vault: client, journal: {
+      load: () => null,
+      save: async () => { throw new Error("synthetic local persistence failure"); }
+    } });
+    await expect(sync.publish({ vaultId: VAULT_ID, bundle: bundleFixture(material), material, generation: 3 }))
+      .rejects.toThrow("synthetic local persistence failure");
+    expect(vault.writeCount).toBe(0);
+  });
+
   it("publishes an encrypted snapshot and fetches it back", async () => {
     const { material, vault } = materialAndVault();
     const sync = new SnapshotSynchronizer({ vault: new RecoveryVaultClient({ transport: vault }) });
@@ -378,6 +409,39 @@ describe("vault client + snapshot sync", () => {
     if (fetched.outcome !== "snapshot") throw new Error("expected snapshot");
     expect(fetched.bundle.connections.map((c) => c.connectionId).sort())
       .toEqual(["conn.test.1", "conn.test.2"]);
+  });
+
+  it("resumes the exact reconciled operation in a new synchronizer and retains merged remote configuration", async () => {
+    const { material, vault, client } = materialAndVault();
+    await new SnapshotSynchronizer({ vault: client }).publish({ vaultId: VAULT_ID,
+      bundle: bundleFixture(material), material, generation: 3 });
+    const journal = new InMemorySnapshotJournal();
+    const writes: Record<string, unknown>[] = [];
+    let capacity = true;
+    const retryClient = new RecoveryVaultClient({ transport: { async post(input) {
+      if (input.message.kind === "vault-write") {
+        writes.push(structuredClone(input.message));
+        if (capacity && input.message.expectedRevision === 1)
+          return { status: 503, body: { error: "capacity", retryable: true } };
+      }
+      return vault.post(input);
+    } } });
+    const bundle = buildEntryRecoveryBundle({ profileRef: "prof.test.1", displayLabel: "B",
+      connections: [connectionFixture({ connectionId: "conn.test.2", routeId: "route.pr.test2" })] });
+    expect(await new SnapshotSynchronizer({ vault: retryClient, journal }).publish({ vaultId: VAULT_ID,
+      bundle, material, generation: 3 })).toEqual({ outcome: "refused", retryable: true });
+    expect(writes).toHaveLength(2);
+    capacity = false;
+    const resumed = new SnapshotSynchronizer({ vault: retryClient, journal });
+    expect((await resumed.publish({ vaultId: VAULT_ID, bundle: { ...bundle, displayLabel: "C", createdAt: new Date(Date.now() + 1000).toISOString() },
+      material, generation: 3 })).outcome).toBe("committed");
+    expect(writes[2]?.snapshot).toEqual(writes[1]?.snapshot);
+    expect(vault.current?.revision).toBe(3);
+    const fetched = await resumed.fetchSnapshot({ vaultId: VAULT_ID, material });
+    if (fetched.outcome !== "snapshot") throw new Error("expected snapshot");
+    expect(fetched.bundle.connections.map((c) => c.connectionId).sort()).toEqual(["conn.test.1", "conn.test.2"]);
+    expect(fetched.bundle.displayLabel).toBe("C");
+    expect(journal.load()?.pendingWrite).toBeNull();
   });
 
   it("survives an interrupted write: the last committed snapshot is retained and the retry reconciles", async () => {

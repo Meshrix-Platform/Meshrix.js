@@ -4,18 +4,19 @@ import {
   EXTERNAL_AUTH_MISSING_CODE_DECORATORS,
   EXTERNAL_AUTH_OPERATION_IDS,
   EXTERNAL_AUTH_VERIFIER_DECORATORS,
-  MAINTENANCE_AGENT_RISKS,
   OPERATION_ASPECTS,
   OPERATION_PROOF_PROFILES,
   PROOF_EXCLUDED_OPERATION_IDS,
   PUBLIC_OPERATION_IDS,
-  READ_ONLY_POST_OPERATION_IDS,
   REQUIRED_SCOPE_DECORATORS,
   SAFETY_DECORATORS,
   maxRisk,
   normalizeRisk,
   riskRank
 } from "./operation-policy-constants.ts";
+import { inferOperationRisk, normalizeOperationSafety, serializableOperationSafety } from "./operation-safety-projection.ts";
+
+export { inferOperationRisk, normalizeOperationSafety, serializableOperationSafety } from "./operation-safety-projection.ts";
 
 export {
   OPERATION_ASPECTS,
@@ -111,50 +112,6 @@ export function withConcurrency(concurrency: Record<string, any> = {}) : any {
 
 export function defineOperation(definition: any, ...decorators: any[]) : any {
   return decorators.reduce((operation?: any, decorator?: any) : any => decorator(operation), { ...definition });
-}
-
-function inferOperationRisk(operation?: any) : any {
-  if (operation.readOnly === true) {
-    return "read_only";
-  }
-  if (READ_ONLY_POST_OPERATION_IDS.has(operation.id)) {
-    return "read_only";
-  }
-
-  const method: any = String(operation.http?.method || "GET").toUpperCase();
-  if (["GET", "HEAD", "OPTIONS"].includes(method)) {
-    return "read_only";
-  }
-
-  return "safe_write";
-}
-
-function normalizeOperationSafety(safety: Record<string, any> = {}, operation: Record<string, any> = {}) : any {
-  const inferredRisk: any = inferOperationRisk(operation);
-  const risk: any = normalizeRisk(safety.risk, inferredRisk);
-  const isRepairOrHigher: any = riskRank(risk) >= riskRank("repair_write");
-  const hasExplicitConfirmationMarker: any =
-    Object.prototype.hasOwnProperty.call(safety, "requiresConfirmationExplicit");
-  const requiresConfirmationExplicit: any = hasExplicitConfirmationMarker
-    ? safety.requiresConfirmationExplicit === true
-    : (
-      Object.prototype.hasOwnProperty.call(safety, "requiresConfirmation") &&
-      typeof safety.requiresConfirmation === "boolean"
-    );
-  return {
-    risk,
-    readOnly: safety.readOnly === undefined ? risk === "read_only" : safety.readOnly === true,
-    destructive: safety.destructive === undefined ? risk === "destructive" : safety.destructive === true,
-    approvalScope: safety.approvalScope || DEFAULT_REPAIR_APPROVAL_SCOPE,
-    requiresConfirmation:
-      requiresConfirmationExplicit
-        ? safety.requiresConfirmation
-        : isRepairOrHigher,
-    requiresConfirmationExplicit,
-    blocked: safety.blocked === true || risk === "destructive",
-    reason: String(safety.reason || ""),
-    resolveRisk: typeof safety.resolveRisk === "function" ? safety.resolveRisk : null
-  };
 }
 
 function transportInputSchema(operation: Record<string, any> = {}) : any {
@@ -828,17 +785,3 @@ export function evaluateOperationSafety({
   return { ok: true, safety };
 }
 
-export function serializableOperationSafety(operation?: any) : any {
-  const safety: any = normalizeOperationSafety(operation.safety || {}, operation);
-  return {
-    risk: safety.risk,
-    readOnly: operation.readOnly === true || safety.readOnly === true,
-    destructive: operation.destructive === true || safety.destructive === true,
-    approvalScope: safety.approvalScope,
-    requiresConfirmation: safety.requiresConfirmation,
-    blocked: safety.blocked,
-    reason: safety.reason,
-    dynamicRisk: typeof operation.safety?.resolveRisk === "function",
-    knownRisks: MAINTENANCE_AGENT_RISKS
-  };
-}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount } from "vue";
 import "./ConsoleSideNavDirectory.css";
 import { operationApprovalTitle } from "../../../composables/console-approval-flow-view-controller";
 import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
@@ -83,19 +83,6 @@ const pendingApprovalItems = computed<DirectoryItem[]>(() =>
 
 const approvalHistoryItems = computed<DirectoryItem[]>(() =>
   approvalItems().filter((item: any) => item.statusKey !== "pending"),
-);
-
-watch(
-  activeSideNavDirectory,
-  (directory: any) => {
-    if (directory === "approval") {
-      void approvalFlowConsole.refreshOperationPermissionPendingOperations();
-    }
-    if (directory === "workspaces") {
-      void workspacesConsole.load();
-    }
-  },
-  { immediate: true },
 );
 
 function operationApprovalStatusLabel(status: unknown) {

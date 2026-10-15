@@ -7,9 +7,15 @@ export {
   capabilityKeyHash,
   capabilityPermissionHash
 } from "./opaque-capability-key-core.ts";
+export type { CapabilityKeyRecord } from "./opaque-capability-key-core.ts";
 export {
   createMemoryCapabilityKeyBindingStore,
   createSealedCapabilityKernelStore
+} from "./opaque-capability-key-store.ts";
+export type {
+  CapabilityKeyBindingStore,
+  LookupKeySource,
+  StoreListOptions
 } from "./opaque-capability-key-store.ts";
 export {
   createOpaqueCapabilityKeyProvider,

@@ -2,14 +2,34 @@ import dns from "node:dns/promises";
 import net from "node:net";
 import { isUpstreamCredentialHeaderName } from "@meshrix/contracts/upstream-service-publishing";
 import { Agent, fetch as undiciFetch, request as undiciRequest } from "undici";
+import {
+  classifyOutboundHost,
+  cloudMetadataEndpoint,
+  expandIpv6,
+  ipv4Parts,
+  ipv4RangeCategory,
+  ipv6BigInt,
+  ipv6RangeCategory,
+  LOCAL_NETWORK_ADDRESS_CATEGORIES,
+  normalizeOutboundHost,
+  type AddressCategory,
+  type HostKind,
+  type OutboundHostClassification,
+} from "./outbound-host-classifier.ts";
+
+export {
+  classifyOutboundHost,
+  LOCAL_NETWORK_ADDRESS_CATEGORIES,
+  type AddressCategory,
+  type HostKind,
+  type OutboundHostClassification,
+};
 
 export const OUTBOUND_EGRESS_DECISION_VERSION = "v0.0.1:security:outbound-egress-decision-1";
 export const DEVELOPMENT_LOCAL_EGRESS_POLICY_PRESET = "security.development-local";
 export const OUTBOUND_REDIRECT_DECISION_VERSION = "v0.0.1:security:outbound-redirect-decision-1";
 
 type DataRecord = Record<string, unknown>;
-type AddressCategory = "benchmark" | "carrier-grade-nat" | "cloud-metadata" | "hostname" | "invalid" | "link-local" | "loopback" | "multicast" | "private" | "public" | "reserved" | "unspecified";
-type HostKind = "hostname" | "ipv4" | "ipv6" | "missing";
 type DnsLookup = (host: string, options: { all: true; verbatim: true }) => Promise<unknown>;
 type FetchImplementation = typeof undiciFetch;
 type RequestImplementation = typeof undiciRequest;
@@ -21,14 +41,6 @@ export interface OutboundEgressPolicies {
     allowLocalForConfiguredModelService?: boolean;
     allowLocalForDevelopment?: boolean;
   };
-}
-
-export interface OutboundHostClassification {
-  host: string;
-  kind: HostKind;
-  category: AddressCategory;
-  restricted: boolean;
-  metadataEndpoint: boolean;
 }
 
 export interface OutboundEgressOptions {
@@ -154,119 +166,17 @@ export interface OutboundRedirectDecision {
   targetDecision?: OutboundEgressDecision | OutboundRuntimeEgressDecision;
 }
 
-const LOCAL_NETWORK_ADDRESS_CATEGORIES = new Set<AddressCategory>(["loopback", "private"]);
+
 const CROSS_ORIGIN_INTERNAL_HEADER_NAMES = new Set([
   "x-meshrix-gateway-service",
   "x-meshrix-skill-hub-subject"
 ]);
-const CLOUD_METADATA_HOSTS = new Set<string>(["instance-data.ec2.internal", "metadata.google.internal", "metadata.goog"]);
-const CLOUD_METADATA_IPV4_ADDRESSES = new Set<string>(["169.254.169.254", "169.254.170.2", "169.254.170.23"]);
-const AWS_METADATA_IPV6 = 0xfd000ec2000000000000000000000254n;
-
 function dataRecord(value: unknown): DataRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as DataRecord : {};
 }
 
-function normalizeHost(value: unknown = ""): string {
-  return String(value ?? "").trim().toLowerCase().replace(/^\[|\]$/g, "");
-}
-
 function normalizeErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error ?? "unknown error");
-}
-
-function ipv4Parts(value: unknown = ""): [number, number, number, number] | null {
-  const parts = String(value ?? "").split(".").map((part) => Number(part));
-  return parts.length === 4 && parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)
-    ? parts as [number, number, number, number]
-    : null;
-}
-
-function ipv4RangeCategory(address: unknown = ""): AddressCategory | "" {
-  const parts = ipv4Parts(address);
-  if (!parts) return "";
-  const [a, b] = parts;
-  if (a === 0) return "unspecified";
-  if (a === 10) return "private";
-  if (a === 127) return "loopback";
-  if (a === 169 && b === 254) return "link-local";
-  if (a === 172 && b >= 16 && b <= 31) return "private";
-  if (a === 192 && b === 168) return "private";
-  if (a === 100 && b >= 64 && b <= 127) return "carrier-grade-nat";
-  if (a === 198 && (b === 18 || b === 19)) return "benchmark";
-  if (a >= 224 && a <= 239) return "multicast";
-  if (a >= 240) return "reserved";
-  return "public";
-}
-
-function expandIpv6(address: unknown = ""): number[] | null {
-  const input = String(address ?? "").toLowerCase();
-  if (!input.includes(":")) return null;
-  const split = input.split("::");
-  if (split.length > 2) return null;
-  const [headText = "", tailText = ""] = split;
-  const head = headText ? headText.split(":").filter(Boolean) : [];
-  const tail = tailText ? tailText.split(":").filter(Boolean) : [];
-  const expandedTail: string[] = [];
-  for (const part of tail) {
-    if (part.includes(".")) {
-      const v4 = ipv4Parts(part);
-      if (!v4) return null;
-      expandedTail.push(((v4[0] << 8) | v4[1]).toString(16));
-      expandedTail.push(((v4[2] << 8) | v4[3]).toString(16));
-    } else {
-      expandedTail.push(part);
-    }
-  }
-  const missing = 8 - head.length - expandedTail.length;
-  if (missing < 0 || (!input.includes("::") && missing !== 0)) return null;
-  const parts = [...head, ...Array.from({ length: missing }, () => "0"), ...expandedTail];
-  if (parts.length !== 8 || parts.some((part) => !/^[0-9a-f]{1,4}$/.test(part))) return null;
-  return parts.map((part) => Number.parseInt(part, 16));
-}
-
-function ipv6BigInt(parts: readonly number[]): bigint {
-  return parts.reduce((acc, part) => (acc << 16n) + BigInt(part), 0n);
-}
-
-function cloudMetadataEndpoint(host: unknown = ""): boolean {
-  const normalized = normalizeHost(host);
-  if (CLOUD_METADATA_HOSTS.has(normalized) || CLOUD_METADATA_IPV4_ADDRESSES.has(normalized)) return true;
-  const parts = expandIpv6(normalized);
-  return Boolean(parts && ipv6BigInt(parts) === AWS_METADATA_IPV6);
-}
-
-function ipv6RangeCategory(address: unknown = ""): AddressCategory | "" {
-  const parts = expandIpv6(address);
-  if (!parts) return "";
-  const value = ipv6BigInt(parts);
-  if (value === 0n) return "unspecified";
-  if (value === 1n) return "loopback";
-  const first = parts[0] ?? 0;
-  if ((first & 0xfe00) === 0xfc00) return "private";
-  if ((first & 0xffc0) === 0xfe80) return "link-local";
-  if ((first & 0xff00) === 0xff00) return "multicast";
-  if (parts.slice(0, 5).every((part) => part === 0) && parts[5] === 0xffff) {
-    return ipv4RangeCategory(`${(parts[6] ?? 0) >> 8}.${(parts[6] ?? 0) & 255}.${(parts[7] ?? 0) >> 8}.${(parts[7] ?? 0) & 255}`);
-  }
-  return "public";
-}
-
-export function classifyOutboundHost(host: unknown = ""): OutboundHostClassification {
-  const normalized = normalizeHost(host);
-  if (!normalized) return { host: "", kind: "missing", category: "invalid", restricted: true, metadataEndpoint: false };
-  if (CLOUD_METADATA_HOSTS.has(normalized)) return { host: normalized, kind: "hostname", category: "cloud-metadata", restricted: true, metadataEndpoint: true };
-  if (normalized === "localhost" || normalized.endsWith(".localhost")) return { host: normalized, kind: "hostname", category: "loopback", restricted: true, metadataEndpoint: false };
-  const ipVersion = net.isIP(normalized);
-  if (ipVersion === 4) {
-    const category = ipv4RangeCategory(normalized) || "invalid";
-    return { host: normalized, kind: "ipv4", category, restricted: category !== "public", metadataEndpoint: cloudMetadataEndpoint(normalized) };
-  }
-  if (ipVersion === 6) {
-    const category = ipv6RangeCategory(normalized) || "invalid";
-    return { host: normalized, kind: "ipv6", category, restricted: category !== "public", metadataEndpoint: cloudMetadataEndpoint(normalized) };
-  }
-  return { host: normalized, kind: "hostname", category: "hostname", restricted: false, metadataEndpoint: false };
 }
 
 export function localEgressAllowed({ policyPreset = "", policies = {} }: Pick<OutboundEgressOptions, "policyPreset" | "policies"> = {}): boolean {
@@ -366,7 +276,7 @@ function selectedPinnedDnsAddress(decision: OutboundRuntimeEgressDecision): DnsA
 function createPinnedDnsDispatcher(decision: OutboundRuntimeEgressDecision, responseTimeouts?: OutboundResponseTimeouts): PinnedDnsDispatcher {
   const pinned = selectedPinnedDnsAddress(decision);
   if (!pinned?.address && !responseTimeouts) return { dispatcher: undefined, pinnedDns: null, async close() {} };
-  const expectedHost = normalizeHost(decision.host);
+  const expectedHost = normalizeOutboundHost(decision.host);
   const address = String(pinned?.address || "").trim();
   const family = Number(pinned?.family || net.isIP(address) || 0);
   const dispatcher = new Agent({
@@ -376,7 +286,7 @@ function createPinnedDnsDispatcher(decision: OutboundRuntimeEgressDecision, resp
     ...(pinned?.address ? {
       connect: {
         lookup(hostname, options, callback) {
-          const requestedHost = normalizeHost(hostname);
+          const requestedHost = normalizeOutboundHost(hostname);
           if (requestedHost && expectedHost && requestedHost !== expectedHost) {
             callback(new Error(`Pinned DNS lookup rejected unexpected host: ${requestedHost}`), "", 0);
             return;
@@ -454,7 +364,8 @@ async function fetchPinnedDnsHop({ url = "", label = "outbound.url", policyPrese
   try {
     const requestInit = { ...init, ...(pinned.dispatcher ? { dispatcher: pinned.dispatcher } : {}) };
     await beforeFetch?.();
-    const response = fetchImpl ? await fetchImpl(url, requestInit) : pinned.dispatcher ? await undiciFetch(url, requestInit) : await globalThis.fetch(url, globalRequestInit(init));
+    const target = typeof url === "string" ? url : url.href;
+    const response = fetchImpl ? await fetchImpl(target, requestInit) : pinned.dispatcher ? await undiciFetch(target, requestInit) : await globalThis.fetch(target, globalRequestInit(init));
     return { response, decision, egressDecision: decision, pinnedDns: pinned.pinnedDns, close: pinned.close };
   } catch (error: unknown) {
     await pinned.close();

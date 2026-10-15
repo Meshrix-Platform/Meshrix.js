@@ -125,13 +125,20 @@ export interface ApiKeyOneTimeResult {
 }
 
 const ENDPOINT = "/api/operation-permission/v1/api-keys";
+let issuerScopesRequest: Promise<ApiKeyIssuerScopes> | null = null;
 
 function encodePathSegment(value: string): string {
   return encodeURIComponent(String(value || "").trim());
 }
 
 export function getApiKeyIssuerScopes(): Promise<ApiKeyIssuerScopes> {
-  return getJson<ApiKeyIssuerScopes>(`${ENDPOINT}/issuer-scopes`);
+  if (!issuerScopesRequest) {
+    const pending = getJson<ApiKeyIssuerScopes>(`${ENDPOINT}/issuer-scopes`).finally(() => {
+      issuerScopesRequest = null;
+    });
+    issuerScopesRequest = pending;
+  }
+  return issuerScopesRequest;
 }
 
 export function listApiKeys(input: {

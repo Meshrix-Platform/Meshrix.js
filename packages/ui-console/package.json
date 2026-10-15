@@ -8,13 +8,13 @@
   },
   "type": "module",
   "scripts": {
-    "build": "vite build --config vite.config.ts && vue-tsc -p tsconfig.build.json",
+    "build": "cross-env NODE_ENV=production vite build --config vite.config.ts && vue-tsc -p tsconfig.build.json",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "prepack": "npm run build"
   },
   "peerDependencies": {
     "element-plus": "^2.13.7",
-    "vue": "^3.5.32",
+    "vue": "^3.5.43",
     "@element-plus/icons-vue": "^2.3.2"
   },
   "exports": {

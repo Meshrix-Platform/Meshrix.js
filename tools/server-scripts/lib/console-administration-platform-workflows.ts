@@ -208,7 +208,7 @@ export const CONSOLE_ADMINISTRATION_PLATFORM_WORKFLOWS: readonly any[] = Object.
       "incompleteObligations",
       "revisionConflict",
       "sinkState",
-      "decryptionAuthority",
+      "contentAccess",
       "dirty"
     ],
     verifierFiles: [

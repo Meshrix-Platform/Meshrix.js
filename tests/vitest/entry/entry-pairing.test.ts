@@ -17,7 +17,9 @@ import {
   parsePairingInviteText,
   verifyEd25519,
   type PairingEndpointPort,
-  type PairingInvite
+  type PairingInvite,
+  type PairingPeerIdentity,
+  enrollDeviceIdentity
 } from "@meshrix/entry";
 
 let dir: string;
@@ -31,14 +33,16 @@ async function custody(): Promise<FileCustodyAdapter> {
 
 function inviteFixture(overrides: Partial<PairingInvite> = {}): PairingInvite {
   const invite = {
-    schemaVersion: "v0.0.1:entry:pairing-invite-1",
+    schemaVersion: "v0.0.1:entry:pairing-invite-2",
     kind: "entry-pairing-invite",
     inviteId: "inv.test.1",
     endpointRouteId: "route.pr.1",
     tenantId: "tenant.pr.1",
     mode: "personal",
+    endpointDeviceId: "dev.endpoint.1",
     endpointPrincipalRef: "prin.pr.1",
     endpointSpkiPin: "spki.test.pin",
+    endpointPinRef: "spki.test.pin",
     relayService: "https://relay.example.invalid",
     vaultId: "vault.pr.1",
     recoveryAuthority: { keyId: "rckey.test.1", generation: 3 },
@@ -59,6 +63,7 @@ function fakeEndpoint(options: {
   failBegin?: "unreachable";
   failComplete?: "unreachable";
   grantRef?: string;
+  endpointPeerIdentity?: PairingPeerIdentity | null;
 } = {}): PairingEndpointPort & { seenSignature?: string; seenChallenge?: string } {
   const state: { seenSignature?: string; seenChallenge?: string } = {};
   const token = options.acceptToken ?? "pt.one-time.token";
@@ -75,7 +80,16 @@ function fakeEndpoint(options: {
         outcome: "challenge",
         challengeId: state.seenChallenge,
         nonce: "pn.test.1",
-        expiresAt: "2099-01-01T00:00:00Z"
+        expiresAt: "2099-01-01T00:00:00Z",
+        account: { accountId: "acct.test.1", authEpoch: 1 },
+        target: {
+          tenantId: input.invite.tenantId,
+          routeId: input.invite.endpointRouteId,
+          deviceId: input.deviceId,
+          devicePublicKey: input.devicePublicKey,
+          grantRef: options.grantRef ?? "grant.staged.1",
+          scopes: ["mcp.invoke"]
+        }
       };
     },
     async completePairing(input) {
@@ -87,7 +101,8 @@ function fakeEndpoint(options: {
         inviteId: input.invite.inviteId,
         endpointRouteId: input.invite.endpointRouteId,
         deviceId: input.deviceId,
-        devicePublicKey: input.devicePublicKey
+        devicePublicKey: input.devicePublicKey,
+        entryPeerIdentity: input.entryPeerIdentity
       });
       state.seenSignature = input.signature;
       if (!verifyEd25519({ publicKey: input.devicePublicKey, signature: input.signature, transcript })) {
@@ -96,7 +111,19 @@ function fakeEndpoint(options: {
       if (input.challengeId !== state.seenChallenge) {
         return { outcome: "refused", refusal: "challenge_mismatch" };
       }
-      return { outcome: "enrolled", capabilityGrantRef: options.grantRef ?? "grant.staged.1" };
+      if (input.permitId !== "_" + "A".repeat(42)
+        || input.purpose !== "pair_device"
+        || input.account.accountId !== "acct.test.1"
+        || input.target.deviceId !== input.deviceId) {
+        return { outcome: "refused", refusal: "authorization_mismatch" };
+      }
+      return {
+        outcome: "enrolled",
+        capabilityGrantRef: input.target.grantRef,
+        admissionGeneration: 4,
+        revocationRevision: 7,
+        endpointPeerIdentity: options.endpointPeerIdentity ?? null
+      };
     }
   }) as never;
 }
@@ -141,6 +168,16 @@ describe("pairing invite payload", () => {
 });
 
 describe("pairing session", () => {
+  function authorization(session: PairingSession) {
+    const snapshot = session.snapshot();
+    return {
+      account: snapshot.account!,
+      target: snapshot.target!,
+      permitId: "_" + "A".repeat(42),
+      purpose: "pair_device" as const
+    };
+  }
+
   it("enrolls a device end-to-end: pending → challenge → proof → enrolled", async () => {
     const endpoint = fakeEndpoint();
     const session = new PairingSession({
@@ -152,7 +189,7 @@ describe("pairing session", () => {
     const issued = await session.begin();
     expect(issued.state).toBe("challenge_issued");
     expect(issued.challengeId).toBeTruthy();
-    const done = await session.submitProof();
+    const done = await session.submitProof(authorization(session));
     expect(done.state).toBe("enrolled");
     const record = done.record!;
     expect(record.inviteId).toBe("inv.test.1");
@@ -172,9 +209,53 @@ describe("pairing session", () => {
         inviteId: record.inviteId,
         endpointRouteId: "route.pr.1",
         deviceId: record.deviceId,
-        devicePublicKey: record.devicePublicKey
+        devicePublicKey: record.devicePublicKey,
+        entryPeerIdentity: null
       })
     })).toBe(true);
+  });
+
+  it("signs and retains the exact paired Peer identities through completion", async () => {
+    const c = await custody();
+    const device = await enrollDeviceIdentity({ custody: c });
+    const entryIdentity: PairingPeerIdentity = {
+      peerId: `peer:tenant.pr.1:route.pr.1:${device.deviceId}`,
+      signalDeviceId: 1,
+      registrationId: 1777,
+      identityKey: Buffer.concat([Buffer.from([5]), randomBytes(32)]).toString("base64url")
+    };
+    const endpointIdentity: PairingPeerIdentity = {
+      peerId: "peer:tenant.pr.1:route.pr.1:dev.endpoint.1",
+      signalDeviceId: 1,
+      registrationId: 2188,
+      identityKey: Buffer.concat([Buffer.from([5]), randomBytes(32)]).toString("base64url")
+    };
+    const endpoint = fakeEndpoint({ endpointPeerIdentity: endpointIdentity });
+    const session = new PairingSession({
+      invite: inviteFixture(), custody: c, endpoint, device, entryPeerIdentity: entryIdentity
+    });
+    expect((await session.begin()).state).toBe("challenge_issued");
+    const done = await session.submitProof(authorization(session));
+    expect(done.state).toBe("enrolled");
+    expect(done.record?.endpointPeerIdentity).toEqual(endpointIdentity);
+    expect(endpoint.seenSignature).toBeTruthy();
+  });
+
+  it("accepts the account authority's canonical null for an absent optional target field", async () => {
+    const endpoint = fakeEndpoint();
+    const session = new PairingSession({
+      invite: inviteFixture(),
+      custody: await custody(),
+      endpoint
+    });
+    await session.begin();
+    const approved = authorization(session);
+    const normalizedTarget = { ...approved.target, vaultWriterRotation: null };
+    const result = await session.submitProof({
+      ...approved,
+      target: normalizedTarget as unknown as typeof approved.target
+    });
+    expect(result.state).toBe("enrolled");
   });
 
   it("refuses an incorrect pairing token and records the refusal", async () => {
@@ -215,7 +296,7 @@ describe("pairing session", () => {
       endpoint
     });
     await session.begin();
-    expect((await session.submitProof()).state).toBe("retry_required");
+    expect((await session.submitProof(authorization(session))).state).toBe("retry_required");
     // No blind re-submit happened — the state stays honest until retried.
     const retried = new PairingSession({
       invite: inviteFixture(),
@@ -223,7 +304,7 @@ describe("pairing session", () => {
       endpoint: fakeEndpoint()
     });
     await retried.begin();
-    expect((await retried.submitProof()).state).toBe("enrolled");
+    expect((await retried.submitProof(authorization(retried))).state).toBe("enrolled");
   });
 
   it("interrupt() moves an in-flight session to retry-required", async () => {

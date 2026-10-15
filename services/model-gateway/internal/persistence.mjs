@@ -39,6 +39,12 @@ export function createFileStore(dataRoot) {
       await handle.close();
     }
     await fs.rename(temporary, finalPath);
+    const directoryHandle = await fs.open(path.dirname(finalPath), "r");
+    try {
+      await directoryHandle.sync();
+    } finally {
+      await directoryHandle.close();
+    }
   }
 
   async function exists(relativePath) {

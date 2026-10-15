@@ -68,7 +68,6 @@ function createHandler(registeredCoreProvider?: any, options: Record<string, any
       markSocketActive: vi.fn(),
       markSocketIdle: vi.fn()
     },
-    loginRateLimiter: { shouldAllow: () : any => ({ allowed: true }) },
     operationAuditStore: null,
     operationConcurrencyScope: "test-http-abort",
     proxyApiRequest: vi.fn(),
@@ -131,6 +130,42 @@ describe("HTTP request abort propagation", () : any => {
     expect(runtimeLogger.debug).not.toHaveBeenCalledWith("http.request.started", expect.anything());
     expect(runtimeLogger.debug).not.toHaveBeenCalledWith("http.request.completed", expect.anything());
     expect(runtimeLogger.info).not.toHaveBeenCalledWith("http.request.completed", expect.anything());
+  });
+
+  it("keeps the request metric without writing per-request start or completion logs", async () : Promise<any> => {
+    const appendHttpRequestMetric: any = vi.fn();
+    const runtimeLogger: Record<string, any> = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn()
+    };
+    const handler: any = createHandler({
+      findProxyRegisteredApiRequest: vi.fn(() : any => null),
+      dispatchRegisteredHttpOperation: vi.fn(async ({ response }: Record<string, any>) : Promise<any> => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end("{}");
+        return true;
+      })
+    }, {
+      operationPermissionPlatform: { store: { appendHttpRequestMetric } },
+      runtimeLogger
+    });
+    const request: any = Readable.from([]);
+    request.method = "GET";
+    request.url = "/api/example";
+    request.headers = {};
+    request.socket = { remoteAddress: "127.0.0.1", encrypted: false };
+    const response: any = new CapturedResponse();
+
+    await handler(request, response);
+
+    expect(response.statusCode).toBe(200);
+    expect(appendHttpRequestMetric).toHaveBeenCalledOnce();
+    for (const level of Object.values(runtimeLogger) as any[]) {
+      expect(level).not.toHaveBeenCalledWith("http.request.started", expect.anything());
+      expect(level).not.toHaveBeenCalledWith("http.request.completed", expect.anything());
+    }
   });
 
   it("aborts the signal passed to the platform MCP gateway when the response closes", async () : Promise<any> => {

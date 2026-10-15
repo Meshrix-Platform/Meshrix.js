@@ -163,19 +163,23 @@ typed unavailable state and are never called.
 
 The supervisor starts adapter connection work only after the HTTP listener,
 discovery state, startup projections, and Core request admission are ready.
-Connect and execution share fixed concurrency and queue limits. Connect,
-execution, close, retry count, retry delay, adapter count, and shutdown all have
-hard ceilings. A connect or task that does not settle after cancellation is
-fenced, so later calls cannot accumulate additional orphaned work. Adapter
-errors are reduced to stable codes; prompts, inputs, provider responses,
-credentials, exception messages, paths, and endpoints are not retained in its
-status projection or logs.
+Connect and execution share fixed concurrency and queue limits. Adapter count,
+retry count, retry delay, and close attempts remain bounded. Connect, task,
+and close execution have no implicit elapsed-time cutoff. An explicitly
+configured connect, task, or close budget requests cooperative cancellation; the
+supervisor keeps the active slot until the invocation settles and retains a
+late successful connection so shutdown can close it. Adapter errors are
+reduced to stable codes; prompts, inputs, provider responses, credentials,
+exception messages, paths, and endpoints are not retained in its status
+projection or logs.
 
 Shutdown first stops adapter admission, cancels queued and active work, clears
-retry timers, and gives each adapter one bounded close attempt. A slow or failed
-adapter close is reported as `integration_close_timeout` or
-`integration_close_failed` but cannot veto Core dependency shutdown. Concrete
-OIDC, OTLP, webhook, model-provider, datastore, and external-service adapters
+retry timers, and waits for active invocations to settle before closing their
+connections. Each adapter then receives one close attempt, and the supervisor
+retains its connection until that attempt actually settles. An expired explicit
+close budget or a failed close is reported as `integration_close_timeout` or
+`integration_close_failed`; a still-running close keeps dependent shutdown open.
+Concrete OIDC, OTLP, webhook, model-provider, datastore, and external-service adapters
 remain independently owned detachable capabilities and must explicitly adopt
 this lifecycle before claiming supervised availability.
 
@@ -185,7 +189,7 @@ The server composition binds the authenticated publishing application, dedicated
 
 Operation Permission, tag projection, downstream invalidation, and protocol acknowledgement state each retain their own revision authority. Composition coordinates only server-owned revision state and exposes redacted lag or failure facts; it does not share mutable registries between those owners or depend on a client implementation. An invalid candidate or failed server protocol stage preserves the documented last-known-good or fail-closed state and cannot expose a partial revision. Client adoption remains an independent compatibility fact and cannot block or promote the server runtime receipt.
 
-The declarative loader reads `<userDataPath>/upstream-config/services.json` and applies its entries independently through the authenticated publishing application. It asks that owner for the canonical service identity and current candidate/published credential references, prepares authenticated values through the external local-secret key provider, then submits one revision-checked create or replace containing the complete descriptor and typed reference. An unchanged credential is reused; a changed credential receives the next service-revision reference, leaving the old candidate and published values intact until the replacement becomes authoritative. Invalid input, unavailable custody, failed writes, and revision conflicts leave the effective service untouched and keep the unchanged file eligible for retry. Diagnostics expose fixed error categories only. The loader coalesces scans, owns one polling timer, reconciles unused secret references against both candidate and published snapshots, and joins in-flight work during close. Entries do not form an all-file transaction.
+The declarative loader reads `<userDataPath>/upstream-config/services.json` and applies its entries independently through the authenticated publishing application. It supports the published flat bearer `auth.token` shorthand and full descriptors with typed references; the original input file remains user-owned plaintext and is not rewritten. It asks that owner for the canonical service identity and current candidate/published credential references, prepares authenticated values through the external local-secret key provider, then submits one revision-checked create or replace containing the complete descriptor and typed reference. An unchanged credential is reused; a changed credential receives the next service-revision reference, leaving the old candidate and published values intact until the replacement becomes authoritative. Invalid input, unavailable custody, failed writes, and revision conflicts leave the effective service untouched and keep the unchanged file eligible for retry. Diagnostics expose fixed error categories only. The loader coalesces scans, owns one polling timer, reconciles unused secret references against both candidate and published snapshots, and joins in-flight work during close. Entries do not form an all-file transaction.
 
 ## Plugin Runtime
 

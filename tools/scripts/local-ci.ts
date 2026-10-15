@@ -31,6 +31,7 @@ const NODE_SOURCE_CONDITION = "--conditions=source";
 
 export interface LocalCiOptions {
   scope: "engineering" | "changed";
+  suites: string[];
   reportPath: string | null;
   help: boolean;
 }
@@ -55,12 +56,19 @@ export function parseLocalCiArguments(argv: readonly string[]): LocalCiOptions {
   let scope: LocalCiOptions["scope"] = "engineering";
   let reportPath: string | null = null;
   let help = false;
+  const suites: string[] = [];
   const seen = new Set<string>();
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--help" || argument === "-h") {
       help = true;
+      continue;
+    }
+    if (argument === "--suite" || argument.startsWith("--suite=")) {
+      const value = argument === "--suite" ? argv[++index] : argument.slice("--suite=".length);
+      if (!value || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value)) throw new Error("local_ci_suite_invalid");
+      if (!suites.includes(value)) suites.push(value);
       continue;
     }
     if (argument === "--scope" || argument === "--report") {
@@ -94,7 +102,8 @@ export function parseLocalCiArguments(argv: readonly string[]): LocalCiOptions {
     throw new Error("local_ci_argument_unknown");
   }
 
-  return { scope, reportPath, help };
+  if (scope === "changed" && suites.length) throw new Error("local_ci_selection_conflict");
+  return { scope, suites, reportPath, help };
 }
 
 interface SuiteResult {
@@ -315,14 +324,19 @@ export function suiteFlowResults(runnerReport: any, reportPath: string): SuiteRe
   });
 }
 
-async function runTestProfile(profile: string, rawReportPath: string, rawLogPath: string, signal: AbortSignal): Promise<{
+export function localCiRunnerArguments(profile: string, reportPath: string, suites: readonly string[] = []): string[] {
+  return ["tests/run.ts", "--profile", profile, "--continue-on-failure", "--strict-platform", "--report", reportPath,
+    ...suites.flatMap((id) => ["--suite", id])];
+}
+
+async function runTestProfile(profile: string, rawReportPath: string, rawLogPath: string, signal: AbortSignal, suites: readonly string[]): Promise<{
   execution: ChildExecution;
   flows: SuiteResult[];
   summary: ReturnType<typeof evaluateEngineeringOutcomes> | null;
   runnerReport?: any;
 }> {
   const reportArgument = displayPath(rawReportPath);
-  const args = ["tests/run.ts", "--profile", profile, "--continue-on-failure", "--strict-platform", "--report", reportArgument];
+  const args = localCiRunnerArguments(profile, reportArgument, suites);
   const execution = await executeNodeFlow(args, rawLogPath, signal);
   const runnerReport = await readJson(rawReportPath);
   if (!runnerReport) {
@@ -354,11 +368,13 @@ function helpText(): string {
     "Usage:",
     "  npm run ci:local",
     "  npm run ci:local -- --scope changed",
+    "  npm run ci:local -- --suite security.http-resource-admission --suite peer.product-wiring",
     "",
     "Options:",
     "  --scope engineering  Ordinary verification (default).",
     "  --scope changed      Only suites that declare the changed paths; reports whole-repository",
     "                       suites and uncovered changes instead of silently running less.",
+    "  --suite <registered-id>  Select an explicit closure; repeat for each suite. Cannot combine with changed.",
     "  --report <repo-relative-path>  Write the structured result to a deterministic path."
   ].join("\n");
 }
@@ -416,7 +432,7 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
 
   try {
     const profile = scope === CHANGED_PROFILE ? CHANGED_PROFILE : DEFAULT_ENGINEERING_PROFILE;
-    const result = await runTestProfile(profile, rawRunnerReportPath, rawLogPath, cancellation.signal);
+    const result = await runTestProfile(profile, rawRunnerReportPath, rawLogPath, cancellation.signal, options.suites);
     execution = result.execution;
     flows = result.flows;
     selectedProfile = profile;
@@ -497,6 +513,7 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
     runId,
     scope: startedScope,
     profile: selectedProfile,
+    selection: options.suites.length ? { kind: "suites", suiteIds: options.suites } : { kind: "profile" },
     candidate,
     executor: { runtime: "node", version: process.version },
     environment: environmentFacts || { native: currentNativeEnvironment() },

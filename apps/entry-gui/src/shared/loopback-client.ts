@@ -1,7 +1,7 @@
 /**
  * Loopback API client — the renderer-side (and test-side) transport for the
  * installed entry product. Talks to the Node backend service over
- * `http://127.0.0.1:<ephemeral>` with a per-launch bearer token.
+ * `http://127.0.0.1:<ephemeral>` with the canonical profile owner's bearer token.
  *
  * The token travels ONLY in the `Authorization` header — never in a URL
  * (so it cannot land in access logs, browser history or error reports) and
@@ -25,7 +25,7 @@ import type { GuiState } from "./gui-state.ts";
 export interface GuiBridgeConfig {
   /** `http://127.0.0.1:<port>` — loopback origin only, no trailing slash. */
   readonly baseUrl: string;
-  /** Per-launch bearer token the Tauri shell minted for this run. */
+  /** Current profile-owner token delivered over the private native bridge. */
   readonly token: string;
 }
 

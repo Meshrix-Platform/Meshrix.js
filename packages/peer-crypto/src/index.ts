@@ -1,11 +1,13 @@
 /**
  * `@meshrix/peer-crypto` — device-side Signal protocol layer for one-to-one
- * peer messaging (DEC-PEER-ENCRYPTED-MAILBOX).
+ * peer messaging.
  *
  * X3DH/PQXDH-family prekey exchange + Double Ratchet via the Node-native
  * `@signalapp/libsignal-client` bindings; Sesame-style resolution keeps one
  * active session per peer pair; pinned remote identities never silently
- * re-trust a changed key. The relay/mailbox stores ciphertext envelopes only.
+ * re-trust a changed key. Send and receive ratchet mutations are staged in a
+ * durable local operation record so ciphertext and inbox/outbox state commit
+ * together before network delivery.
  */
 
 export {
@@ -40,6 +42,8 @@ export {
   loadPeerIdentity,
   replenishPeerPrekeys,
   rotateSignedPreKey,
+  signPeerIdentityMessage,
+  verifyPeerIdentityMessage,
   PeerIdentity,
   type CreatePeerIdentityOptions,
   type PeerPrekeyPoolSize
@@ -48,9 +52,12 @@ export {
 export {
   createInMemoryPeerCryptoStore,
   InMemoryPeerCryptoStore,
+  applyPeerCryptoMutation,
   peerSessionAddressKey,
   parsePeerSessionAddressKey,
   type PeerCryptoCounters,
+  type PeerCryptoMutation,
+  type PeerCryptoPreparedOperation,
   type PeerCryptoStore,
   type PeerIdentityBinding,
   type PeerIdentitySecretRecord,
@@ -58,6 +65,11 @@ export {
   type StoredPreKeyEntry,
   type StoredPreKeyRecord
 } from "./store.ts";
+
+export {
+  createPeerCryptoTransactionOverlay,
+  type PeerCryptoTransactionOverlay
+} from "./transaction-overlay.ts";
 
 export {
   createFilePeerCryptoStore,

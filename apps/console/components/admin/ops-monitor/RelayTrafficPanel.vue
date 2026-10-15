@@ -21,9 +21,9 @@ const keyMetricCards: RelayStatCardSpec[] = [
   { name: "meshrix_relay_sessions_admitted", label: "会话准入" },
   { name: "meshrix_relay_sessions_rejected", label: "会话拒绝" },
   { name: "meshrix_relay_sessions_revoked", label: "会话吊销" },
-  { name: "meshrix_relay_mailbox_accepted", label: "邮箱接收" },
-  { name: "meshrix_relay_mailbox_acked", label: "邮箱确认" },
-  { name: "meshrix_relay_mailbox_expired", label: "邮箱过期" },
+  { name: "meshrix_relay_sessions_closed", label: "会话关闭" },
+  { name: "meshrix_relay_sessions_restored", label: "会话恢复" },
+  { name: "meshrix_relay_vault_writes_committed", label: "Vault 写入" },
   { name: "meshrix_relay_frames_forwarded", label: "帧转发" },
   { name: "meshrix_relay_frames_dropped", label: "帧丢弃" },
   { name: "meshrix_relay_rate_limit_drops", label: "限流丢弃" },
@@ -37,6 +37,9 @@ const relayConfigured = computed(() => relayTrafficState?.value?.configured === 
 const relayError = computed(() => String(relayTrafficState?.value?.error || ""));
 const relayHttpStatus = computed(() => Number(relayTrafficState?.value?.status || 0));
 
+const relayPersistence = computed(() => relayTrafficState?.value?.persistence || null);
+const relayPersistenceDegraded = computed(() => relayPersistence.value?.state === "degraded");
+
 const relayTrafficStatusLabel = computed(() => {
   if (!relayTrafficState?.value) {
     return "未读取";
@@ -44,7 +47,10 @@ const relayTrafficStatusLabel = computed(() => {
   if (!relayConfigured.value) {
     return "未配置";
   }
-  return relayError.value ? "不可达" : "正常";
+  if (relayError.value) {
+    return "不可达";
+  }
+  return relayPersistenceDegraded.value ? "降级" : "正常";
 });
 
 const liveMetricSums = computed(() => {
@@ -72,6 +78,14 @@ const hasStatData = computed(() =>
   || relayMetrics.value.length > 0,
 );
 
+/**
+ * A metric absent from the live exposition AND from the retained history is
+ * unavailable — never rendered as zero traffic. Only a series the relay
+ * actually reported counts as observed (including an observed zero).
+ */
+const metricObserved = (name: string): boolean =>
+  Object.prototype.hasOwnProperty.call(displaySums.value, name);
+
 const counterRows = computed(() => {
   const rows: any[] = [];
   for (const metric of relayMetrics.value) {
@@ -98,6 +112,7 @@ const counterRows = computed(() => {
 const statCards = computed(() =>
   keyMetricCards.map((item) => ({
     ...item,
+    observed: metricObserved(item.name),
     value: Number(displaySums.value[item.name] || 0),
     spark: sparklinePoints(item.name),
   })),
@@ -127,18 +142,28 @@ function formatBytes(value: number): string {
   return `${text} ${units[unit]}`;
 }
 
-function formatStatValue(card: RelayStatCardSpec, value: number): string {
+function formatStatValue(card: RelayStatCardSpec & { observed?: boolean }, value: number): string {
+  if (card.observed === false) {
+    return "—";
+  }
   return card.format === "bytes" ? formatBytes(value) : formatCounter(value);
 }
 
-/** Inline-SVG sparkline: polyline points for `viewBox="0 0 100 28"`. */
+/** Inline-SVG polyline points for `viewBox="0 0 100 28"`. */
 function sparklinePoints(metricName: string): string {
-  const values = relayHistory.value.map((point: any) =>
-    Number(point?.sums?.[metricName] ?? 0),
+  // An absent series is not a zero series: only points where the relay
+  // actually reported this metric feed the sparkline.
+  const observed = relayHistory.value.filter((point: any) =>
+    Object.prototype.hasOwnProperty.call(point?.sums || {}, metricName),
   );
-  if (values.length < 2) {
+  if (observed.length < 2) {
     return "";
   }
+  const values = relayHistory.value.map((point: any) =>
+    Object.prototype.hasOwnProperty.call(point?.sums || {}, metricName)
+      ? Number(point?.sums?.[metricName] ?? 0)
+      : 0,
+  );
   const max = Math.max(...values);
   const span = values.length - 1;
   return values
@@ -172,6 +197,9 @@ onMounted(() => {
     </div>
     <p v-if="relayConfigured && relayError" class="relay-traffic-hint relay-traffic-hint-error">
       Relay 指标接口暂不可达：{{ relayError }}<template v-if="relayHttpStatus">（HTTP {{ relayHttpStatus }}）</template>
+    </p>
+    <p v-if="relayConfigured && relayPersistenceDegraded" class="relay-traffic-hint relay-traffic-hint-error">
+      历史持久化{{ relayPersistence?.reason === "load_failed" ? "读取失败" : "写入失败" }}：当前仅保留内存中的最近采样，重启后将丢失，卡片数值可能不完整。
     </p>
     <div v-if="relayConfigured && hasStatData" class="relay-traffic-stat-grid">
       <div

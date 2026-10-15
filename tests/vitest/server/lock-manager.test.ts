@@ -21,6 +21,7 @@ import {
   PostgresLockBackendError,
   PostgresLockManager
 } from "../../../packages/foundation/src/concurrency/postgres-lock-manager.ts";
+import { withOperationLock } from "../../../packages/server-runtime/src/composition/operation-dispatch-lock.ts";
 import {
   SqliteLockBackendError,
   SqliteLockManager
@@ -525,6 +526,135 @@ describe("PostgreSQL lock manager", () : any => {
     expect(await manager.isLocked("distributed")).toBe(true);
   });
 
+  it("waits for a committed acquire result past the unselected default query interval", async () : Promise<any> => {
+    vi.useFakeTimers();
+    let signalAcquireStarted: any;
+    const acquireStarted: any = new Promise((resolve?: any) : any => { signalAcquireStarted = resolve; });
+    let finishAcquireReply: any;
+    const acquireReply: any = new Promise((resolve?: any) : any => { finishAcquireReply = resolve; });
+    class CommitThenDelayAcquireClient extends MockPgClient {
+      async query(sql?: any, params: any = []) : Promise<any> {
+        if (sql.includes("INSERT INTO _meshrix_lock_leases")) {
+          const result: any = await super.query(sql, params);
+          signalAcquireStarted();
+          await acquireReply;
+          return result;
+        }
+        return super.query(sql, params);
+      }
+    }
+    class CommitThenDelayAcquirePool extends MockPgPool {
+      async connect() : Promise<any> {
+        const client: any = new CommitThenDelayAcquireClient(this.coordinator);
+        this.clients.push(client);
+        return client;
+      }
+    }
+    const pool: any = new CommitThenDelayAcquirePool();
+    const { manager } = createPostgresManager({ pool, defaultTtlMs: 60_000, maxWaitMs: 0 });
+    let settled: any = false;
+    const acquiring: any = manager.acquire("committed-reply-delay", { waitMs: 0 }).finally(() : any => { settled = true; });
+    await acquireStarted;
+    expect(pool.coordinator.locks.size).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(5_001);
+    expect(settled).toBe(false);
+    expect(pool.coordinator.locks.size).toBe(1);
+
+    finishAcquireReply();
+    const handle: any = await acquiring;
+    expect(handle.fencingToken).toBe("fence_postgres_100");
+    expect(pool.clients[0].destroyed).toBe(false);
+    await handle.release();
+  });
+
+  it("honors an expired caller wait budget only after a late committed acquire is released", async () : Promise<any> => {
+    vi.useFakeTimers();
+    let signalAcquireStarted: any;
+    const acquireStarted: any = new Promise((resolve?: any) : any => { signalAcquireStarted = resolve; });
+    let finishAcquireReply: any;
+    const acquireReply: any = new Promise((resolve?: any) : any => { finishAcquireReply = resolve; });
+    class CommitThenDelayAcquireClient extends MockPgClient {
+      async query(sql?: any, params: any = []) : Promise<any> {
+        if (sql.includes("INSERT INTO _meshrix_lock_leases")) {
+          const result: any = await super.query(sql, params);
+          signalAcquireStarted();
+          await acquireReply;
+          return result;
+        }
+        return super.query(sql, params);
+      }
+    }
+    class CommitThenDelayAcquirePool extends MockPgPool {
+      async connect() : Promise<any> {
+        const client: any = new CommitThenDelayAcquireClient(this.coordinator);
+        this.clients.push(client);
+        return client;
+      }
+    }
+    const pool: any = new CommitThenDelayAcquirePool();
+    const { manager } = createPostgresManager({ pool, maxWaitMs: 500 });
+    let settled: any = false;
+    const acquiring: any = manager.acquire("late-committed-acquire", { waitMs: 10 })
+      .finally(() : any => { settled = true; });
+    await acquireStarted;
+    expect(pool.coordinator.locks.size).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(11);
+    expect(settled).toBe(false);
+
+    finishAcquireReply();
+    await expect(acquiring).rejects.toBeInstanceOf(LockTimeoutError);
+    expect(pool.coordinator.locks.size).toBe(0);
+    expect(manager.getMetrics()).toMatchObject({ totalTimedOut: 1, currentActive: 0, currentWaiting: 0 });
+  });
+
+  it("releases a committed acquire after caller cancellation before rejecting", async () : Promise<any> => {
+    let signalAcquireStarted: any;
+    const acquireStarted: any = new Promise((resolve?: any) : any => { signalAcquireStarted = resolve; });
+    let finishAcquireReply: any;
+    const acquireReply: any = new Promise((resolve?: any) : any => { finishAcquireReply = resolve; });
+    class CommitThenDelayAcquireClient extends MockPgClient {
+      async query(sql?: any, params: any = []) : Promise<any> {
+        if (sql.includes("INSERT INTO _meshrix_lock_leases")) {
+          const result: any = await super.query(sql, params);
+          signalAcquireStarted();
+          await acquireReply;
+          return result;
+        }
+        return super.query(sql, params);
+      }
+    }
+    class CommitThenDelayAcquirePool extends MockPgPool {
+      async connect() : Promise<any> {
+        const client: any = new CommitThenDelayAcquireClient(this.coordinator);
+        this.clients.push(client);
+        return client;
+      }
+    }
+    const pool: any = new CommitThenDelayAcquirePool();
+    const { manager } = createPostgresManager({ pool, maxWaitMs: 1000 });
+    const controller: AbortController = new AbortController();
+    let settled: any = false;
+    const acquiring: any = manager.acquire("cancelled-committed-acquire", {
+      signal: controller.signal,
+      waitMs: 1000
+    }).finally(() : any => { settled = true; });
+    const aborted: any = expect(acquiring).rejects.toBeInstanceOf(LockAcquireAbortedError);
+    await acquireStarted;
+    expect(pool.coordinator.locks.size).toBe(1);
+
+    controller.abort();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    finishAcquireReply();
+    await aborted;
+    expect(pool.coordinator.locks.size).toBe(0);
+    expect(pool.coordinator.nextFence).toBe(101n);
+    expect(pool.clients[0].destroyed).toBe(false);
+  });
+
   it("coordinates managers by namespace and inspects externally held locks", async () : Promise<any> => {
     const pool: any = new MockPgPool();
     const managerA: any = new PostgresLockManager({ pool, namespace: "deployment-a", maxWaitMs: 50 });
@@ -565,6 +695,127 @@ describe("PostgreSQL lock manager", () : any => {
     await vi.advanceTimersByTimeAsync(25);
     expect(handle.released).toBe(false);
     await handle.release();
+  });
+
+  it("waits for a committed heartbeat response beyond the unselected default query interval", async () : Promise<any> => {
+    vi.useFakeTimers();
+    let signalHeartbeatStarted: any;
+    const heartbeatStarted: any = new Promise((resolve?: any) : any => { signalHeartbeatStarted = resolve; });
+    let finishHeartbeatReply: any;
+    const heartbeatReply: any = new Promise((resolve?: any) : any => { finishHeartbeatReply = resolve; });
+    class CommitThenDelayHeartbeatClient extends MockPgClient {
+      async query(sql?: any, params: any = []) : Promise<any> {
+        if (sql.includes("UPDATE _meshrix_lock_leases")) {
+          const result: any = await super.query(sql, params);
+          signalHeartbeatStarted();
+          await heartbeatReply;
+          return result;
+        }
+        return super.query(sql, params);
+      }
+    }
+    class CommitThenDelayHeartbeatPool extends MockPgPool {
+      async connect() : Promise<any> {
+        const client: any = new CommitThenDelayHeartbeatClient(this.coordinator);
+        this.clients.push(client);
+        return client;
+      }
+    }
+    const pool: any = new CommitThenDelayHeartbeatPool();
+    const { manager: lockManager } = createPostgresManager({ pool, defaultTtlMs: 60_000 });
+    const handle: any = await lockManager.acquire("committed-heartbeat-reply-delay");
+    const previousExpiry: number = handle.expiresAt.getTime();
+    let settled: any = false;
+    const heartbeat: any = handle.heartbeat(90_000).finally(() : any => { settled = true; });
+    await heartbeatStarted;
+    const committedLease: any = [...pool.coordinator.locks.values()][0];
+    expect(committedLease.expiresAt).toBeGreaterThan(previousExpiry);
+
+    await vi.advanceTimersByTimeAsync(5_001);
+    expect(settled).toBe(false);
+    expect(handle.released).toBe(false);
+    expect(lockManager.getMetrics().currentActive).toBe(1);
+
+    finishHeartbeatReply();
+    await heartbeat;
+    expect(handle.released).toBe(false);
+    await handle.release();
+  });
+
+  it("invalidates a holder and signals lease loss when a pending heartbeat reaches its real TTL", async () : Promise<any> => {
+    vi.useFakeTimers();
+    let signalHeartbeatStarted: any;
+    const heartbeatStarted: any = new Promise((resolve?: any) : any => { signalHeartbeatStarted = resolve; });
+    class NonSettlingHeartbeatClient extends MockPgClient {
+      query(sql?: any, params: any = []) : any {
+        if (sql.includes("UPDATE _meshrix_lock_leases")) {
+          signalHeartbeatStarted();
+          return new Promise(() : any => {});
+        }
+        return super.query(sql, params);
+      }
+    }
+    class NonSettlingHeartbeatPool extends MockPgPool {
+      async connect() : Promise<any> {
+        const client: any = new NonSettlingHeartbeatClient(this.coordinator);
+        this.clients.push(client);
+        return client;
+      }
+    }
+    const pool: any = new NonSettlingHeartbeatPool();
+    const { manager } = createPostgresManager({
+      pool,
+      defaultTtlMs: 100,
+      heartbeatIntervalMs: 10,
+      maxWaitMs: 0
+    });
+    let acquiredHandle: any = null;
+    const acquire: any = manager.acquire.bind(manager);
+    manager.acquire = async (...args: any[]) : Promise<any> => {
+      acquiredHandle = await acquire(...args);
+      return acquiredHandle;
+    };
+
+    let signalObserved: any;
+    const leaseLossNotified: any = new Promise((resolve?: any) : any => { signalObserved = resolve; });
+    let runStarted: any;
+    const runBegan: any = new Promise((resolve?: any) : any => { runStarted = resolve; });
+    let signalAborted: any = false;
+    let assertActivePhase: any = null;
+    const execution: any = withOperationLock({
+      operation: { id: "pending-renewal-ttl-expiry" },
+      lockManager: manager,
+      run: async (operationLock?: any) : Promise<any> => {
+        runStarted();
+        operationLock.signal.addEventListener("abort", () : any => {
+          signalAborted = operationLock.signal.aborted;
+          try {
+            operationLock.assertActive();
+          } catch (error: any) {
+            assertActivePhase = error.phase;
+          }
+          signalObserved();
+        }, { once: true });
+        await leaseLossNotified;
+      }
+    }).catch((error?: any) : any => error);
+
+    await runBegan;
+    await vi.advanceTimersByTimeAsync(10);
+    await heartbeatStarted;
+    expect(acquiredHandle.released).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(90);
+    await leaseLossNotified;
+    const error: any = await execution;
+    await Promise.all([...manager._pendingLeaseExpirations]);
+
+    expect(error).toMatchObject({ name: "OperationLockError", phase: "heartbeat" });
+    expect(signalAborted).toBe(true);
+    expect(assertActivePhase).toBe("heartbeat");
+    expect(acquiredHandle.released).toBe(true);
+    expect(pool.clients.some((client?: any) => client.destroyed)).toBe(true);
+    expect(pool.coordinator.locks.size).toBe(0);
   });
 
   it("unlocks rather than renewing an elapsed PostgreSQL application lease", async () : Promise<any> => {
@@ -691,7 +942,7 @@ describe("PostgreSQL lock manager", () : any => {
     expect(manager.getMetrics()).toMatchObject({ currentActive: 0, currentWaiting: 0 });
   });
 
-  it("destroys a PostgreSQL session when caller aborts an acquire query", async () : Promise<any> => {
+  it("waits for an aborted acquire query and compensates if it commits", async () : Promise<any> => {
     let releaseQuery: any;
     const queryBarrier: any = new Promise((resolve?: any) : any => {
       releaseQuery = resolve;
@@ -715,14 +966,17 @@ describe("PostgreSQL lock manager", () : any => {
     const pool: any = new AbortQueryPool();
     const { manager } = createPostgresManager({ pool, maxWaitMs: 500 });
     const controller: any = new AbortController();
-    const pending: any = manager.acquire("abort-during-query", { signal: controller.signal });
+    let settled: any = false;
+    const pending: any = manager.acquire("abort-during-query", { signal: controller.signal })
+      .finally(() : any => { settled = true; });
     await vi.waitFor(() : any => expect(pool.clients).toHaveLength(1));
     controller.abort();
-
-    await expect(pending).rejects.toBeInstanceOf(LockAcquireAbortedError);
-    expect(pool.clients[0].destroyed).toBe(true);
-    releaseQuery();
     await Promise.resolve();
+    expect(settled).toBe(false);
+
+    releaseQuery();
+    await expect(pending).rejects.toBeInstanceOf(LockAcquireAbortedError);
+    expect(pool.clients[0].destroyed).toBe(false);
     expect(pool.coordinator.locks.size).toBe(0);
   });
 
@@ -754,11 +1008,14 @@ describe("PostgreSQL lock manager", () : any => {
       expect(pool.clients).toHaveLength(1);
     });
     const destroying: any = manager.destroy();
-    await expect(pending).rejects.toBeInstanceOf(LockManagerDestroyedError);
-    await destroying;
-    expect(pool.clients[0].destroyed).toBe(true);
-    releaseAcquireQuery();
+    let settled: any = false;
+    const observedPending: any = pending.finally(() : any => { settled = true; });
     await Promise.resolve();
+    expect(settled).toBe(false);
+    releaseAcquireQuery();
+    await expect(observedPending).rejects.toBeInstanceOf(LockManagerDestroyedError);
+    await destroying;
+    expect(pool.clients[0].destroyed).toBe(false);
     expect(pool.coordinator.locks.size).toBe(0);
     expect(manager.getMetrics()).toMatchObject({ currentActive: 0, currentWaiting: 0 });
   });
@@ -932,8 +1189,12 @@ describe("PostgreSQL lock manager", () : any => {
       queryTimeoutMs: 5
     });
     resources.push({ manager: acquireManager });
-    await expect(acquireManager.acquire("hung-acquire")).rejects.toBeInstanceOf(LockTimeoutError);
+    await expect(acquireManager.acquire("hung-acquire")).rejects.toMatchObject({
+      name: "PostgresLockBackendError",
+      operation: "acquire"
+    });
     expect(acquirePool.clients[0].destroyed).toBe(true);
+    expect(acquireManager.getMetrics()).toMatchObject({ totalBackendErrors: 1, totalTimedOut: 0 });
     await acquireManager.destroy();
 
     const heartbeatPool: any = new HangingPool();
@@ -1014,7 +1275,7 @@ describe("PostgreSQL lock manager", () : any => {
     const destroying: any = manager.destroy();
     releaseHeartbeat();
 
-    await expect(heartbeat).rejects.toBeInstanceOf(LockReleasedError);
+    await expect(heartbeat).rejects.toBeInstanceOf(LockManagerDestroyedError);
     await releasing;
     await destroying;
 

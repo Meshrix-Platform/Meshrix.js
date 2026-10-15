@@ -16,11 +16,21 @@ import {
 
 import { listStorageBackups } from "../../../packages/foundation/src/storage/backup-query.ts";
 import { createStorageBackup } from "../../../packages/foundation/src/storage/backup-snapshot.ts";
-import { BACKUP_RESTORE_PROTOCOL_VERSION } from "../../../packages/foundation/src/storage/backup-contract.ts";
+import { BACKUP_RESTORE_PROTOCOL_VERSION, BACKUP_ROOT_ENV } from "../../../packages/foundation/src/storage/backup-contract.ts";
 import { restoreStorageBackup } from "../../../packages/foundation/src/storage/restore-execution.ts";
 import { createStorageKernel } from "../../../packages/foundation/src/storage/storage-kernel.ts";
 import { createStorageProvider } from "../../../packages/foundation/src/storage/storage-provider.ts";
 import { acquireStorageRuntimeLease } from "../../../packages/foundation/src/storage/storage-lifecycle-lock.ts";
+import {
+  ensureOperationAuditProjectionKey
+} from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
+import {
+  createFileLocalSecretKeyProvider
+} from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+import {
+  createOperationAuditStore,
+  inspectOperationAuditProjection
+} from "../../../packages/foundation/src/security/operation-audit.ts";
 import { executeStorageOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/storage-client-monitor-executors.ts";
 import {
   classifyProtocolStorageArtifact,
@@ -612,6 +622,152 @@ describe("storage backup restore", () : any => {
     expect(await fs.readFile(path.join(userDataPath, "security/execution-sandbox-custody/master-key"), "utf8"))
       .toBe("separately-managed-key");
     expect(await fs.readFile(pendingObjectPath, "utf8")).toBe("partial object");
+  });
+
+  it("preserves operation-audit custody on replacement restore and requires it on a clean target", async () : Promise<any> => {
+    const sourceRoot: any = await tempDir("meshrix-audit-custody-source-");
+    const backupRoot: any = await tempDir("meshrix-audit-custody-backups-");
+    const keyRoot: any = await tempDir("meshrix-audit-custody-key-");
+    const wrongKeyRoot: any = await tempDir("meshrix-audit-custody-wrong-key-");
+    const cleanTarget: any = await tempDir("meshrix-audit-custody-clean-target-");
+    const masterKey: any = "6d".repeat(32);
+    const keyFile: any = await writeFixture(keyRoot, "master-key", `${masterKey}\n`);
+    const wrongKeyFile: any = await writeFixture(wrongKeyRoot, "master-key", `${"7e".repeat(32)}\n`);
+    const restoredKeyRoot: any = await tempDir("meshrix-audit-custody-restored-key-");
+    const restoredKeyFile: any = await writeFixture(restoredKeyRoot, "master-key", `${masterKey}\n`);
+    const previousBackupRoot: any = process.env[BACKUP_ROOT_ENV];
+    process.env[BACKUP_ROOT_ENV] = backupRoot;
+    const sourceKeyProvider: any = createFileLocalSecretKeyProvider({ dataDir: sourceRoot, keyFile });
+    const wrongKeyProvider: any = createFileLocalSecretKeyProvider({ dataDir: cleanTarget, keyFile: wrongKeyFile });
+    const restoredKeyProvider: any = createFileLocalSecretKeyProvider({ dataDir: cleanTarget, keyFile: restoredKeyFile });
+    let sourceAuditKey: any = null;
+    let sourceStore: any = null;
+    let replacementAuditKey: any = null;
+    let replacementStore: any = null;
+    let restoredAuditKey: any = null;
+    let restoredStore: any = null;
+    try {
+      sourceAuditKey = await ensureOperationAuditProjectionKey({
+        dataDir: sourceRoot,
+        keyProvider: sourceKeyProvider,
+        allowInitialize: true
+      });
+      sourceStore = createOperationAuditStore({
+        userDataPath: sourceRoot,
+        projectionKey: sourceAuditKey.key,
+        projectionKeyId: sourceAuditKey.keyId
+      });
+      await sourceStore.ready();
+      const entry: any = {
+        auditId: "audit-custody-restore-probe",
+        operationId: "synthetic.backup.custody",
+        transport: "test",
+        status: "ok",
+        tenantId: "synthetic-tenant",
+        traceId: "synthetic-trace",
+        actor: { userId: "synthetic-user" },
+        input: { value: "synthetic-input" }
+      };
+      await sourceStore.appendIdempotent(entry);
+      await sourceStore.close();
+      sourceStore = null;
+      sourceAuditKey.key.fill(0);
+      sourceAuditKey = null;
+
+      const manifest: any = await createStorageBackup({ userDataPath: sourceRoot, label: "audit-custody" });
+      expect(manifest.secretCustody).toEqual({
+        mode: "separate-custody-required",
+        secretMaterialIncluded: false,
+        replacementRestorePreservesExcludedCustody: true
+      });
+      expect(manifest.files.some((file: any) => file.relativePath.startsWith("secrets/"))).toBe(false);
+
+      await writeFixture(sourceRoot, "after-backup/temporary.txt", "remove-on-replacement");
+      const replacement: any = await restoreStorageBackup({
+        userDataPath: sourceRoot,
+        backupId: manifest.backupId,
+        dryRun: false,
+        apply: true
+      });
+      expect(replacement.restoreSemantics).toBe("replacement");
+      expect(await fs.readFile(path.join(sourceRoot, "secrets", "registry.json"), "utf8")).toContain(
+        "operation-audit-projection"
+      );
+      replacementAuditKey = await ensureOperationAuditProjectionKey({
+        dataDir: sourceRoot,
+        keyProvider: sourceKeyProvider,
+        allowInitialize: false
+      });
+      replacementStore = createOperationAuditStore({
+        userDataPath: sourceRoot,
+        projectionKey: replacementAuditKey.key,
+        projectionKeyId: replacementAuditKey.keyId
+      });
+      await replacementStore.ready();
+      await expect(replacementStore.list({ userId: "synthetic-user", tenantId: "synthetic-tenant" }))
+        .resolves.toMatchObject([{ auditId: "audit-custody-restore-probe" }]);
+      expect(replacementAuditKey.keyId).toMatch(/^sha256:[a-f0-9]{64}$/u);
+      await replacementStore.close();
+      replacementStore = null;
+      replacementAuditKey.key.fill(0);
+      replacementAuditKey = null;
+
+      const cleanRestore: any = await restoreStorageBackup({
+        userDataPath: cleanTarget,
+        backupId: manifest.backupId,
+        dryRun: false,
+        apply: true
+      });
+      expect(cleanRestore.restoreSemantics).toBe("replacement");
+      const cleanAuditDatabase: any = path.join(cleanTarget, "security", "operation-audit.sqlite");
+      const beforeMissingCustody: any = await fs.readFile(cleanAuditDatabase);
+      await expect(inspectOperationAuditProjection({ userDataPath: cleanTarget }))
+        .resolves.toMatchObject({ state: "projected", projectionKeyId: expect.stringMatching(/^sha256:/u) });
+      await expect(ensureOperationAuditProjectionKey({
+        dataDir: cleanTarget,
+        keyProvider: restoredKeyProvider,
+        allowInitialize: false
+      })).rejects.toMatchObject({ code: "operation_audit_projection_key_unavailable" });
+      expect(await fs.readFile(cleanAuditDatabase)).toEqual(beforeMissingCustody);
+      await expect(fs.stat(path.join(cleanTarget, "secrets", "registry.json")))
+        .rejects.toMatchObject({ code: "ENOENT" });
+
+      await fs.cp(path.join(sourceRoot, "secrets"), path.join(cleanTarget, "secrets"), { recursive: true });
+      const beforeWrongCustody: any = await fs.readFile(cleanAuditDatabase);
+      await expect(ensureOperationAuditProjectionKey({
+        dataDir: cleanTarget,
+        keyProvider: wrongKeyProvider,
+        allowInitialize: false
+      })).rejects.toMatchObject({ code: "local_secret_decryption_failed" });
+      expect(await fs.readFile(cleanAuditDatabase)).toEqual(beforeWrongCustody);
+
+      restoredAuditKey = await ensureOperationAuditProjectionKey({
+        dataDir: cleanTarget,
+        keyProvider: restoredKeyProvider,
+        allowInitialize: false
+      });
+      restoredStore = createOperationAuditStore({
+        userDataPath: cleanTarget,
+        projectionKey: restoredAuditKey.key,
+        projectionKeyId: restoredAuditKey.keyId
+      });
+      await restoredStore.ready();
+      await expect(restoredStore.list({ userId: "synthetic-user", tenantId: "synthetic-tenant" }))
+        .resolves.toMatchObject([{ auditId: "audit-custody-restore-probe" }]);
+      expect(restoredAuditKey.keyId).toMatch(/^sha256:[a-f0-9]{64}$/u);
+    } finally {
+      await sourceStore?.close().catch(() => undefined);
+      await replacementStore?.close().catch(() => undefined);
+      await restoredStore?.close().catch(() => undefined);
+      sourceAuditKey?.key.fill(0);
+      replacementAuditKey?.key.fill(0);
+      restoredAuditKey?.key.fill(0);
+      sourceKeyProvider.close();
+      wrongKeyProvider.close();
+      restoredKeyProvider.close();
+      if (previousBackupRoot === undefined) delete process.env[BACKUP_ROOT_ENV];
+      else process.env[BACKUP_ROOT_ENV] = previousBackupRoot;
+    }
   });
 
   it("rejects malformed includePaths without expanding to replacement semantics", async () : Promise<any> => {

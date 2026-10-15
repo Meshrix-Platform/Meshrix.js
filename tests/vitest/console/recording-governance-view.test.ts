@@ -45,8 +45,8 @@ function snapshot(overrides: Record<string, any> = {}): any {
       authority: {
         custody: "enterprise_local",
         durable: true,
-        decryptionAuthority: "organization",
-        decryptionAuthorityNote: "organization-controlled"
+        contentAccess: "organization",
+        contentAccessNote: "unencrypted private local files"
       },
       policy: {
         schemaVersion: "v0.0.1:recording:policy-1",
@@ -106,7 +106,7 @@ describe("recording governance console", () : any => {
     const controller = useRecordingGovernanceController({ client: client() });
     await controller.refresh();
     expect(controller.policy.value?.policyRevision).toBe(1);
-    expect(controller.authority.value?.decryptionAuthority).toBe("organization");
+    expect(controller.authority.value?.contentAccess).toBe("organization");
     expect(controller.authority.value?.custody).toBe("enterprise_local");
     // No all-on default: every category starts disabled.
     for (const key of controller.categories) {
@@ -229,7 +229,7 @@ describe("recording governance console", () : any => {
     expect(controller.incompleteObligations.value[0].reason).toBe("category_disabled");
   });
 
-  it("renders custody, decryption authority, health and limitation copy", async () : Promise<any> => {
+  it("renders custody, content access truth, health and limitation copy", async () : Promise<any> => {
     const pending = snapshot({
       pendingObligations: [
         {

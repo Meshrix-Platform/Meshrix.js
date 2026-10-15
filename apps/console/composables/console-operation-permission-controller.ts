@@ -257,6 +257,20 @@ export function createConsoleOperationPermissionController(
     }
   }
 
+  async function refreshOperationPermissionActivity() : Promise<any> {
+    try {
+      const [audit, metrics] = await Promise.all([
+        getOperationPermissionAudit(50),
+        getOperationPermissionMetrics(),
+      ]);
+      operationPermissionAuditItems.value = audit.items;
+      operationPermissionMetricsState.value = metrics.metrics;
+    } catch (nextError: any) {
+      options.error.value =
+        nextError instanceof Error ? nextError.message : "刷新智能体工具活动数据失败。";
+    }
+  }
+
   const {
     copyIssuedToolToken,
     createGrant,
@@ -281,6 +295,7 @@ export function createConsoleOperationPermissionController(
     clearBusy: options.clearBusy,
     error: options.error,
     refreshOperationPermission,
+    refreshOperationPermissionActivity,
     setBusy: options.setBusy,
     operationPermissionGrantsState,
   });

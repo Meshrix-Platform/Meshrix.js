@@ -12,9 +12,11 @@ const EXPOSITION: string = [
   "# HELP meshrix_relay_bytes_in Wire bytes received from connected sockets.",
   "# TYPE meshrix_relay_bytes_in counter",
   'meshrix_relay_bytes_in{object="session",tenant="t-1",route="r-1",device="",scope="ephemeral"} 2048',
-  "# HELP meshrix_relay_mailbox_acked Peer acknowledgements durably recorded.",
-  "# TYPE meshrix_relay_mailbox_acked counter",
-  'meshrix_relay_mailbox_acked{object="mailbox",tenant="t-1",route="",device="d-9",scope="durable"} 7',
+  "# HELP meshrix_relay_sessions_closed Sessions closed at durable transitions.",
+  "# TYPE meshrix_relay_sessions_closed counter",
+  'meshrix_relay_sessions_closed{object="session",tenant="t-1",route="",device="d-9",scope="durable"} 7',
+  "# HELP foreign_exporter_metric A metric that is not part of the relay projection.",
+  'foreign_exporter_metric{tenant="t-1"} 999',
   "",
 ].join("\n");
 
@@ -77,10 +79,12 @@ describe("system.relay_traffic executor", () : any => {
     expect(typeof response.payload.fetchedAt).toBe("string");
 
     const metrics: any = response.payload.metrics;
+    // Only the meshrix_relay_* projection is kept; foreign exporter series
+    // are dropped rather than materialized.
     expect(metrics.map((metric?: any) : any => metric.name)).toEqual([
       "meshrix_relay_sessions_admitted",
       "meshrix_relay_bytes_in",
-      "meshrix_relay_mailbox_acked"
+      "meshrix_relay_sessions_closed"
     ]);
     const admitted: any = metrics[0];
     expect(admitted.help).toBe("Sessions admitted after directory authority checks.");
@@ -95,8 +99,9 @@ describe("system.relay_traffic executor", () : any => {
     expect(response.payload.history[0].sums).toMatchObject({
       meshrix_relay_sessions_admitted: 6,
       meshrix_relay_bytes_in: 2048,
-      meshrix_relay_mailbox_acked: 7
+      meshrix_relay_sessions_closed: 7
     });
+    expect(response.payload.history[0].sums.foreign_exporter_metric).toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
@@ -169,6 +174,39 @@ describe("system.relay_traffic executor", () : any => {
 
     expect(response.status).toBe(200);
     expect(response.payload).toMatchObject({ configured: true, error: "relay_unreachable", status: 401 });
+  });
+
+  it("rejects an oversized exposition body instead of buffering it fully", async () : Promise<any> => {
+    vi.stubEnv("MESHRIX_RELAY_METRICS_URL", "https://relay.example.test/admin/metrics");
+    stubMetricsFetch(`meshrix_relay_sessions_admitted 1\n${"# HELP pad ".padEnd(300_000, "x")}`);
+    const execute: any = await loadExecutor();
+
+    const response: any = await execute({ operationId: "system.relay_traffic", input: {}, context: {} });
+
+    expect(response.status).toBe(200);
+    expect(response.payload).toMatchObject({ configured: true, error: "metrics_response_invalid" });
+    expect(response.payload.metrics).toBeUndefined();
+  });
+
+  it("bounds metric series and per-series samples from remote input", async () : Promise<any> => {
+    vi.stubEnv("MESHRIX_RELAY_METRICS_URL", "https://relay.example.test/admin/metrics");
+    const lines: string[] = [];
+    for (let index = 0; index < 200; index += 1) {
+      lines.push(`meshrix_relay_sessions_admitted{index="${index}"} ${index}`);
+    }
+    for (let index = 0; index < 80; index += 1) {
+      lines.push(`meshrix_relay_synthetic_${index} 1`);
+    }
+    stubMetricsFetch(lines.join("\n"));
+    const execute: any = await loadExecutor();
+
+    const response: any = await execute({ operationId: "system.relay_traffic", input: {}, context: {} });
+
+    expect(response.status).toBe(200);
+    expect(response.payload.metrics.length).toBeLessThanOrEqual(64);
+    for (const metric of response.payload.metrics) {
+      expect(metric.samples.length).toBeLessThanOrEqual(128);
+    }
   });
 });
 
@@ -295,6 +333,41 @@ describe("system.relay_traffic history persistence", () : any => {
     expect(response.status).toBe(200);
     expect(response.payload.history).toHaveLength(1);
     expect(response.payload.history[0].sums.meshrix_relay_sessions_admitted).toBe(6);
+    // The write failure is surfaced, not masked as normal: the panel can
+    // show that restart would lose the in-memory ring.
+    expect(response.payload.persistence).toMatchObject({
+      state: "degraded",
+      reason: "write_failed"
+    });
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reports persistence degradation then recovers once writes succeed", async () : Promise<any> => {
+    vi.useFakeTimers();
+    const base: any = 1_700_000_000_000;
+    vi.setSystemTime(base);
+    const dir: any = makeTempDir();
+    const blocker: any = path.join(dir, "blocker");
+    fs.writeFileSync(blocker, "x", "utf8");
+    const goodFile: any = path.join(dir, "history.json");
+    vi.stubEnv("MESHRIX_RELAY_METRICS_URL", "https://relay.example.test/admin/metrics");
+    vi.stubEnv("MESHRIX_RELAY_TRAFFIC_PERSIST", path.join(blocker, "history.json"));
+    stubMetricsFetch();
+    const execute: any = await loadExecutor();
+    const run: any = () : Promise<any> => execute({ operationId: "system.relay_traffic", input: {}, context: {} });
+
+    const failed: any = await run();
+    expect(failed.payload.persistence).toMatchObject({ state: "degraded", reason: "write_failed" });
+
+    // Pointing the ring at a writable path lets the next append persist:
+    // degradation recovers instead of latching.
+    vi.stubEnv("MESHRIX_RELAY_TRAFFIC_PERSIST", goodFile);
+    vi.setSystemTime(base + 20_000);
+    const recovered: any = await run();
+    expect(recovered.payload.persistence).toMatchObject({ state: "durable" });
+    expect(recovered.payload.history).toHaveLength(2);
+    expect(JSON.parse(fs.readFileSync(goodFile, "utf8"))).toHaveLength(2);
 
     fs.rmSync(dir, { recursive: true, force: true });
   });

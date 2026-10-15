@@ -170,7 +170,7 @@ describe("state coordinator behavior", () : any => {
     await expect(replacement).resolves.toBe("replacement");
   });
 
-  it("separates default and maximum queue-wait and execution timeout bounds", async () : Promise<any> => {
+  it("keeps queue-wait admission bounds and waits for explicitly budgeted work to settle", async () : Promise<any> => {
     vi.useFakeTimers();
     const coordinator: any = createStateMutationCoordinator({
       policy: {
@@ -184,8 +184,18 @@ describe("state coordinator behavior", () : any => {
     const first: any = coordinator.queueStateMutation("bounded-timeouts", async ({ signal }: Record<string, any>) : Promise<any> => {
       await firstGate.promise;
       expect(signal.aborted).toBe(true);
+      return "first-settled-after-deadline";
     }, { timeoutMs: 1_000 });
-    const firstAssertion: any = expect(first).rejects.toMatchObject({ code: "STATE_MUTATION_TIMEOUT" });
+    let firstSettled = false;
+    const firstObserved: any = first.then((value?: any) : any => {
+      firstSettled = true;
+      return value;
+    }, (error?: any) : never => {
+      firstSettled = true;
+      throw error;
+    });
+    const firstDeadline: any = expect(firstObserved).rejects
+      .toMatchObject({ code: "STATE_MUTATION_TIMEOUT" });
     await Promise.resolve();
     const queued: any = coordinator.queueStateMutation("bounded-timeouts", async () : Promise<any> => "never", {
       queueWaitTimeoutMs: 1_000
@@ -197,14 +207,27 @@ describe("state coordinator behavior", () : any => {
     await vi.advanceTimersByTimeAsync(1);
     await queuedAssertion;
     await vi.advanceTimersByTimeAsync(15);
-    await firstAssertion;
+    expect(firstSettled).toBe(false);
     firstGate.resolve();
-    await vi.advanceTimersByTimeAsync(0);
+    await firstDeadline;
 
     const defaultGate: any = deferred();
-    const defaultActive: any = coordinator.queueStateMutation("default-timeouts", () : any => defaultGate.promise);
-    const defaultAssertion: any = expect(defaultActive)
-      .rejects.toMatchObject({ code: "STATE_MUTATION_TIMEOUT" });
+    let defaultSignal: AbortSignal | null = null;
+    const defaultActive: any = coordinator.queueStateMutation("default-timeouts", async ({ signal }: Record<string, any>) : Promise<any> => {
+      defaultSignal = signal;
+      await defaultGate.promise;
+      return "configured-policy-result";
+    });
+    let defaultSettled = false;
+    const defaultObserved: any = defaultActive.then((value?: any) : any => {
+      defaultSettled = true;
+      return value;
+    }, (error?: any) : never => {
+      defaultSettled = true;
+      throw error;
+    });
+    const defaultDeadline: any = expect(defaultObserved).rejects
+      .toMatchObject({ code: "STATE_MUTATION_TIMEOUT" });
     await Promise.resolve();
     const defaultQueued: any = coordinator.queueStateMutation("default-timeouts", async () : Promise<any> => "never");
     const defaultQueuedAssertion: any = expect(defaultQueued)
@@ -212,9 +235,32 @@ describe("state coordinator behavior", () : any => {
     await vi.advanceTimersByTimeAsync(10);
     await defaultQueuedAssertion;
     await vi.advanceTimersByTimeAsync(10);
-    await defaultAssertion;
+    expect(defaultSignal?.aborted).toBe(true);
+    expect(defaultSettled).toBe(false);
     defaultGate.resolve();
-    await vi.advanceTimersByTimeAsync(0);
+    await defaultDeadline;
+  });
+
+  it("does not inject an execution deadline for ordinary state mutations", async () : Promise<any> => {
+    vi.useFakeTimers();
+    const coordinator: any = createStateMutationCoordinator();
+    const gate: any = deferred();
+    let signal: AbortSignal | null = null;
+    let settled = false;
+    const active: any = coordinator.queueStateMutation("no-default-execution-deadline", async (context?: any) : Promise<any> => {
+      signal = context.signal;
+      await gate.promise;
+      return "completed";
+    }).then((value?: any) : any => {
+      settled = true;
+      return value;
+    });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(300_001);
+    expect(signal?.aborted).toBe(false);
+    expect(settled).toBe(false);
+    gate.resolve();
+    await expect(active).resolves.toBe("completed");
   });
 
   it("keeps FIFO lanes isolated and shares one idle deferred while recovering from failure", async () : Promise<any> => {
@@ -259,25 +305,31 @@ describe("state coordinator behavior", () : any => {
     const coordinator: any = createStateMutationCoordinator();
     const controller: any = new AbortController();
     const gate: any = deferred();
-    const taskSettled: any = deferred();
+    let activeSettled = false;
     const active: any = coordinator.queueStateMutation("active-abort", async ({ signal }: Record<string, any>) : Promise<any> => {
       await gate.promise;
       expect(signal.aborted).toBe(true);
-      taskSettled.resolve();
+      activeSettled = true;
+      return "completed-after-cancel";
     }, { signal: controller.signal });
+    const activeOutcome: any = active.catch((error?: any) : any => error);
     await Promise.resolve();
     const queued: any = coordinator.queueStateMutation("active-abort", async () : Promise<any> => "never");
     const queuedAssertion: any = expect(queued)
       .rejects.toMatchObject({ code: "STATE_MUTATION_QUEUE_FENCED" });
     controller.abort();
-    await expect(active).rejects.toMatchObject({ code: "STATE_MUTATION_ABORTED" });
+    await Promise.resolve();
+    expect(activeSettled).toBe(false);
     await queuedAssertion;
-    await expect(coordinator.waitForStateIdle("active-abort"))
-      .rejects.toMatchObject({ code: "STATE_MUTATION_QUEUE_FENCED" });
+    let idleSettled = false;
+    const idle: any = coordinator.waitForStateIdle("active-abort").then(() : void => { idleSettled = true; });
     await expect(coordinator.queueStateMutation("active-abort", async () : Promise<any> => "blocked"))
       .rejects.toMatchObject({ code: "STATE_MUTATION_QUEUE_FENCED" });
+    expect(idleSettled).toBe(false);
     gate.resolve();
-    await taskSettled.promise;
+    await expect(activeOutcome).resolves.toMatchObject({ code: "STATE_MUTATION_ABORTED" });
+    await idle;
+    expect(activeSettled).toBe(true);
     await new Promise((resolve?: any) : any => setImmediate(resolve));
     await expect(coordinator.queueStateMutation("active-abort", async () : Promise<any> => "recovered"))
       .resolves.toBe("recovered");
@@ -359,7 +411,7 @@ describe("state coordinator behavior", () : any => {
     });
   });
 
-  it("fails queued mutations fast while a timed-out task remains the serialization fence", async () : Promise<any> => {
+  it("keeps the serialization fence until explicitly timed-out work settles and returns the timeout", async () : Promise<any> => {
     vi.useFakeTimers();
     const events: any[] = [];
     let releaseFirst: any;
@@ -378,28 +430,40 @@ describe("state coordinator behavior", () : any => {
       events.push("first-end");
       markFirstSettled();
       return "first";
-    });
+    }, { timeoutMs: 60_000 });
     const second: any = queueStateMutation("timeout-fence", async () : Promise<any> => {
       events.push("second-start");
       return "second";
     });
-    const firstRejected: any = expect(first).rejects.toMatchObject({ code: "STATE_MUTATION_TIMEOUT" });
     const secondRejected: any = expect(second).rejects.toMatchObject({ code: "STATE_MUTATION_QUEUE_FENCED" });
 
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(60_000);
-    await firstRejected;
     await secondRejected;
+    let firstSettled = false;
+    const firstObserved: any = first.then((value?: any) : any => {
+      firstSettled = true;
+      return value;
+    }, (error?: any) : never => {
+      firstSettled = true;
+      throw error;
+    });
+    const firstDeadline: any = expect(firstObserved).rejects
+      .toMatchObject({ code: "STATE_MUTATION_TIMEOUT" });
 
     await expect(queueStateMutation("timeout-fence", async () : Promise<any> => "third"))
       .rejects.toMatchObject({ code: "STATE_MUTATION_QUEUE_FENCED" });
-    await expect(waitForStateIdle("timeout-fence"))
-      .rejects.toMatchObject({ code: "STATE_MUTATION_QUEUE_FENCED" });
+    let idleSettled = false;
+    const idle: any = waitForStateIdle("timeout-fence").then(() : void => { idleSettled = true; });
     expect(events).toEqual(["first-start"]);
+    expect(firstSettled).toBe(false);
+    expect(idleSettled).toBe(false);
 
     releaseFirst();
     await firstActuallySettled;
     await vi.advanceTimersByTimeAsync(0);
+    await firstDeadline;
+    await idle;
     await expect(queueStateMutation("timeout-fence", async () : Promise<any> => {
       events.push("fourth-start");
       return "fourth";
@@ -581,6 +645,25 @@ describe("state coordinator behavior", () : any => {
       maxBytes: 2048,
       maxRecordBytes: 512
     })).rejects.toMatchObject({ code: "BOUNDED_JSONL_RECORD_TOO_LARGE" });
+  });
+
+  it("does not re-filter selected JSONL rows after the tail scan", async () : Promise<any> => {
+    const root: any = await tempDir("meshrix-bounded-jsonl-filter-");
+    const eventPath: any = path.join(root, "events", "filtered.jsonl");
+    await fs.mkdir(path.dirname(eventPath), { recursive: true });
+    await fs.writeFile(eventPath, [1, 2, 3, 4].map((sequence) => JSON.stringify({ sequence })).join("\n") + "\n", "utf8");
+    let filterCalls = 0;
+
+    const records: any = await readJsonlTail(eventPath, {
+      limit: 2,
+      filter: (value) => {
+        filterCalls += 1;
+        return Number((value as Record<string, unknown>).sequence) % 2 === 0;
+      }
+    });
+
+    expect(records).toEqual([{ sequence: 2 }, { sequence: 4 }]);
+    expect(filterCalls).toBe(3);
   });
 
   it("heals a torn JSONL tail on read instead of failing", async (): Promise<any> => {

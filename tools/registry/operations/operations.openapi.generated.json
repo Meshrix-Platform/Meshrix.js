@@ -8559,6 +8559,56 @@
         }
       }
     },
+    "/api/discovery/clients/enrollment-token": {
+      "post": {
+        "operationId": "discovery.clients.enrollment_token",
+        "summary": "签发客户端登记令牌",
+        "tags": [
+          "discovery"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "ttlSeconds": {
+                    "type": "integer",
+                    "minimum": 60,
+                    "maximum": 86400
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/discovery/config": {
       "get": {
         "operationId": "discovery.get_config",

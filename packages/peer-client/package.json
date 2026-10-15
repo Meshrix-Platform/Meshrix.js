@@ -1,7 +1,7 @@
 {
   "name": "@meshrix/peer-client",
   "version": "0.1.0",
-  "description": "Device-side durable peer messaging client: sender-scoped outbox with receipt reconciliation, deduplicated inbox with cursor resume and gap tombstones, and a host-neutral dispatch surface over the private-relay peer mailbox.",
+  "description": "Device-side encrypted peer client with durable local outbox and inbox, exact-ciphertext retry, pairing-pinned signed receipts, paged local history, and host-neutral application dispatch over online private-relay forwarding.",
   "license": "Apache-2.0",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"

@@ -7,6 +7,8 @@ import {
 } from "../state/state-coordinator.ts";
 import { buildBootstrapPayload } from "@meshrix/protocols/http/bootstrap-payload";
 
+export const MESHRIX_DISCOVERY_CHECK_IN_POLICY_ENV = "MESHRIX_DISCOVERY_CHECK_IN_POLICY";
+
 const DEFAULT_DISCOVERY_CONFIG: Record<string, any> = {
   serverId: "",
   serverLabel: "",
@@ -18,7 +20,8 @@ const DEFAULT_DISCOVERY_CONFIG: Record<string, any> = {
   configVersion: "",
   refreshIntervalSeconds: 0,
   checkInIntervalSeconds: 0,
-  offlineAfterSeconds: 0
+  offlineAfterSeconds: 0,
+  checkInPolicy: "credential"
 };
 
 export function getDiscoveryConfigPath(userDataPath?: any) : any {
@@ -46,6 +49,11 @@ function normalizeMode(value?: any) : any {
   return ["active", "forward"].includes(String(value || "").trim())
     ? String(value).trim()
     : "";
+}
+
+function normalizeCheckInPolicy(value?: any, fallback?: any) : any {
+  const normalized: any = String(value || "").trim().toLowerCase();
+  return ["credential", "open"].includes(normalized) ? normalized : fallback;
 }
 
 function normalizeDiscoveryConfig(config: Record<string, any> = {}, context: Record<string, any> = {}) : any {
@@ -77,6 +85,10 @@ function normalizeDiscoveryConfig(config: Record<string, any> = {}, context: Rec
     offlineAfterSeconds: normalizePositiveInteger(
       config.offlineAfterSeconds,
       DEFAULT_DISCOVERY_CONFIG.offlineAfterSeconds
+    ),
+    checkInPolicy: normalizeCheckInPolicy(
+      process.env[MESHRIX_DISCOVERY_CHECK_IN_POLICY_ENV] || config.checkInPolicy,
+      DEFAULT_DISCOVERY_CONFIG.checkInPolicy
     )
   };
 }

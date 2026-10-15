@@ -1,7 +1,16 @@
 import crypto from "node:crypto";
 
 const HOST_CONTEXT_SCHEMA = "v0.0.1:skill-hub:host-context-1";
-const HOST_OWNED_INPUT_FIELDS = new Set(["actor", "actor-id", "actorId", "tenantRef"]);
+// Identity and routing fields are host-owned: callers must not pick the
+// service-side registry partition (or impersonate a principal) through input.
+const HOST_OWNED_INPUT_FIELDS = new Set([
+  "actor",
+  "actor-id",
+  "actorId",
+  "tenantRef",
+  "registryWorkspaceId",
+  "contributionRegistryWorkspaceId"
+]);
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -78,6 +87,7 @@ export function createSkillHubExternalServiceClient({ serviceRef, timeoutMs }) {
     signal = null,
     host = {},
     phase = "execute",
+    invocationId,
     receipt = undefined,
     operationPermissionReceipt = undefined
   }) {
@@ -96,20 +106,24 @@ export function createSkillHubExternalServiceClient({ serviceRef, timeoutMs }) {
         : {})
     });
     const requestInput = Object.freeze({ ...businessInput, meshrixContext });
-    const idempotencyKey = `skill-hub:${crypto.createHash("sha256").update(canonicalJson({
-      operationId: operation.id,
-      phase,
-      input: requestInput
-    })).digest("hex")}`;
+    const callerKey = typeof businessInput.idempotencyKey === "string"
+      ? businessInput.idempotencyKey.trim()
+      : "";
+    const logicalInvocationId = typeof invocationId === "string" && invocationId.length > 0
+      ? invocationId
+      : crypto.randomUUID();
+    const idempotencyIdentity = callerKey
+      ? { operationId: operation.id, phase, callerKey }
+      : { operationId: operation.id, phase, invocationId: logicalInvocationId };
+    const idempotencyKey = `skill-hub:${crypto.createHash("sha256").update(canonicalJson(idempotencyIdentity)).digest("hex")}`;
     const task = (async () => {
       try {
         const response = await host.externalService.request({
           serviceRef,
           operationRef: operation.id,
           input: requestInput,
-          idempotencyKey,
-          timeoutMs
-        }, { signal });
+          idempotencyKey
+        }, { signal, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
         return applicationResponse(response);
       } catch (error) {
         const status = signal?.aborted ? 499 : Number(error?.status || 502);

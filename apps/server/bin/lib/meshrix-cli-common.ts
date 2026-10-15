@@ -1,6 +1,8 @@
 import fsp from "node:fs/promises";
+import { isIP } from "node:net";
 import path from "node:path";
 import { getDefaultServerUrl } from "@meshrix/foundation/config/server-env";
+import { fetchWithPinnedDns } from "@meshrix/foundation/security/outbound-egress-policy";
 
 export const DEFAULT_SERVER_URL: any = process.env.MESHRIX_SERVER_URL || getDefaultServerUrl();
 
@@ -9,11 +11,35 @@ const SENSITIVE_ARG_HEADER_NAMES: any = new Set<any>([
   "cookie",
   "proxy-authorization",
   "x-api-key",
-  "x-auth-token"
+  "x-auth-token",
+  "x-meshrix.js-api-key",
+  "x-meshrix-api-key",
+  "x-meshrix-tool-token",
+  "x-meshrix-capability-key",
+  "x-meshrix-claim-token",
+  "x-meshrix-csrf",
+  "x-meshrix-signature"
 ]);
 
 export function normalizeBaseUrl(value?: any) : any {
-  return String(value || DEFAULT_SERVER_URL).replace(/\/+$/, "");
+  let url: URL;
+  try {
+    url = new URL(String(value || DEFAULT_SERVER_URL));
+  } catch {
+    throw new Error("server_url_invalid");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("server_url_protocol_invalid");
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error("server_url_credentials_or_query_forbidden");
+  }
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  const loopback = hostname === "::1" || (isIP(hostname) === 4 && hostname.startsWith("127."));
+  if (url.protocol === "http:" && !loopback) {
+    throw new Error("server_url_remote_requires_https");
+  }
+  return url.toString().replace(/\/+$/, "");
 }
 
 export function normalizeApiPath(value?: any) : any {
@@ -226,7 +252,8 @@ export async function requestRaw({
   body,
   headers = {},
   binary = false,
-  okStatuses = []
+  okStatuses = [],
+  signal
 }: Record<string, any>) : Promise<any> {
   const baseUrl: any = normalizeBaseUrl(serverUrl);
   const normalizedMethod: any = String(method || "GET").toUpperCase();
@@ -247,27 +274,51 @@ export async function requestRaw({
     }
   }
 
-  const response: any = await fetch(url, {
-    method: normalizedMethod,
-    headers: requestHeaders,
-    body: requestBody
+  const transport = await fetchWithPinnedDns({
+    url,
+    label: "meshrix.cli.server",
+    policyPreset: "security.development-local",
+    maxRedirects: 0,
+    responseTimeouts: { headersTimeout: 0, bodyTimeout: 0 },
+    init: {
+      method: normalizedMethod,
+      headers: requestHeaders,
+      body: requestBody,
+      signal,
+      redirect: "manual"
+    }
   });
-  const buffer: any = Buffer.from(await response.arrayBuffer());
-  if (!response.ok && !okStatuses.includes(response.status)) {
-    const details: any = buffer.toString("utf8");
-    throw new Error(`${normalizedMethod} ${url} failed: ${response.status} ${details}`);
+  const response: any = transport.response;
+  try {
+    if (!response.ok && !okStatuses.includes(response.status)) {
+      await response.body?.cancel().catch(() : any => {});
+      throw new Error(`${normalizedMethod} request failed: ${response.status}`);
+    }
+    const buffer: any = Buffer.from(await response.arrayBuffer());
+    return {
+      response,
+      buffer
+    };
+  } finally {
+    await transport.close();
   }
-
-  return {
-    response,
-    buffer
-  };
 }
 
 export async function requestJson(input?: any) : Promise<any> {
   const { buffer } = await requestRaw(input);
-  const text: any = buffer.toString("utf8").trim();
-  return text ? JSON.parse(text) : {};
+  return parseServerJsonResponse(buffer);
+}
+
+export function parseServerJsonResponse(input?: any) : any {
+  const text: any = typeof input === "string"
+    ? input.trim()
+    : Buffer.from(input || []).toString("utf8").trim();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("server_response_invalid_json");
+  }
 }
 
 export async function writeResponse({ args, result, rawBuffer = null, contentType = "" }: Record<string, any>) : Promise<any> {

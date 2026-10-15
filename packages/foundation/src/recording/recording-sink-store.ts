@@ -78,6 +78,7 @@ const ARTIFACT_DIR = "artifacts";
 const GENESIS_DIGEST = `sha256:${"0".repeat(64)}`;
 const ARTIFACT_REF_PREFIX = "art.";
 const DEFAULT_RESERVATION_TTL_MS = 15 * 60 * 1000;
+const DEFAULT_RETENTION_SWEEP_MS = 5 * 60 * 1000;
 const UNREFERENCED_ARTIFACT_GRACE_MS = 60 * 60 * 1000;
 const DEFAULT_LIST_LIMIT = 100;
 const MAX_LIST_LIMIT = 1000;
@@ -114,6 +115,13 @@ export interface RecordingSinkStoreOptions {
   policy?: unknown;
   now?: () => number;
   reservationTtlMs?: unknown;
+  /**
+   * Periodic retention interval in milliseconds. A store that stays open
+   * while a category goes idle still enforces age/budget retention; `0`
+   * disables the timer (tests and embedding hosts that drive
+   * `enforceRetention` themselves). One bounded pass also runs at open.
+   */
+  retentionSweepMs?: unknown;
 }
 
 export interface RecordingStoredArtifact {
@@ -428,9 +436,11 @@ class SqliteRecordingSinkStore implements RecordingSinkStore {
   readonly #budgets: UnknownRecord;
   readonly #now: () => number;
   readonly #reservationTtlMs: number;
+  readonly #retentionSweepMs: number;
   readonly #artifactsDir: string;
   #db: Database.Database;
   #closed = false;
+  #retentionTimer: ReturnType<typeof setInterval> | null = null;
   #currentPolicy: UnknownRecord | null = null;
   readonly #policyCache = new Map<number, UnknownRecord>();
 
@@ -451,6 +461,9 @@ class SqliteRecordingSinkStore implements RecordingSinkStore {
     this.#reservationTtlMs = boundedInt(
       options.reservationTtlMs, DEFAULT_RESERVATION_TTL_MS, 1_000, 24 * 60 * 60 * 1000
     );
+    this.#retentionSweepMs = boundedInt(
+      options.retentionSweepMs, DEFAULT_RETENTION_SWEEP_MS, 0, 24 * 60 * 60 * 1000
+    );
 
     ensurePrivateDir(this.rootPath);
     this.#artifactsDir = path.join(this.rootPath, ARTIFACT_DIR);
@@ -464,6 +477,23 @@ class SqliteRecordingSinkStore implements RecordingSinkStore {
       this.#openPolicy(options.policy);
       this.#sweepOrphanArtifactFiles();
       this.#sweepExpiredReservations();
+      // One bounded retention pass at open: rows that expired while the
+      // store was closed leave custody before the first read or write.
+      this.enforceRetention();
+      if (this.#retentionSweepMs > 0) {
+        // The periodic sweep keeps idle/disabled categories under their
+        // retention contract without a write arriving to trigger pruning.
+        // unref'd: recorder custody never pins the host process open.
+        this.#retentionTimer = setInterval(() => {
+          try {
+            this.enforceRetention();
+          } catch {
+            // A failed pass retries at the next interval; write/read paths
+            // still report their own errors honestly at the API boundary.
+          }
+        }, this.#retentionSweepMs);
+        this.#retentionTimer.unref?.();
+      }
       ensurePrivateSqliteLocation(databasePath);
     } catch (error: unknown) {
       try {
@@ -1610,6 +1640,21 @@ class SqliteRecordingSinkStore implements RecordingSinkStore {
   }
 
   /**
+   * Age expiry is a read fence, not only a prune target: between the expiry
+   * instant and the next sweep, an expired row is physically present but
+   * contractually dead — reads must not return material retention already
+   * retired. Replies on the same (category, revision) selection the prune
+   * uses.
+   */
+  #recordExpired(category: string, revision: number, occurredEpoch: number): boolean {
+    const selection = this.#selectionForRevision(revision, category);
+    if (!selection) return false;
+    const maxAge = Number(asRecord(selection.retention).maxAgeSeconds);
+    return Number.isFinite(maxAge) && maxAge > 0
+      && occurredEpoch + maxAge * 1000 <= this.#now();
+  }
+
+  /**
    * Role-scoped record reads: a record is returned only when `role` holds a
    * reader role for its category under the revision that captured it —
    * captured records remain readable under their own policy even after the
@@ -1640,6 +1685,9 @@ class SqliteRecordingSinkStore implements RecordingSinkStore {
       `SELECT * FROM recording_records WHERE ${conditions.join(" AND ")} ORDER BY rowid ASC LIMIT ?`
     ).all(...params, limit) as RecordRow[];
     return rows
+      .filter((row) => !this.#recordExpired(
+        row.category, Number(row.policy_revision), Number(row.occurred_epoch)
+      ))
       .filter((row) => this.#roleMayRead(row.category, Number(row.policy_revision), role))
       .map((row) => JSON.parse(row.record_json) as UnknownRecord);
   }
@@ -1669,18 +1717,23 @@ class SqliteRecordingSinkStore implements RecordingSinkStore {
       );
     }
     const links = this.#db.prepare(
-      `SELECT DISTINCT r.category AS category, r.policy_revision AS policy_revision
+      `SELECT r.category AS category, r.policy_revision AS policy_revision,
+              r.occurred_epoch AS occurred_epoch
        FROM recording_record_artifacts ra
        JOIN recording_records r ON r.record_id = ra.record_id
        WHERE ra.artifact_ref = ?`
-    ).all(artifactRef) as { category: string; policy_revision: number }[];
+    ).all(artifactRef) as { category: string; policy_revision: number; occurred_epoch: number }[];
     if (links.length === 0) {
       throw new RecordingSinkError(
         "role_unauthorized",
         "Artifact has no recorded custody binding; no category read role applies."
       );
     }
-    if (!links.some((link) => this.#roleMayRead(link.category, Number(link.policy_revision), role))) {
+    const liveLinks = links.filter((link) => !this.#recordExpired(
+      link.category, Number(link.policy_revision), Number(link.occurred_epoch)
+    ));
+    if (liveLinks.length === 0
+        || !liveLinks.some((link) => this.#roleMayRead(link.category, Number(link.policy_revision), role))) {
       throw new RecordingSinkError(
         "role_unauthorized",
         "Reader role is not authorized for this artifact's recording category."
@@ -1963,6 +2016,10 @@ class SqliteRecordingSinkStore implements RecordingSinkStore {
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
+    if (this.#retentionTimer) {
+      clearInterval(this.#retentionTimer);
+      this.#retentionTimer = null;
+    }
     this.#db.close();
   }
 }

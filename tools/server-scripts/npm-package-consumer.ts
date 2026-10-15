@@ -927,6 +927,13 @@ async function runPackagedServerUi({ cwd, rootManifest, onStage = () => {} }: Re
   const readyFile: any = path.join(process.env.TMPDIR || "/tmp", `meshrix-ready-${process.pid}.json`);
   const serverData: any = path.join(process.env.MESHRIX_USER_DATA_DIR || "/tmp/meshrix-data", "server-ui");
   await fs.mkdir(serverData, { recursive: true });
+  const masterKeyFile: any = path.join(path.dirname(serverData), "local-secret-master-key");
+  const masterKey: any = randomBytes(32);
+  try {
+    await fs.writeFile(masterKeyFile, `${masterKey.toString("hex")}\n`, { mode: 0o600 });
+  } finally {
+    masterKey.fill(0);
+  }
   // Launch the installed entry directly: an `npm exec` launcher swallows SIGTERM on some npm
   // versions, so the product would never receive the shutdown request that this stage verifies.
   const serverBin: any = rootManifest.bin?.["meshrix-server"];
@@ -935,6 +942,7 @@ async function runPackagedServerUi({ cwd, rootManifest, onStage = () => {} }: Re
   await fs.access(serverEntry);
   const serverEnv: any = npmEnv({
     MESHRIX_USER_DATA_DIR: serverData,
+    MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE: masterKeyFile,
     CODEX_HOME: path.join(serverData, "codex-home"),
     PATH: `${path.join(cwd, "node_modules", ".bin")}${path.delimiter}${process.env.PATH || ""}`
   });

@@ -10,6 +10,17 @@
     "healthPath": "/readyz",
     "allowLocalNetwork": true,
     "tags": ["file-parser", "format-convert"],
+    "references": [
+      {
+        "type": "credential",
+        "reference": "secret://meshrix/file-parser/format-convert/request-auth",
+        "revision": 1,
+        "use": "request-auth",
+        "host": "format-convert",
+        "protocol": "http",
+        "scopes": []
+      }
+    ],
     "trafficPolicy": {
       "perMinute": 120,
       "burst": 20,
@@ -31,7 +42,6 @@
           "approvalScope": "gateway:write",
           "approvalLayers": []
         },
-        "timeoutMs": 30000,
         "payloadTransport": {
           "request": {
             "mode": "artifact_multipart",
@@ -74,7 +84,6 @@
         "path": "/v1/convert",
         "risk": "safe_write",
         "requiredScopes": ["gateway:write"],
-        "timeoutMs": 30000,
         "payloadTransport": {
           "request": {
             "mode": "artifact_multipart",

@@ -1207,6 +1207,7 @@ export function createToolExecutionRuntime({
           })()
         : null
     };
+    let dispatchSettlementOutcome: "fulfilled" | "rejected" | null = null;
     try {
       const toolActor: any = toolActorFromAuthorization({
         authorization,
@@ -1216,30 +1217,39 @@ export function createToolExecutionRuntime({
       });
       const dispatch = async (dispatchSignal: any) : Promise<void> => {
         await runWithAbortableTimeout(
-          (signal?: any) : any => operationDispatcher({
-            operation,
-            controllers,
-            request,
-            response: captured,
-            requestBody: directRequest.requestBody,
-            url: directRequest.url,
-            params: directRequest.params,
-            input: operationInput,
-            transport: "operation-permission",
-            operationBudgetOwned: true,
-            method: operation.http?.method || "POST",
-            authorizeOperation: null,
-            revalidateAuthorization,
-            operationAuditStore,
-            operationProofSubstrate,
-            recordingSink,
-            concurrencyScope: operationConcurrencyScope,
-            logger,
-            authSession: { user: toolActor },
-            actor: toolActor,
-            skipAuthorization: true,
-            signal
-          }),
+          async (signal?: any) : Promise<any> => {
+            try {
+              const result = await operationDispatcher({
+                operation,
+                controllers,
+                request,
+                response: captured,
+                requestBody: directRequest.requestBody,
+                url: directRequest.url,
+                params: directRequest.params,
+                input: operationInput,
+                transport: "operation-permission",
+                operationBudgetOwned: true,
+                method: operation.http?.method || "POST",
+                authorizeOperation: null,
+                revalidateAuthorization,
+                operationAuditStore,
+                operationProofSubstrate,
+                recordingSink,
+                concurrencyScope: operationConcurrencyScope,
+                logger,
+                authSession: { user: toolActor },
+                actor: toolActor,
+                skipAuthorization: true,
+                signal
+              });
+              dispatchSettlementOutcome = "fulfilled";
+              return result;
+            } catch (error) {
+              dispatchSettlementOutcome = "rejected";
+              throw error;
+            }
+          },
           tool.timeoutMs,
           dispatchSignal
         );
@@ -1436,10 +1446,21 @@ export function createToolExecutionRuntime({
         }
       };
     } catch (error: any) {
+      const dispatchSettlement =
+        ["tool_aborted", "tool_timeout"].includes(String(error?.code || "")) && dispatchSettlementOutcome
+          ? Object.freeze({
+              outcome: dispatchSettlementOutcome,
+              responseStatusCode: Number(captured.statusCode || 200),
+              responseEnded: captured.ended === true,
+              responseBytes: (captured.chunks || []).reduce((total: number, chunk: unknown) =>
+                total + (Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(String(chunk ?? ""))), 0)
+            })
+          : null;
       return await completeToolExecutionFailure({
         error, startedAtMs, logTool, traceId, toolExecutionId, tool,
         appendExecution, authorization, context, policy, policySummary,
-        input, request, store, inputBytes, publishEvent, startedAt
+        input, request, store, inputBytes, publishEvent, startedAt,
+        dispatchSettlement
       });
     } finally {
       apiKeyEffectRevalidate = null;

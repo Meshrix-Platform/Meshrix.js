@@ -3,7 +3,6 @@ import { validateQueueBackgroundWriteAspectShape } from "./store-adapter-contrac
 interface QueueStateWrite { [key: string]: unknown }
 type QueueStateWriter = (input?: QueueStateWrite) => unknown;
 interface QueueBackgroundWriteStore {
-  writeFallbackCoordinatorState: QueueStateWriter;
   writeSnapshotState: QueueStateWriter;
   writeCompactionState: QueueStateWriter;
   writeInternalHealthState: QueueStateWriter;
@@ -11,8 +10,7 @@ interface QueueBackgroundWriteStore {
 export interface QueueBackgroundWriteAspect extends QueueBackgroundWriteStore {}
 
 function isBackgroundWriteStore(store: Partial<QueueBackgroundWriteStore> | undefined): store is QueueBackgroundWriteStore {
-  return Boolean(store) && typeof store?.writeFallbackCoordinatorState === "function" &&
-    typeof store.writeSnapshotState === "function" && typeof store.writeCompactionState === "function" &&
+  return Boolean(store) && typeof store?.writeSnapshotState === "function" && typeof store.writeCompactionState === "function" &&
     typeof store.writeInternalHealthState === "function";
 }
 
@@ -24,7 +22,6 @@ function requireStoreMethod(store: Partial<QueueBackgroundWriteStore> | undefine
 
 export function createQueueBackgroundWriteAspect({ store }: { store?: Partial<QueueBackgroundWriteStore> } = {}): Readonly<QueueBackgroundWriteAspect> {
   const methods: Array<keyof QueueBackgroundWriteStore> = [
-    "writeFallbackCoordinatorState",
     "writeSnapshotState",
     "writeCompactionState",
     "writeInternalHealthState"
@@ -36,9 +33,6 @@ export function createQueueBackgroundWriteAspect({ store }: { store?: Partial<Qu
   if (!isBackgroundWriteStore(store)) throw new Error("Queue background write aspect requires a complete store.");
   const checkedStore = store;
   const aspect: Readonly<QueueBackgroundWriteAspect> = Object.freeze({
-    writeFallbackCoordinatorState(input: QueueStateWrite = {}) {
-      return checkedStore.writeFallbackCoordinatorState(input);
-    },
     writeSnapshotState(input: QueueStateWrite = {}) {
       return checkedStore.writeSnapshotState(input);
     },

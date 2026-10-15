@@ -191,21 +191,6 @@ export async function ensurePostgresWorkQueueSchema(pool?: PostgresSchemaPool): 
     CREATE INDEX IF NOT EXISTS idx_work_queue_pg_background_writes_type_entity
       ON work_queue_background_writes(aspect_type, entity_id);
 
-    CREATE TABLE IF NOT EXISTS work_queue_fallback_tasks (
-      fallback_task_id TEXT PRIMARY KEY,
-      work_item_id TEXT NOT NULL,
-      state TEXT NOT NULL,
-      attempt INTEGER NOT NULL DEFAULT 0,
-      max_attempts INTEGER NOT NULL DEFAULT 0,
-      reason TEXT NOT NULL DEFAULT '',
-      decision_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-      created_at_ms BIGINT NOT NULL,
-      updated_at_ms BIGINT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_work_queue_pg_fallback_work_item
-      ON work_queue_fallback_tasks(work_item_id);
-
     CREATE TABLE IF NOT EXISTS work_queue_internal_health (
       health_key TEXT PRIMARY KEY,
       state_json JSONB NOT NULL DEFAULT '{}'::jsonb,

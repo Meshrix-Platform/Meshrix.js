@@ -103,14 +103,12 @@ export function writeStoredServerAddresses(value: StoredServerAddresses) : any {
   return saved;
 }
 
-export async function probeServerAddressUrl(value: string, timeoutMs: any = 5_000) : Promise<any> {
+export async function probeServerAddressUrl(value: string) : Promise<any> {
   const nextUrl: any = normalizeServerAddressUrl(value);
   if (!nextUrl) {
     return false;
   }
 
-  const controller: any = new AbortController();
-  const timeout: any = setTimeout(() : any => controller.abort(), timeoutMs);
   const url: any = new URL("/api/bootstrap", nextUrl).toString();
   try {
     const response: any = await fetch(url, {
@@ -118,7 +116,6 @@ export async function probeServerAddressUrl(value: string, timeoutMs: any = 5_00
       headers: { Accept: "application/json" },
       mode: "cors",
       credentials: "omit",
-      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -132,7 +129,5 @@ export async function probeServerAddressUrl(value: string, timeoutMs: any = 5_00
     return isStorageRecord(payload);
   } catch {
     return false;
-  } finally {
-    clearTimeout(timeout);
   }
 }

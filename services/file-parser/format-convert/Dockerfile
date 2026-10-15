@@ -8,7 +8,7 @@ COPY cmd ./cmd
 COPY internal ./internal
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go test ./...
+    CGO_ENABLED=0 go test -c -o /out/format-convert-tests ./internal/service
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go vet ./...
@@ -16,13 +16,15 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/format-convert ./cmd/format-convert
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/Meshrix-Platform/Meshrix.js" \
       org.opencontainers.image.licenses="Apache-2.0"
 
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
+        bubblewrap \
+        util-linux \
         ca-certificates \
         fonts-dejavu-core \
         fonts-liberation2 \
@@ -42,3 +44,11 @@ ENV PORT=8080 \
 USER 10001:10001
 EXPOSE 8080
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/format-convert"]
+
+# Sandbox tests execute under the production runtime and container policy,
+# rather than a BuildKit builder lacking the required namespace permissions.
+FROM runtime AS qualification
+COPY --from=builder /out/format-convert-tests /usr/local/bin/format-convert-tests
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/format-convert-tests"]
+
+FROM runtime AS release

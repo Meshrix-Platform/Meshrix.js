@@ -1,3 +1,4 @@
+import { projectHttpMetricRoute, projectHttpMetricMethod } from "./store-metrics-utils.ts";
 import { redactOperationAuditValue } from "@meshrix/foundation/security/operation-audit";
 import { hashValue, executionResultSummary } from "./store-models.ts";
 import { nowIso, parseJson, randomId, stringifyJson } from "./store-utils.ts";
@@ -42,7 +43,7 @@ function isRoutineProbeMetricNoise(entry: Record<string, any> = {}) : any {
   return ["GET", "HEAD"].includes(String(entry.method || "").toUpperCase()) &&
     String(entry.route || "") === "/api/healthz" &&
     statusCode >= 200 &&
-    statusCode < 500 &&
+    statusCode < 400 &&
     String(entry.completionStatus || "completed") === "completed";
 }
 
@@ -425,22 +426,24 @@ export function createAuditStoreMethods(ctx?: any) : any {
     const requestBytes: any = Math.max(0, Number(entry.requestBytes || 0));
     const responseBytes: any = Math.max(0, Number(entry.responseBytes || 0));
     const transferBytes: any = Math.max(0, Number(entry.transferBytes || requestBytes + responseBytes));
-    const bytesPerSecond: any = durationMs > 0
+    const bytesPerSecond: any = entry.byteRateTotal !== undefined
+      ? Number(entry.byteRateTotal) / Math.max(1, Number(entry.eventCount || 1))
+      : durationMs > 0
       ? Number(((transferBytes * 1000) / durationMs).toFixed(2))
       : transferBytes;
     const result: any = db.prepare(`
       INSERT INTO http_request_metric_events (
         metric_id, trace_id, request_id, transport, method, route, status_code,
         completion_status, request_bytes, response_bytes, transfer_bytes,
-        duration_ms, bytes_per_second, user_agent, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        duration_ms, bytes_per_second, user_agent, created_at, event_count, duration_histogram_json, peak_bytes_per_second
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       randomId("http_metric"),
       String(entry.traceId || ""),
       String(entry.requestId || ""),
       String(entry.transport || "http"),
-      String(entry.method || ""),
-      String(entry.route || ""),
+      projectHttpMetricMethod(entry.method),
+      projectHttpMetricRoute(entry.route),
       Math.max(0, Number(entry.statusCode || 0)),
       String(entry.completionStatus || "completed"),
       requestBytes,
@@ -449,11 +452,16 @@ export function createAuditStoreMethods(ctx?: any) : any {
       durationMs,
       bytesPerSecond,
       String(entry.userAgent || "").slice(0, 512),
-      entry.createdAt || nowIso()
+      entry.createdAt || nowIso(),
+      Math.max(1, Number(entry.eventCount || 1)),
+      entry.durationHistogram ? stringifyJson(entry.durationHistogram) : "",
+      Number(entry.peakBytesPerSecond ?? bytesPerSecond)
     );
     maintainMetricRetention();
     return result;
   }
+
+  const appendHttpRequestMetricBatch = db.transaction((entries: any[] = []) => entries.map(appendHttpRequestMetric));
 
   function saveCatalogSnapshot(catalog: Record<string, any> = {}, { notify = true }: Record<string, any> = {}) : any {
     if (!catalog.fingerprint) {
@@ -518,6 +526,7 @@ export function createAuditStoreMethods(ctx?: any) : any {
     appendExecutionAnchored,
     appendMetric,
     appendHttpRequestMetric,
+    appendHttpRequestMetricBatch,
     saveCatalogSnapshot,
     listAudit,
     getAudit

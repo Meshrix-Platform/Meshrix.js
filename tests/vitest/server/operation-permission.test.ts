@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { canonicalHash } from "@meshrix/foundation/serialization/canonical-json";
 
 const sendJsonMock: any = vi.hoisted(() : any => vi.fn((response?: any, status?: any, payload?: any) : any => {
@@ -440,8 +440,12 @@ beforeEach(() : any => {
   traceContextFromRequestMock.mockClear();
 });
 
+afterEach(() : void => {
+  vi.useRealTimers();
+});
+
 describe("operation-permission runtime (behavior)", () : any => {
-  it("keeps the standard execution deadline for unrelated operations with no upstream lifetime marker", () : any => {
+  it("does not add an execution deadline when an operation has no explicit budget", () : any => {
     const catalog = createToolCatalog({ operations: [{
       id: "unrelated.operation",
       toolId: "unrelated.tool",
@@ -455,7 +459,7 @@ describe("operation-permission runtime (behavior)", () : any => {
       requiredScopes: ["test:run"]
     }] });
 
-    expect(catalog.tools[0].timeoutMs).toBe(30_000);
+    expect(catalog.tools[0].timeoutMs).toBeUndefined();
   });
 
   it("preserves opaque secret-reference arrays without persisting secret material", () : any => {
@@ -632,7 +636,7 @@ describe("operation-permission runtime (behavior)", () : any => {
     }));
   });
 
-  it("aborts timed-out dispatch and waits for dispatcher settlement before returning", async () : Promise<any> => {
+  it("preserves an explicit timeout result and records late dispatcher settlement evidence", async () : Promise<any> => {
     let observeAbort: any;
     const aborted: any = new Promise((resolve?: any) : any => {
       observeAbort = resolve;
@@ -641,9 +645,14 @@ describe("operation-permission runtime (behavior)", () : any => {
     const dispatchSettled: any = new Promise((resolve?: any) : any => {
       settleDispatch = resolve;
     });
-    const operationDispatcher: any = vi.fn(async ({ signal }: Record<string, any>) : Promise<any> => {
+    let dispatchedResponse: any = null;
+    const operationDispatcher: any = vi.fn(async ({ signal, response }: Record<string, any>) : Promise<any> => {
+      dispatchedResponse = response;
       signal.addEventListener("abort", observeAbort, { once: true });
-      await dispatchSettled;
+      const result = await dispatchSettled;
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ result }));
+      return result;
     });
     const fixture: any = createRuntimeFixture({
       tool: { timeoutMs: 10 },
@@ -662,22 +671,63 @@ describe("operation-permission runtime (behavior)", () : any => {
 
     await aborted;
     expect(executionSettled).toBe(false);
-    settleDispatch();
+    settleDispatch("completed after cancellation request");
     const result: any = await execution;
 
     expect(operationDispatcher).toHaveBeenCalledWith(expect.objectContaining({
       signal: expect.any(AbortSignal)
     }));
+    expect(operationDispatcher).toHaveBeenCalledOnce();
     expect(result).toMatchObject({
       ok: false,
       status: 500,
-      payload: {
-        error: {
-          code: "tool_timeout",
-          message: "Tool execution timed out after 10ms."
-        }
-      }
+      payload: { error: { code: "tool_timeout" } }
     });
+    expect(dispatchedResponse).toMatchObject({ statusCode: 200, ended: true });
+    expect(Buffer.concat(dispatchedResponse.chunks).toString("utf8")).toContain("completed after cancellation request");
+    expect(fixture.store.appendExecution).toHaveBeenCalledWith(expect.objectContaining({
+      status: "failed",
+      errorCode: "tool_timeout",
+      resultSummary: expect.objectContaining({
+        type: "runtime_error",
+        dispatchSettlement: {
+          outcome: "fulfilled",
+          responseStatusCode: 200,
+          responseEnded: true,
+          responseBytes: expect.any(Number)
+        }
+      })
+    }));
+    expect(JSON.stringify(fixture.store.appendExecution.mock.calls[0][0].resultSummary))
+      .not.toContain("completed after cancellation request");
+  });
+
+  it("does not create an execution timer for an operation without an explicit budget", async () : Promise<any> => {
+    vi.useFakeTimers();
+    let observedSignal: AbortSignal | null = null;
+    let settleDispatch!: (value: unknown) => void;
+    const dispatchSettled = new Promise((resolve) => { settleDispatch = resolve; });
+    const operationDispatcher: any = vi.fn(async ({ signal }: Record<string, any>) : Promise<any> => {
+      observedSignal = signal;
+      return await dispatchSettled;
+    });
+    const fixture: any = createRuntimeFixture({ tool: { timeoutMs: undefined }, runtime: { operationDispatcher } });
+    let executionSettled = false;
+    const execution = fixture.runtime.executeTool({
+      toolId: fixture.tool.id,
+      input: { name: "alpha" },
+      request: createRequest()
+    }).then((result?: any) : any => {
+      executionSettled = true;
+      return result;
+    });
+
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(30_001);
+    expect(executionSettled).toBe(false);
+    expect(observedSignal?.aborted).toBe(false);
+    settleDispatch("completed without an implicit timeout");
+    await expect(execution).resolves.toMatchObject({ ok: true, status: 200 });
   });
 
   it.each([
@@ -1035,10 +1085,15 @@ describe("operation-permission runtime (behavior)", () : any => {
     const dispatchSettled: any = new Promise((resolve?: any) : any => {
       settleDispatch = resolve;
     });
-    const operationDispatcher: any = vi.fn(async ({ signal }: Record<string, any>) : Promise<any> => {
+    let dispatchedResponse: any = null;
+    const operationDispatcher: any = vi.fn(async ({ signal, response }: Record<string, any>) : Promise<any> => {
+      dispatchedResponse = response;
       signal.addEventListener("abort", observeAbort, { once: true });
       observeDispatch();
       await dispatchSettled;
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ result: "completed after caller cancellation" }));
+      return "completed after caller cancellation";
     });
     const fixture: any = createRuntimeFixture({
       tool: { timeoutMs: 5_000 },
@@ -1072,6 +1127,24 @@ describe("operation-permission runtime (behavior)", () : any => {
         }
       }
     });
+    expect(operationDispatcher).toHaveBeenCalledOnce();
+    expect(dispatchedResponse).toMatchObject({ statusCode: 200, ended: true });
+    expect(Buffer.concat(dispatchedResponse.chunks).toString("utf8"))
+      .toContain("completed after caller cancellation");
+    expect(fixture.store.appendExecution).toHaveBeenCalledWith(expect.objectContaining({
+      status: "failed",
+      errorCode: "tool_aborted",
+      resultSummary: expect.objectContaining({
+        dispatchSettlement: {
+          outcome: "fulfilled",
+          responseStatusCode: 200,
+          responseEnded: true,
+          responseBytes: expect.any(Number)
+        }
+      })
+    }));
+    expect(JSON.stringify(fixture.store.appendExecution.mock.calls[0][0].resultSummary))
+      .not.toContain("completed after caller cancellation");
   });
 
   it("refreshes operations and moves from operation-missing to a successful dry run", async () : Promise<any> => {

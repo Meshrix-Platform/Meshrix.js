@@ -153,7 +153,7 @@ function scanJsonStructure(raw?: any) : any {
 
 function parseJsonSafe(raw?: any) : any {
   const source: any = Buffer.isBuffer(raw) || raw instanceof Uint8Array
-    ? new TextDecoder("utf-8", { fatal: true }).decode(raw)
+    ? new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(raw)
     : raw;
   if (typeof source !== "string") {
     throw new TypeError("Publishing input must be UTF-8 JSON bytes or a JSON string.");

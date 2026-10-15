@@ -1,5 +1,5 @@
-import { triggerBrowserDownload } from "./browser-downloads";
-import { parseBrowserRelativeUrl } from "./browser-window";
+import { triggerBrowserDownload } from "./browser-downloads.ts";
+import { parseBrowserRelativeUrl } from "./browser-window.ts";
 
 export type BridgeDownloadOptions = {
   fileName?: string;
@@ -74,36 +74,33 @@ async function ensureCsrfToken(url: string) : Promise<any> {
   await csrfBootstrapPromise;
 }
 
-async function extractErrorMessage(response: Response) : Promise<any> {
-  const rawText: any = await response.text();
-
+async function discardErrorResponseBody(response: Response): Promise<void> {
   try {
-    const parsed: any = JSON.parse(rawText);
-    return parsed.error || parsed.message || rawText;
+    await response.body?.cancel();
   } catch {
-    return rawText;
+    // HTTP errors are represented by their status only; the response body is unused.
   }
 }
 
-async function parseJsonResponse<T>(response: Response, url: string): Promise<T> {
+async function parseJsonResponse<T>(response: Response): Promise<T> {
   const rawText: any = await response.text();
   const contentType: any = response.headers.get("content-type") || "";
   const trimmed: any = rawText.trim();
 
   if (!trimmed) {
-    throw new Error(`接口没有返回 JSON：${url}`);
+    throw new Error("接口没有返回 JSON。");
   }
 
   if (!contentType.includes("application/json") && trimmed.startsWith("<")) {
     throw new Error(
-      `接口返回了 HTML 而不是 JSON：${url}。请检查登录状态、接口路径或服务端是否回退到了前端页面。`,
+      "接口返回了 HTML 页面，请检查登录状态或服务端接口响应。",
     );
   }
 
   try {
     return JSON.parse(rawText) as T;
   } catch {
-    throw new Error(`接口返回的 JSON 无法解析：${url}。响应片段：${trimmed.slice(0, 160)}`);
+    throw new Error("接口返回的 JSON 无法解析。");
   }
 }
 
@@ -175,22 +172,21 @@ export async function downloadFile(
     method: "GET",
     headers: {
       Accept: "*/*",
-      ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
     },
     credentials: "same-origin",
     signal: options.signal,
   });
 
   if (!response.ok) {
-    const message: any = await extractErrorMessage(response);
-    throw new Error(message || `下载失败：${response.status}`);
+    await discardErrorResponseBody(response);
+    throw new Error(`下载失败：${response.status}`);
   }
 
   const contentType: any = response.headers.get("content-type") || "";
   const disposition: any = response.headers.get("content-disposition") || "";
   if (/text\/html/i.test(contentType) && !/filename|attachment/i.test(disposition)) {
-    const htmlPreview: any = (await response.text()).trim().slice(0, 160);
-    throw new Error(`下载接口返回了 HTML 页面，请检查接口路径或登录状态。响应片段：${htmlPreview}`);
+    await response.body?.cancel();
+    throw new Error("下载接口返回了 HTML 页面，请检查接口路径或登录状态。");
   }
 
   const blob: any = await response.blob();
@@ -232,11 +228,11 @@ export async function postJson<T>(
   });
 
   if (!response.ok) {
-    const message: any = await extractErrorMessage(response);
-    throw new Error(message || `Request failed: ${response.status}`);
+    await discardErrorResponseBody(response);
+    throw new Error(`Request failed: ${response.status}`);
   }
 
-  const data: any = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response);
   updateCsrfToken(data);
   return data;
 }
@@ -261,10 +257,10 @@ export async function sendJson<T>(
     signal: options.signal,
   });
   if (!response.ok) {
-    const message: any = await extractErrorMessage(response);
-    throw new Error(message || `Request failed: ${response.status}`);
+    await discardErrorResponseBody(response);
+    throw new Error(`Request failed: ${response.status}`);
   }
-  const data: any = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response);
   updateCsrfToken(data);
   return data;
 }
@@ -287,11 +283,11 @@ export async function deleteJson<T>(
   });
 
   if (!response.ok) {
-    const message: any = await extractErrorMessage(response);
-    throw new Error(message || `Request failed: ${response.status}`);
+    await discardErrorResponseBody(response);
+    throw new Error(`Request failed: ${response.status}`);
   }
 
-  const data: any = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response);
   updateCsrfToken(data);
   return data;
 }
@@ -302,7 +298,6 @@ export async function getJson<T>(
 ): Promise<T> {
   const headers: HeadersInit = {
     Accept: "application/json",
-    ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
   };
   const response: any = await fetch(url, {
     method: "GET",
@@ -312,11 +307,11 @@ export async function getJson<T>(
   });
 
   if (!response.ok) {
-    const message: any = await extractErrorMessage(response);
-    throw new Error(message || `Request failed: ${response.status}`);
+    await discardErrorResponseBody(response);
+    throw new Error(`Request failed: ${response.status}`);
   }
 
-  const data: any = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response);
   updateCsrfToken(data);
   return data;
 }
@@ -337,11 +332,11 @@ export async function putBinaryJson<T>(
   });
 
   if (!response.ok) {
-    const message: any = await extractErrorMessage(response);
-    throw new Error(message || `Request failed: ${response.status}`);
+    await discardErrorResponseBody(response);
+    throw new Error(`Request failed: ${response.status}`);
   }
 
-  const data: any = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response);
   updateCsrfToken(data);
   return data;
 }

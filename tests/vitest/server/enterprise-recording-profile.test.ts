@@ -308,7 +308,7 @@ describe("enterprise recording profile composition", () => {
     const read = await governedCall(provider, "recording_governance.policy.get", {}, tenantId);
     expect(read.status).toBe(200);
     expect(read.payload.snapshot.policy.policyRevision).toBe(1);
-    expect(read.payload.snapshot.authority.decryptionAuthority).toBe("organization");
+    expect(read.payload.snapshot.authority.contentAccess).toBe("organization");
     const genesis = read.payload.snapshot.policy;
 
     const publish = await governedCall(provider, "recording_governance.policy.publish", {

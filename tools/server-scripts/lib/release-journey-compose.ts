@@ -27,7 +27,12 @@ export const RELEASE_JOURNEY_SAFE_START_CONFIGURATION: Readonly<Record<string, a
   consoleEnabled: true
 });
 
-export function composeEnv({ hostPort, converterImage }: Record<string, any>) : any {
+export function composeEnv({
+  hostPort,
+  converterImage,
+  masterKeySource,
+  converterTokenSource
+}: Record<string, any>) : any {
   return {
     ...process.env,
     DOCKER_BUILDKIT: "1",
@@ -40,7 +45,9 @@ export function composeEnv({ hostPort, converterImage }: Record<string, any>) : 
     MESHRIX_SERVER_WITH_UI: "1",
     MESHRIX_HOST_PORT: String(hostPort),
     MESHRIX_ADVERTISED_BASE_URL: `http://127.0.0.1:${hostPort}`,
-    MESHRIX_FORMAT_CONVERT_IMAGE_NAME: converterImage
+    MESHRIX_FORMAT_CONVERT_IMAGE_NAME: converterImage,
+    MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE: masterKeySource,
+    MESHRIX_FORMAT_CONVERT_AUTH_TOKEN_SOURCE: converterTokenSource
   };
 }
 

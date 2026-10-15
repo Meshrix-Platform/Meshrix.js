@@ -1,658 +1,696 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { Buffer } from "node:buffer";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  createFilePeerCryptoStore,
+  createPeerDeliveryAck,
+  createPeerSend,
+  parsePeerSend,
+  peerDeliveryAckSigningInputForSend,
+  peerDeliveryAckTranscript,
+  peerIdForRouteDevice,
+  PRIVATE_RELAY_PEER_LIMITS
+} from "@meshrix/contracts/private-relay";
+import {
+  base64urlDecode,
+  base64urlEncode,
   createInMemoryPeerCryptoStore,
   createPeerIdentity,
-  loadPeerIdentity,
   peerIdentityBinding,
-  repinPeerIdentity,
+  signPeerIdentityMessage,
   type PeerCryptoStore,
   type PeerIdentity
 } from "@meshrix/peer-crypto";
 import {
-  createFilePeerClientStore,
-  createInMemoryPeerClientStore,
-  isPeerClientError,
+  InMemoryPeerClientStore,
+  PEER_CLIENT_MAX_PLAINTEXT_BYTES,
   PeerClient,
+  peerIdentityPublicDescriptor,
   staticPeerDirectory,
   type PeerClientStore,
-  type PeerInboundMessage
+  type PeerInboundMessage,
+  type PeerInboundOutcome
 } from "@meshrix/peer-client";
 
-import { FakePeerRelay, FAKE_ROUTE, FAKE_TENANT, type FakePeerTransport } from "./fake-relay.ts";
+import { FakePeerRelay, FAKE_ROUTE, FAKE_TENANT } from "./fake-relay.ts";
 
-/**
- * End-to-end coverage of the durable peer client over a faithful in-memory
- * relay: all 13 wire kinds run with real mailbox semantics and real
- * X3DH+ratchet crypto between two device identities — nothing is mocked
- * below the session channel.
- */
-
-const ALICE_PEER = "peer.alice.1";
-const BOB_PEER = "peer.bob.1";
 const ALICE_DEV = "dev.alice";
 const BOB_DEV = "dev.bob";
 
-interface EventLog {
-  inbound: PeerInboundMessage[];
-  sendState: { messageId: string; state: string; position: number | null }[];
-  conflict: { messageId: string }[];
-  unrecorded: { messageId: string }[];
-  lostRange: { fromSeq: number; toSeq: number; cause: string; messageIds: readonly string[] | null }[];
-  requiresRePair: { peerId: string; source: string }[];
-  bundleRefused: { refusal: string }[];
-  retentionPolicy: { mailboxMaxItems: number }[];
-  ackRefused: { messageId: string; refusal: string }[];
-  decryptFailure: { messageId: string; code: string }[];
-  dispatchFailed: { messageId: string; error: string }[];
-  error: { code: string }[];
-}
-
 interface Device {
-  peerId: string;
-  deviceId: string;
-  cryptoStore: PeerCryptoStore;
-  clientStore: ReturnType<typeof createInMemoryPeerClientStore> | PeerClientStore;
-  identity: PeerIdentity;
-  transport: FakePeerTransport;
-  client: PeerClient;
-  events: EventLog;
+  readonly identity: PeerIdentity;
+  readonly deviceId: string;
+  readonly cryptoStore: PeerCryptoStore;
+  readonly clientStore: PeerClientStore;
+  readonly client: PeerClient;
+  readonly errors: string[];
 }
 
-const tempDirs: string[] = [];
+function peerId(deviceId: string): string {
+  const value = peerIdForRouteDevice({ tenantId: FAKE_TENANT, routeId: FAKE_ROUTE, deviceId });
+  if (!value) throw new Error("Test route tuple did not produce a peer id.");
+  return value;
+}
 
-afterEach(async () => {
-  while (tempDirs.length > 0) {
-    const dir = tempDirs.pop();
-    if (dir) await rm(dir, { recursive: true, force: true });
+function makeClient(
+  relay: FakePeerRelay,
+  input: {
+    identity: PeerIdentity;
+    deviceId: string;
+    cryptoStore: PeerCryptoStore;
+    clientStore: PeerClientStore;
+    peerIdentity: PeerIdentity;
+    dispatch?: (message: PeerInboundMessage) => PeerInboundOutcome | Promise<PeerInboundOutcome>;
   }
-});
-
-function freshEvents(): EventLog {
-  return {
-    inbound: [], sendState: [], conflict: [], unrecorded: [], lostRange: [],
-    requiresRePair: [], bundleRefused: [], retentionPolicy: [], ackRefused: [],
-    decryptFailure: [], dispatchFailed: [], error: []
-  };
-}
-
-function wireEvents(client: PeerClient, events: EventLog): void {
-  client.on("inbound", (event) => events.inbound.push(event));
-  client.on("sendState", (event) => events.sendState.push({ messageId: event.messageId, state: event.state, position: event.position }));
-  client.on("conflict", (event) => events.conflict.push(event));
-  client.on("unrecorded", (event) => events.unrecorded.push(event));
-  client.on("lostRange", (event) => events.lostRange.push(event));
-  client.on("requiresRePair", (event) => events.requiresRePair.push(event));
-  client.on("bundleRefused", (event) => events.bundleRefused.push(event));
-  client.on("retentionPolicy", (event) => events.retentionPolicy.push({ mailboxMaxItems: event.mailboxMaxItems }));
-  client.on("ackRefused", (event) => events.ackRefused.push(event));
-  client.on("decryptFailure", (event) => events.decryptFailure.push(event));
-  client.on("dispatchFailed", (event) => events.dispatchFailed.push(event));
-  client.on("error", (event) => events.error.push({ code: event.code }));
-}
-
-async function makeDevice(relay: FakePeerRelay, input: {
-  peerId: string;
-  deviceId: string;
-  cryptoStore?: PeerCryptoStore;
-  clientStore?: PeerClientStore;
-  identity?: PeerIdentity;
-  directory?: ReturnType<typeof staticPeerDirectory>;
-  pageSize?: number;
-  maxSendAttempts?: number;
-  admissionGeneration?: number;
-  prekeyPool?: { oneTimeCount: number; kyberCount: number };
-}): Promise<Device> {
-  const cryptoStore = input.cryptoStore ?? createInMemoryPeerCryptoStore();
-  const identity = input.identity ?? await createPeerIdentity({
-    localStore: cryptoStore,
-    peerId: input.peerId,
-    prekeyPool: input.prekeyPool
-  });
-  const clientStore = input.clientStore ?? createInMemoryPeerClientStore();
-  const transport = relay.attach({
-    tenantId: FAKE_TENANT,
-    routeId: FAKE_ROUTE,
-    deviceId: input.deviceId,
-    admissionGeneration: input.admissionGeneration
-  });
-  const client = new PeerClient({
-    identity,
-    cryptoStore,
-    clientStore,
-    transport,
+): Device {
+  const client = new TrackedPeerClient({
+    identity: input.identity,
+    cryptoStore: input.cryptoStore,
+    clientStore: input.clientStore,
+    transport: relay.attach({ tenantId: FAKE_TENANT, routeId: FAKE_ROUTE, deviceId: input.deviceId }),
     route: { tenantId: FAKE_TENANT, routeId: FAKE_ROUTE, deviceId: input.deviceId },
-    directory: input.directory,
-    pageSize: input.pageSize,
-    maxSendAttempts: input.maxSendAttempts,
-    requestTimeoutMs: 300
+    directory: staticPeerDirectory({ [input.peerIdentity.peerId === peerId(ALICE_DEV) ? ALICE_DEV : BOB_DEV]: peerIdentityPublicDescriptor(input.peerIdentity) }),
+    dispatch: input.dispatch
   });
-  const events = freshEvents();
-  wireEvents(client, events);
-  return { peerId: identity.peerId, deviceId: input.deviceId, cryptoStore, clientStore, identity, transport, client, events };
+  const device: Device = {
+    identity: input.identity,
+    deviceId: input.deviceId,
+    cryptoStore: input.cryptoStore,
+    clientStore: input.clientStore,
+    client,
+    errors: []
+  };
+  client.on("error", (event) => device.errors.push(event.code));
+  return device;
 }
 
-async function eventually(check: () => boolean | Promise<boolean>, timeoutMs = 8_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    if (await check()) return;
-    if (Date.now() > deadline) {
-      expect(await check(), "timed out waiting for condition").toBe(true);
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-}
-
-function text(bytes: Uint8Array): string {
-  return new TextDecoder().decode(bytes);
-}
-
-async function pairedDevices(relay: FakePeerRelay, options: { bobPublishes?: boolean } = {}) {
+async function pairedDevices(options: {
+  readonly aliceClientStore?: PeerClientStore;
+  readonly bobClientStore?: PeerClientStore;
+  readonly aliceDispatch?: (message: PeerInboundMessage) => PeerInboundOutcome | Promise<PeerInboundOutcome>;
+  readonly bobDispatch?: (message: PeerInboundMessage) => PeerInboundOutcome | Promise<PeerInboundOutcome>;
+} = {}): Promise<{ readonly relay: FakePeerRelay; readonly alice: Device; readonly bob: Device }> {
+  const relay = new FakePeerRelay();
   relay.pair(FAKE_TENANT, FAKE_ROUTE, ALICE_DEV, BOB_DEV);
-  const alice = await makeDevice(relay, {
-    peerId: ALICE_PEER,
-    deviceId: ALICE_DEV,
-    directory: staticPeerDirectory({ [BOB_DEV]: BOB_PEER })
+  const aliceCryptoStore = createInMemoryPeerCryptoStore();
+  const bobCryptoStore = createInMemoryPeerCryptoStore();
+  const aliceIdentity = await createPeerIdentity({
+    localStore: aliceCryptoStore,
+    peerId: peerId(ALICE_DEV),
+    prekeyPool: { oneTimeCount: 2, kyberCount: 2 }
   });
-  const bob = await makeDevice(relay, {
-    peerId: BOB_PEER,
+  const bobIdentity = await createPeerIdentity({
+    localStore: bobCryptoStore,
+    peerId: peerId(BOB_DEV),
+    prekeyPool: { oneTimeCount: 2, kyberCount: 2 }
+  });
+  const alice = makeClient(relay, {
+    identity: aliceIdentity,
+    deviceId: ALICE_DEV,
+    cryptoStore: aliceCryptoStore,
+    clientStore: options.aliceClientStore ?? new InMemoryPeerClientStore(),
+    peerIdentity: bobIdentity,
+    dispatch: options.aliceDispatch
+  });
+  const bob = makeClient(relay, {
+    identity: bobIdentity,
     deviceId: BOB_DEV,
-    directory: staticPeerDirectory({ [ALICE_DEV]: ALICE_PEER })
+    cryptoStore: bobCryptoStore,
+    clientStore: options.bobClientStore ?? new InMemoryPeerClientStore(),
+    peerIdentity: aliceIdentity,
+    dispatch: options.bobDispatch
   });
   await alice.client.publishBundle();
-  if (options.bobPublishes !== false) await bob.client.publishBundle();
-  return { alice, bob };
+  await bob.client.publishBundle();
+  return { relay, alice, bob };
 }
 
-describe("peer-client outbox", () => {
-  it("sends first message as prekey, session-type once the peer answers", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
+async function eventually(check: () => boolean | Promise<boolean>): Promise<void> {
+  for (let attempt = 0; attempt < 2_000; attempt += 1) {
+    if (await check()) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  expect(await check(), "condition did not settle").toBe(true);
+}
 
-    const first = await alice.client.sendMessage(BOB_DEV, "hello one");
-    expect(first.state).toBe("accepted");
-    expect(first.position).toBe(1);
-    // X3DH/PQXDH first contact: the crypto envelope is prekey-typed and the
-    // wire headers carry the negotiated prekey material ids.
-    expect(first.envelope.headers.messageType).toBe("prekey");
-    expect(first.envelope.headers.signedPrekeyId).toBeTruthy();
-    expect(first.receipts.some((receipt) => receipt.kind === "accepted" && receipt.source === "mailbox")).toBe(true);
+async function inboxEntry(device: Device, messageId: string, senderDeviceId: string) {
+  return device.client.inbox.entry(device.client.inbox.identity(messageId, senderDeviceId));
+}
 
-    // The initiator stays prekey-typed until the responder answers — the
-    // ratchet is only confirmed by an inbound message on that session.
-    await eventually(async () => (await bob.client.inbox.list()).length === 1);
-    const reply = await bob.client.sendMessage(ALICE_DEV, "ack");
-    expect(reply.state).toBe("accepted");
-    await eventually(async () => (await alice.client.inbox.list()).length === 1);
+const clientsForCleanup = new Set<PeerClient>();
 
-    const second = await alice.client.sendMessage(BOB_DEV, "hello two");
-    expect(second.state).toBe("accepted");
-    expect(second.position).toBe(2);
-    expect(second.envelope.headers.messageType).toBe("session");
-    expect(second.envelope.headers.senderBundleId).toBe(first.envelope.headers.senderBundleId);
-    expect(alice.events.sendState.filter((event) => event.state === "accepted").length).toBe(2);
-  });
+class TrackedPeerClient extends PeerClient {
+  constructor(...options: ConstructorParameters<typeof PeerClient>) {
+    super(...options);
+    clientsForCleanup.add(this);
+  }
+}
 
-  it("reconciles a lost peer-accepted reply through peer-status", async () => {
-    const relay = new FakePeerRelay();
-    const { alice } = await pairedDevices(relay);
-    const warm = await alice.client.sendMessage(BOB_DEV, "warm up"); // session exists — drops land on send/status, not bundle-fetch
-    expect(warm.state).toBe("accepted");
-    relay.dropNextResponses(ALICE_DEV, 2); // lose the accepted reply AND the drive-time reconcile answer
-
-    const entry = await alice.client.sendMessage(BOB_DEV, "lost reply");
-    expect(entry.state).toBe("pending");
-    expect(entry.position).toBeNull();
-
-    await alice.client.reconcile();
-    const reconciled = await alice.client.outbox.entry(entry.messageId);
-    // Position + accepted receipt are recovered honestly; the state may already
-    // have advanced to `received` because bob's page ack raced the reconcile.
-    expect(["accepted", "received"]).toContain(reconciled?.state);
-    expect(reconciled?.position).toBe(2);
-    expect(reconciled?.receipts.some((receipt) => receipt.kind === "accepted")).toBe(true);
-  });
-
-  it("retries a pending send with the same id and envelope; duplicate is success", async () => {
-    const relay = new FakePeerRelay();
-    const { alice } = await pairedDevices(relay);
-    const warm = await alice.client.sendMessage(BOB_DEV, "warm up");
-    expect(warm.state).toBe("accepted");
-    relay.dropNextResponses(ALICE_DEV, 2);
-
-    const entry = await alice.client.sendMessage(BOB_DEV, "retry me");
-    expect(entry.state).toBe("pending");
-
-    await alice.client.resume(); // reconnect path: retry same id + same envelope bytes
-    const retried = await alice.client.outbox.entry(entry.messageId);
-    expect(["accepted", "received"]).toContain(retried?.state);
-    expect(retried?.position).toBe(2);
-    expect(retried?.attempts).toBe(2);
-    // The mailbox stored exactly one envelope — duplicate replayed the position.
-    expect(relay.partitionOf(FAKE_ROUTE, BOB_DEV).position).toBe(2);
-  });
-
-  it("surfaces a sender-scope conflict honestly and never retries it", async () => {
-    const relay = new FakePeerRelay();
-    const { alice } = await pairedDevices(relay);
-
-    const first = await alice.client.sendMessage(BOB_DEV, "original");
-    expect(first.state).toBe("accepted");
-
-    // A second writer sharing the device identity reuses the messageId with
-    // different envelope bytes — the wire's typed conflict class.
-    const rival = await makeDevice(relay, {
-      peerId: ALICE_PEER,
-      deviceId: ALICE_DEV,
-      cryptoStore: alice.cryptoStore,
-      identity: alice.identity,
-      directory: staticPeerDirectory({ [BOB_DEV]: BOB_PEER })
-    });
-    const conflicted = await rival.client.sendMessage(BOB_DEV, "different bytes", { messageId: first.messageId });
-    expect(conflicted.state).toBe("conflict");
-    expect(rival.events.conflict.map((event) => event.messageId)).toContain(first.messageId);
-
-    await expect(rival.client.sendMessage(BOB_DEV, "again", { messageId: first.messageId }))
-      .rejects.toSatisfy((error) => isPeerClientError(error, "peer_client_state"));
-    await rival.client.reconcile();
-    expect((await rival.client.outbox.entry(first.messageId))?.state).toBe("conflict");
-  });
-
-  it("surfaces unrecorded when the mailbox drops sends past the attempt bound", async () => {
-    const relay = new FakePeerRelay();
-    relay.pair(FAKE_TENANT, FAKE_ROUTE, ALICE_DEV, BOB_DEV);
-    const alice = await makeDevice(relay, {
-      peerId: ALICE_PEER, deviceId: ALICE_DEV,
-      directory: staticPeerDirectory({ [BOB_DEV]: BOB_PEER }),
-      maxSendAttempts: 2
-    });
-    const bob = await makeDevice(relay, { peerId: BOB_PEER, deviceId: BOB_DEV });
-    await alice.client.publishBundle();
-    await bob.client.publishBundle();
-    const session = await alice.client.sendMessage(BOB_DEV, "paired send");
-    expect(session.state).toBe("accepted");
-
-    relay.unpair(FAKE_ROUTE);
-    const stuck = await alice.client.sendMessage(BOB_DEV, "nobody home", { messageId: "msg.stuck.1" });
-    expect(stuck.state).toBe("pending");
-    await alice.client.resume();
-    const resolved = await alice.client.outbox.entry("msg.stuck.1");
-    expect(resolved?.state).toBe("unrecorded");
-    expect(alice.events.unrecorded.map((event) => event.messageId)).toContain("msg.stuck.1");
-  });
-
-  it("fails a first send honestly when the peer never published a bundle", async () => {
-    const relay = new FakePeerRelay();
-    relay.pair(FAKE_TENANT, FAKE_ROUTE, ALICE_DEV, BOB_DEV);
-    const alice = await makeDevice(relay, {
-      peerId: ALICE_PEER, deviceId: ALICE_DEV,
-      directory: staticPeerDirectory({ [BOB_DEV]: BOB_PEER })
-    });
-    await makeDevice(relay, { peerId: BOB_PEER, deviceId: BOB_DEV }); // never publishes
-    await expect(alice.client.sendMessage(BOB_DEV, "cannot initiate"))
-      .rejects.toSatisfy((error) => isPeerClientError(error, "peer_client_bundle_unavailable"));
-  });
+afterEach(async () => {
+  await Promise.all([...clientsForCleanup].map((client) => client.dispose()));
+  clientsForCleanup.clear();
+  vi.restoreAllMocks();
 });
 
-describe("peer-client inbox + dispatch", () => {
-  it("delivers end-to-end: decrypt, dispatch, received + agent receipts upstream", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    bob.client.onInboundMessage(async (message) => {
-      expect(text(message.plaintext)).toBe("secret work");
-      return "accepted_by_agent";
+describe("peer-client online durable delivery", () => {
+  it("makes every dispose caller wait for queued durable initialization", async () => {
+    const cryptoStore = createInMemoryPeerCryptoStore();
+    const identity = await createPeerIdentity({ localStore: cryptoStore, peerId: peerId(ALICE_DEV) });
+    const clientStore = new InMemoryPeerClientStore();
+    const prepare = clientStore.prepareRoute.bind(clientStore);
+    let entered!: () => void;
+    const entering = new Promise<void>((resolve) => { entered = resolve; });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.spyOn(clientStore, "prepareRoute").mockImplementation(async (route) => {
+      entered();
+      await gate;
+      return prepare(route);
     });
-
-    const entry = await alice.client.sendMessage(BOB_DEV, "secret work");
-    await eventually(() => bob.events.inbound.length === 1);
-    expect(bob.events.inbound[0].messageId).toBe(entry.messageId);
-    expect(bob.events.inbound[0].senderPeerId).toBe(ALICE_PEER);
-    expect(bob.events.inbound[0].senderDeviceId).toBe(ALICE_DEV);
-
-    await alice.client.reconcile();
-    const final = await alice.client.outbox.entry(entry.messageId);
-    expect(final?.state).toBe("accepted_by_agent");
-    expect(final?.receipts.map((receipt) => receipt.kind)).toEqual(
-      expect.arrayContaining(["accepted", "received", "accepted_by_agent"])
-    );
+    const send = vi.fn();
+    const client = new TrackedPeerClient({ identity, cryptoStore, clientStore, transport: { send },
+      route: { tenantId: FAKE_TENANT, routeId: FAKE_ROUTE, deviceId: ALICE_DEV } });
+    const preparing = client.prepareLocalState();
+    await entering;
+    let completed = 0;
+    const first = client.dispose().then(() => { completed += 1; });
+    const second = client.dispose().then(() => { completed += 1; });
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(completed).toBe(0);
+    } finally {
+      release();
+      await Promise.all([preparing, first, second]);
+    }
+    expect(completed).toBe(2);
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it("keeps entries pending without a handler, still acks received, then drains on attach", async () => {
+  it("prepares route-local state without sending relay traffic or dispatching business messages", async () => {
     const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-
-    await alice.client.sendMessage(BOB_DEV, "queued work");
-    await eventually(async () => (await bob.client.inbox.list()).length === 1);
-    expect((await bob.client.inbox.list())[0].dispatch).toBe("pending");
-
-    await alice.client.reconcile();
-    expect((await alice.client.outbox.list())[0].state).toBe("received");
-
-    const delivered: string[] = [];
-    bob.client.onInboundMessage(async (message) => {
-      delivered.push(text(message.plaintext));
-      return "accepted_by_agent";
+    relay.pair(FAKE_TENANT, FAKE_ROUTE, ALICE_DEV, BOB_DEV);
+    const cryptoStore = createInMemoryPeerCryptoStore();
+    const remoteCryptoStore = createInMemoryPeerCryptoStore();
+    const identity = await createPeerIdentity({
+      localStore: cryptoStore,
+      peerId: peerId(ALICE_DEV),
+      prekeyPool: { oneTimeCount: 2, kyberCount: 2 }
     });
-    await eventually(() => delivered.length === 1);
-    expect(delivered).toEqual(["queued work"]);
-    await alice.client.reconcile();
-    expect((await alice.client.outbox.list())[0].state).toBe("accepted_by_agent");
+    const remoteIdentity = await createPeerIdentity({
+      localStore: remoteCryptoStore,
+      peerId: peerId(BOB_DEV),
+      prekeyPool: { oneTimeCount: 2, kyberCount: 2 }
+    });
+    const clientStore = new InMemoryPeerClientStore();
+    const prepareRoute = vi.spyOn(clientStore, "prepareRoute");
+    const transport = relay.attach({ tenantId: FAKE_TENANT, routeId: FAKE_ROUTE, deviceId: ALICE_DEV });
+    const send = vi.spyOn(transport, "send");
+    let dispatchCalls = 0;
+    const client = new TrackedPeerClient({
+      identity,
+      cryptoStore,
+      clientStore,
+      transport,
+      route: { tenantId: FAKE_TENANT, routeId: FAKE_ROUTE, deviceId: ALICE_DEV },
+      directory: staticPeerDirectory({ [BOB_DEV]: peerIdentityPublicDescriptor(remoteIdentity) }),
+      dispatch: () => { dispatchCalls += 1; return "accepted_by_agent"; }
+    });
+
+    await client.prepareLocalState();
+    await client.prepareLocalState();
+
+    expect(prepareRoute).toHaveBeenCalledTimes(1);
+    expect(send).not.toHaveBeenCalled();
+    expect(dispatchCalls).toBe(0);
   });
 
-  it("dedups redelivery: an identical page never re-decrypts or re-dispatches", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    let dispatched = 0;
-    bob.client.onInboundMessage(async () => {
-      dispatched += 1;
-      return "accepted_by_agent";
+  it("uses a Signal-signed durable receipt and retries the exact ciphertext after a lost ACK", async () => {
+    let dispatchCalls = 0;
+    const { relay, alice, bob } = await pairedDevices({
+      bobDispatch: async () => { dispatchCalls += 1; return "accepted_by_agent"; }
     });
-    await alice.client.sendMessage(BOB_DEV, "one");
-    await alice.client.sendMessage(BOB_DEV, "two");
-    await eventually(() => dispatched === 2);
+    relay.dropNextDeliveryAcks(ALICE_DEV);
 
-    // A lagging channel replays the whole backlog page — dedup must hold.
-    await relay.replayPage(BOB_DEV, 0);
-    await eventually(() => dispatched === 2, 2_000); // settle: no third dispatch may appear
-    expect(dispatched).toBe(2);
-    expect((await bob.client.inbox.list()).length).toBe(2);
+    const sent = await alice.client.sendMessage(BOB_DEV, "offline mailbox is unnecessary");
+    await eventually(async () => (await inboxEntry(bob, sent.messageId, ALICE_DEV))?.dispatch === "accepted_by_agent");
+    const firstReceipt = (await inboxEntry(bob, sent.messageId, ALICE_DEV))?.deliveryAck;
+    expect(firstReceipt?.signature).toMatch(/^[A-Za-z0-9_-]{86}$/u);
+    expect((await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state).toBe("pending");
+
+    await eventually(async () => (await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state === "delivered");
+    const attempts = relay.sendAttempts.filter((entry) => entry.messageId === sent.messageId);
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1].envelope).toEqual(attempts[0].envelope);
+    expect((await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.deliveryAck).toEqual(firstReceipt);
+    expect(dispatchCalls).toBe(1);
   });
 
-  it("resumes from the durable cursor: only unseen positions dispatch", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    const dispatched: string[] = [];
+  it("commits transport receipt independently and preserves deferred application dispatch", async () => {
+    const { alice, bob } = await pairedDevices({ bobDispatch: () => "deferred" });
+    const sent = await alice.client.sendMessage(BOB_DEV, "durable before dispatch");
+    await eventually(async () => (await inboxEntry(bob, sent.messageId, ALICE_DEV))?.deliveryAck !== null);
+    await eventually(async () => (await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state === "delivered");
+    expect((await inboxEntry(bob, sent.messageId, ALICE_DEV))?.dispatch).toBe("pending");
+
+    let replayed = 0;
     bob.client.onInboundMessage(async (message) => {
-      dispatched.push(text(message.plaintext));
+      expect(message.messageId).toBe(sent.messageId);
+      replayed += 1;
       return "accepted_by_agent";
     });
-    await alice.client.sendMessage(BOB_DEV, "before restart 1");
-    await alice.client.sendMessage(BOB_DEV, "before restart 2");
-    await eventually(() => dispatched.length === 2);
+    await bob.client.retryPendingDispatch();
+    expect(replayed).toBe(1);
+    expect((await inboxEntry(bob, sent.messageId, ALICE_DEV))?.dispatch).toBe("accepted_by_agent");
+    expect((await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state).toBe("delivered");
+  });
 
-    // Restart the client over the same durable stores.
-    const restarted = await makeDevice(relay, {
-      peerId: BOB_PEER,
+  it.each(["authority_stale", "backpressured"] as const)(
+    "retries a durable signed ACK after %s without reconnect or application redispatch",
+    async (temporaryFailure) => {
+      let dispatchCalls = 0;
+      const { relay, alice, bob } = await pairedDevices({
+        bobDispatch: () => { dispatchCalls += 1; return "accepted_by_agent"; }
+      });
+      if (temporaryFailure === "authority_stale") relay.refuseNextDeliveryAcks(ALICE_DEV);
+      else relay.backpressureNextDeliveryAcks(ALICE_DEV);
+
+      const sent = await alice.client.sendMessage(BOB_DEV, "receipt survives temporary authority loss", {
+        messageId: "msg.authority.stale.ack"
+      });
+      await eventually(async () => relay.deliveryAckAttempts.length === 1
+        && (await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state === "pending");
+      const committedAck = (await inboxEntry(bob, sent.messageId, ALICE_DEV))?.deliveryAck;
+      expect(committedAck).not.toBeNull();
+      expect(dispatchCalls).toBe(1);
+      expect(alice.client.presence(BOB_DEV)?.state).toBe("reachable");
+      expect(bob.client.presence(ALICE_DEV)?.state).toBe("reachable");
+
+      await vi.waitFor(async () => {
+        expect((await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state).toBe("delivered");
+      }, { timeout: 5_000, interval: 10 });
+
+      expect(relay.deliveryAckAttempts.length).toBeGreaterThanOrEqual(2);
+      expect(relay.deliveryAckAttempts[0]).toEqual(committedAck);
+      expect(relay.deliveryAckAttempts[1]).toEqual(committedAck);
+      expect((await inboxEntry(bob, sent.messageId, ALICE_DEV))?.deliveryAck).toEqual(committedAck);
+      expect(dispatchCalls).toBe(1);
+      expect(alice.client.presence(BOB_DEV)?.state).toBe("reachable");
+      expect(bob.client.presence(ALICE_DEV)?.state).toBe("reachable");
+    }
+  );
+
+  it("retries the same sender-owned ciphertext after transient peer-send backpressure", async () => {
+    let dispatchCalls = 0;
+    const { relay, alice, bob } = await pairedDevices({
+      bobDispatch: () => { dispatchCalls += 1; return "accepted_by_agent"; }
+    });
+    relay.backpressureNextPeerSends(BOB_DEV);
+
+    const sent = await alice.client.sendMessage(BOB_DEV, "preserve sender custody through backpressure", {
+      messageId: "msg.peer.send.backpressure"
+    });
+    await eventually(async () => (await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.lastForwarded?.outcome === "backpressured");
+    const exactEnvelope = sent.envelope;
+    expect((await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state).toBe("pending");
+
+    await vi.waitFor(async () => {
+      expect((await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state).toBe("delivered");
+    }, { timeout: 5_000, interval: 10 });
+
+    const attempts = relay.sendAttempts.filter((entry) => entry.messageId === sent.messageId);
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0].envelope).toEqual(exactEnvelope);
+    expect(attempts[1].envelope).toEqual(exactEnvelope);
+    expect((await inboxEntry(bob, sent.messageId, ALICE_DEV))?.dispatch).toBe("accepted_by_agent");
+    expect(dispatchCalls).toBe(1);
+  });
+
+  it("keeps transport and crypto progress independent from a slow application handler", async () => {
+    let markDispatchStarted!: () => void;
+    let releaseDispatch!: () => void;
+    const dispatchStarted = new Promise<void>((resolve) => { markDispatchStarted = resolve; });
+    const release = new Promise<void>((resolve) => { releaseDispatch = resolve; });
+    const { alice, bob } = await pairedDevices({
+      bobDispatch: async () => {
+        markDispatchStarted();
+        await release;
+        return "accepted_by_agent";
+      }
+    });
+
+    const first = await alice.client.sendMessage(BOB_DEV, "application may take time");
+    await dispatchStarted;
+    await eventually(async () => (await alice.client.outbox.entry(first.messageId, BOB_DEV))?.state === "delivered");
+
+    const reply = await bob.client.sendMessage(ALICE_DEV, "transport remains available");
+    await eventually(async () => (await bob.client.outbox.entry(reply.messageId, ALICE_DEV))?.state === "delivered");
+
+    releaseDispatch();
+    await eventually(async () => (await inboxEntry(bob, first.messageId, ALICE_DEV))?.dispatch === "accepted_by_agent");
+  });
+
+  it("rejects forged signed receipts and does not ACK Signal duplicates under a new tuple", async () => {
+    const { relay, alice, bob } = await pairedDevices({ bobDispatch: () => "accepted_by_agent" });
+    relay.dropNextDeliveryAcks(ALICE_DEV);
+    const first = await alice.client.sendMessage(BOB_DEV, "first session message");
+    await eventually(async () => (await inboxEntry(bob, first.messageId, ALICE_DEV))?.deliveryAck != null);
+    await alice.client.resume();
+    await eventually(async () => (await alice.client.outbox.entry(first.messageId, BOB_DEV))?.state === "delivered");
+
+    const reply = await bob.client.sendMessage(ALICE_DEV, "confirm initiator ratchet");
+    await eventually(async () => (await inboxEntry(alice, reply.messageId, BOB_DEV))?.deliveryAck != null);
+
+    const sessionSend = await alice.client.sendMessage(BOB_DEV, "established-session message");
+    await eventually(async () => (await inboxEntry(bob, sessionSend.messageId, ALICE_DEV))?.deliveryAck != null);
+    const originalWire = relay.sendAttempts.find((entry) => entry.messageId === sessionSend.messageId);
+    expect(originalWire).toBeDefined();
+
+    const firstWire = relay.sendAttempts.find((entry) => entry.messageId === first.messageId);
+    const conflictingTuple = createPeerSend({ ...originalWire!, envelope: firstWire!.envelope });
+    relay.inject(BOB_DEV, conflictingTuple as unknown as Record<string, unknown>);
+    await eventually(() => bob.errors.includes("peer_client_conflict"));
+
+    const duplicateUnderNewId = createPeerSend({ ...originalWire!, messageId: "msg.replayed.as.new" });
+    relay.inject(BOB_DEV, duplicateUnderNewId as unknown as Record<string, unknown>);
+    await eventually(async () => (await inboxEntry(bob, "msg.replayed.as.new", ALICE_DEV)) !== null);
+    const skipped = await inboxEntry(bob, "msg.replayed.as.new", ALICE_DEV);
+    expect(skipped?.decryptError).toBe("peer_duplicate_message");
+    expect(skipped?.plaintext).toBeNull();
+    expect(skipped?.deliveryAck).toBeNull();
+
+    const releaseAcks = relay.holdDeliveryAcks(ALICE_DEV);
+    const unsettled = await alice.client.sendMessage(BOB_DEV, "receipt signature must be pinned");
+    await eventually(async () => (await inboxEntry(bob, unsettled.messageId, ALICE_DEV))?.deliveryAck != null);
+    await bob.client.resume(); // A legitimate retry remains withheld during the forgery check.
+    const pendingEntry = await alice.client.outbox.entry(unsettled.messageId, BOB_DEV);
+    expect(pendingEntry?.state).toBe("pending");
+    const wireSend = createPeerSend({
+      tenantId: FAKE_TENANT,
+      routeId: FAKE_ROUTE,
+      senderDeviceId: ALICE_DEV,
+      recipientDeviceId: BOB_DEV,
+      messageId: unsettled.messageId,
+      envelope: pendingEntry!.envelope
+    });
+    const signingInput = await peerDeliveryAckSigningInputForSend(wireSend);
+    expect(signingInput).not.toBeNull();
+    const attackerStore = createInMemoryPeerCryptoStore();
+    const attacker = await createPeerIdentity({ localStore: attackerStore, peerId: "peer.attacker" });
+    const signature = signPeerIdentityMessage(attacker, Buffer.from(peerDeliveryAckTranscript(signingInput!), "utf8"));
+    const forged = createPeerDeliveryAck({ ...signingInput!, signature: base64urlEncode(signature) });
+    relay.inject(ALICE_DEV, forged as unknown as Record<string, unknown>);
+    await eventually(() => alice.errors.includes("peer_client_invalid_delivery_ack"));
+    expect((await alice.client.outbox.entry(unsettled.messageId, BOB_DEV))?.state).toBe("pending");
+    expect((await peerIdentityBinding(alice.cryptoStore, peerId(BOB_DEV)))?.state).toBe("active");
+    releaseAcks();
+    await bob.client.resume();
+    await eventually(async () => (await alice.client.outbox.entry(unsettled.messageId, BOB_DEV))?.state === "delivered");
+  });
+
+  it("keeps new offline sends in local custody and retries the same envelope when the peer returns", async () => {
+    const { relay, alice, bob } = await pairedDevices();
+    relay.detach(BOB_DEV);
+    const sent = await alice.client.sendMessage(BOB_DEV, "peer returns later", { messageId: "msg.offline.retry" });
+    expect(sent.state).toBe("pending");
+    const storedEnvelope = sent.envelope;
+    expect((await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state).toBe("pending");
+    expect(relay.sendAttempts.filter((entry) => entry.messageId === sent.messageId)).toHaveLength(1);
+
+    const replacement = makeClient(relay, {
+      identity: bob.identity,
       deviceId: BOB_DEV,
       cryptoStore: bob.cryptoStore,
       clientStore: bob.clientStore,
-      identity: bob.identity
+      peerIdentity: alice.identity
     });
-    restarted.client.onInboundMessage(async (message) => {
-      dispatched.push(text(message.plaintext));
-      return "rejected";
-    });
-    await alice.client.sendMessage(BOB_DEV, "after restart");
-    await restarted.client.resume();
-
-    expect(dispatched).toEqual(["before restart 1", "before restart 2", "after restart"]);
-    expect(await restarted.client.inbox.cursor()).toBe(3);
+    await replacement.client.resume();
+    await eventually(async () => (await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state === "delivered");
+    const attempts = relay.sendAttempts.filter((entry) => entry.messageId === sent.messageId);
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1].envelope).toEqual(storedEnvelope);
+    expect((await inboxEntry(replacement, sent.messageId, ALICE_DEV))?.plaintext).not.toBeNull();
   });
 
-  it("surfaces gap tombstones as lost-range events and advances the cursor", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    relay.detach(BOB_DEV); // offline: nothing pushes, bob will fetch later
-    await alice.client.sendMessage(BOB_DEV, "lost one");
-    await alice.client.sendMessage(BOB_DEV, "lost two");
-    await alice.client.sendMessage(BOB_DEV, "survivor");
-    relay.truncate(FAKE_ROUTE, BOB_DEV, [1, 2], "expired");
+  it("does not resend an unconfirmed envelope every time a later message is acknowledged", async () => {
+    const { relay, alice, bob } = await pairedDevices();
+    relay.dropNextDeliveryAcks(ALICE_DEV);
 
-    const dispatched: string[] = [];
-    bob.client.onInboundMessage(async (message) => {
-      dispatched.push(text(message.plaintext));
-      return "accepted_by_agent";
-    });
-    await bob.client.sync();
+    const first = await alice.client.sendMessage(BOB_DEV, "first receipt is lost");
+    await eventually(async () => (await inboxEntry(bob, first.messageId, ALICE_DEV))?.deliveryAck !== null);
+    expect((await alice.client.outbox.entry(first.messageId, BOB_DEV))?.state).toBe("pending");
+    const later = await alice.client.sendMessage(BOB_DEV, "a later message can still settle");
+    await eventually(async () => (await alice.client.outbox.entry(later.messageId, BOB_DEV))?.state === "delivered");
 
-    expect(dispatched).toEqual(["survivor"]);
-    expect(bob.events.lostRange.length).toBe(1);
-    expect(bob.events.lostRange[0].fromSeq).toBe(1);
-    expect(bob.events.lostRange[0].toSeq).toBe(2);
-    expect(bob.events.lostRange[0].cause).toBe("expired");
-    expect(bob.events.lostRange[0].messageIds?.length).toBe(2);
-    expect(await bob.client.inbox.cursor()).toBe(3);
-    expect((await bob.client.inbox.gaps()).length).toBe(1);
+    expect(relay.sendAttempts.filter((entry) => entry.messageId === first.messageId)).toHaveLength(1);
+    await alice.client.resume();
+    await eventually(async () => (await alice.client.outbox.entry(first.messageId, BOB_DEV))?.state === "delivered");
+    const firstAttempts = relay.sendAttempts.filter((entry) => entry.messageId === first.messageId);
+    expect(firstAttempts).toHaveLength(2);
+    expect(firstAttempts[1].envelope).toEqual(firstAttempts[0].envelope);
   });
 
-  it("honors paged fetches with more=true across three pages", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    relay.detach(BOB_DEV);
-    for (let index = 1; index <= 5; index += 1) {
-      await alice.client.sendMessage(BOB_DEV, `paged ${index}`);
+  it("recovers a send WAL after outbox persistence fails without encrypting the message twice", async () => {
+    class FailFirstOutboxWrite extends InMemoryPeerClientStore {
+      #fail = true;
+
+      override async saveOutboxEntry(entry: Parameters<InMemoryPeerClientStore["saveOutboxEntry"]>[0]): Promise<void> {
+        if (this.#fail) {
+          this.#fail = false;
+          throw new Error("simulated interruption before outbox commit");
+        }
+        await super.saveOutboxEntry(entry);
+      }
     }
-    const bob2 = await makeDevice(relay, {
-      peerId: BOB_PEER, deviceId: BOB_DEV,
-      cryptoStore: bob.cryptoStore, clientStore: bob.clientStore, identity: bob.identity,
-      pageSize: 2
-    });
-    const dispatched: string[] = [];
-    bob2.client.onInboundMessage(async (message) => {
-      dispatched.push(text(message.plaintext));
-      return "accepted_by_agent";
-    });
-    await bob2.client.sync();
-    expect(dispatched).toEqual(["paged 1", "paged 2", "paged 3", "paged 4", "paged 5"]);
-    expect(await bob2.client.inbox.cursor()).toBe(5);
+
+    const { relay, alice, bob } = await pairedDevices({ aliceClientStore: new FailFirstOutboxWrite() });
+    await expect(alice.client.sendMessage(BOB_DEV, "commit exact envelope once", { messageId: "msg.wal.once" }))
+      .rejects.toThrow("simulated interruption");
+    await alice.client.resume();
+    await eventually(async () => (await alice.client.outbox.entry("msg.wal.once", BOB_DEV))?.state === "delivered");
+    const recovered = await alice.client.outbox.entry("msg.wal.once", BOB_DEV);
+    expect(recovered?.envelope).toBeDefined();
+    await alice.client.sendMessage(BOB_DEV, "commit exact envelope once", { messageId: "msg.wal.once" });
+    expect(relay.sendAttempts.filter((entry) => entry.messageId === "msg.wal.once")).toHaveLength(1);
+    expect((await inboxEntry(bob, "msg.wal.once", ALICE_DEV))?.dispatch).toBe("pending");
   });
 
-  it("records undecryptable input as evidence, still acks, never fabricates plaintext", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    relay.detach(BOB_DEV);
-    const entry = await alice.client.sendMessage(BOB_DEV, "tamper target");
-    relay.tamperEnvelope(FAKE_ROUTE, BOB_DEV, entry.position ?? 1);
-    let dispatched = 0;
-    bob.client.onInboundMessage(async () => {
-      dispatched += 1;
-      return "accepted_by_agent";
+  it("backs off before receive WAL commit on local capacity pressure and retries exact ciphertext", async () => {
+    class BackpressureOnce extends InMemoryPeerClientStore {
+      #reject = true;
+
+      override async assertAvailableCapacity(additionalBytes: number): Promise<void> {
+        expect(additionalBytes).toBeGreaterThan(0);
+        if (this.#reject) {
+          this.#reject = false;
+          throw Object.assign(new Error("not enough local storage"), { code: "private_storage_capacity" });
+        }
+      }
+    }
+
+    let dispatchCalls = 0;
+    const { relay, alice, bob } = await pairedDevices({
+      bobClientStore: new BackpressureOnce(),
+      bobDispatch: () => { dispatchCalls += 1; return "accepted_by_agent"; }
     });
-    await bob.client.sync();
+    const sent = await alice.client.sendMessage(BOB_DEV, "retry after local storage is available", { messageId: "msg.capacity.retry" });
+    await eventually(() => bob.errors.includes("peer_client_backpressured"));
+    expect((await inboxEntry(bob, sent.messageId, ALICE_DEV))).toBeNull();
+    expect((await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state).toBe("pending");
+    expect(dispatchCalls).toBe(0);
 
-    expect(dispatched).toBe(0);
-    const stored = await bob.client.inbox.list();
-    expect(stored.length).toBe(1);
-    expect(stored[0].plaintext).toBeNull();
-    expect(stored[0].decryptError).toBeTruthy();
-    expect(bob.events.decryptFailure.length).toBe(1);
-    await alice.client.reconcile();
-    expect((await alice.client.outbox.list())[0].state).toBe("received");
-  });
-});
-
-describe("peer-client receipts + reports", () => {
-  it("reports a completed outcome through reports[] as independent agent evidence", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    bob.client.onInboundMessage(async () => "accepted_by_agent");
-    const entry = await alice.client.sendMessage(BOB_DEV, "finish me");
-    await eventually(() => bob.events.inbound.length === 1);
-
-    await bob.client.reportOutcome(entry.messageId, "completed", new TextEncoder().encode("done"));
-    await alice.client.reconcile();
-    const final = await alice.client.outbox.entry(entry.messageId);
-    expect(final?.state).toBe("completed");
-    const completed = final?.receipts.find((receipt) => receipt.kind === "completed");
-    expect(completed?.source).toBe("agent");
-    expect(completed?.detail).toBeTruthy();
+    await eventually(async () => (await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state === "delivered");
+    const attempts = relay.sendAttempts.filter((entry) => entry.messageId === sent.messageId);
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1].envelope).toEqual(attempts[0].envelope);
+    expect(dispatchCalls).toBe(1);
   });
 
-  it("surfaces ack refusals with typed reasons", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    bob.client.onInboundMessage(async () => "accepted_by_agent");
-    const entry = await alice.client.sendMessage(BOB_DEV, "expire before report");
-    await eventually(() => bob.events.inbound.length === 1);
-    relay.truncate(FAKE_ROUTE, BOB_DEV, [entry.position ?? 1], "expired");
+  it("fits the exact UTF-8 producer cap inside relay ciphertext for fresh PQXDH and established messages", async () => {
+    const { relay, alice, bob } = await pairedDevices();
+    const plaintext = "你".repeat(10_922) + "ab";
+    expect(Buffer.byteLength(plaintext, "utf8")).toBe(PEER_CLIENT_MAX_PLAINTEXT_BYTES);
+    const maxMessageId = "m".repeat(127);
 
-    await bob.client.reportOutcome(entry.messageId, "completed");
-    await eventually(() => bob.events.ackRefused.length >= 1);
-    expect(bob.events.ackRefused[0].refusal).toBe("message_unknown");
+    const first = await alice.client.sendMessage(BOB_DEV, plaintext, { messageId: maxMessageId });
+    const firstWire = relay.sendAttempts.find((entry) => entry.messageId === maxMessageId);
+    expect(firstWire?.envelope.headers.messageType).toBe("prekey");
+    expect(parsePeerSend(firstWire)).not.toBeNull();
+    const firstEnvelopeBytes = base64urlDecode(first.envelope.ciphertext, PRIVATE_RELAY_PEER_LIMITS.maxEnvelopeBytes);
+    expect(firstEnvelopeBytes).not.toBeNull();
+    expect(firstEnvelopeBytes!.byteLength).toBeLessThanOrEqual(PRIVATE_RELAY_PEER_LIMITS.maxEnvelopeBytes);
+    await eventually(async () => (await inboxEntry(bob, maxMessageId, ALICE_DEV))?.deliveryAck !== null);
+
+    const response = await bob.client.sendMessage(ALICE_DEV, "confirm ratchet");
+    await eventually(async () => (await inboxEntry(alice, response.messageId, BOB_DEV))?.deliveryAck !== null);
+    const steady = await alice.client.sendMessage(BOB_DEV, plaintext, { messageId: "m".repeat(126) + "n" });
+    const steadyWire = relay.sendAttempts.find((entry) => entry.messageId === steady.messageId);
+    expect(steadyWire?.envelope.headers.messageType).toBe("session");
+    expect(parsePeerSend(steadyWire)).not.toBeNull();
+    const steadyEnvelopeBytes = base64urlDecode(steady.envelope.ciphertext, PRIVATE_RELAY_PEER_LIMITS.maxEnvelopeBytes);
+    expect(steadyEnvelopeBytes).not.toBeNull();
+    expect(steadyEnvelopeBytes!.byteLength).toBeLessThanOrEqual(PRIVATE_RELAY_PEER_LIMITS.maxEnvelopeBytes);
+    await eventually(async () => (await inboxEntry(bob, steady.messageId, ALICE_DEV))?.deliveryAck !== null);
   });
-
-  it("survives a restart with queued reports: redelivery dedups, report still lands", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    let dispatched = 0;
-    bob.client.onInboundMessage(async () => {
-      dispatched += 1;
-      return "accepted_by_agent";
+  it("rejects a lost bundle request and recovers on the same client", async () => {
+    const { relay, alice } = await pairedDevices();
+    let fetchStarted!: () => void;
+    const requested = new Promise<void>((resolve) => { fetchStarted = resolve; });
+    const dispatch = relay.dispatch.bind(relay);
+    const intercepted = vi.spyOn(relay, "dispatch").mockImplementation(async (channel, message) => {
+      if (message.kind === "peer-bundle-fetch") {
+        fetchStarted();
+        return;
+      }
+      await dispatch(channel, message);
     });
-    relay.dropNextResponses(BOB_DEV, 1); // the page's peer-ack reply is lost
-    const entry = await alice.client.sendMessage(BOB_DEV, "report survives");
-    await eventually(() => dispatched === 1);
-    await eventually(() => bob.events.error.length >= 1); // the ack timeout surfaced honestly
-
-    // Crash-like restart: cursor stayed back, the queued report stayed durable.
-    const restarted = await makeDevice(relay, {
-      peerId: BOB_PEER, deviceId: BOB_DEV,
-      cryptoStore: bob.cryptoStore, clientStore: bob.clientStore, identity: bob.identity
-    });
-    restarted.client.onInboundMessage(async () => {
-      dispatched += 1;
-      return "rejected";
-    });
-    await restarted.client.resume();
-    expect(dispatched).toBe(1); // dedup: no second exposure of committed work
-
-    await alice.client.reconcile();
-    const final = await alice.client.outbox.entry(entry.messageId);
-    expect(final?.state).toBe("accepted_by_agent");
-  });
-});
-
-describe("peer-client trust + lifecycle", () => {
-  it("blocks delivery on peer_identity_changed until an explicit re-pin", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    bob.client.onInboundMessage(async () => "accepted_by_agent");
-    const delivered = await alice.client.sendMessage(BOB_DEV, "trusted");
-    expect(delivered.state).toBe("accepted");
-    await eventually(() => bob.events.inbound.length === 1);
-
-    // Bob reinstalls: same peerId, fresh identity key, new bundle revision.
-    const bobNewStore = createInMemoryPeerCryptoStore();
-    const bobNewIdentity = await createPeerIdentity({ localStore: bobNewStore, peerId: BOB_PEER });
-    const bobNew = await makeDevice(relay, {
-      peerId: BOB_PEER, deviceId: BOB_DEV,
-      cryptoStore: bobNewStore, identity: bobNewIdentity
-    });
-    await bobNew.client.publishBundle();
-    const received: string[] = [];
-    alice.client.onInboundMessage(async (message) => {
-      received.push(text(message.plaintext));
-      return "accepted_by_agent";
-    });
-
-    await bobNew.client.sendMessage(ALICE_DEV, "new keys, same peer");
-    await eventually(() => alice.events.requiresRePair.length === 1);
-    expect(alice.events.requiresRePair[0].peerId).toBe(BOB_PEER);
-    expect(received.length).toBe(0); // blocked: never dispatched, never auto-repaired
-    const failed = await alice.client.inbox.list();
-    expect(failed.some((entry) => entry.decryptError === "peer_identity_changed")).toBe(true);
-
-    // Explicit re-pair is the only way through — on BOTH ends. Alice accepts
-    // bob's new key; bob re-establishes trust for alice at a new generation,
-    // which sweeps his stale ratchet so the next send re-initiates X3DH.
-    await alice.client.repinPeer(BOB_PEER, bobNewIdentity.publicKey.serialize());
-    await repinPeerIdentity(bobNew.cryptoStore, ALICE_PEER, alice.identity.publicKey.serialize());
-    await bobNew.client.sendMessage(ALICE_DEV, "after re-pair");
-    await eventually(() => received.length === 1);
-    expect(received).toEqual(["after re-pair"]);
+    const blocked = alice.client.sendMessage(BOB_DEV, "recover unfinished control", { messageId: "msg.control.recover" });
+    const rejection = expect(blocked).rejects.toMatchObject({ code: "peer_client_transport" });
+    await requested;
+    alice.client.transportLost();
+    await rejection;
+    expect(await alice.client.outbox.entry("msg.control.recover", BOB_DEV)).toBeNull();
+    intercepted.mockRestore();
+    await alice.client.resume();
+    await alice.client.sendMessage(BOB_DEV, "recover unfinished control", { messageId: "msg.control.recover" });
+    await eventually(async () => (await alice.client.outbox.entry("msg.control.recover", BOB_DEV))?.state === "delivered");
+    expect(relay.sendAttempts.filter((entry) => entry.messageId === "msg.control.recover")).toHaveLength(1);
   });
 
-  it("replenishes the prekey pool once and publishes on retry", async () => {
-    const relay = new FakePeerRelay();
-    relay.pair(FAKE_TENANT, FAKE_ROUTE, ALICE_DEV, BOB_DEV);
-    const alice = await makeDevice(relay, {
-      peerId: ALICE_PEER, deviceId: ALICE_DEV,
-      prekeyPool: { oneTimeCount: 1, kyberCount: 1 }
+  it("does not dispatch a stale pending page after the durable entry has already committed", async () => {
+    let dispatchStarted!: () => void;
+    let releaseDispatch!: () => void;
+    const started = new Promise<void>((resolve) => { dispatchStarted = resolve; });
+    const release = new Promise<void>((resolve) => { releaseDispatch = resolve; });
+    let calls = 0;
+    const { alice, bob } = await pairedDevices({
+      bobDispatch: async () => {
+        calls += 1;
+        dispatchStarted();
+        await release;
+        return "accepted_by_agent";
+      }
     });
-    const first = await alice.client.publishBundle();
-    expect(first.outcome).toBe("published");
-    const second = await alice.client.publishBundle(); // pool drained → replenish → retry
-    expect(second.outcome).toBe("superseded");
-    expect(second.revision).toBe(2);
-  });
-
-  it("refuses bundle publication honestly after revocation", async () => {
-    const relay = new FakePeerRelay();
-    relay.pair(FAKE_TENANT, FAKE_ROUTE, ALICE_DEV, BOB_DEV);
-    const alice = await makeDevice(relay, { peerId: ALICE_PEER, deviceId: ALICE_DEV });
-    relay.revokeDevice(ALICE_DEV);
-    await expect(alice.client.publishBundle())
-      .rejects.toSatisfy((error) => isPeerClientError(error, "peer_client_bundle_unavailable"));
-    expect(alice.events.bundleRefused.map((event) => event.refusal)).toContain("revoked");
-  });
-
-  it("resumes sessions and durable state from file stores across a restart", async () => {
-    const relay = new FakePeerRelay();
-    relay.pair(FAKE_TENANT, FAKE_ROUTE, ALICE_DEV, BOB_DEV);
-    const dir = await mkdtemp(join(tmpdir(), "peer-client-"));
-    tempDirs.push(dir);
-    const cryptoStore = createFilePeerCryptoStore(join(dir, "crypto"));
-    const clientStore = createFilePeerClientStore(join(dir, "client"));
-    const identity = await createPeerIdentity({ localStore: cryptoStore, peerId: ALICE_PEER });
-
-    const alice = await makeDevice(relay, {
-      peerId: ALICE_PEER, deviceId: ALICE_DEV,
-      cryptoStore, clientStore, identity,
-      directory: staticPeerDirectory({ [BOB_DEV]: BOB_PEER })
+    const sent = await alice.client.sendMessage(BOB_DEV, "one committed application call");
+    await started;
+    let pageCaptured!: () => void;
+    let releasePage!: () => void;
+    const captured = new Promise<void>((resolve) => { pageCaptured = resolve; });
+    const pageRelease = new Promise<void>((resolve) => { releasePage = resolve; });
+    const originalPage = bob.client.inbox.pendingDispatchPage.bind(bob.client.inbox);
+    vi.spyOn(bob.client.inbox, "pendingDispatchPage").mockImplementationOnce(async (...args) => {
+      const page = await originalPage(...args);
+      pageCaptured();
+      await pageRelease;
+      return page;
     });
-    const bob = await makeDevice(relay, { peerId: BOB_PEER, deviceId: BOB_DEV });
-    bob.client.onInboundMessage(async () => "accepted_by_agent");
-    await alice.client.publishBundle();
-    await bob.client.publishBundle();
-    const first = await alice.client.sendMessage(BOB_DEV, "before restart");
-    expect(first.envelope.headers.messageType).toBe("prekey");
-    await eventually(async () => (await bob.client.inbox.list()).length === 1);
-    await bob.client.sendMessage(ALICE_DEV, "ack"); // confirms alice's ratchet: later sends are session-typed
-    await eventually(async () => (await alice.client.inbox.list()).length === 1);
+    const retry = bob.client.retryPendingDispatch();
+    await captured;
+    bob.client.transportLost();
+    releaseDispatch();
+    await eventually(async () => (await inboxEntry(bob, sent.messageId, ALICE_DEV))?.dispatch === "accepted_by_agent");
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    releasePage();
+    await retry;
+    expect(calls).toBe(1);
+    expect((await inboxEntry(bob, sent.messageId, ALICE_DEV))?.dispatch).toBe("accepted_by_agent");
+  });
 
-    // Restart over the same durable state: identity, session, outbox all resume.
-    const reloaded = await loadPeerIdentity(cryptoStore);
-    expect(reloaded?.peerId).toBe(ALICE_PEER);
-    const alice2 = await makeDevice(relay, {
-      peerId: ALICE_PEER, deviceId: ALICE_DEV,
-      cryptoStore, clientStore, identity: reloaded ?? undefined,
-      directory: staticPeerDirectory({ [BOB_DEV]: BOB_PEER })
+  it("retries deferred durable dispatch after signed delivery without new traffic or reconnect", async () => {
+    let dispatchCalls = 0;
+    const { relay, alice, bob } = await pairedDevices({
+      bobDispatch: () => {
+        dispatchCalls += 1;
+        return dispatchCalls === 1 ? { kind: "deferred" as const } : "accepted_by_agent";
+      }
     });
-    await alice2.client.resume();
-    const persisted = await alice2.client.outbox.entry(first.messageId);
-    expect(persisted?.state).toBe("accepted_by_agent");
-
-    const second = await alice2.client.sendMessage(BOB_DEV, "after restart");
-    expect(second.envelope.headers.messageType).toBe("session"); // ratchet resumed, no new handshake
-    await eventually(() => bob.events.inbound.length === 2);
-    expect(text(bob.events.inbound[1].plaintext)).toBe("after restart");
+    const sent = await alice.client.sendMessage(BOB_DEV, "retry only the durable application obligation");
+    await eventually(async () => {
+      const received = await inboxEntry(bob, sent.messageId, ALICE_DEV);
+      return received?.deliveryAck !== null && received?.deliveryAck !== undefined
+        && (await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state === "delivered";
+    });
+    expect((await inboxEntry(bob, sent.messageId, ALICE_DEV))?.dispatch).toBe("pending");
+    expect(dispatchCalls).toBe(1);
+    await vi.waitFor(async () => {
+      expect((await inboxEntry(bob, sent.messageId, ALICE_DEV))?.dispatch).toBe("accepted_by_agent");
+    }, { timeout: 5_000, interval: 10 });
+    expect(dispatchCalls).toBe(2);
+    expect((await alice.client.outbox.entry(sent.messageId, BOB_DEV))?.state).toBe("delivered");
+    expect(relay.sendAttempts.filter((entry) => entry.messageId === sent.messageId)).toHaveLength(1);
   });
 
-  it("exposes the peer safety number for out-of-band verification", async () => {
-    const relay = new FakePeerRelay();
-    const { alice, bob } = await pairedDevices(relay);
-    await alice.client.sendMessage(BOB_DEV, "verify me");
-    const number = await alice.client.peerSafetyNumberFor(BOB_PEER);
-    expect(number).toBeTruthy();
-    const binding = await peerIdentityBinding(alice.cryptoStore, BOB_PEER);
-    expect(binding?.state).toBe("active");
-    // Bob pins alice only on first decrypt — no pin exists before the message lands.
-    expect(await bob.client.peerSafetyNumberFor(ALICE_PEER)).toBeNull();
-    await eventually(async () => (await bob.client.inbox.list()).length === 1);
-    expect(await bob.client.peerSafetyNumberFor(ALICE_PEER)).toBeTruthy();
-  });
+  it("retries other pending work while a healthy handler is still running without overlapping sweeps", async () => {
+    let slowCalls = 0;
+    let deferredCalls = 0;
+    let triggerCalls = 0;
+    let slowStarted!: () => void;
+    const slowCallStarted = new Promise<void>((resolve) => { slowStarted = resolve; });
+    const neverSettles = new Promise<PeerInboundOutcome>(() => undefined);
+    const { alice, bob } = await pairedDevices({
+      bobDispatch: (message) => {
+        if (message.messageId === "msg.slow") {
+          slowCalls += 1;
+          slowStarted();
+          return neverSettles;
+        }
+        if (message.messageId === "msg.deferred") {
+          deferredCalls += 1;
+          return deferredCalls === 1 ? { kind: "deferred" as const } : "accepted_by_agent";
+        }
+        if (message.messageId === "msg.retry-trigger") {
+          triggerCalls += 1;
+          return triggerCalls === 1 ? { kind: "deferred" as const } : "accepted_by_agent";
+        }
+        return "accepted_by_agent";
+      }
+    });
 
-  it("serves the retention policy advertisement on push and pull", async () => {
-    const relay = new FakePeerRelay();
-    const { alice } = await pairedDevices(relay);
-    const pulled = await alice.client.fetchRetentionPolicy();
-    expect(pulled.mailboxMaxItems).toBe(relay.policy.mailboxMaxItems);
-    expect(alice.events.retentionPolicy.length).toBe(1);
-    expect((await alice.client.retentionPolicy())?.mailboxCapacityBytes).toBe(relay.policy.mailboxCapacityBytes);
-  });
+    await alice.client.sendMessage(BOB_DEV, "hold one healthy dispatch", { messageId: "msg.slow" });
+    await slowCallStarted;
+
+    let pageReadCount = 0;
+    let activePageReads = 0;
+    let maximumActivePageReads = 0;
+    let firstTimerPageStarted!: () => void;
+    let releaseFirstTimerPage!: () => void;
+    const timerPageStarted = new Promise<void>((resolve) => { firstTimerPageStarted = resolve; });
+    const timerPageRelease = new Promise<void>((resolve) => { releaseFirstTimerPage = resolve; });
+    const originalPendingPage = bob.client.inbox.pendingDispatchPage.bind(bob.client.inbox);
+    vi.spyOn(bob.client.inbox, "pendingDispatchPage").mockImplementation(async (...args) => {
+      pageReadCount += 1;
+      activePageReads += 1;
+      maximumActivePageReads = Math.max(maximumActivePageReads, activePageReads);
+      try {
+        if (pageReadCount === 1) {
+          firstTimerPageStarted();
+          await timerPageRelease;
+        }
+        return await originalPendingPage(...args);
+      } finally {
+        activePageReads -= 1;
+      }
+    });
+
+    await alice.client.sendMessage(BOB_DEV, "defer until recovery", { messageId: "msg.deferred" });
+    await vi.waitFor(() => expect(deferredCalls).toBe(1), { timeout: 5_000, interval: 10 });
+    await timerPageStarted;
+
+    await alice.client.sendMessage(BOB_DEV, "request another deferred retry", { messageId: "msg.retry-trigger" });
+    await vi.waitFor(() => expect(triggerCalls).toBe(1), { timeout: 5_000, interval: 10 });
+    // Cross the next exponential retry delay while the first page remains held.
+    await new Promise<void>((resolve) => setTimeout(resolve, 2_100));
+
+    expect(pageReadCount).toBe(1);
+    expect(maximumActivePageReads).toBe(1);
+    releaseFirstTimerPage();
+
+    await vi.waitFor(async () => {
+      expect((await inboxEntry(bob, "msg.deferred", ALICE_DEV))?.dispatch).toBe("accepted_by_agent");
+      expect((await inboxEntry(bob, "msg.retry-trigger", ALICE_DEV))?.dispatch).toBe("accepted_by_agent");
+    }, { timeout: 5_000, interval: 10 });
+    expect((await inboxEntry(bob, "msg.slow", ALICE_DEV))?.dispatch).toBe("pending");
+    expect(slowCalls).toBe(1);
+    expect(deferredCalls).toBe(2);
+    expect(triggerCalls).toBe(2);
+  }, 10_000);
+
 });

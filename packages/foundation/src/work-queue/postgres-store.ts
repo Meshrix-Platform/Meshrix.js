@@ -1804,38 +1804,6 @@ export async function createPostgresWorkQueueStore({
     async recordBackgroundWrite(aspectType?: unknown, input: QueueCommandInput = {}) {
       return withTransaction(database, (client) => recordBackgroundWriteInternal(client, aspectType, input));
     },
-    async writeFallbackCoordinatorState(input: QueueCommandInput = {}) {
-      return withTransaction(database, async (client) => {
-        const nowMs = nowFrom(timeSource, input.nowMs);
-        const fallbackTaskId = toText(input.fallbackTaskId || input.entityId || identityGenerator.fallbackTaskId());
-        if (input.workItemId) {
-          await client.query(`
-            INSERT INTO work_queue_fallback_tasks (
-              fallback_task_id, work_item_id, state, attempt, max_attempts,
-              reason, decision_json, created_at_ms, updated_at_ms
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)
-            ON CONFLICT(fallback_task_id) DO UPDATE SET
-              state = EXCLUDED.state,
-              attempt = EXCLUDED.attempt,
-              max_attempts = EXCLUDED.max_attempts,
-              reason = EXCLUDED.reason,
-              decision_json = EXCLUDED.decision_json,
-              updated_at_ms = EXCLUDED.updated_at_ms
-          `, [
-            fallbackTaskId,
-            toText(input.workItemId),
-            toText((asObject(input.state) || {}).state || input.status || "queued"),
-            asInt(input.attempt, 0),
-            asInt(input.maxAttempts, resolvedPolicy.fallbackRetry.maxAttempts),
-            toText(input.reason),
-            JSON.stringify(input.state || input.decision || {}),
-            nowMs,
-            nowMs
-          ]);
-        }
-        return recordBackgroundWriteInternal(client, "fallback_coordinator", { ...input, entityId: fallbackTaskId, nowMs });
-      });
-    },
     writeSnapshotState(input: QueueCommandInput = {}) {
       return store.recordBackgroundWrite("snapshot", input);
     },

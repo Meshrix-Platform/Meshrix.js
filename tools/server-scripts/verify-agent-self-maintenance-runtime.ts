@@ -422,7 +422,8 @@ invariant(combined.includes("config_in_place_mutation") && combined.includes("fs
 invariant(combined.includes('"/v1/chat/completions"'), "direct_model_gateway_http_missing");
 invariant(combined.includes('"/api/operation-permission/v1/execute"'), "governed_meshrix_http_missing");
 invariant(combined.includes("assertProposal(rawProposal"), "untrusted_proposal_gate_missing");
-invariant(combined.includes("MAX_QUEUE_ITEMS") && combined.includes("REQUEST_TIMEOUT_MS"), "bounded_execution_missing");
+invariant(combined.includes("MAX_QUEUE_ITEMS"), "bounded_queue_capacity_missing");
+invariant(!combined.includes("REQUEST_TIMEOUT_MS") && !combined.includes("AbortSignal.timeout"), "active_work_timeout_forbidden");
 invariant(combined.includes("configuration_replaced") && combined.includes("recovered: true"), "cancellation_or_recovery_missing");
 
 const { SelfMaintenanceRuntime } = await import(pathToFileURL(path.join(pluginRoot, "internal/runtime.mjs")).href) as {

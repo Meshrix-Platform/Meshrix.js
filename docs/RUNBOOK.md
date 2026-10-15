@@ -237,6 +237,11 @@ These commands reuse a healthy instance of the same mode, refuse an occupied def
 
 ```bash
 npm ci
+key_source="${XDG_CONFIG_HOME:-$HOME/.config}/meshrix/local-secret-master-key"
+install -d -m 0700 "$(dirname "$key_source")"
+if [ ! -e "$key_source" ]; then (umask 077; openssl rand -hex 32 > "$key_source"); fi
+chmod 0444 "$key_source"
+export MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE="$key_source"
 npm run start:dev
 ```
 
@@ -272,7 +277,7 @@ server.
 Non-development server startup:
 
 ```bash
-npm run server:start
+MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE="$key_source" npm run server:start
 ```
 
 This command starts the Core edition with the Web Console on the same origin.
@@ -296,14 +301,24 @@ The source checkout Compose file builds the API-only `runtime` target for local
 deployment verification. Prefer the one-click commands:
 
 ```bash
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/meshrix"
+install -d -m 0700 "$config_dir"
+key_source="$config_dir/local-secret-master-key"
+if [ ! -e "$key_source" ]; then (umask 077; openssl rand -hex 32 > "$key_source"); fi
+chmod 0444 "$key_source"
+export MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE="$key_source"
 npm run start:compose
 npm run stop:compose
 npm run restart:compose
 ```
 
-```bash
-docker compose up -d
-```
+The persistent master-key file is mounted read-only for UID/GID `10001`. Keep
+its parent directory private (`0700`); the file's `0444` mode lets that
+container identity read it without exposing it through other host directories.
+Keep the same key across every restart and restore. Meshrix.js now requires it
+before startup because encrypted credentials and the operation-audit privacy
+projection depend on stable custody. Never replace it with a newly generated
+key after data has been created.
 
 For a local deployment that also serves the Web Console, select the UI image
 target explicitly, or use `npm run start:compose:ui` / `npm run stop:compose:ui` /
@@ -317,14 +332,37 @@ The Compose file also defines an optional, profile-gated `format-convert`
 service for the file-parser/format-convert upstream example
 (`docs/examples/file-parser-format-convert.upstream.json`). A plain
 `docker compose up` never starts it. Set `MESHRIX_FORMAT_CONVERT_IMAGE_NAME`
-to an operator-supplied local image, then enable the profile:
+to an operator-supplied local image, create a separate bearer-token file, and
+enable the profile:
 
 ```bash
+token_source="$config_dir/format-convert-auth-token"
+if [ ! -e "$token_source" ]; then (umask 077; openssl rand -hex 32 > "$token_source"); fi
+chmod 0444 "$token_source"
+export MESHRIX_FORMAT_CONVERT_AUTH_TOKEN_SOURCE="$token_source"
+export MESHRIX_FORMAT_CONVERT_IMAGE_NAME=meshrix-js-format-convert:local
 docker compose --profile format-convert up -d
 ```
 
 The service stays on the internal Compose network; the server reaches it as
-`http://format-convert:8080`.
+`http://format-convert:8080`. The token file is mounted read-only and is read
+by the converter at startup. Provision the same token into Meshrix.js Local
+Secret Store under the exact generated service, host, protocol, and revision
+binding before publishing the descriptor. The portable example uses the typed
+reference `secret://meshrix/file-parser/format-convert/request-auth`; its
+multipart `/v1/convert` operation is preserved. The published flat configuration
+with `auth: { type: "bearer", token }` also remains supported: the loader encrypts
+the value into scoped Local Secret custody and publishes only its typed reference.
+It requires the external master-key provider, preserves current credentials during
+replacement, and revokes only unused loader-generated references. The original
+configuration remains plaintext and user-owned; restrict its permissions or use
+the typed-reference form to keep credential values outside it. Meshrix.js does not
+rewrite the input file or delete existing secret records.
+
+File-backed Compose credentials are not end-to-end encrypted. The converter
+authenticates `/v1/convert` and `/metrics`, while `/healthz` and `/readyz`
+remain unauthenticated probes. The sample uses private-network HTTP; use a
+TLS-protected hop whenever traffic crosses an untrusted network.
 
 Create the reproducible server source archive and its SHA-256 checksum with:
 
@@ -365,6 +403,7 @@ install -d -m 0700 /etc/meshrix/secrets
 umask 077
 openssl rand -hex 32 > "$key_source"
 openssl rand -hex 32 > "$proof_signer_source"
+chmod 0444 "$key_source" "$proof_signer_source"
 docker pull "$candidate"
 docker volume create meshrix-server-data
 docker volume create meshrix-server-backups
@@ -403,7 +442,15 @@ docker run -d \
 The same immutable activation is available through the production Compose
 overlay. `MESHRIX_IMAGE_NAME` must contain the digest reference.
 `MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE` must be an absolute operator-custodied
-file outside Meshrix.js data and backup volumes.
+file outside Meshrix.js data and backup volumes. Recovery backups exclude this
+key and Local Secret Store custody. In-place replacement restore preserves the
+existing excluded custody; a clean-target restore must separately reinject the
+matching master key and the encrypted Local Secret Store registry/value files,
+including the internal audit-projection seed, before Core starts. Master-key
+rotation preserves that encrypted seed and does not change projected audit
+identities. A missing or mismatched seed for an already projected audit
+database fails startup without generating a replacement or rewriting the
+database.
 `MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE` must be a second, different
 operator-custodied file with the same external-custody boundary, and
 `MESHRIX_PUBLIC_BASE_URL` must be the HTTPS URL owned by the administrator's
@@ -411,6 +458,11 @@ reverse proxy. `MESHRIX_TRUSTED_PROXIES` must list the exact IP address or
 addresses from which that proxy reaches the container. Production admission
 requires exact HTTPS forwarding metadata from those peers and leaves only
 local health probes available without proxy metadata.
+Compose file-backed secrets preserve source-file permissions. Keep both files
+inside the private `0700` directory and set the mounted files to `0444` so
+UID/GID `10001` can read them in the container; the private parent prevents
+other host users from traversing to those files. The cloud deployment planner
+checks this custody shape.
 `--no-build --pull never` prevents the cloud host from replacing the candidate
 with a local build or network result:
 

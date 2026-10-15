@@ -2,7 +2,7 @@ import { parentPort } from "node:worker_threads";
 import { Ajv2020, type AnySchema } from "ajv/dist/2020.js";
 
 if (!parentPort) throw new Error("Schema worker requires a parent port.");
-const ajv = new Ajv2020({ strict: false, strictSchema: true, strictTypes: false, allErrors: true, addUsedSchema: false, validateFormats: false, allowUnionTypes: true });
+const ajv = new Ajv2020({ strict: false, strictSchema: true, strictTypes: false, allErrors: false, addUsedSchema: false, validateFormats: false, allowUnionTypes: true });
 const compiledSchemas = new Map<string, ReturnType<typeof ajv.compile>>();
 parentPort.on("message", ({ type, jobId, schema, value, validate, digest }: { readonly type: "validate"; readonly jobId: number; readonly schema: unknown; readonly value?: unknown; readonly validate: boolean; readonly digest: string }) => {
   if (type !== "validate") return;

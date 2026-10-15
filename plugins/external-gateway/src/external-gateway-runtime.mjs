@@ -28,6 +28,7 @@ const CHANNEL_FIELDS = new Set([
 const DIRECTIONS = Object.freeze(["downstream", "upstream"]);
 const RESULT_STATUSES = new Set(["admitted", "degraded", "shed", "timeout", "cancelled", "failed"]);
 const RATE_WINDOW_MS = 1_000;
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 function confinement(pluginId) {
   return Object.freeze({
@@ -72,6 +73,25 @@ function boundedInteger(value, minimum, maximum, field) {
   return value;
 }
 
+function scheduleAt(deadlineAt, callback) {
+  let timer = null;
+  let cancelled = false;
+  const schedule = () => {
+    if (cancelled) return;
+    const remaining = deadlineAt - Date.now();
+    if (remaining <= 0) {
+      callback();
+      return;
+    }
+    timer = setTimeout(schedule, Math.min(MAX_TIMER_DELAY_MS, remaining));
+  };
+  schedule();
+  return () => {
+    cancelled = true;
+    if (timer !== null) clearTimeout(timer);
+  };
+}
+
 function validateChannelConfiguration(input, direction) {
   assertKnownFields(input, CHANNEL_FIELDS, `External Gateway ${direction} configuration`);
   if (!new Set(["caddy", "nginx", "direct"]).has(input.adapter)) {
@@ -94,7 +114,7 @@ function validateChannelConfiguration(input, direction) {
     maxConcurrency: boundedInteger(input.maxConcurrency, 1, 1_024, "maxConcurrency"),
     maxRatePerSecond: boundedInteger(input.maxRatePerSecond, 1, 100_000, "maxRatePerSecond"),
     maxQueueDepth: boundedInteger(input.maxQueueDepth, 0, 4_096, "maxQueueDepth"),
-    timeoutMs: boundedInteger(input.timeoutMs, 10, 120_000, "timeoutMs"),
+    ...(input.timeoutMs === undefined ? {} : { timeoutMs: boundedInteger(input.timeoutMs, 10, 120_000, "timeoutMs") }),
     circuitFailureThreshold: boundedInteger(input.circuitFailureThreshold, 1, 100, "circuitFailureThreshold"),
     circuitResetMs: boundedInteger(input.circuitResetMs, 10, 300_000, "circuitResetMs")
   });
@@ -121,6 +141,7 @@ function frozenEnvelope(input, direction) {
       input.stage !== direction || !plainObject(input.refs) || !Object.isFrozen(input.refs)) return false;
   const refs = input.refs;
   return TRAFFIC_MODELS.includes(refs.trafficModel) &&
+    Number.isSafeInteger(refs.deadlineMs) && refs.deadlineMs > 0 &&
     [refs.resourceRefs, refs.inputRefs, refs.traceRefs, refs.evidenceRefs]
       .every((values) => Array.isArray(values) && Object.isFrozen(values));
 }
@@ -159,9 +180,12 @@ function createChannel(direction, configuration, transport) {
   let active = 0;
   let cursor = 0;
   let closed = false;
+  let closePromise = null;
+  let closeComplete = false;
   const queue = [];
   const admittedAt = [];
   const activeControllers = new Set();
+  const activeSettlements = new Set();
   const circuits = new Map(configuration.endpointRefs.map((endpointRef) => [
     endpointRef,
     { failures: 0, openUntil: 0 }
@@ -209,10 +233,13 @@ function createChannel(direction, configuration, transport) {
     }
   }
 
-  async function invoke(job) {
+  function invoke(job) {
     const now = Date.now();
     const endpointRef = selectEndpoint(now);
-    if (!endpointRef) return result(job.envelope, "degraded", "external_gateway_circuit_open");
+    if (!endpointRef) {
+      const outcome = result(job.envelope, "degraded", "external_gateway_circuit_open");
+      return { outcome: Promise.resolve(outcome), settled: Promise.resolve() };
+    }
     const attachment = Object.freeze({
       adapter: configuration.adapter,
       endpointRef,
@@ -225,43 +252,62 @@ function createChannel(direction, configuration, transport) {
     activeControllers.add(controller);
     const cancel = () => controller.abort("external_gateway_cancelled");
     job.signal?.addEventListener("abort", cancel, { once: true });
-    const timeoutMs = Math.max(1, job.deadlineAt - Date.now());
-    let timer;
-    try {
-      const timeout = new Promise((resolve) => {
-        timer = setTimeout(() => {
-          controller.abort("external_gateway_timeout");
+    const cancellation = new Promise((resolve) => {
+      const resolveAborted = () => {
+        if (controller.signal.reason === "external_gateway_timeout") {
           resolve(result(job.envelope, "timeout", "external_gateway_timeout"));
-        }, timeoutMs);
+          return;
+        }
+        resolve(result(job.envelope, "cancelled",
+          controller.signal.reason === "external_gateway_closed"
+            ? "external_gateway_closed"
+            : "external_gateway_cancelled"));
+      };
+      controller.signal.addEventListener("abort", resolveAborted, { once: true });
+      if (job.signal?.aborted) cancel();
+    });
+    const cancelTimeout = scheduleAt(job.deadlineAt, () => controller.abort("external_gateway_timeout"));
+    const request = Object.freeze({ attachment, envelope: job.envelope, signal: controller.signal });
+    const transportTask = Promise.resolve()
+      .then(() => transport(request))
+      .then((value) => normalizeTransportResult(job.envelope, value))
+      .catch(() => {
+        if (controller.signal.aborted) {
+          if (controller.signal.reason === "external_gateway_timeout") {
+            return result(job.envelope, "timeout", "external_gateway_timeout");
+          }
+          return result(job.envelope, "cancelled", controller.signal.reason === "external_gateway_closed"
+            ? "external_gateway_closed"
+            : "external_gateway_cancelled");
+        }
+        return result(job.envelope, "failed", "external_gateway_transport_failed");
       });
-      const request = Object.freeze({ attachment, envelope: job.envelope, signal: controller.signal });
-      const transportTask = Promise.resolve(transport(request))
-        .then((value) => normalizeTransportResult(job.envelope, value))
-        .catch(() => result(
-          job.envelope,
-          controller.signal.aborted && controller.signal.reason !== "external_gateway_timeout" ? "cancelled" : "failed",
-          controller.signal.aborted && controller.signal.reason !== "external_gateway_timeout"
-            ? String(controller.signal.reason || "external_gateway_cancelled")
-            : "external_gateway_transport_failed"
-        ));
-      const outcome = await Promise.race([transportTask, timeout]);
-      recordEndpointResult(endpointRef, outcome, Date.now());
-      return outcome;
-    } finally {
-      clearTimeout(timer);
+    const outcome = Promise.race([transportTask, cancellation]).then((value) => {
+      recordEndpointResult(endpointRef, value, Date.now());
+      return value;
+    });
+    const settled = transportTask.finally(() => {
+      cancelTimeout();
       activeControllers.delete(controller);
       job.signal?.removeEventListener("abort", cancel);
-    }
+    });
+    return { outcome, settled };
   }
 
   function start(job) {
     active += 1;
-    invoke(job).then(job.resolve, () => {
+    const invocation = invoke(job);
+    invocation.outcome.then(job.resolve, () => {
       job.resolve(result(job.envelope, "failed", "external_gateway_transport_failed"));
-    }).finally(() => {
+    });
+    let settlement;
+    settlement = invocation.settled.finally(() => {
       active -= 1;
+      activeSettlements.delete(settlement);
       runNext();
     });
+    activeSettlements.add(settlement);
+    settlement.catch(() => {});
   }
 
   const channel = Object.freeze({
@@ -276,7 +322,7 @@ function createChannel(direction, configuration, transport) {
       maxRatePerSecond: configuration.maxRatePerSecond,
       circuitBreaker: true,
       overloadShedding: true,
-      timeoutMs: configuration.timeoutMs,
+      ...(configuration.timeoutMs === undefined ? {} : { timeoutMs: configuration.timeoutMs }),
       cancellation: true,
       streaming: true,
       backpressure: true,
@@ -305,9 +351,9 @@ function createChannel(direction, configuration, transport) {
       admittedAt.push(now);
       return new Promise((resolve) => {
         let settled = false;
-        let queueTimer;
+        let cancelQueueDeadline;
         let queuedAbort = null;
-        const deadlineAt = now + Math.min(configuration.timeoutMs, envelope.refs.deadlineMs);
+        const deadlineAt = now + Math.min(configuration.timeoutMs ?? envelope.refs.deadlineMs, envelope.refs.deadlineMs);
         const job = {
           envelope,
           signal: options.signal ?? null,
@@ -318,7 +364,7 @@ function createChannel(direction, configuration, transport) {
             resolve(value);
           },
           cleanupQueue() {
-            clearTimeout(queueTimer);
+            cancelQueueDeadline?.();
             if (queuedAbort) job.signal?.removeEventListener("abort", queuedAbort);
           }
         };
@@ -335,9 +381,9 @@ function createChannel(direction, configuration, transport) {
           };
           queuedAbort = () => removeQueued(result(envelope, "cancelled", "external_gateway_cancelled"));
           job.signal?.addEventListener("abort", queuedAbort, { once: true });
-          queueTimer = setTimeout(() => {
+          cancelQueueDeadline = scheduleAt(deadlineAt, () => {
             removeQueued(result(envelope, "timeout", "external_gateway_timeout"));
-          }, Math.max(1, deadlineAt - Date.now()));
+          });
         }
       });
     }
@@ -346,11 +392,18 @@ function createChannel(direction, configuration, transport) {
   return Object.freeze({
     channel,
     close() {
-      const alreadyClosed = closed;
+      if (closePromise) {
+        if (closeComplete) return Promise.resolve(Object.freeze({ ok: true, alreadyClosed: true }));
+        return closePromise;
+      }
       closed = true;
       for (const controller of activeControllers) controller.abort("external_gateway_closed");
       runNext();
-      return Object.freeze({ ok: true, alreadyClosed });
+      closePromise = Promise.all([...activeSettlements]).then(() => {
+        closeComplete = true;
+        return Object.freeze({ ok: true, alreadyClosed: false });
+      });
+      return closePromise;
     },
     snapshot() {
       return Object.freeze({
@@ -380,9 +433,9 @@ export function createExternalGatewayPluginRuntime({ pluginId, configuration = {
       activation: activationResult([]),
       contributions: emptyContributions(),
       close() {
-        const alreadyClosed = closed;
+        if (closed) return Promise.resolve(Object.freeze({ ok: true, alreadyClosed: true }));
         closed = true;
-        return Object.freeze({ ok: true, alreadyClosed });
+        return Promise.resolve(Object.freeze({ ok: true, alreadyClosed: false }));
       }
     });
   }
@@ -391,7 +444,8 @@ export function createExternalGatewayPluginRuntime({ pluginId, configuration = {
   }
   const runtimes = DIRECTIONS.map((direction) => createChannel(direction, admission[direction], transport));
   const contribution = gatewayContribution(runtimes.map((runtime) => runtime.channel));
-  let closed = false;
+  let closePromise = null;
+  let closeComplete = false;
   return Object.freeze({
     id: pluginId || "external-gateway",
     mounts: Object.freeze({}),
@@ -400,10 +454,15 @@ export function createExternalGatewayPluginRuntime({ pluginId, configuration = {
     contributions: Object.freeze({ gatewayChannels: contribution }),
     snapshot: () => Object.freeze(runtimes.map((runtime) => runtime.snapshot())),
     close() {
-      const alreadyClosed = closed;
-      closed = true;
-      for (const runtime of runtimes) runtime.close();
-      return Object.freeze({ ok: true, alreadyClosed });
+      if (closePromise) {
+        if (closeComplete) return Promise.resolve(Object.freeze({ ok: true, alreadyClosed: true }));
+        return closePromise;
+      }
+      closePromise = Promise.all(runtimes.map((runtime) => runtime.close())).then(() => {
+        closeComplete = true;
+        return Object.freeze({ ok: true, alreadyClosed: false });
+      });
+      return closePromise;
     }
   });
 }

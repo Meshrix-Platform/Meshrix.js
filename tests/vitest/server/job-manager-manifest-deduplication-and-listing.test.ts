@@ -10,6 +10,11 @@ const loggerMock: any = vi.hoisted(() : any => ({
   debug: vi.fn()
 }));
 
+const checkpointRecoveryMocks: any = vi.hoisted(() : any => ({
+  start: vi.fn(async () : Promise<any> => null),
+  upsertNode: vi.fn(async () : Promise<any> => null)
+}));
+
 const durableWorkflowRuntimeMock: any = vi.hoisted(() : any => ({
   startWorkflow: vi.fn(async () : Promise<any> => null),
   recoverWorkflow: vi.fn(async () : Promise<any> => null),
@@ -34,11 +39,11 @@ vi.mock("#meshrix/product-api", async () : Promise<any> => {
     finishCheckpointTree: vi.fn(async () : Promise<any> => null),
     getRuntimeLogger: vi.fn(() : any => loggerMock),
     removeImportCheckpoint: vi.fn(async () : Promise<any> => null),
-    startCheckpointTree: vi.fn(async () : Promise<any> => null),
+    startCheckpointTree: checkpointRecoveryMocks.start,
     summarizeError: vi.fn((error?: any) : any => error?.message || String(error || "")),
     summarizeForLog: vi.fn((value?: any) : any => value),
     traceDetails: vi.fn(() : any => ({ traceId: "unit-trace" })),
-    upsertCheckpointNode: vi.fn(async () : Promise<any> => null)
+    upsertCheckpointNode: checkpointRecoveryMocks.upsertNode
   };
 });
 
@@ -105,6 +110,8 @@ describe("job manager behavior", () : any => {
     loggerMock.warn.mockClear();
     loggerMock.error.mockClear();
     loggerMock.debug.mockClear();
+    checkpointRecoveryMocks.start.mockClear();
+    checkpointRecoveryMocks.upsertNode.mockClear();
     durableWorkflowRuntimeMock.startWorkflow.mockClear();
     durableWorkflowRuntimeMock.recoverWorkflow.mockClear();
     durableWorkflowRuntimeMock.scheduleActivity.mockClear();
@@ -235,6 +242,42 @@ describe("job manager behavior", () : any => {
         id: runningId,
         checkpointId: serverToken("checkpoint", runningId)
       });
+    });
+  });
+
+  it("does not repeat checkpoint or workflow recovery writes while external-worker APIs refresh an active job", async () : Promise<any> => {
+    await withTempUserData(async (userDataPath?: any) : Promise<any> => {
+      const jobId = "externally-managed-active-job";
+      const checkpointId = serverToken("checkpoint", jobId);
+      await seedPersistedJob(userDataPath, jobId, {
+        id: jobId,
+        status: "queued",
+        createdAt: "2026-07-22T09:00:00.000Z",
+        updatedAt: "2026-07-22T09:00:00.000Z",
+        checkpointId,
+        checkpointTreeId: serverToken("checkpoint_tree", "job", jobId),
+        workflowId: serverToken("workflow", "import_parse_job", jobId)
+      });
+
+      const manager: any = createTestJobManager({ userDataPath, processingEnabled: false });
+      const initial = await manager.getJob(jobId);
+      expect(initial).toMatchObject({ id: jobId, status: "queued", checkpointId });
+      expect(checkpointRecoveryMocks.start).toHaveBeenCalledTimes(1);
+      expect(checkpointRecoveryMocks.upsertNode).toHaveBeenCalledTimes(1);
+      expect(durableWorkflowRuntimeMock.recoverWorkflow).toHaveBeenCalledTimes(1);
+
+      checkpointRecoveryMocks.start.mockClear();
+      checkpointRecoveryMocks.upsertNode.mockClear();
+      durableWorkflowRuntimeMock.recoverWorkflow.mockClear();
+
+      await manager.getJob(jobId);
+      await manager.listJobs();
+      await manager.getJobByCheckpointId(checkpointId);
+
+      expect(checkpointRecoveryMocks.start).not.toHaveBeenCalled();
+      expect(checkpointRecoveryMocks.upsertNode).not.toHaveBeenCalled();
+      expect(durableWorkflowRuntimeMock.recoverWorkflow).not.toHaveBeenCalled();
+      await manager.close();
     });
   });
 

@@ -140,7 +140,8 @@ export function assertRuntimeDockerfileServiceIsolation(dockerfile: string): voi
 
 export function verifyModelGatewayDetachment(): void {
   const servicePackage = readJson("services/model-gateway/package.json");
-  assert.deepEqual(servicePackage.dependencies ?? {}, {}, "standalone service must not depend on Meshrix packages");
+  assert.deepEqual(servicePackage.dependencies ?? {}, { undici: "^8.11.2" },
+    "standalone service may use its locked Undici transport dependency but must not depend on Meshrix packages");
   assert.equal((servicePackage.scripts as Record<string, unknown>).start, "node src/main.mjs");
 
   for (const file of sourceFiles(serviceRoot)) {
@@ -163,8 +164,8 @@ export function verifyModelGatewayDetachment(): void {
   assertRuntimeDockerfileServiceIsolation(read("Dockerfile"));
 
   const pluginPackage = readJson("plugins/model-gateway/package.json");
-  assert.deepEqual(pluginPackage.dependencies, { "@meshrix/contracts": "0.0.1" },
-    "adapter may depend only on the neutral contract package");
+  assert.deepEqual(pluginPackage.dependencies ?? {}, {},
+    "the adapter runtime must remain self-contained and declare no runtime package dependencies");
   const manifest = readJson("plugins/model-gateway/plugin.json");
   assert.equal(manifest.defaultEnabled, false);
   assert.deepEqual(manifest.routes, []);

@@ -1,9 +1,9 @@
-import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash, createPublicKey, generateKeyPairSync } from "node:crypto";
-import { createServer as createHttpServer, type IncomingMessage } from "node:http";
+import { createServer as createHttpServer, request as httpRequest, type IncomingMessage } from "node:http";
 import { type AddressInfo, type Socket } from "node:net";
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +24,8 @@ import { createInnerRequestChannel } from "@meshrix/entry-transport";
 import type { Gateway } from "@meshrix/contracts/gateway";
 
 import { checkPrivateEndpoint, renderEndpointMetrics, servePrivateEndpointProfile, type PrivateEndpointSurface } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/profile.ts";
+import { EndpointPeerRuntime } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/peer.ts";
+import { loadPrivateEndpointConfig } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/config.ts";
 import { RelayWebSocketTransport } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/transport.ts";
 
 // ---------------------------------------------------------------------------
@@ -293,6 +295,45 @@ async function startFakeRelay(hooks: RelayHooks = {}): Promise<FakeRelay> {
 // ---------------------------------------------------------------------------
 
 const CREDENTIAL_ENV = "MESHRIX_TEST_PRIVATE_RELAY_CREDENTIAL";
+const ADMIN_TOKEN_ENV = "MESHRIX_TEST_ENDPOINT_ADMIN_TOKEN";
+const ADMIN_BEARER = "<admin-token>";
+
+function adminListen(port: number): { listen: { host: string; port: number }; token: string } {
+  return { listen: { host: "127.0.0.1", port }, token: `env:${ADMIN_TOKEN_ENV}` };
+}
+
+function bindAdminToken(): () => void {
+  const saved = process.env[ADMIN_TOKEN_ENV];
+  process.env[ADMIN_TOKEN_ENV] = ADMIN_BEARER;
+  return () => {
+    if (saved === undefined) delete process.env[ADMIN_TOKEN_ENV];
+    else process.env[ADMIN_TOKEN_ENV] = saved;
+  };
+}
+
+function adminHttp(
+  port: number,
+  options: { path: string; method?: string; headers?: Record<string, string | string[]>; body?: string }
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({
+      host: "127.0.0.1",
+      port,
+      path: options.path,
+      method: options.method ?? "GET",
+      headers: options.headers
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        resolve({ status: res.statusCode ?? 0, body: text ? JSON.parse(text) as Record<string, unknown> : {} });
+      });
+    });
+    req.on("error", reject);
+    req.end(options.body);
+  });
+}
 
 async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 5_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -311,8 +352,12 @@ interface Fixture {
   /** Entry-side TLS material — the paired identity this endpoint pins. */
   readonly entryKey: string;
   readonly entryCert: string;
+  /** The endpoint device's own paired identity. */
   readonly pairedIdentityKey: string;
   readonly pairedIdentityFingerprint: string;
+  /** The entry device's own paired identity — enrolled as an entry-role record. */
+  readonly entryIdentityKey: string;
+  readonly entryIdentityFingerprint: string;
 }
 
 async function writeFixture(relayUrl: string, overrides: Record<string, unknown> = {}): Promise<Fixture> {
@@ -334,8 +379,8 @@ async function writeFixture(relayUrl: string, overrides: Record<string, unknown>
     // the entry identity until the real pin is contract-representable.
     let entryCert = "";
     let entryKey = "";
-    let pairedIdentityKey = "";
-    let pairedIdentityFingerprint = "";
+    let entryIdentityKey = "";
+    let entryIdentityFingerprint = "";
     for (;;) {
       if (spawnSync("openssl", ["req", "-x509", "-nodes", "-newkey", "ed25519", "-days", "1", "-subj", "/CN=entry", "-keyout", entryKeyPath, "-out", entryCertPath], opts).status !== 0) {
         throw new Error("openssl failed to generate the entry TLS fixture");
@@ -343,8 +388,19 @@ async function writeFixture(relayUrl: string, overrides: Record<string, unknown>
       entryCert = await readFile(entryCertPath, "utf8");
       entryKey = await readFile(entryKeyPath, "utf8");
       const entryPublicKey = createPublicKey({ key: entryCert, format: "pem" });
-      pairedIdentityKey = entryPublicKey.export({ format: "der", type: "spki" }).toString("base64url");
-      pairedIdentityFingerprint = spkiSha256Base64Url(entryPublicKey);
+      entryIdentityKey = entryPublicKey.export({ format: "der", type: "spki" }).toString("base64url");
+      entryIdentityFingerprint = spkiSha256Base64Url(entryPublicKey);
+      if (/^[A-Za-z0-9]/.test(entryIdentityFingerprint)) break;
+    }
+    // The endpoint device record carries its own Ed25519 identity, matching
+    // the endpoint-trust-binding contract where pairedIdentity is the device's
+    // own key; the entry is a separate entry-role device record.
+    let pairedIdentityKey = "";
+    let pairedIdentityFingerprint = "";
+    for (;;) {
+      const endpointIdentity = generateKeyPairSync("ed25519");
+      pairedIdentityKey = endpointIdentity.publicKey.export({ format: "der", type: "spki" }).toString("base64url");
+      pairedIdentityFingerprint = spkiSha256Base64Url(endpointIdentity.publicKey);
       if (/^[A-Za-z0-9]/.test(pairedIdentityFingerprint)) break;
     }
     const recovery = generateKeyPairSync("ed25519");
@@ -389,7 +445,9 @@ async function writeFixture(relayUrl: string, overrides: Record<string, unknown>
       entryKey,
       entryCert,
       pairedIdentityKey,
-      pairedIdentityFingerprint
+      pairedIdentityFingerprint,
+      entryIdentityKey,
+      entryIdentityFingerprint
     };
   } catch (error) {
     await rm(dir, { recursive: true, force: true });
@@ -448,6 +506,25 @@ function enrolledIdentity(fixture: Fixture, extraDevices: string[] = []) {
       }
     });
   }
+  // The inner-channel peer resolves to its own entry-role device record; the
+  // endpoint's pairing pin comes from the entry device's own identity.
+  store.enroll({
+    deviceId: "dev.pr.entry.1",
+    routeId: "route.pr.1",
+    tenantId: "tenant.pr.1",
+    trustBinding: {
+      schemaVersion: PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION,
+      kind: "endpoint-trust-binding",
+      pairedIdentityKey: fixture.entryIdentityKey,
+      pairedIdentityFingerprint: fixture.entryIdentityFingerprint,
+      mode: "personal",
+      role: "entry",
+      trustGeneration: 3,
+      endpointPrincipalRef: "prin.pr.1",
+      capabilityGrantRef: "grantref.pr.1",
+      boundRecoveryKeyId: null
+    }
+  });
   return store;
 }
 
@@ -612,7 +689,9 @@ describe("private endpoint profile serve", () => {
   const saved = process.env[CREDENTIAL_ENV];
   function withCredential<T>(fn: () => Promise<T>): Promise<T> {
     process.env[CREDENTIAL_ENV] = "test-relay-credential";
+    const restoreAdmin = bindAdminToken();
     return fn().finally(() => {
+      restoreAdmin();
       if (saved === undefined) delete process.env[CREDENTIAL_ENV];
       else process.env[CREDENTIAL_ENV] = saved;
     });
@@ -621,7 +700,7 @@ describe("private endpoint profile serve", () => {
   it("serves: readiness, reachability transitions, protected status query, revocation propagation and signal drain", () => withCredential(async () => {
     const relay = await startFakeRelay();
     const adminPort = await freePort();
-    const fixture = await writeFixture(relay.url, { admin: { listen: { host: "127.0.0.1", port: adminPort } } });
+    const fixture = await writeFixture(relay.url, { admin: adminListen(adminPort) });
     const identity = enrolledIdentity(fixture, ["dev.pr.endpoint.2"]);
     const runtime = fakeRuntime();
     const controller = new AbortController();
@@ -648,7 +727,9 @@ describe("private endpoint profile serve", () => {
       expect(lines.join("\n")).not.toContain("BEGIN PRIVATE KEY");
 
       // The loopback admin listener exposes the same honest surface directly.
-      const status = await fetch(`http://127.0.0.1:${adminPort}/status`).then((response) => response.json() as Promise<Record<string, unknown>>);
+      const status = await fetch(`http://127.0.0.1:${adminPort}/status`, {
+        headers: { authorization: `Bearer ${ADMIN_BEARER}` }
+      }).then((response) => response.json() as Promise<Record<string, unknown>>);
       expect(status.reachability).toBe("reachable");
       expect(status.profile).toBe("private-endpoint");
 
@@ -762,6 +843,58 @@ describe("private endpoint profile serve", () => {
       const surface = parseSurfaces(lines).at(-1) as PrivateEndpointSurface;
       expect(surface.sessionId).toBe("sess.retry.13");
       expect(surface.endpointRestarts).toBeGreaterThanOrEqual(1);
+      controller.abort();
+      expect((await run).outcome).toBe("stopped");
+    } finally {
+      controller.abort();
+      await relay.close();
+      await rm(fixture.dir, { recursive: true, force: true });
+    }
+  }), 30_000);
+
+  it("reconnects after a capacity close instead of treating it as permanent termination", () => withCredential(async () => {
+    const relay = await startFakeRelay({
+      onSessionOpen(conn, message) {
+        const admission = message.admission as Record<string, unknown>;
+        conn.send(JSON.stringify({
+          schemaVersion: PRIVATE_RELAY_SCHEMA_VERSION,
+          wireProtocol: PRIVATE_RELAY_WIRE_PROTOCOL,
+          kind: "session-admitted",
+          sessionId: "sess.capacity.retry",
+          purpose: "forward",
+          admittedGeneration: admission.admissionGeneration,
+          revocationRevision: admission.revocationRevision,
+          routeState: "reachable",
+          limits: { ...RELAY_LIMIT_FIELDS },
+          reconnectGeneration: 1,
+          cursors: { toEndpoint: 0, toEntry: 0 },
+          serverNonce: "sn.relay.fixture.capacity001"
+        }));
+        conn.send(JSON.stringify({
+          schemaVersion: PRIVATE_RELAY_SCHEMA_VERSION,
+          wireProtocol: PRIVATE_RELAY_WIRE_PROTOCOL,
+          kind: "session-close",
+          sessionId: "sess.capacity.retry",
+          reason: "capacity_exceeded",
+          finalCursors: { toEndpoint: 0, toEntry: 0 }
+        }));
+        conn.close(4000, "capacity_exceeded");
+      }
+    });
+    const fixture = await writeFixture(relay.url);
+    const controller = new AbortController();
+    const lines: string[] = [];
+    try {
+      const run = servePrivateEndpointProfile(fixture.configPath, {
+        signal: controller.signal,
+        identityStore: enrolledIdentity(fixture),
+        writeLine: (line) => lines.push(line),
+        buildRuntime: async () => fakeRuntime()
+      });
+      await waitFor(() => relay.seen.some((entry) => entry.message.kind === "session-reconnect"));
+      await waitFor(() => parseSurfaces(lines).some((surface) => surface.reachability === "reachable"
+        && surface.session === "admitted" && surface.sessionId?.startsWith("sess.restored.") === true
+        && (surface.reconnectGeneration ?? 0) >= 1));
       controller.abort();
       expect((await run).outcome).toBe("stopped");
     } finally {
@@ -1064,22 +1197,18 @@ async function connectPeer(url: string): Promise<PeerClient> {
 // ---------------------------------------------------------------------------
 // Peer messaging wiring: the optional peer block activates EndpointPeerRuntime
 // on the SAME admitted session; peer-schema kinds ride the wire next to
-// session/recovery frames and the loopback admin listener exposes the
-// operator surface (status/inbox/send/ack-outcome/reconcile/sync/pair-safety).
+// session/recovery frames and the loopback admin listener exposes the local
+// status/inbox/send/pair-safety surface.
 // ---------------------------------------------------------------------------
 
 import {
   PRIVATE_RELAY_PEER_SCHEMA_VERSION,
-  createPeerAcked,
   createPeerBundle,
   createPeerBundlePublished,
-  createPeerMessages,
-  createPeerRetentionPolicy,
-  createPeerStatus
+  createPeerSend
 } from "@meshrix/contracts/private-relay";
-import { loadPrivateEndpointConfig } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/config.ts";
 
-/** Answer every peer wire request like a cooperative mailbox would. */
+/** Answer the endpoint's prekey publication and lookup requests. */
 function peerAnsweringRelay(): RelayHooks {
   const answer = (conn: TestWsConn, payload: Record<string, unknown>) => {
     conn.send(JSON.stringify(payload));
@@ -1108,43 +1237,6 @@ function peerAnsweringRelay(): RelayHooks {
             state: "unpublished", bundle: null, refusal: null
           }) as Record<string, unknown>);
           return;
-        case "peer-fetch":
-          answer(conn, createPeerMessages({
-            routeId, deviceId,
-            messages: [],
-            nextAfterSeq: Number(message.afterSeq ?? 0),
-            more: false, gaps: []
-          }) as Record<string, unknown>);
-          return;
-        case "peer-ack": {
-          const received = Array.isArray(message.received) ? message.received as { messageId: string; position: number }[] : [];
-          const reports = Array.isArray(message.reports) ? message.reports as { kind: string; messageId: string; position: number; detail: string | null }[] : [];
-          answer(conn, createPeerAcked({
-            routeId, deviceId,
-            recorded: [
-              ...received.map((entry) => ({ kind: "received" as const, source: "recipient" as const, messageId: entry.messageId, position: entry.position, detail: null })),
-              ...reports.map((entry) => ({ kind: entry.kind, source: "agent" as const, messageId: entry.messageId, position: entry.position, detail: entry.detail ?? null }))
-            ],
-            refused: []
-          }) as Record<string, unknown>);
-          return;
-        }
-        case "peer-receipt": {
-          const messageIds = Array.isArray(message.messageIds) ? message.messageIds.map(String) : [];
-          answer(conn, createPeerStatus({
-            routeId, deviceId,
-            statuses: messageIds.map((messageId) => ({ messageId, position: 0, receipts: [] }))
-          }) as Record<string, unknown>);
-          return;
-        }
-        case "peer-retention-policy":
-          answer(conn, createPeerRetentionPolicy({
-            routeId, deviceId,
-            mailboxCapacityBytes: 16_777_216,
-            mailboxRetentionMs: 2_592_000_000,
-            mailboxMaxItems: 4_096
-          }) as Record<string, unknown>);
-          return;
         default:
           return;
       }
@@ -1156,7 +1248,9 @@ describe("private endpoint peer wiring", () => {
   const savedPeer = process.env[CREDENTIAL_ENV];
   function withCredential<T>(fn: () => Promise<T>): Promise<T> {
     process.env[CREDENTIAL_ENV] = "test-relay-credential";
+    const restoreAdmin = bindAdminToken();
     return fn().finally(() => {
+      restoreAdmin();
       if (savedPeer === undefined) delete process.env[CREDENTIAL_ENV];
       else process.env[CREDENTIAL_ENV] = savedPeer;
     });
@@ -1217,15 +1311,27 @@ describe("private endpoint peer wiring", () => {
       const received: Record<string, unknown>[] = [];
       transport.setHandlers({ onMessage: (m) => received.push(m as Record<string, unknown>) });
       expect(transport.connect()).toBe(true);
-      transport.send(createPeerRetentionPolicy({
+      transport.send(createPeerSend({
+        tenantId: "tenant.pr.1",
         routeId: "route.pr.1",
-        deviceId: "dev.pr.endpoint.1",
-        mailboxCapacityBytes: 1,
-        mailboxRetentionMs: 1,
-        mailboxMaxItems: 1
+        senderDeviceId: "dev.pr.endpoint.1",
+        recipientDeviceId: "dev.pr.entry.1",
+        messageId: "msg.peer.test.1",
+        envelope: {
+          format: "signal-pqxdh",
+          headers: {
+            messageType: "session",
+            senderBundleId: "bundle.sender.1",
+            recipientBundleId: "bundle.recipient.1",
+            prekeyId: null,
+            signedPrekeyId: null,
+            baseKeyId: null
+          },
+          ciphertext: "YQ"
+        }
       }) as Record<string, unknown>);
-      await waitFor(() => relay.seen.some((entry) => entry.message.kind === "peer-retention-policy"));
-      const seen = relay.seen.find((entry) => entry.message.kind === "peer-retention-policy")!.message;
+      await waitFor(() => relay.seen.some((entry) => entry.message.kind === "peer-send"));
+      const seen = relay.seen.find((entry) => entry.message.kind === "peer-send")!.message;
       expect(seen.schemaVersion).toBe(PRIVATE_RELAY_PEER_SCHEMA_VERSION);
       transport.terminate();
     } finally {
@@ -1238,7 +1344,7 @@ describe("private endpoint peer wiring", () => {
     const adminPort = await freePort();
     const peerDir = "peer-state-fixture";
     const fixture = await writeFixture(relay.url, {
-      admin: { listen: { host: "127.0.0.1", port: adminPort } },
+      admin: adminListen(adminPort),
       peer: { enabled: true, storageDir: peerDir }
     });
     const identity = enrolledIdentity(fixture, ["dev.pr.endpoint.2"]);
@@ -1262,23 +1368,27 @@ describe("private endpoint peer wiring", () => {
       await waitFor(() => relay.seen.some((entry) => entry.message.kind === "peer-bundle-publish"));
 
       const admin = async (route: string, init?: RequestInit) => {
-        const response = await fetch(`http://127.0.0.1:${adminPort}${route}`, init);
+        const headers = new Headers(init?.headers);
+        headers.set("authorization", `Bearer ${ADMIN_BEARER}`);
+        if ((init?.method ?? "GET").toUpperCase() === "POST" && !headers.has("content-type")) {
+          headers.set("content-type", "application/json");
+        }
+        const response = await fetch(`http://127.0.0.1:${adminPort}${route}`, { ...init, headers });
         return { status: response.status, body: await response.json() as Record<string, unknown> };
       };
 
-      // Policy pull and the initial bundle publish are asynchronous behind
-      // admission — poll the operator surface until both have landed.
+      // The initial bundle publish is asynchronous behind admission. Poll the
+      // bounded local surface until the durable bundle projection is ready.
       let peerStatus!: { status: number; body: Record<string, unknown> };
       await waitFor(async () => {
         peerStatus = await admin("/peer/status");
         if (peerStatus.status !== 200) return false;
-        const body = peerStatus.body as { retentionPolicy?: unknown; localBundle?: { revision: number } | null };
-        return body.retentionPolicy != null && (body.localBundle?.revision ?? 0) >= 1;
+        const body = peerStatus.body as { localBundle?: { revision: number } | null };
+        return (body.localBundle?.revision ?? 0) >= 1;
       });
       expect(peerStatus.body.enabled).toBe(true);
       expect(peerStatus.body.peerId).toBe("peer:tenant.pr.1:route.pr.1:dev.pr.endpoint.1");
       expect(peerStatus.body.sessionLive).toBe(true);
-      expect((peerStatus.body.retentionPolicy as { mailboxMaxItems: number }).mailboxMaxItems).toBe(4096);
       expect((peerStatus.body.localBundle as { revision: number }).revision).toBeGreaterThanOrEqual(1);
 
       const inbox = await admin("/peer/inbox");
@@ -1292,19 +1402,7 @@ describe("private endpoint peer wiring", () => {
         body: JSON.stringify({ peerDeviceId: "dev.pr.entry.9", text: "hello" })
       });
       expect(send.status).toBe(400);
-      expect(send.body.error).toBe("peer_client_bundle_unavailable");
-
-      const sync = await admin("/peer/sync", { method: "POST" });
-      expect(sync.status).toBe(200);
-      expect((sync.body as { cursor: number }).cursor).toBe(0);
-
-      const reconcile = await admin("/peer/reconcile", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({})
-      });
-      expect(reconcile.status).toBe(200);
-      expect(reconcile.body.reconciled).toBe(true);
+      expect(send.body.error).toBe("peer_client_unknown_peer");
 
       // Safety evidence is never invented: an unobserved peer reports nulls.
       const safety = await admin("/peer/pair-safety?peerDeviceId=dev.pr.entry.9");
@@ -1323,7 +1421,7 @@ describe("private endpoint peer wiring", () => {
   it("answers peer_disabled on /peer routes when the block is absent", () => withCredential(async () => {
     const relay = await startFakeRelay();
     const adminPort = await freePort();
-    const fixture = await writeFixture(relay.url, { admin: { listen: { host: "127.0.0.1", port: adminPort } } });
+    const fixture = await writeFixture(relay.url, { admin: adminListen(adminPort) });
     const identity = enrolledIdentity(fixture, ["dev.pr.endpoint.2"]);
     const controller = new AbortController();
     const lines: string[] = [];
@@ -1336,7 +1434,9 @@ describe("private endpoint peer wiring", () => {
       });
       // The admin listener binds before the first surface emission.
       await waitFor(() => lines.length > 0);
-      const response = await fetch(`http://127.0.0.1:${adminPort}/peer/status`);
+      const response = await fetch(`http://127.0.0.1:${adminPort}/peer/status`, {
+        headers: { authorization: `Bearer ${ADMIN_BEARER}` }
+      });
       expect(response.status).toBe(404);
       expect((await response.json() as { error: string }).error).toBe("peer_disabled");
       controller.abort();
@@ -1352,10 +1452,9 @@ describe("private endpoint peer wiring", () => {
 // ---------------------------------------------------------------------------
 // Metrics exposition: GET /metrics on the same loopback admin surface renders
 // the existing profile counters as Prometheus text — never payloads, secrets
-// or identifiers — and inherits the surface's (optional) bearer authority.
+// or identifiers — and requires the listener's bearer token.
 // ---------------------------------------------------------------------------
 
-const ADMIN_TOKEN_ENV = "MESHRIX_TEST_ENDPOINT_ADMIN_TOKEN";
 
 interface ExpositionSample {
   readonly labels: Readonly<Record<string, string>>;
@@ -1468,7 +1567,7 @@ describe("private endpoint metrics exposition", () => {
   it("serves the exposition on the loopback admin listener and agrees with /status", () => withCredentials(async () => {
     const relay = await startFakeRelay();
     const adminPort = await freePort();
-    const fixture = await writeFixture(relay.url, { admin: { listen: { host: "127.0.0.1", port: adminPort } } });
+    const fixture = await writeFixture(relay.url, { admin: adminListen(adminPort) });
     const controller = new AbortController();
     const lines: string[] = [];
     try {
@@ -1480,8 +1579,9 @@ describe("private endpoint metrics exposition", () => {
       });
       await waitFor(() => parseSurfaces(lines).some((s) => s.reachability === "reachable"));
 
-      const status = await fetch(`http://127.0.0.1:${adminPort}/status`).then((response) => response.json() as Promise<PrivateEndpointSurface>);
-      const response = await fetch(`http://127.0.0.1:${adminPort}/metrics`);
+      const authed = { authorization: `Bearer ${ADMIN_BEARER}` };
+      const status = await fetch(`http://127.0.0.1:${adminPort}/status`, { headers: authed }).then((response) => response.json() as Promise<PrivateEndpointSurface>);
+      const response = await fetch(`http://127.0.0.1:${adminPort}/metrics`, { headers: authed });
       expect(response.status).toBe(200);
       expect(response.headers.get("content-type")).toBe("text/plain; version=0.0.4");
       const text = await response.text();
@@ -1519,7 +1619,7 @@ describe("private endpoint metrics exposition", () => {
       await relay.close();
       await rm(fixture.dir, { recursive: true, force: true });
     }
-  }), 30_000);
+  }, ADMIN_BEARER), 30_000);
 
   it("enforces the configured admin bearer token uniformly, including /metrics", () => withCredentials(async () => {
     const relay = await startFakeRelay();
@@ -1542,13 +1642,55 @@ describe("private endpoint metrics exposition", () => {
         expect((await fetch(`http://127.0.0.1:${adminPort}${route}`)).status).toBe(401);
         expect((await fetch(`http://127.0.0.1:${adminPort}${route}`, { headers: { authorization: "Bearer wrong-token" } })).status).toBe(401);
       }
-      const authed = { authorization: "Bearer test-admin-token" };
+      const authed = { authorization: "Bearer <admin-token>" };
       const metricsResponse = await fetch(`http://127.0.0.1:${adminPort}/metrics`, { headers: authed });
       expect(metricsResponse.status).toBe(200);
       const text = await metricsResponse.text();
       expect(parseExposition(text).has("meshrix_endpoint_operations_tracked")).toBe(true);
-      expect(text).not.toContain("test-admin-token");
+      expect(text).not.toContain("<admin-token>");
       expect((await fetch(`http://127.0.0.1:${adminPort}/status`, { headers: authed })).status).toBe(200);
+      expect((await fetch(`http://127.0.0.1:${adminPort}/peer/inbox`)).status).toBe(401);
+      expect((await fetch(`http://127.0.0.1:${adminPort}/status`, {
+        headers: { ...authed, origin: "http://127.0.0.1:9" }
+      })).status).toBe(200);
+      expect((await fetch(`http://127.0.0.1:${adminPort}/status`, {
+        headers: { ...authed, origin: "http://[::1]:9" }
+      })).status).toBe(200);
+      const evilOrigin = await fetch(`http://127.0.0.1:${adminPort}/status`, {
+        headers: { ...authed, origin: "https://evil.example" }
+      });
+      expect(evilOrigin.status).toBe(403);
+      expect((await evilOrigin.json() as { error: string }).error).toBe("admin_origin_rejected");
+      expect((await fetch(`http://127.0.0.1:${adminPort}/status`, {
+        headers: { ...authed, origin: "http://localhost:9" }
+      })).status).toBe(200);
+      expect((await adminHttp(adminPort, { path: "/status", headers: { ...authed, host: `localhost:${adminPort}` } })).status).toBe(200);
+      const evilHost = await adminHttp(adminPort, {
+        path: "/status",
+        headers: { ...authed, host: "evil.example" }
+      });
+      expect(evilHost.status).toBe(403);
+      expect(evilHost.body.error).toBe("admin_host_rejected");
+      expect((await adminHttp(adminPort, {
+        path: "/status",
+        headers: { ...authed, host: "127.0.0.1:9" }
+      })).status).toBe(403);
+      const plainPost = await adminHttp(adminPort, {
+        path: "/peer/send",
+        method: "POST",
+        headers: { ...authed, "content-type": "text/plain" },
+        body: "{}"
+      });
+      expect(plainPost.status).toBe(415);
+      expect(plainPost.body.error).toBe("admin_content_type_rejected");
+      const jsonPost = await adminHttp(adminPort, {
+        path: "/peer/send",
+        method: "POST",
+        headers: { ...authed, "content-type": "application/json" },
+        body: "{}"
+      });
+      expect(jsonPost.status).toBe(404);
+      expect(jsonPost.body.error).toBe("peer_disabled");
 
       controller.abort();
       expect((await run).outcome).toBe("stopped");
@@ -1557,13 +1699,13 @@ describe("private endpoint metrics exposition", () => {
       await relay.close();
       await rm(fixture.dir, { recursive: true, force: true });
     }
-  }, "test-admin-token"), 30_000);
+  }, "<admin-token>"), 30_000);
 
-  it("includes durable peer depths only when the peer block is enabled", () => withCredentials(async () => {
+  it("reports peer liveness without scanning local outbox or inbox history", () => withCredentials(async () => {
     const relay = await startFakeRelay(peerAnsweringRelay());
     const adminPort = await freePort();
     const fixture = await writeFixture(relay.url, {
-      admin: { listen: { host: "127.0.0.1", port: adminPort } },
+      admin: adminListen(adminPort),
       peer: { enabled: true, storageDir: "peer-state-metrics" }
     });
     const controller = new AbortController();
@@ -1577,12 +1719,14 @@ describe("private endpoint metrics exposition", () => {
       });
       await waitFor(() => parseSurfaces(lines).some((s) => s.reachability === "reachable"));
 
-      const response = await fetch(`http://127.0.0.1:${adminPort}/metrics`);
+      const response = await fetch(`http://127.0.0.1:${adminPort}/metrics`, {
+        headers: { authorization: `Bearer ${ADMIN_BEARER}` }
+      });
       expect(response.status).toBe(200);
       const metrics = parseExposition(await response.text());
       expect(scalarSample(metrics, "meshrix_endpoint_peer_live")).toBe(1);
-      expect(scalarSample(metrics, "meshrix_endpoint_peer_inbox_depth")).toBe(0);
-      expect(scalarSample(metrics, "meshrix_endpoint_peer_outbox_depth")).toBe(0);
+      expect(metrics.has("meshrix_endpoint_peer_inbox_depth")).toBe(false);
+      expect(metrics.has("meshrix_endpoint_peer_outbox_depth")).toBe(false);
 
       controller.abort();
       expect((await run).outcome).toBe("stopped");
@@ -1591,14 +1735,94 @@ describe("private endpoint metrics exposition", () => {
       await relay.close();
       await rm(fixture.dir, { recursive: true, force: true });
     }
+  }, ADMIN_BEARER), 30_000);
+
+  it("projects provider failures into stable retained peer events", async () => {
+    const handlers = new Map<string, (event: unknown) => void>();
+    const marker = "SYNTHETIC_PRIVATE_PROVIDER_DETAIL";
+    let failures = 0;
+    let disposed = false;
+    const fail = async () => { failures += 1; throw new Error(marker); };
+    const client = { on: (kind: string, handler: (event: unknown) => void) => handlers.set(kind, handler),
+      dispose: () => { disposed = true; },
+      resume: fail, publishBundle: fail,
+      localBundle: async () => null, learnedPeers: async () => ({}),
+      outbox: {
+        historyPage: async () => ({ items: [], nextAfterSequence: null }),
+        pendingPage: async () => ({ items: [], nextAfterSequence: null })
+      },
+      inbox: {
+        historyPage: async () => ({ items: [], nextAfterSequence: null }),
+        pendingDispatchPage: async () => ({ items: [], nextAfterSequence: null })
+      } };
+    // The actual constructor owns event projection; only downstream failures
+    // and stores are synthetic, with no peer conversation or provider request.
+    const Constructor = EndpointPeerRuntime as unknown as new (input: Record<string, unknown>) => EndpointPeerRuntime;
+    const runtime = new Constructor({ client, peerId: "synthetic.peer", route: { tenantId: "tenant.synthetic", routeId: "route.synthetic", deviceId: "dev.synthetic" },
+      sessionLive: () => true, cryptoStore: {}, clientStore: {}, resolvePeerIdentity: async () => null });
+    handlers.get("error")?.({ code: marker, detail: marker });
+    runtime.onSessionLive();
+    await waitFor(() => failures === 2);
+    await Promise.resolve();
+    const status = await runtime.status();
+    expect(status.events.map((event) => event.kind)).toEqual(["error", "resume_failed", "bundle_publish_failed"]);
+    expect(JSON.stringify(status)).not.toContain(marker);
+    expect(status.events.every((event) => event.detail === event.kind)).toBe(true);
+    await runtime.close();
+    expect(disposed).toBe(true);
+  });
+
+  it("delivers a persistent generated bearer to local callers without exposing it in status", () => withCredentials(async () => {
+    const relay = await startFakeRelay();
+    const adminPort = await freePort();
+    const fixture = await writeFixture(relay.url, { admin: { listen: { host: "127.0.0.1", port: adminPort } } });
+    const controller = new AbortController();
+    const lines: string[] = [];
+    const config = await loadPrivateEndpointConfig(fixture.configPath);
+    const bearer = (await readFile(config.adminTokenFile!, "utf8")).trim();
+    const run = servePrivateEndpointProfile(fixture.configPath, { signal: controller.signal,
+      identityStore: enrolledIdentity(fixture), writeLine: (line) => lines.push(line), buildRuntime: async () => fakeRuntime() });
+    try {
+      await waitFor(() => lines.length > 0);
+      expect((await adminHttp(adminPort, { path: "/status", headers: { host: `localhost:${adminPort}` } })).status).toBe(401);
+      const headers = { host: `localhost:${adminPort}`, origin: "http://localhost:9", authorization: `Bearer ${bearer}` };
+      const status = await adminHttp(adminPort, { path: "/status", headers });
+      expect(status.status).toBe(200);
+      expect(JSON.stringify(status.body)).not.toContain(bearer);
+      const preflight = await fetch(`http://127.0.0.1:${adminPort}/status`, { method: "OPTIONS", headers: { origin: "http://localhost:9", "access-control-request-method": "GET", "access-control-request-headers": "authorization" } });
+      expect(preflight.status).toBe(204);
+      expect(preflight.headers.get("access-control-allow-origin")).toBe("http://localhost:9");
+      expect(preflight.headers.get("access-control-allow-headers")).toContain("Authorization");
+      expect((await fetch(`http://127.0.0.1:${adminPort}/status`, { method: "OPTIONS", headers: { origin: "https://evil.example" } })).status).toBe(403);
+      expect((await loadPrivateEndpointConfig(fixture.configPath)).adminToken).toBe(bearer);
+      controller.abort();
+      expect((await run).outcome).toBe("stopped");
+    } finally { controller.abort(); await relay.close(); await rm(fixture.dir, { recursive: true, force: true }); }
   }), 30_000);
 
   it("validates the admin token binding without serving", () => withCredentials(async () => {
+    const omitted = await writeFixture("wss://relay.example.invalid", {
+      admin: { listen: { host: "127.0.0.1", port: 0 } }
+    });
+    try {
+      const [first, second] = await Promise.all([
+        loadPrivateEndpointConfig(omitted.configPath), loadPrivateEndpointConfig(omitted.configPath)
+      ]);
+      expect(first.adminToken).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+      expect(second.adminToken).toBe(first.adminToken);
+      expect(second.adminTokenFile).toBe(first.adminTokenFile);
+      if (process.platform !== "win32") expect((await stat(first.adminTokenFile!)).mode & 0o077).toBe(0);
+      const summary = await checkPrivateEndpoint({ config: omitted.configPath });
+      expect(JSON.stringify(summary)).not.toContain(first.adminToken);
+      expect((summary.admin as { credential: { file: string } }).credential.file).toBe(first.adminTokenFile);
+    } finally {
+      await rm(omitted.dir, { recursive: true, force: true });
+    }
     const literal = await writeFixture("wss://relay.example.invalid", {
       admin: { listen: { host: "127.0.0.1", port: 0 }, token: "inline-secret" }
     });
     try {
-      await expect(checkPrivateEndpoint({ config: literal.configPath })).rejects.toMatchObject({ code: "private_endpoint_credential_invalid" });
+      await expect(checkPrivateEndpoint({ config: literal.configPath })).rejects.toMatchObject({ code: "private_endpoint_material_invalid" });
     } finally {
       await rm(literal.dir, { recursive: true, force: true });
     }
@@ -1611,5 +1835,5 @@ describe("private endpoint metrics exposition", () => {
     } finally {
       await rm(missing.dir, { recursive: true, force: true });
     }
-  }, "test-admin-token"));
+  }, "<admin-token>"));
 });

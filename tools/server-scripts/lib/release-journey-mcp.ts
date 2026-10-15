@@ -98,8 +98,9 @@ export async function uploadBinaryFixtureThroughConnector({
   }
   const createdResponse: any = await fetchImpl(createUrl, {
     method: "POST",
+    redirect: "error",
     headers: {
-      ...authHeaders(token, target),
+      ...authHeaders(token, target, normalizedBaseUrl),
       ...createIdentityHeaders
     },
     body: createBody,
@@ -138,8 +139,9 @@ export async function uploadBinaryFixtureThroughConnector({
   }
   const uploadedResponse: any = await fetchImpl(uploadUrl, {
     method: "PUT",
+    redirect: "error",
     headers: {
-      ...authHeaders(token, target),
+      ...authHeaders(token, target, normalizedBaseUrl),
       "Content-Type": "application/octet-stream",
       ...uploadIdentityHeaders
     },
@@ -467,13 +469,14 @@ export async function probeApiKeyUploadRequest({
       ? Buffer.alloc(0)
       : Buffer.isBuffer(body) ? body : Buffer.from(String(body || ""));
     const headers: Record<string, any> = {
-      ...authHeaders(token, target)
+      ...authHeaders(token, target, baseUrl)
     };
     if (ambiguousCredential) headers.Authorization = "Bearer x";
     if (method === "POST") headers["Content-Type"] = "application/json";
     else if (method === "PUT") headers["Content-Type"] = "application/octet-stream";
     const response: any = await fetch(url, {
       method,
+      redirect: "error",
       headers,
       body: method === "GET" ? undefined : requestBody,
       signal: AbortSignal.timeout(30_000)
@@ -631,7 +634,7 @@ export async function diagnoseArtifactGet({ artifactUrl, target = "kimi", env = 
       method: "GET",
       redirect: "error",
       signal: AbortSignal.timeout(15000),
-      headers: authHeaders(token, resolvedTarget)
+      headers: authHeaders(token, resolvedTarget, new URL(artifactUrl).origin)
     });
     let code: any = "";
     try {

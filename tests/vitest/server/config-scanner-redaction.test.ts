@@ -7,6 +7,21 @@ import {
 
 const scanKey: any = Buffer.alloc(32, 7);
 
+it("distinguishes four-part source revisions from routable hosts and path literals", () => {
+  const value = [11, 22, 33, 44].join(".");
+  expect(scanText("docs/source.md", `https://github.com/example/project/blob/release-${value}/src/main.c`, scanKey)).toEqual([]);
+  expect(scanText("docs/source.md", `https://${value}/source`, scanKey)).toMatchObject([{ rule: "public-ipv4-literal" }]);
+  expect(scanText("docs/source.md", `https://github.com/example/project/blob/main/config/${value}`, scanKey)).toMatchObject([{ rule: "public-ipv4-literal" }]);
+  for (const text of [
+    `https://github.com/example/project/blob/main?host=${value}`,
+    `https://github.com/example/project/blob/main#host=${value}`,
+    `{"source":"https://github.com/example/project/blob/main","host":"${value}"}`
+  ]) {
+    expect(scanText("docs/source.md", text, scanKey)).toMatchObject([{ rule: "public-ipv4-literal" }]);
+  }
+  expect(scanText("docs/source.md", value, scanKey)).toMatchObject([{ rule: "public-ipv4-literal" }]);
+});
+
 function macosHome(username: any, ...parts: any[]) : any {
   return ["", "Users", username, ...parts].join("/");
 }

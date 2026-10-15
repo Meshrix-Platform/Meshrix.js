@@ -51,7 +51,8 @@
       "directory": "packages/entry-transport",
       "allowedDependsOn": [
         "contracts",
-        "gateway"
+        "gateway",
+        "peer-client"
       ],
       "forbiddenDependsOn": [
         "foundation",
@@ -163,10 +164,12 @@
         "contracts",
         "entry-app",
         "entry-transport",
-        "gateway"
+        "gateway",
+        "peer-crypto",
+        "peer-client",
+        "foundation"
       ],
       "forbiddenDependsOn": [
-        "foundation",
         "agents",
         "capabilities",
         "protocols",
@@ -353,7 +356,10 @@
         "foundation",
         "capabilities",
         "protocols",
-        "gateway"
+        "gateway",
+        "peer-crypto",
+        "peer-client",
+        "entry-transport"
       ],
       "forbiddenDependsOn": [
         "agents",
@@ -563,6 +569,26 @@
         "apps/**",
         "packages/**",
         "tools/**"
+      ],
+      "severity": "error"
+    },
+    {
+      "id": "entry-gui-foundation-primitives-require-node-backend",
+      "description": "Only the Entry Node backend may consume shared Foundation primitives; renderer and shared UI sources remain isolated.",
+      "fromPattern": "apps/entry-gui/**",
+      "excludedFromPatterns": [
+        "apps/entry-gui/src/main/**"
+      ],
+      "fromLayers": [
+        "entry-gui-app"
+      ],
+      "specifierKinds": [
+        "relative",
+        "package",
+        "package-import"
+      ],
+      "forbiddenTargets": [
+        "packages/foundation/**"
       ],
       "severity": "error"
     }

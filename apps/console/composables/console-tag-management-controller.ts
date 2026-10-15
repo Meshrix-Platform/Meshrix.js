@@ -106,6 +106,19 @@ function sortTags(tags: TagManagementTag[], parentId = "") : any {
   );
 }
 
+function compareTagListOrder(left: TagManagementTag, right: TagManagementTag): number {
+  for (const [leftValue, rightValue] of [
+    [left.kind, right.kind],
+    [left.parentTagId, right.parentTagId],
+    [left.tagId, right.tagId],
+  ]) {
+    if (leftValue !== rightValue) {
+      return leftValue < rightValue ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
 export function buildTreeRows(tags: TagManagementTag[]): TagManagementTreeRow[] {
   const rows: TagManagementTreeRow[] = [];
   const tagsById: any = new Map<string, TagManagementTag>(
@@ -232,20 +245,60 @@ export function useTagManagementConsole() : any {
     startNewTag();
   }
 
-  async function refreshTagManagement(forceEditor: any = false) : Promise<any> {
+  function tagMatchesFilters(tag: TagManagementTag): boolean {
+    if (kindFilter.value && tag.kind !== kindFilter.value) return false;
+    if (statusFilter.value) return tag.status === statusFilter.value;
+    return includeArchived.value || tag.status !== "archived";
+  }
+
+  function applyTagResponse(tag: TagManagementTag): boolean {
+    if (!tag || typeof tag.tagId !== "string" || tag.tagId.length === 0
+      || typeof tag.kind !== "string"
+      || typeof tag.label !== "string"
+      || typeof tag.description !== "string"
+      || typeof tag.parentTagId !== "string"
+      || typeof tag.enabled !== "boolean"
+      || typeof tag.system !== "boolean"
+      || typeof tag.status !== "string"
+      || !Array.isArray(tag.scopePrerequisites)
+      || !tag.metadata || typeof tag.metadata !== "object" || Array.isArray(tag.metadata)
+      || typeof tag.createdAt !== "string"
+      || typeof tag.updatedAt !== "string") {
+      return false;
+    }
+
+    const current = tags.value.filter((item?: any) : any => item.tagId !== tag.tagId);
+    if (tagMatchesFilters(tag)) {
+      current.push(tag);
+      current.sort(compareTagListOrder);
+    }
+    tags.value = current;
+    syncSelectionAfterLoad(true);
+    return true;
+  }
+
+  async function refreshTagManagement(
+    forceEditor: any = false,
+    refreshOptions: { includeTags?: boolean } = {},
+  ) : Promise<any> {
     loading.value = true;
     error.value = "";
+    const includeTags = refreshOptions.includeTags !== false;
     try {
       const [tagPayload, projectionPayload, auditPayload] = await Promise.all([
-        listTagManagementTags({
-          kind: kindFilter.value || undefined,
-          status: statusFilter.value || undefined,
-          includeArchived: includeArchived.value,
-        }),
+        includeTags
+          ? listTagManagementTags({
+              kind: kindFilter.value || undefined,
+              status: statusFilter.value || undefined,
+              includeArchived: includeArchived.value,
+            })
+          : Promise.resolve(null),
         listTagManagementProjections({ includeArchived: includeArchived.value }),
         listTagManagementAudit({ limit: 100 }),
       ]);
-      tags.value = tagPayload.items || [];
+      if (tagPayload) {
+        tags.value = tagPayload.items || [];
+      }
       projections.value = projectionPayload.items || [];
       auditItems.value = auditPayload.items || [];
       syncSelectionAfterLoad(forceEditor);
@@ -274,9 +327,16 @@ export function useTagManagementConsole() : any {
         metadata,
       };
       const response: any = await upsertTagManagementTag(payload);
-      selectedTagId.value = response.tag.tagId;
+      const updatedTag: any = response?.tag;
+      if (typeof updatedTag?.tagId === "string") {
+        selectedTagId.value = updatedTag.tagId;
+      }
       status.value = "已保存";
-      await refreshTagManagement(true);
+      if (applyTagResponse(updatedTag)) {
+        await refreshTagManagement(true, { includeTags: false });
+      } else {
+        await refreshTagManagement(true);
+      }
     } catch (caught: any) {
       error.value = caught instanceof Error ? caught.message : "Tag 保存失败。";
     } finally {
@@ -292,9 +352,13 @@ export function useTagManagementConsole() : any {
     error.value = "";
     status.value = "";
     try {
-      await archiveTagManagementTag(selectedTag.value.tagId, "console archive");
+      const response: any = await archiveTagManagementTag(selectedTag.value.tagId, "console archive");
       status.value = "已归档";
-      await refreshTagManagement(true);
+      if (applyTagResponse(response?.tag)) {
+        await refreshTagManagement(true, { includeTags: false });
+      } else {
+        await refreshTagManagement(true);
+      }
     } catch (caught: any) {
       error.value = caught instanceof Error ? caught.message : "Tag 归档失败。";
     } finally {
@@ -308,9 +372,13 @@ export function useTagManagementConsole() : any {
     error.value = "";
     status.value = "";
     try {
-      await restoreTagManagementTag(selectedTag.value.tagId);
+      const response: any = await restoreTagManagementTag(selectedTag.value.tagId);
       status.value = "已恢复";
-      await refreshTagManagement(true);
+      if (applyTagResponse(response?.tag)) {
+        await refreshTagManagement(true, { includeTags: false });
+      } else {
+        await refreshTagManagement(true);
+      }
     } catch (caught: any) {
       error.value = caught instanceof Error ? caught.message : "Tag 恢复失败。";
     } finally {

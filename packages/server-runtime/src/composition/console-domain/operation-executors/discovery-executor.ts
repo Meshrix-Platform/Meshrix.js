@@ -1,5 +1,6 @@
 
 import { hashClientString, serverToken } from "@meshrix/foundation/security/client-strings";
+import { isClientCredential } from "../../../state/client-registry-repository.ts";
 import { buildBootstrapPayload } from "@meshrix/protocols/http/bootstrap-payload";
 import {
   buildClientConnectionList,
@@ -26,8 +27,27 @@ export function stripClientDiscoveryStrings(value: Record<string, any> = {}) : a
       : "",
     refreshIntervalSeconds: value.refreshIntervalSeconds,
     checkInIntervalSeconds: value.checkInIntervalSeconds,
-    offlineAfterSeconds: value.offlineAfterSeconds
+    offlineAfterSeconds: value.offlineAfterSeconds,
+    checkInPolicy: value.checkInPolicy
   };
+}
+
+function presentedClientCredential(input: Record<string, any> = {}, request?: any) : any {
+  const authorization: any = String(request?.headers?.authorization || "");
+  if (authorization.startsWith("Bearer ")) {
+    const bearer: any = authorization.slice("Bearer ".length).trim();
+    if (isClientCredential(bearer)) {
+      return bearer;
+    }
+  }
+  const inline: any = String(input.clientCredential || "");
+  return isClientCredential(inline) ? inline : "";
+}
+
+function checkInPolicyOf(discoveryState: Record<string, any> = {}) : any {
+  return String(discoveryState.checkInPolicy || "").trim().toLowerCase() === "open"
+    ? "open"
+    : "credential";
 }
 
 export async function executeDiscoveryOperation({ operationId, input = {}, context }: Record<string, any>) : Promise<any> {
@@ -36,6 +56,7 @@ export async function executeDiscoveryOperation({ operationId, input = {}, conte
     "discovery.check_in",
     "discovery.clients",
     "discovery.clients.alignment_command",
+    "discovery.clients.enrollment_token",
     "discovery.get_config",
     "discovery.set_config"
   ]);
@@ -53,10 +74,49 @@ export async function executeDiscoveryOperation({ operationId, input = {}, conte
     if (typeof clientRegistryService.recordClientCheckIn !== "function") {
       return result(503, { error: "客户端登记存储不可用。" });
     }
-    const clientId: any = serverToken(
-      "client",
-      input.clientId || input.hostname || input.currentServiceUrl || "anonymous"
-    );
+    // check_in stays a public route; client identity is established here by a
+    // server-issued credential (Bearer mck_… or input.clientCredential), a
+    // one-time enrollmentToken minted by an operator, or — only when the
+    // deployment's checkInPolicy is explicitly "open" — the legacy
+    // input-derived identity.
+    const checkInPolicy: any = checkInPolicyOf(discoveryState);
+    const credential: any = presentedClientCredential(input, context.request);
+    const enrollmentToken: any = String(input.enrollmentToken || "").trim();
+    let clientId: any = "";
+    let issuedCredential: any = "";
+    if (credential) {
+      const resolved: any = typeof clientRegistryService.resolveClientCredential === "function"
+        ? clientRegistryService.resolveClientCredential(credential)
+        : { ok: false };
+      if (!resolved?.ok) {
+        return result(401, {
+          error: "客户端凭证无效或已吊销。",
+          code: "client_credential_invalid"
+        });
+      }
+      clientId = String(resolved.clientId || "");
+    } else if (enrollmentToken) {
+      const consumed: any = typeof clientRegistryService.consumeEnrollmentToken === "function"
+        ? clientRegistryService.consumeEnrollmentToken(enrollmentToken)
+        : { ok: false };
+      if (!consumed?.ok) {
+        return result(403, {
+          error: "客户端登记令牌无效、已使用或已过期。",
+          code: String(consumed?.code || "client_enrollment_denied")
+        });
+      }
+      clientId = serverToken("client", hashClientString(enrollmentToken, "client.enroll"));
+    } else if (checkInPolicy === "open") {
+      clientId = serverToken(
+        "client",
+        input.clientId || input.hostname || input.currentServiceUrl || "anonymous"
+      );
+    } else {
+      return result(401, {
+        error: "客户端登记需要有效凭证或登记令牌。",
+        code: "client_credential_required"
+      });
+    }
     const record: any = clientRegistryService.recordClientCheckIn({
       clientId,
       clientLabel: hashClientString(input.clientLabel || input.hostname || clientId, "client.label"),
@@ -82,6 +142,10 @@ export async function executeDiscoveryOperation({ operationId, input = {}, conte
         code: record.code || "client_registration_rejected"
       });
     }
+    if (enrollmentToken && typeof clientRegistryService.issueClientCredential === "function") {
+      const issued: any = clientRegistryService.issueClientCredential({ clientId });
+      issuedCredential = String(issued?.credential || "");
+    }
     await publishProtocolEvent(
       context.protocolEventBus,
       "discovery.clients",
@@ -94,9 +158,43 @@ export async function executeDiscoveryOperation({ operationId, input = {}, conte
     return result(200, {
       ok: true,
       client: record,
+      ...(issuedCredential ? { credential: issuedCredential } : {}),
       bootstrap: {
         ...buildBootstrapPayload(discoveryState)
       }
+    });
+  }
+
+  if (id === "discovery.clients.enrollment_token") {
+    const { clientRegistryService, error } = requireClientRegistryService(context);
+    if (error) {
+      return error;
+    }
+    if (typeof clientRegistryService.issueEnrollmentToken !== "function") {
+      return result(503, { error: "客户端登记令牌存储不可用。" });
+    }
+    const issued: any = clientRegistryService.issueEnrollmentToken({
+      ttlSeconds: input.ttlSeconds
+    });
+    if (issued?.ok === false) {
+      return result(issued.statusCode || 429, {
+        error: issued.error || "客户端登记令牌签发失败。",
+        code: issued.code || "client_enrollment_token_rejected"
+      });
+    }
+    await publishProtocolEvent(
+      context.protocolEventBus,
+      "discovery.clients",
+      {
+        serverId: discoveryState.serverId,
+        expiresAt: issued.expiresAt
+      },
+      { type: "discovery.client.enrollment_token.issued" }
+    );
+    return result(200, {
+      ok: true,
+      token: issued.token,
+      expiresAt: issued.expiresAt
     });
   }
 

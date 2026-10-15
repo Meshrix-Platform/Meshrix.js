@@ -48,9 +48,9 @@ export const DOCUMENTATION_ASSET_CLASSIFICATIONS = Object.freeze([
     assetId: "product-visual-assets",
     classification: "promotional",
     paths: Object.freeze([
-      "docs/banner.svg",
-      "docs/logo.svg",
-      "docs/architecture-overview.svg"
+      "assets/brand/banner.svg",
+      "assets/brand/logo.svg",
+      "assets/diagrams/architecture-overview.svg"
     ]),
     purpose: "README and product-page visuals. They explain the product but do not define module boundaries.",
     factAuthority: "not-authoritative-for-architecture-hydration"

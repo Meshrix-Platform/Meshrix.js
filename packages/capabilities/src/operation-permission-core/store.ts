@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { projectHttpMetricRoute, projectHttpMetricMethod } from "./store-metrics-utils.ts";
 import path from "node:path";
 import { createSqliteExecutionLane } from "@meshrix/foundation/storage/sqlite-execution-lane";
 import {
@@ -44,14 +45,14 @@ export const OPERATION_PERMISSION_STORE_COMMANDS: readonly string[] = Object.fre
   "authorizeRequest", "authorizeGrantForExecution", "appendGrantEvent", "listGrantEvents",
   "appendPolicyDecision", "appendPolicyDecisionAnchored", "listPolicyDecisions", "appendExecution",
   "appendExecutionAnchored", "anchorPermissionAuditFact", "provePermissionAuditInclusion",
-  "appendMetric", "appendHttpRequestMetric", "saveCatalogSnapshot", "flushChangeNotifications",
+  "appendMetric", "appendHttpRequestMetric", "appendHttpRequestMetricBatch", "saveCatalogSnapshot", "flushChangeNotifications",
   "listAudit", "getAudit", "metricsSummary", "metricsExport", "metricsHealth",
   "metricsPrometheus", "metricsStorageSummary", "pruneMetrics", "createPendingOperation",
   "getPendingOperation", "listPendingOperations", "resolvePendingOperation", "diagnostic", "close"
 ]);
 
 export const OPERATION_PERMISSION_API_KEY_COMMANDS: readonly string[] = Object.freeze([
-  "getIssuerScopes", "list", "listAudienceGrants", "create", "rotate", "revoke", "authenticateRuntime",
+  "getIssuerScopes", "list", "listAudienceGrants", "create", "rotate", "revoke", "authenticateAdmission", "authenticateRuntime",
   "revalidateAuthorization", "authorizeOperation", "reserveEffect", "revalidateEffect",
   "releaseEffect", "explainLookupPlan"
 ]);
@@ -103,8 +104,7 @@ export function createOperationPermissionStore({
   apiKeyRandomBytes = null,
   metricRetention = null,
   maxPending = 1024,
-  maxPendingBytes = 16 * 1024 * 1024,
-  defaultDeadlineMs = 30_000
+  maxPendingBytes = 16 * 1024 * 1024
 }: Record<string, any>) : any {
   const databasePath = canonicalOperationPermissionDatabasePath(userDataPath);
   if (activeStoreOwners.has(databasePath)) {
@@ -163,8 +163,7 @@ export function createOperationPermissionStore({
         alias: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS || "meshrix-tool-bindings"
       });
   } catch (error: any) {
-    void closeResources();
-    releaseStoreOwner(owner);
+    void closeResources().finally(() => releaseStoreOwner(owner));
     throw error;
   }
 
@@ -240,14 +239,12 @@ export function createOperationPermissionStore({
       ],
       hostHandlers,
       maxPending,
-      maxPendingBytes,
-      defaultDeadlineMs
+      maxPendingBytes
     });
     owner.lane = lane;
     owner.state = "active";
   } catch (error: any) {
-    void closeResources();
-    releaseStoreOwner(owner);
+    void closeResources().finally(() => releaseStoreOwner(owner));
     throw error;
   }
   const commandContext: any = () : any => ({
@@ -259,6 +256,81 @@ export function createOperationPermissionStore({
     args: normalizeArguments(kind, args),
     context: commandContext()
   });
+  const rejectedMetrics = new Map<string, any>();
+  let metricFlush: Promise<void> | null = null;
+  let metricTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function mergeMetric(target: any, entry: any): void {
+    const count = Math.max(1, Number(entry.eventCount || 1));
+    target.eventCount += count;
+    target.requestBytes += Math.max(0, Number(entry.requestBytes || 0));
+    target.responseBytes += Math.max(0, Number(entry.responseBytes || 0));
+    target.durationMs += Math.max(0, Number(entry.durationMs || 0));
+    const transferBytes = Math.max(0, Number(entry.transferBytes ?? (Number(entry.requestBytes || 0) + Number(entry.responseBytes || 0))));
+    target.transferBytes += transferBytes;
+    const byteRate = Number(entry.durationMs) > 0 ? transferBytes * 1000 / Number(entry.durationMs) : transferBytes;
+    target.byteRateTotal += Number(entry.byteRateTotal ?? byteRate);
+    target.peakBytesPerSecond = Math.max(target.peakBytesPerSecond, Number(entry.peakBytesPerSecond ?? byteRate));
+    if (entry.durationHistogram) {
+      for (const [bucket, value] of Object.entries(entry.durationHistogram)) {
+        target.durationHistogram[bucket] = (target.durationHistogram[bucket] || 0) + Number(value);
+      }
+    } else {
+      const duration = Math.max(0, Number(entry.durationMs || 0));
+      const bucket = duration <= 1 ? 1 : 2 ** Math.min(53, Math.ceil(Math.log2(duration)));
+      target.durationHistogram[bucket] = (target.durationHistogram[bucket] || 0) + count;
+    }
+  }
+
+  function bufferRejectedMetric(entry: any): void {
+    const statusCode = Number.isInteger(entry.statusCode) && entry.statusCode >= 0 && entry.statusCode <= 599 ? entry.statusCode : 0;
+    const completionStatus = entry.completionStatus === "completed" ? "completed" : "closed";
+    const transport = ["http", "mcp", "operation-permission"].includes(entry.transport) ? entry.transport : "http";
+    let route = projectHttpMetricRoute(entry.route);
+    let method = projectHttpMetricMethod(entry.method);
+    let key = JSON.stringify([transport, method, route, statusCode, completionStatus]);
+    if (!rejectedMetrics.has(key) && rejectedMetrics.size >= 512) {
+      // A finite overflow lattice retains exact status/completion totals.
+      // Active buckets are never evicted or reset by attacker key rotation.
+      route = "overflow";
+      method = "OTHER";
+      key = JSON.stringify([transport, method, route, statusCode, completionStatus]);
+    }
+    let target = rejectedMetrics.get(key);
+    if (!target) {
+      target = { transport, method, route, statusCode, completionStatus, createdAt: entry.createdAt || new Date().toISOString(),
+        eventCount: 0, requestBytes: 0, responseBytes: 0, transferBytes: 0, durationMs: 0, byteRateTotal: 0, peakBytesPerSecond: 0, durationHistogram: {} };
+      rejectedMetrics.set(key, target);
+    }
+    mergeMetric(target, entry);
+    scheduleMetricFlush();
+  }
+
+  function scheduleMetricFlush(): void {
+    if (metricTimer || storeClosing || metricFlush) return;
+    metricTimer = setTimeout(() => {
+      metricTimer = null;
+      void flushRejectedMetrics().catch(() => { /* read/close exposes a failed durable flush; retain all facts */ });
+    }, 1000);
+    metricTimer.unref?.();
+  }
+
+  async function flushRejectedMetrics(): Promise<void> {
+    if (metricTimer) { clearTimeout(metricTimer); metricTimer = null; }
+    if (metricFlush) await metricFlush;
+    if (!rejectedMetrics.size) return;
+    const entries = [...rejectedMetrics.values()];
+    rejectedMetrics.clear();
+    metricFlush = execute("appendHttpRequestMetricBatch", [entries]).then(() => {}, (error: any) => {
+      for (const entry of entries) bufferRejectedMetric(entry);
+      throw error;
+    });
+    try { await metricFlush; } finally {
+      metricFlush = null;
+      if (rejectedMetrics.size) scheduleMetricFlush();
+    }
+  }
+
   const facade: Record<string, any> = {
     lane,
     registerApiKeyExecutionOwnerClose(closeOwner: () => Promise<void>) : any {
@@ -307,6 +379,7 @@ export function createOperationPermissionStore({
             });
           }
           storeClosing = true;
+          await flushRejectedMetrics();
           await lane.close();
           await closeResources();
           releaseStoreOwner(owner);
@@ -321,6 +394,20 @@ export function createOperationPermissionStore({
   for (const kind of OPERATION_PERMISSION_STORE_COMMANDS) {
     if (kind === "close") continue;
     facade[kind] = (...args: any[]) : Promise<any> => execute(kind, args);
+  }
+  facade.appendHttpRequestMetric = (entry: any = {}): Promise<any> => {
+    if (storeClosing) return Promise.reject(Object.assign(new Error("Operation Permission store is closing."), { code: "sqlite_lane_closed" }));
+    if (Number(entry.statusCode || 0) >= 400 || (entry.completionStatus && entry.completionStatus !== "completed")) {
+      bufferRejectedMetric(entry);
+      return Promise.resolve({ buffered: true });
+    }
+    return execute("appendHttpRequestMetric", [entry]);
+  };
+  for (const kind of ["metricsSummary", "metricsExport", "metricsHealth", "metricsPrometheus", "metricsStorageSummary", "pruneMetrics"]) {
+    facade[kind] = async (...args: any[]): Promise<any> => {
+      await flushRejectedMetrics();
+      return execute(kind, args);
+    };
   }
   return Object.freeze(facade);
 }

@@ -28,6 +28,13 @@ function writeSse(response, lines) {
   response.end();
 }
 
+function declaredRequestBytes(request, maxBytes) {
+  const raw = request.headers["content-length"];
+  const declared = Number.parseInt(Array.isArray(raw) ? raw[0] : raw, 10);
+  if (!Number.isSafeInteger(declared) || declared < 0) return maxBytes;
+  return declared;
+}
+
 async function readJson(request, maxBytes) {
   const chunks = [];
   let total = 0;
@@ -83,8 +90,6 @@ export async function createModelGatewayHttpHandler(options = {}) {
     dataRoot,
     maxRequestBytes = 2 * 1024 * 1024,
     clients = {},
-    requestTimeoutMs,
-    maxAttempts,
     bounds,
     fetchImpl,
     windowMs,
@@ -96,8 +101,6 @@ export async function createModelGatewayHttpHandler(options = {}) {
   const application = await createModelGatewayApplication({
     dataRoot,
     clients,
-    requestTimeoutMs,
-    maxAttempts,
     bounds,
     fetchImpl,
     windowMs,
@@ -105,6 +108,17 @@ export async function createModelGatewayHttpHandler(options = {}) {
   });
 
   function authenticated(request) {
+    const headerValues = (name) => {
+      const distinct = request.headersDistinct?.[name];
+      if (Array.isArray(distinct)) return distinct;
+      return (request.rawHeaders || []).reduce((found, headerName, index, all) => {
+        if (index % 2 === 0 && String(headerName).toLowerCase() === name) found.push(all[index + 1]);
+        return found;
+      }, []);
+    };
+    const authorization = headerValues("authorization");
+    const apiKey = headerValues("x-api-key");
+    if (authorization.length > 1 || apiKey.length > 1 || (authorization.length > 0 && apiKey.length > 0)) return null;
     return application.authenticate(request.headers);
   }
 
@@ -119,33 +133,44 @@ export async function createModelGatewayHttpHandler(options = {}) {
       writeJson(response, 401, nativeEnvelope(protocol, stableError("unauthorized", "client authentication required", requestId)));
       return;
     }
-    const body = await readJson(request, maxRequestBytes);
-    const idempotencyKey = String(request.headers["idempotency-key"] || "").trim() || null;
-    const result = protocol === "anthropic"
-      ? await application.callAnthropic({
-          client,
-          body,
-          idempotencyKey,
-          requestId,
-          headers: request.headers
-        })
-      : await application.callOpenAi({
-          client,
-          body,
-          idempotencyKey,
-          requestId,
-          headers: request.headers
-        });
-    if (result.error) {
-      writeJson(response, result.error.status, nativeEnvelope(protocol, result.error));
-      return;
+    const controller = new AbortController();
+    const onResponseClose = () => {
+      if (!response.writableEnded) controller.abort();
+    };
+    response.once("close", onResponseClose);
+    try {
+      const body = await readJson(request, maxRequestBytes);
+      const idempotencyKey = String(request.headers["idempotency-key"] || "").trim() || null;
+      const result = protocol === "anthropic"
+        ? await application.callAnthropic({
+            client,
+            body,
+            idempotencyKey,
+            requestId,
+            signal: controller.signal,
+            headers: request.headers
+          })
+        : await application.callOpenAi({
+            client,
+            body,
+            idempotencyKey,
+            requestId,
+            signal: controller.signal,
+            headers: request.headers
+          });
+      if (result.error) {
+        writeJson(response, result.error.status, nativeEnvelope(protocol, result.error));
+        return;
+      }
+      if (body.stream === true) {
+        const lines = protocol === "anthropic" ? anthropicChunks(result.body) : openAiChunks(result.body);
+        writeSse(response, lines);
+        return;
+      }
+      writeJson(response, result.status || 200, result.body);
+    } finally {
+      response.off("close", onResponseClose);
     }
-    if (body.stream === true) {
-      const lines = protocol === "anthropic" ? anthropicChunks(result.body) : openAiChunks(result.body);
-      writeSse(response, lines);
-      return;
-    }
-    writeJson(response, result.status || 200, result.body);
   }
 
   async function handleManaged(request, response, method, pathname, searchParams) {
@@ -160,15 +185,15 @@ export async function createModelGatewayHttpHandler(options = {}) {
     if (pathname === "/v1/model-gateway/providers") {
       result = method === "POST"
         ? await application.createProvider(client, body, requestId)
-        : { body: application.listProviders() };
+        : application.listProviders(client, requestId);
     } else if (pathname === "/v1/model-gateway/models") {
       result = method === "POST"
         ? await application.createModel(client, body, requestId)
-        : { body: application.listModels() };
+        : application.listManagedModels(client, requestId);
     } else if (pathname === "/v1/model-gateway/pricing-revisions" || pathname === "/v1/model-gateway/pricing") {
       result = method === "POST"
         ? await application.createPricingRevision(client, body, requestId)
-        : { body: application.listPricingRevisions() };
+        : application.listPricingRevisions(client, requestId);
     } else if (pathname === "/v1/models") {
       const models = application.listModels();
       result = { body: { object: "list", data: models.map((model) => application.modelDetail(model.modelId)).filter(Boolean) } };
@@ -188,7 +213,7 @@ export async function createModelGatewayHttpHandler(options = {}) {
     writeJson(response, 200, result.body);
   }
 
-  const handler = async (request, response) => {
+  const routeHandler = async (request, response) => {
     try {
       const url = new URL(request.url || "/", "http://model-gateway.invalid");
       const pathname = url.pathname;
@@ -251,6 +276,36 @@ export async function createModelGatewayHttpHandler(options = {}) {
     } catch {
       writeJson(response, 500, stableError("internal_error", "internal service error", crypto.randomUUID()));
     }
+  };
+
+  const handler = async (request, response) => {
+    let admission;
+    try {
+      const pathname = new URL(request.url || "/", "http://model-gateway.invalid").pathname;
+      const publicProbe = request.method === "GET" && (pathname === "/health" || pathname === "/ready");
+      if (!publicProbe) {
+        const client = authenticated(request);
+        if (!client) {
+          // Preserve each protocol's existing authentication envelope.
+          await routeHandler(request, response);
+          return;
+        }
+        admission = application.admitRequest({ subject: client.subject,
+          requestBytes: request.method === "POST" && ["/v1/chat/completions", "/v1/messages",
+            "/v1/model-gateway/providers", "/v1/model-gateway/models", "/v1/model-gateway/pricing",
+            "/v1/model-gateway/pricing-revisions"].includes(pathname)
+            ? declaredRequestBytes(request, maxRequestBytes) : 0 });
+        if (!admission.ok) {
+          const denial = stableError(admission.code, "request denied by aggregate admission policy", crypto.randomUUID());
+          writeJson(response, denial.status, pathname === "/v1/messages" ? anthropicError(denial)
+            : pathname === "/v1/chat/completions" ? openAiError(denial) : denial);
+          return;
+        }
+      }
+      await routeHandler(request, response);
+    } catch {
+      if (!response.headersSent) writeJson(response, 500, stableError("internal_error", "internal service error", crypto.randomUUID()));
+    } finally { admission?.release?.(); }
   };
 
   handler.close = async () => {

@@ -15,6 +15,7 @@ const syntheticHome = path.posix.join("/", "Users", "synthetic-provenance-user")
 async function createFixture(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-provenance-fixture-"));
   temporaryRoots.push(root);
+  execFileSync("git", ["clone", "--shared", "--quiet", REPO_ROOT, root], { cwd: REPO_ROOT, stdio: "ignore" });
   await fs.mkdir(path.join(root, "tools/server-scripts"), { recursive: true });
   await fs.mkdir(path.join(root, "build/reports"), { recursive: true });
   await fs.mkdir(path.join(root, "build"), { recursive: true });
@@ -41,36 +42,19 @@ async function createFixture(): Promise<string> {
   }));
   await fs.writeFile(path.join(root, "build/reports/ordinary-report.md"), "synthetic local report\n");
 
-  const gitEnvironment = {
-    PATH: process.env.PATH ?? process.env.Path ?? "",
-    HOME: root,
-    USERPROFILE: root,
-    GIT_CONFIG_NOSYSTEM: "1",
-    GIT_CONFIG_GLOBAL: path.join(root, ".gitconfig"),
-    GIT_AUTHOR_NAME: "Fixture Author Marker",
-    GIT_AUTHOR_EMAIL: "fixture-author@example.invalid",
-    GIT_COMMITTER_NAME: "Fixture Committer Marker",
-    GIT_COMMITTER_EMAIL: "fixture-committer@example.invalid",
-    GIT_TERMINAL_PROMPT: "0",
-    ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
-    ...(process.env.WINDIR ? { WINDIR: process.env.WINDIR } : {})
-  };
   const git = (args: string[]) => execFileSync("git", args, {
     cwd: root,
-    env: gitEnvironment,
     stdio: "ignore"
   });
-  git(["init", "--quiet"]);
-  git(["checkout", "--quiet", "-b", "private-branch-marker"]);
-  git(["add", "."]);
-  git(["commit", "--quiet", "-m", "fixture"]);
+  git(["branch", "private-branch-marker", "HEAD"]);
+  git(["symbolic-ref", "HEAD", "refs/heads/private-branch-marker"]);
   const httpRemote: any = new URL("https://http-private.invalid/team/repo.git");
   httpRemote.username = "fixture-user";
   httpRemote.password = "HTTP-CREDENTIAL-MARKER";
   const sshRemote: any = new URL("ssh://ssh-private.invalid/team/repo.git");
   sshRemote.username = "fixture-user";
   sshRemote.password = "SSH-CREDENTIAL-MARKER";
-  git(["remote", "add", "origin", httpRemote.href]);
+  git(["remote", "set-url", "origin", httpRemote.href]);
   git(["remote", "add", "upstream", sshRemote.href]);
   return root;
 }

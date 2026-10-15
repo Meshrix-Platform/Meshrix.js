@@ -44,13 +44,19 @@ function topRows(rows, key, limit) {
     .slice(0, limit);
 }
 
-export function buildSkillHubStatsDashboard({ items = [], auditEvents = [], workspaceId = "", assetRecordProjector } = {}) {
+export function buildSkillHubStatsDashboard({
+  items = [],
+  auditEvents = [],
+  auditSummary = null,
+  workspaceId = "",
+  assetRecordProjector
+} = {}) {
   const contributions = asArray(items).map((item) => refreshSkillHubMetrics(item, { assetRecordProjector }));
   const contributorMap = new Map();
   const workspaceMap = new Map();
-  const statusBreakdown = {};
-  const eventCounts = {};
-  const actionCounts = {};
+  const statusBreakdown = Object.create(null);
+  const eventCounts = Object.create(null);
+  const actionCounts = Object.create(null);
   for (const contribution of contributions) {
     addCount(statusBreakdown, contribution.status);
     const contributorId = text(contribution.contributorId || "anonymous") || "anonymous";
@@ -108,7 +114,12 @@ export function buildSkillHubStatsDashboard({ items = [], auditEvents = [], work
     }
     for (const event of asArray(contribution.usageEvents)) addCount(actionCounts, event.action || "asset.used");
   }
-  for (const event of asArray(auditEvents)) addCount(eventCounts, event.eventType);
+  const summaryCounts = auditSummary?.byType;
+  if (summaryCounts && typeof summaryCounts === "object" && !Array.isArray(summaryCounts)) {
+    for (const [eventType, count] of Object.entries(summaryCounts)) addCount(eventCounts, eventType, count);
+  } else {
+    for (const event of asArray(auditEvents)) addCount(eventCounts, event.eventType);
+  }
   const sum = (field) => contributions.reduce((total, item) => total + Number(item.metrics?.[field] || 0), 0);
   const executionCount = sum("executionCount");
   const successfulUseCount = sum("successfulUseCount");
@@ -143,7 +154,7 @@ export function buildSkillHubStatsDashboard({ items = [], auditEvents = [], work
     workspaceRows,
     eventBreakdown,
     usageActionBreakdown,
-    auditEventCount: auditEvents.length,
+    auditEventCount: Number.isSafeInteger(auditSummary?.count) ? auditSummary.count : auditEvents.length,
     dashboardSummary: {
       contributorCount: contributorMap.size,
       workspaceCount: workspaceMap.size,
@@ -158,6 +169,9 @@ export function createSkillHubContributionRegistry({
   workspaceId,
   initialPersistedState,
   schedulePersistence,
+  commitMutation: persistMutation,
+  readAuditEvents,
+  readAuditSummary,
   serviceData,
   registryRelativePath,
   contributionNormalizer,
@@ -173,6 +187,7 @@ export function createSkillHubContributionRegistry({
   const contributions = new Map(Object.values(loaded.contributions).filter((item) => item?.contributionId)
     .map((item) => [item.contributionId, refreshSkillHubMetrics(item, { assetRecordProjector })]));
   const auditEvents = loaded.auditEvents;
+  let activeMutation = null;
 
   function materialize(contribution, input) {
     return materializeAsset(contribution, {
@@ -180,19 +195,57 @@ export function createSkillHubContributionRegistry({
       persistenceEnabled: true,
       serviceData,
       schedulePersistence,
+      registryScope: registryRelativePath.split("/").at(-1).replace(/\.json$/u, ""),
       assetRecordProjector
     });
   }
 
-  function persist() {
-    const state = {
-      schemaVersion: "v0.0.1:schema:definition-1",
-      protocolVersion: WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
-      updatedAt: nowIso(),
-      contributions: Object.fromEntries(contributions),
-      auditEvents
+  function persist(id) {
+    if (!activeMutation) throw new Error("Skill Hub registry mutation is missing its transaction scope.");
+    activeMutation.dirty = true;
+    activeMutation.contributionId = text(id);
+  }
+
+  function beginMutation(name, args = []) {
+    if (activeMutation) throw new Error("Skill Hub registry mutation transactions cannot be nested.");
+    const contributionId = name === "submitContribution" ? "" : text(args[0]);
+    const previousContribution = contributionId ? contributions.get(contributionId) : null;
+    activeMutation = {
+      auditEventCount: auditEvents.length,
+      contributionId,
+      contributionExisted: Boolean(previousContribution),
+      contributionSnapshot: previousContribution ? clone(previousContribution) : null,
+      dirty: false
     };
-    schedulePersistence(() => serviceData.writeFile(registryRelativePath, `${JSON.stringify(state, null, 2)}\n`, "utf8"));
+  }
+
+  async function commitMutation() {
+    if (!activeMutation) throw new Error("Skill Hub registry mutation transaction is unavailable.");
+    const transaction = activeMutation;
+    if (!transaction.dirty) {
+      activeMutation = null;
+      return;
+    }
+    const contribution = contributions.get(transaction.contributionId);
+    if (!contribution) throw new Error("Skill Hub registry mutation lost its contribution record.");
+    await persistMutation({
+      contribution: clone(contribution),
+      auditEvents: auditEvents.slice(transaction.auditEventCount)
+    });
+    auditEvents.splice(0, auditEvents.length);
+    activeMutation = null;
+  }
+
+  function rollbackMutation() {
+    if (!activeMutation) return;
+    const transaction = activeMutation;
+    if (transaction.contributionId && transaction.contributionExisted) {
+      contributions.set(transaction.contributionId, refreshSkillHubMetrics(transaction.contributionSnapshot, { assetRecordProjector }));
+    } else if (transaction.contributionId) {
+      contributions.delete(transaction.contributionId);
+    }
+    auditEvents.length = transaction.auditEventCount;
+    activeMutation = null;
   }
 
   function get(id) {
@@ -227,7 +280,7 @@ export function createSkillHubContributionRegistry({
     if (["published", "adopted"].includes(nextState)) contribution.metrics.acceptedCount += 1;
     materialize(contribution, { lifecycleState: nextState, targetWorkspaceId: contribution.workspaceId,
       relation: "canonical", actorId: input.actorId || "", reason: input.reason || "" });
-    persist();
+    persist(id);
     return { contribution: clone(refreshSkillHubMetrics(contribution, { assetRecordProjector })), audit: evidence, lifecycleDecision: decision };
   }
 
@@ -251,11 +304,12 @@ export function createSkillHubContributionRegistry({
       materialize(contribution, { lifecycleState: "submitted", targetWorkspaceId: contribution.workspaceId,
         relation: "canonical", actorId: contribution.contributorId, reason: "initial_submission" });
       contributions.set(contribution.contributionId, contribution);
+      activeMutation.contributionId = contribution.contributionId;
       const evidence = audit("contribution.submitted", { workspaceId: contribution.workspaceId,
         contributionId: contribution.contributionId, contributorId: contribution.contributorId,
         contributionType: contribution.contributionType, assetId: contribution.currentAssetRef?.assetId || "" });
       contribution.auditIds.push(evidence.auditId);
-      persist();
+      persist(contribution.contributionId);
       return { contribution: clone(refreshSkillHubMetrics(contribution, { assetRecordProjector })), assetRecord: clone(contribution.currentAssetRef) };
     },
     scanContribution(id, input = {}) {
@@ -295,14 +349,26 @@ export function createSkillHubContributionRegistry({
       contribution.adoptions.push(adoption);
       const assetRecord = materialize(contribution, { lifecycleState: "adopted", targetWorkspaceId,
         relation: "adoption", actorId: adoption.adopterId, reason: input.reason || "cross_workspace_adoption" });
-      return { ...transition(id, "adopted", { ...input, lifecycleEvent: "contribution.adopt" }), adoption: clone(adoption), assetRecord: clone(assetRecord) };
+      // A contribution enters the adopted lifecycle state once. Each later
+      // workspace adoption is a separate relation, not another state change.
+      const result = contribution.status === "adopted"
+        ? { contribution: clone(contribution), audit: null, lifecycleDecision: null }
+        : transition(id, "adopted", { ...input, lifecycleEvent: "contribution.adopt" });
+      if (!result.audit) {
+        const evidence = audit("contribution.adopted", adoption);
+        contribution.auditIds.push(evidence.auditId);
+        result.audit = evidence;
+      }
+      persist(id);
+      return { ...result, contribution: clone(refreshSkillHubMetrics(contribution, { assetRecordProjector })),
+        adoption: clone(adoption), assetRecord: clone(assetRecord) };
     },
     deprecateContribution: (id, input = {}) => transition(id, "deprecated", { ...input, lifecycleEvent: "contribution.deprecate" }),
     revokeContribution(id, input = {}) {
       const steps = [];
       if (["published", "adopted"].includes(get(id).status)) steps.push(registry.deprecateContribution(id, input));
       const result = transition(id, "revoked", { ...input, lifecycleEvent: "contribution.revoke" });
-      persist();
+      persist(id);
       return { ...result, contribution: clone(refreshSkillHubMetrics(get(id), { assetRecordProjector })), steps };
     },
     requestPermission(id, input = {}) {
@@ -312,7 +378,7 @@ export function createSkillHubContributionRegistry({
         contributionId: id, requesterId: text(input.requesterId), targetWorkspaceId,
         actions: asArray(input.actions || ["read"]).map(text).filter(Boolean), purpose: text(input.purpose), status: "requested", createdAt: nowIso() };
       const evidence = audit("contribution.permission.requested", permissionRequest);
-      contribution.permissionRequests.push(permissionRequest); contribution.auditIds.push(evidence.auditId); persist();
+      contribution.permissionRequests.push(permissionRequest); contribution.auditIds.push(evidence.auditId); persist(id);
       return { permissionRequest: clone(permissionRequest), audit: evidence };
     },
     async grantPermission(id, input = {}) {
@@ -345,7 +411,7 @@ export function createSkillHubContributionRegistry({
       permissionRequest.status = "granted";
       permissionRequest.grantedAt = nowIso();
       const evidence = audit("contribution.permission.granted", { ...contributionGrant, loanRecordId: loanRecord.loanRecordId });
-      contribution.grants.push(contributionGrant); contribution.auditIds.push(evidence.auditId); persist();
+      contribution.grants.push(contributionGrant); contribution.auditIds.push(evidence.auditId); persist(id);
       return {
         contributionGrant: clone(contributionGrant),
         loanRecord,
@@ -358,9 +424,10 @@ export function createSkillHubContributionRegistry({
       const workspaceId = requiredWorkspaceId(input.workspaceId, "workspaceId");
       const downloadEvent = { downloadEventId: stableId("contribution_download", { id, ...input, nonce: randomUUID() }), contributionId: id,
         actorId: text(input.actorId), workspaceId, createdAt: nowIso() };
-      const evidence = audit("contribution.downloaded", downloadEvent); contribution.downloadEvents.push(downloadEvent); persist();
+      const evidence = audit("contribution.downloaded", downloadEvent); contribution.downloadEvents.push(downloadEvent); persist(id);
       refreshSkillHubMetrics(contribution, { assetRecordProjector });
-      return { downloadEvent: clone(downloadEvent), metrics: clone(contribution.metrics), audit: evidence };
+      return { downloadEvent: clone(downloadEvent), metrics: clone(contribution.metrics), audit: evidence,
+        contribution: clone(contribution) };
     },
     recordUsage(id, input = {}) {
       const contribution = get(id);
@@ -375,7 +442,7 @@ export function createSkillHubContributionRegistry({
       if (!currentGrant) throw Object.assign(new Error("Contribution use requires a current permission grant."), { code: "contribution_use_grant_required" });
       const usageEvent = { usageEventId: stableId("contribution_usage", { id, ...input, nonce: randomUUID() }), contributionId: id,
         actorId, workspaceId, action, createdAt: nowIso() };
-      const evidence = audit("contribution.used", usageEvent); contribution.usageEvents.push(usageEvent); persist();
+      const evidence = audit("contribution.used", usageEvent); contribution.usageEvents.push(usageEvent); persist(id);
       refreshSkillHubMetrics(contribution, { assetRecordProjector });
       return { usageEvent: clone(usageEvent), metrics: clone(contribution.metrics), audit: evidence };
     },
@@ -394,13 +461,13 @@ export function createSkillHubContributionRegistry({
       const existing = contribution.executionReceipts.find((entry) => entry.runId === normalized.runId);
       if (existing) return { executionReceipt: clone(existing), audit: null };
       const evidence = audit("contribution.execution.receipt", { contributionId: id, ...normalized });
-      contribution.executionReceipts.push(normalized); contribution.auditIds.push(evidence.auditId); persist();
+      contribution.executionReceipts.push(normalized); contribution.auditIds.push(evidence.auditId); persist(id);
       return { executionReceipt: clone(normalized), audit: evidence };
     },
     recordRollback(id, input = {}) {
       const contribution = get(id); contribution.metrics.rollbackCount += 1;
       const evidence = audit("contribution.rollback.recorded", { workspaceId: contribution.workspaceId, contributionId: id, reason: input.reason || "" });
-      persist(); return { metrics: clone(refreshSkillHubMetrics(contribution, { assetRecordProjector }).metrics), audit: evidence };
+      persist(id); return { metrics: clone(refreshSkillHubMetrics(contribution, { assetRecordProjector }).metrics), audit: evidence };
     },
     assertCurrentGrant(id, input = {}) {
       const contribution = get(id);
@@ -412,19 +479,9 @@ export function createSkillHubContributionRegistry({
       }
       return clone(currentGrant);
     },
-    _snapshotState() {
-      return clone({ contributions: Object.fromEntries(contributions), auditEvents });
-    },
-    _restoreState(snapshot = {}) {
-      const restored = normalizedState(snapshot);
-      contributions.clear();
-      for (const item of Object.values(restored.contributions)) {
-        if (item?.contributionId) {
-          contributions.set(item.contributionId, refreshSkillHubMetrics(item, { assetRecordProjector }));
-        }
-      }
-      auditEvents.splice(0, auditEvents.length, ...restored.auditEvents);
-    },
+    _beginMutation: beginMutation,
+    _commitMutation: commitMutation,
+    _rollbackMutation: rollbackMutation,
     getContribution: (id) => clone(get(id)),
     listContributions: () => [...contributions.values()].map((item) => clone(refreshSkillHubMetrics(item, { assetRecordProjector }))),
     getLeaderboard: () => [...contributions.values()].map((item) => refreshSkillHubMetrics(item, { assetRecordProjector }))
@@ -434,7 +491,13 @@ export function createSkillHubContributionRegistry({
         usageCount: item.metrics.usageCount, successRate: item.metrics.successRate,
         uniqueWorkspaceAdoptions: item.metrics.uniqueWorkspaceAdoptions, rollbackCount: item.metrics.rollbackCount,
         acceptedCount: item.metrics.acceptedCount })),
-    listAuditEvents: () => clone(auditEvents)
+    listAuditEvents: () => typeof readAuditEvents === "function" ? readAuditEvents() : clone(auditEvents),
+    getAuditSummary: () => {
+      if (typeof readAuditSummary === "function") return readAuditSummary();
+      const byType = Object.create(null);
+      for (const event of auditEvents) addCount(byType, event?.eventType);
+      return { count: auditEvents.length, byType };
+    }
   };
   return Object.freeze(registry);
 }

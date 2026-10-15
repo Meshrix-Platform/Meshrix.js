@@ -14,7 +14,9 @@ COPY --chown=skillhub:skillhub src ./src
 COPY --chown=skillhub:skillhub internal ./internal
 COPY --chown=skillhub:skillhub state-machines ./state-machines
 
-ENV PORT=8080 \
+ENV HOST=0.0.0.0 \
+    SKILL_HUB_ALLOW_PUBLIC_BIND=1 \
+    PORT=8080 \
     SKILL_HUB_DATA_ROOT=/var/lib/skill-hub \
     MAX_REQUEST_BYTES=2097152
 

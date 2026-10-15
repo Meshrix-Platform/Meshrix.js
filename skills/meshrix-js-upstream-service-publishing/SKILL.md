@@ -68,40 +68,78 @@ publication transaction themselves.
     {
       "name": "example-catalog",
       "type": "mcp",                          // http | json-rpc | mcp
-      "url": "http://<host>:8871/mcp",        // remote MCP endpoint
-      "auth": { "type": "bearer", "token": "..." }, // upstream credential
+      "url": "https://<host>:8871/mcp",       // remote MCP endpoint; private HTTP requires explicit local-network policy
       "headers": { "x-project-id": "dev" }           // MCP request context
     }
   ]
 }
 ```
 
-The server creates or replaces each service publication and derives internal
-identifiers (`capabilityId`, `secretBindingId`, and issuer scopes); they are
-not part of this file. When `auth.token` is set, the server stores a typed
-secret and binds its reference. Configure
-`MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE` to an external 32-byte key file outside
-the governed data directory before adding a token. The JSON configuration
-itself contains that token in plaintext, so protect the file as credential
-material and keep it out of source control, logs, and shared support reports.
-The file's `headers` field supplies MCP request context; it is not a general
-HTTP/JSON-RPC header map. Verify an authenticated service with its health
-endpoint after the configuration is applied.
+For services requiring credentials, use the full descriptor form so the file
+contains only a typed reference, never credential material:
 
-Scope boundaries:
+```jsonc
+{
+  "services": [{
+    "name": "file-parser/format-convert",
+    "descriptor": {
+      "serviceProtocol": "http",
+      "label": "File Parser / Format Convert",
+      "baseUrl": "http://format-convert:8080",
+      "allowLocalNetwork": true,
+      "operations": [{
+        "operationKey": "convert",
+        "method": "POST",
+        "path": "/v1/convert",
+        "risk": "safe_write",
+        "payloadTransport": {
+          "request": {
+            "mode": "artifact_multipart",
+            "maxBytes": 53477376,
+            "mediaTypes": ["multipart/form-data"],
+            "multipart": {
+              "artifactParts": [{ "argument": "file", "partName": "file", "required": true }],
+              "scalarFields": [{ "argument": "targetFormat", "partName": "targetFormat", "required": false }],
+              "maxParts": 2
+            }
+          },
+          "response": {
+            "mode": "artifact",
+            "maxBytes": 104857600,
+            "mediaTypes": ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+            "allowRanges": true
+          }
+        }
+      }],
+      "references": [{
+        "type": "credential",
+        "reference": "secret://meshrix/file-parser/format-convert/request-auth",
+        "revision": 1,
+        "use": "request-auth",
+        "host": "format-convert",
+        "protocol": "http",
+        "scopes": []
+      }]
+    }
+  }]
+}
+```
 
-- **Upstream service registration** (this skill): the configuration file
-  above. It does not involve API Keys, organization governance, or client
-  authorization.
-- **Downstream client access**: issuing API Keys and configuring clients is a
-  separate workflow owned by `$meshrix-js-api-key-issuance` and
-  `$meshrix-js-organization-governance`; never mix client authorization into
-  service registration.
-
-Use the manual API flow below when an integration manages publication through
-the HTTP control plane instead of the operator-managed configuration file.
-
-## Publish to a running instance (manual API flow)
+`services.json` accepts the flat `name/type/url/headers` shape, its published
+`auth: { type: "bearer", token }` shorthand, or `{ name, descriptor }` with typed
+references. The shorthand is normalized through the existing Local Secret
+Store: the loader encrypts the bearer value using the external master-key
+provider and binds it to the publishing owner's generated service identity,
+endpoint host, protocol and revision. Only a typed reference enters the normal
+revision-checked publishing command. An unchanged credential is reused; a
+changed value is prepared separately so the current candidate and published
+credential remain usable until replacement becomes authoritative. The loader
+revokes only its own unused generated references after rechecking both snapshots.
+Operator-provisioned references are verified, never rotated or revoked by this
+normalization. The input file remains user-owned plaintext and is not rewritten;
+protect it with restrictive permissions, or use the typed-reference form to
+keep credential values outside it. Diagnostics never include credential values
+or raw configuration.
 
 ### Authenticate
 
@@ -157,8 +195,8 @@ MCP services derive tools/call from the remote catalog and must not carry an
   "allowLocalNetwork": true,
   "mcp": {
     "transport": "http",                  // remote HTTP only; stdio is rejected
-    "url": "http://<service-host>:<port>/mcp",  // must pass the remote-URL validation
-    "protocolVersion": "2026-07-28",     // modern HTTP discovery, without initialize/session
+    "url": "https://<service-host>:<port>/mcp", // public endpoint; private HTTP requires explicit local-network policy
+    "protocolVersion": "2026-07-28",     // stateless HTTP, without initialize/session
     "headers": {                          // optional declarative request headers
       "x-project-id": "<project>"          // supported per ADR-0001; values are
     }                                     // plain strings, injection syntax rejected
@@ -186,8 +224,12 @@ actual addresses, tokens, and scopes for the instance at hand.
    reachability (the service is asking for credentials), while a timeout or
    connection failure means the port is not exposed.
 2. **Select the protocol version supported by the upstream endpoint.** Remote
-   HTTP `2026-07-28` uses modern `server/discover` without an initialize or
-   session handshake. The legacy HTTP/session path and internal legacy stdio
+   HTTP `2026-07-28` sends `tools/list` directly; `server/discover` is optional
+   and Meshrix.js does not issue an automatic discovery probe. Each request is
+   self-describing and has no initialize or session handshake. Successful
+   responses may be JSON or Streamable HTTP event streams; event frames are
+   parsed incrementally and the matching validated result is returned without
+   waiting for the stream to close. The legacy HTTP/session path and internal legacy stdio
    path use their configured legacy versions and initialize/session lifecycle.
    `MCP_SUPPORTED_PROTOCOL_VERSIONS` in
    `packages/protocols/mcp/upstream-mcp-transport-common.ts` describes the

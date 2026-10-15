@@ -23,8 +23,16 @@ export function createAdmissionController({ policy, windowMs, now = Date.now }) 
   const totalQuota = policy.maxTotalTokenQuota;
   const concurrencyLimit = policy.maxConcurrentCalls;
   const costQuotaMicros = policy.maxCostQuotaMicros;
+  const globalConcurrentLimit = policy.maxGlobalConcurrentCalls;
+  const subjectConcurrentLimit = policy.maxSubjectConcurrentCalls;
+  const globalRequestByteLimit = policy.maxGlobalRequestBytes;
+  const subjectRequestByteLimit = policy.maxSubjectRequestBytes;
   const buckets = new Map();
   const partitions = new Map();
+  const aggregate = { concurrent: 0, bytes: 0 };
+  const subjects = new Map();
+  const requestBuckets = new Map();
+  const requestGlobalBucket = createRateBucket(policy.maxGlobalRequestRatePerSecond, now);
 
   function recordFor(partitionKey) {
     let record = partitions.get(partitionKey);
@@ -76,19 +84,75 @@ export function createAdmissionController({ policy, windowMs, now = Date.now }) 
     }
     bucket.tokens -= 1;
     record.concurrent += 1;
-    record.window.push({
+    const reservation = {
       at: now(),
       inputTokens,
       outputTokens: requestedOutputTokens,
       costMicros: estimatedCostMicros,
-    });
-    return { ok: true, partitionKey };
+    };
+    record.window.push(reservation);
+    return { ok: true, partitionKey, reservation };
   }
 
-  function release({ partitionKey }) {
+  function release({ partitionKey, reservation, refund = false }) {
     const record = partitions.get(partitionKey);
     if (record && record.concurrent > 0) record.concurrent -= 1;
+    if (!refund || !record || !reservation) return;
+    const index = record.window.indexOf(reservation);
+    if (index >= 0) record.window.splice(index, 1);
+    const bucket = buckets.get(partitionKey);
+    if (bucket) bucket.tokens = Math.min(bucket.capacity, bucket.tokens + 1);
   }
 
-  return Object.freeze({ admit, release });
+  // Aggregate (service-wide and per-subject) admission. It is decided before
+  // the request body is read, so a denied request buffers zero bytes and
+  // never reaches a per-model partition or the provider. The returned
+  // reservation must be released once the request finishes.
+  function admitRequest({ subject, requestBytes = 0 }) {
+    const bytes = Number.isSafeInteger(requestBytes) && requestBytes > 0 ? requestBytes : 0;
+    if (bytes > subjectRequestByteLimit || bytes > globalRequestByteLimit) {
+      return { ok: false, code: "budget_exceeded" };
+    }
+    const key = String(subject || "");
+    let requestBucket = requestBuckets.get(key);
+    if (!requestBucket) {
+      requestBucket = createRateBucket(policy.maxSubjectRequestRatePerSecond, now);
+      requestBuckets.set(key, requestBucket);
+    }
+    refill(requestGlobalBucket, policy.maxGlobalRequestRatePerSecond, now);
+    refill(requestBucket, policy.maxSubjectRequestRatePerSecond, now);
+    if (requestGlobalBucket.tokens < 1 || requestBucket.tokens < 1) return { ok: false, code: "rate_limited" };
+    let record = subjects.get(key);
+    if (!record) {
+      record = { concurrent: 0, bytes: 0 };
+      subjects.set(key, record);
+    }
+    if (aggregate.concurrent >= globalConcurrentLimit ||
+        record.concurrent >= subjectConcurrentLimit ||
+        aggregate.bytes + bytes > globalRequestByteLimit ||
+        record.bytes + bytes > subjectRequestByteLimit) {
+      return { ok: false, code: "rate_limited" };
+    }
+    requestGlobalBucket.tokens -= 1;
+    requestBucket.tokens -= 1;
+    aggregate.concurrent += 1;
+    aggregate.bytes += bytes;
+    record.concurrent += 1;
+    record.bytes += bytes;
+    let released = false;
+    return {
+      ok: true,
+      release() {
+        if (released) return;
+        released = true;
+        aggregate.concurrent -= 1;
+        aggregate.bytes -= bytes;
+        record.concurrent -= 1;
+        record.bytes -= bytes;
+        if (record.concurrent === 0) subjects.delete(key);
+      }
+    };
+  }
+
+  return Object.freeze({ admit, release, admitRequest });
 }

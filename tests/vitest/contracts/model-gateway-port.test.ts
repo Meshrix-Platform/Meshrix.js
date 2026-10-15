@@ -10,7 +10,6 @@ import {
   isModelGatewayOperationId
 } from "@meshrix/contracts/model-gateway/client-port";
 import {
-  MODEL_GATEWAY_ADAPTER_MAX_TIMEOUT_MS,
   MODEL_GATEWAY_ADAPTER_STATELESS,
   assertModelGatewayAdapterConfig,
   createDefaultDisabledModelGatewayAdapterConfig,
@@ -24,13 +23,25 @@ interface OpenApiOperation {
   }>;
 }
 
+interface OpenApiSchema {
+  additionalProperties?: boolean;
+  $ref?: string;
+  const?: string;
+  description?: string;
+  enum?: string[];
+  oneOf?: OpenApiSchema[];
+  properties?: Record<string, OpenApiSchema>;
+  items?: OpenApiSchema;
+  type?: string;
+}
+
 interface OpenApiContract {
   openapi: string;
   info: { version: string; title: string };
   paths: Record<string, { post?: OpenApiOperation }>;
   components: {
     securitySchemes: Record<string, unknown>;
-    schemas: Record<string, unknown>;
+    schemas: Record<string, OpenApiSchema>;
   };
 }
 
@@ -54,7 +65,7 @@ describe("Model Gateway Service wire contract", () => {
     });
   });
 
-  it("is natively compatible with OpenAI and Anthropic without a Meshrix translation endpoint", async () => {
+  it("uses OpenAI and Anthropic endpoint paths without a Meshrix translation endpoint", async () => {
     const contract = await readServiceContract();
     const paths: string[] = Object.keys(contract.paths);
     for (const required of [
@@ -93,6 +104,62 @@ describe("Model Gateway Service wire contract", () => {
     expect(anthropic?.responses["200"].content).toHaveProperty("text/event-stream");
     expect(anthropic?.responses["default"].content["application/json"].schema.$ref)
       .toContain("AnthropicError");
+  });
+
+  it("closes native request schemas over priced text and client-executed tools", async () => {
+    const contract = await readServiceContract();
+    const openAi = contract.components.schemas.OpenAiChatCompletionsRequest;
+    const anthropic = contract.components.schemas.AnthropicMessagesRequest;
+    expect(openAi.additionalProperties).toBe(false);
+    expect(anthropic.additionalProperties).toBe(false);
+    expect(openAi.properties?.messages?.items?.additionalProperties).toBe(false);
+    expect(anthropic.properties?.messages?.items?.additionalProperties).toBe(false);
+    expect(openAi.properties?.messages?.items?.properties?.content?.oneOf?.map((schema) => schema.type))
+      .toEqual(["string", "null"]);
+    expect(openAi.properties?.messages?.items?.properties?.tool_calls?.items?.properties?.function)
+      .toMatchObject({ additionalProperties: false });
+    const anthropicBlocks = anthropic.properties?.messages?.items?.properties?.content?.oneOf?.[1]
+      ?.items?.oneOf?.map((schema) => schema.$ref);
+    expect(anthropicBlocks).toEqual(expect.arrayContaining([
+      "#/components/schemas/AnthropicTextBlock",
+      "#/components/schemas/AnthropicToolUseBlock",
+      "#/components/schemas/AnthropicToolResultBlock"
+    ]));
+    expect(anthropicBlocks).not.toContain("#/components/schemas/AnthropicImageBlock");
+    expect(Object.keys(openAi.properties ?? {})).toEqual(expect.arrayContaining([
+      "messages",
+      "max_completion_tokens",
+      "tools",
+      "tool_choice",
+      "parallel_tool_calls",
+      "response_format"
+    ]));
+    expect(Object.keys(anthropic.properties ?? {})).toEqual(expect.arrayContaining([
+      "messages",
+      "max_tokens",
+      "system",
+      "tools",
+      "tool_choice"
+    ]));
+    for (const unsupported of ["modalities", "audio", "service_tier", "web_search_options", "prompt_cache_retention", "mcp_servers"]) {
+      expect(openAi.properties ?? {}).not.toHaveProperty(unsupported);
+      expect(anthropic.properties ?? {}).not.toHaveProperty(unsupported);
+    }
+    expect(contract.paths["/v1/messages"].post?.parameters ?? []).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "anthropic-beta" })])
+    );
+    expect(contract.paths["/v1/chat/completions"].post?.parameters ?? []).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "x-client-request-id", in: "header" })])
+    );
+    const pricing = contract.components.schemas.PricingRevision;
+    const description = (pricing.properties?.inputTokenRate?.description ?? "") + " " +
+      (pricing.properties?.outputTokenRate?.description ?? "");
+    expect(description).toContain("operator-supplied ceiling");
+    expect(description).toContain("not verified against provider pricing");
+    expect(description).toContain("invoice totals");
+    expect(description).toContain("automatic prompt-cache writes");
+    expect(contract.components.schemas.AnthropicToolResultBlock.properties?.content?.oneOf?.map((schema) => schema.type))
+      .toEqual(["string", "array"]);
   });
 
   it("closes over admission, pricing, cancellation, ledger, and stable errors", async () => {
@@ -157,6 +224,16 @@ describe("Meshrix ModelGatewayClientPort and adapter", () => {
       serviceRef: "model-gateway-prod",
       modelRef: "deepseek-v4-flash",
       providerRef: "deepseek",
+      inputRefs: ["in-1"],
+      idempotencyKey: "idem-too-long",
+      deadlineMs: 2_147_483_648,
+      stream: false
+    })).toThrow("model_gateway_call_deadline_invalid");
+    expect(() => assertModelGatewayCallRequest({
+      operationId: "model_gateway.call",
+      serviceRef: "model-gateway-prod",
+      modelRef: "deepseek-v4-flash",
+      providerRef: "deepseek",
       inputRefs: Array.from({ length: 65 }, () => "in"),
       idempotencyKey: "idem-2",
       deadlineMs: 60_000,
@@ -164,7 +241,7 @@ describe("Meshrix ModelGatewayClientPort and adapter", () => {
     })).toThrow("model_gateway_call_input_refs_bounded");
   });
 
-  it("is default-disabled, stateless, and closed over serviceRef plus bounded timeout", () => {
+  it("is default-disabled, stateless, and preserves only an optional explicit timeout", () => {
     const disabled = createDefaultDisabledModelGatewayAdapterConfig();
     expect(disabled.enabled).toBe(false);
     expect(disabled.serviceRef).toBeNull();
@@ -174,22 +251,33 @@ describe("Meshrix ModelGatewayClientPort and adapter", () => {
     const enabled = assertModelGatewayAdapterConfig({
       schemaVersion: "v0.0.1:model-gateway:adapter-config-1",
       enabled: true,
+      serviceRef: "model-gateway-prod"
+    });
+    expect(enabled.serviceRef).toBe("model-gateway-prod");
+    const configured = assertModelGatewayAdapterConfig({
+      schemaVersion: "v0.0.1:model-gateway:adapter-config-1",
+      enabled: true,
       serviceRef: "model-gateway-prod",
       timeoutMs: 30_000
     });
-    expect(enabled.serviceRef).toBe("model-gateway-prod");
+    expect(configured.timeoutMs).toBe(30_000);
     expect(() => assertModelGatewayAdapterConfig({
       schemaVersion: "v0.0.1:model-gateway:adapter-config-1",
       enabled: true,
-      serviceRef: null,
-      timeoutMs: 30_000
+      serviceRef: null
     })).toThrow("model_gateway_adapter_config_service_ref_required");
     expect(() => assertModelGatewayAdapterConfig({
       schemaVersion: "v0.0.1:model-gateway:adapter-config-1",
       enabled: false,
       serviceRef: null,
-      timeoutMs: MODEL_GATEWAY_ADAPTER_MAX_TIMEOUT_MS + 1
-    })).toThrow("model_gateway_adapter_config_timeout_out_of_bounds");
+      timeoutMs: 30_000
+    })).not.toThrow();
+    expect(() => assertModelGatewayAdapterConfig({
+      schemaVersion: "v0.0.1:model-gateway:adapter-config-1",
+      enabled: false,
+      serviceRef: null,
+      timeoutMs: 120_001
+    })).toThrow("model_gateway_adapter_config_timeout_invalid");
     expect(() => assertModelGatewayAdapterConfig({
       schemaVersion: "v0.0.1:model-gateway:adapter-config-1",
       enabled: false,

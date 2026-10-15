@@ -16,28 +16,19 @@ describe("MCP tool refresh single-flight", () : any => {
   it("shares a modern HTTP refresh while a canceled caller leaves another waiter active", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-modern-refresh-flight-"));
     const requests: string[] = [];
-    let releaseDiscovery!: () => void;
-    const discoveryGate = new Promise<void>((resolve) => { releaseDiscovery = resolve; });
-    let startDiscovery!: () => void;
-    const discoveryStarted = new Promise<void>((resolve) => { startDiscovery = resolve; });
+    let releaseList!: () => void;
+    const listGate = new Promise<void>((resolve) => { releaseList = resolve; });
+    let startList!: () => void;
+    const listStarted = new Promise<void>((resolve) => { startList = resolve; });
     const server = createServer(async (request, response) => {
       const chunks: Buffer[] = [];
       for await (const chunk of request) chunks.push(Buffer.from(chunk));
       const wire = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       requests.push(wire.method);
-      if (wire.method === "server/discover") {
-        startDiscovery();
-        await discoveryGate;
-        if (response.destroyed) return;
-        response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify({
-          jsonrpc: "2.0",
-          id: wire.id,
-          result: { resultType: "complete", supportedVersions: ["2026-07-28"] }
-        }));
-        return;
-      }
       if (wire.method === "tools/list") {
+        startList();
+        await listGate;
+        if (response.destroyed) return;
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({
           jsonrpc: "2.0",
@@ -68,20 +59,20 @@ describe("MCP tool refresh single-flight", () : any => {
       const creator = new AbortController();
       const follower = new AbortController();
       const first = registry.listMcpTools({ serviceId: "modern-flight-service" }, { signal: creator.signal });
-      await discoveryStarted;
+      await listStarted;
       const second = registry.listMcpTools({ serviceId: "modern-flight-service" }, { signal: follower.signal });
 
       creator.abort();
       await expect(first).rejects.toMatchObject({ reasonCode: "upstream_mcp_cancelled" });
-      releaseDiscovery();
+      releaseList();
 
       const listed = await second;
       expect(listed.items).toEqual([
         expect.objectContaining({ name: "upstream.modern-flight-service.records.list" })
       ]);
-      expect(requests).toEqual(["server/discover", "tools/list"]);
+      expect(requests).toEqual(["tools/list"]);
     } finally {
-      releaseDiscovery();
+      releaseList();
       await registry.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await fs.rm(root, { recursive: true, force: true });

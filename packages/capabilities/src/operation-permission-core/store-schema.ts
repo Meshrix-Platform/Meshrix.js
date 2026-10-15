@@ -1,3 +1,4 @@
+import { projectHttpMetricRoute, projectHttpMetricMethod } from "./store-metrics-utils.ts";
 import { runMigrations } from "@meshrix/foundation/storage/sqlite-migrations";
 
 function hasColumn(db?: any, tableName?: any, columnName?: any) : any {
@@ -241,6 +242,7 @@ export function ensureSchema(db?: any, {
       created_at TEXT NOT NULL,
       rotated_at TEXT,
       revoked_at TEXT,
+      claimed_at TEXT,
       expires_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_api_key_records_org_status_created
@@ -608,6 +610,7 @@ export function ensureSchema(db?: any, {
             created_at TEXT NOT NULL,
             rotated_at TEXT,
             revoked_at TEXT,
+            claimed_at TEXT,
             expires_at TEXT NOT NULL
           );
           CREATE INDEX IF NOT EXISTS idx_api_key_records_org_status_created
@@ -707,7 +710,37 @@ export function ensureSchema(db?: any, {
             ON tool_grants(parent_grant_id, type, id);
         `);
       }
+    },
+    {
+      version: 15,
+      up: (db?: any) : any => {
+        addColumnIfMissing(db, "http_request_metric_events", "event_count", "event_count INTEGER NOT NULL DEFAULT 1");
+        addColumnIfMissing(db, "http_request_metric_events", "duration_histogram_json", "duration_histogram_json TEXT NOT NULL DEFAULT ''");
+        addColumnIfMissing(db, "http_request_metric_events", "peak_bytes_per_second", "peak_bytes_per_second REAL NOT NULL DEFAULT 0");
+        db.exec("UPDATE http_request_metric_events SET peak_bytes_per_second = bytes_per_second WHERE event_count = 1");
+        // Reproject historical path metadata in place. Request facts, counts,
+        // byte totals and timestamps are retained; no historical row is erased.
+        const update = db.prepare("UPDATE http_request_metric_events SET route = ?, method = ? WHERE metric_id = ?");
+        const select = db.prepare("SELECT metric_id, route, method FROM http_request_metric_events WHERE metric_id > ? ORDER BY metric_id LIMIT 1000");
+        let cursor = "";
+        for (;;) {
+          const rows = select.all(cursor);
+          if (!rows.length) break;
+          for (const row of rows) update.run(projectHttpMetricRoute(row.route), projectHttpMetricMethod(row.method), row.metric_id);
+          cursor = rows[rows.length - 1].metric_id;
+        }
+      }
+    },
+    // version 16: API Key claim tracking. `claimed_at` stays NULL until the
+    // first successful credential authentication; records still unclaimed past
+    // the claim window derive the "unclaimed" status and fail closed.
+    {
+      version: 16,
+      up: (db?: any) : any => {
+        addColumnIfMissing(db, "api_key_records", "claimed_at", "claimed_at TEXT");
+      }
     }
+
   ]);
 
   if (recoverStaleApiKeyEffectReservations === true) {

@@ -342,6 +342,32 @@ export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS = Object.freeze([
       requiredScopes: ["runtime:admin"]
     },
 {
+      id: "discovery.clients.enrollment_token",
+      feature: "discovery",
+      label: "签发客户端登记令牌",
+      target: { controller: "system", method: "handleCreateDiscoveryEnrollmentToken" },
+      http: {
+        method: "POST",
+        path: "/api/discovery/clients/enrollment-token",
+        localInForwardMode: true
+      },
+      rpc: { method: "discovery.clients.enrollment_token", body: "params" },
+      cli: {
+        command: ["discovery", "clients", "enrollment-token"],
+        usage: "discovery clients enrollment-token --body enrollment.json"
+      },
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          ttlSeconds: { type: "integer", minimum: 60, maximum: 86400 }
+        }
+      },
+      safety: { risk: "safe_write", requiresConfirmation: false },
+      requiredScopes: ["runtime:admin"],
+      log: { recordInput: false, redaction: "secret" }
+    },
+{
       id: "discovery.get_config",
       feature: "discovery",
       label: "读取服务发现配置",

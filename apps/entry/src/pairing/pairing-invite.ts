@@ -17,10 +17,20 @@ import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import {
   PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION
 } from "@meshrix/contracts/private-relay";
+import {
+  ENTRY_PAIRING_KIND,
+  ENTRY_PAIRING_SCHEMA,
+  type PairingInvite,
+  type PairingRecoveryAuthority
+} from "@meshrix/contracts/account";
 import { entryError } from "../errors.ts";
 
-export const ENTRY_PAIRING_SCHEMA = "v0.0.1:entry:pairing-invite-1";
-export const ENTRY_PAIRING_KIND = "entry-pairing-invite";
+export {
+  ENTRY_PAIRING_KIND,
+  ENTRY_PAIRING_SCHEMA,
+  type PairingInvite,
+  type PairingRecoveryAuthority
+} from "@meshrix/contracts/account";
 export const ENTRY_PAIRING_URI_PREFIX = "meshrix-entry://pair#";
 
 const OPAQUE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,126}$/u;
@@ -46,37 +56,11 @@ function instant(value: unknown): string | null {
   return text && ISO_INSTANT.test(text) && Number.isFinite(Date.parse(text)) ? text : null;
 }
 
-export interface PairingRecoveryAuthority {
-  readonly keyId: string;
-  readonly generation: number;
-}
-
-export interface PairingInvite {
-  readonly schemaVersion: string;
-  readonly kind: typeof ENTRY_PAIRING_KIND;
-  readonly inviteId: string;
-  readonly endpointRouteId: string;
-  readonly tenantId: string;
-  readonly mode: "personal" | "enterprise";
-  readonly endpointPrincipalRef: string;
-  /** Endpoint SPKI pin — the inner-channel trust anchor (`spki` form). */
-  readonly endpointSpkiPin: string;
-  /** Relay service base URL the endpoint is reachable through. */
-  readonly relayService: string;
-  readonly vaultId: string;
-  /** Recovery authority enrolled at invite issue (informational binding). */
-  readonly recoveryAuthority: PairingRecoveryAuthority | null;
-  readonly issuedAt: string;
-  readonly expiresAt: string;
-  /** One-time bearer token proving invite legitimacy to the endpoint. */
-  readonly pairingToken: string;
-}
-
 export function parsePairingInvite(value: unknown): PairingInvite | null {
   if (!isRecord(value)) return null;
   const keys = Object.keys(value).sort();
   const expected = [
-    "endpointPrincipalRef", "endpointRouteId", "endpointSpkiPin", "expiresAt",
+    "endpointDeviceId", "endpointPinRef", "endpointPrincipalRef", "endpointRouteId", "endpointSpkiPin", "expiresAt",
     "inviteId", "issuedAt", "kind", "mode", "pairingToken",
     "recoveryAuthority", "relayService", "schemaVersion", "tenantId", "vaultId"
   ];
@@ -85,16 +69,19 @@ export function parsePairingInvite(value: unknown): PairingInvite | null {
   const inviteId = opaque(value.inviteId);
   const endpointRouteId = opaque(value.endpointRouteId);
   const tenantId = opaque(value.tenantId);
+  const endpointDeviceId = opaque(value.endpointDeviceId);
   const endpointPrincipalRef = opaque(value.endpointPrincipalRef);
   const endpointSpkiPin = bounded(value.endpointSpkiPin, 128);
+  const endpointPinRef = bounded(value.endpointPinRef, 128);
   const relayService = bounded(value.relayService, 512);
   const vaultId = opaque(value.vaultId);
   const issuedAt = instant(value.issuedAt);
   const expiresAt = instant(value.expiresAt);
   const pairingToken = bounded(value.pairingToken, 256);
   const mode = value.mode === "personal" || value.mode === "enterprise" ? value.mode : null;
-  if (!inviteId || !endpointRouteId || !tenantId || !endpointPrincipalRef
-    || !endpointSpkiPin || !relayService || !vaultId || !issuedAt || !expiresAt
+  if (!inviteId || !endpointRouteId || !tenantId || !endpointDeviceId || !endpointPrincipalRef
+    || !endpointSpkiPin || !endpointPinRef || endpointPinRef !== endpointSpkiPin
+    || !relayService || !vaultId || !issuedAt || !expiresAt
     || !pairingToken || !mode) return null;
   if (Date.parse(expiresAt) <= Date.parse(issuedAt)) return null;
   let recoveryAuthority: PairingRecoveryAuthority | null = null;
@@ -112,8 +99,10 @@ export function parsePairingInvite(value: unknown): PairingInvite | null {
     endpointRouteId,
     tenantId,
     mode,
+    endpointDeviceId,
     endpointPrincipalRef,
     endpointSpkiPin,
+    endpointPinRef,
     relayService,
     vaultId,
     recoveryAuthority,

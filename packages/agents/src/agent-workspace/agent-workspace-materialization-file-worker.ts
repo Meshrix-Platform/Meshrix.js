@@ -36,7 +36,6 @@ interface WorkerNames {
 interface PendingRequest {
   resolve(value: unknown): void;
   reject(reason?: unknown): void;
-  timer: NodeJS.Timeout;
 }
 interface DirectoryWorkerOptions {
   parentPath?: string;
@@ -81,7 +80,6 @@ function failure(value: unknown): WorkerFailure | null {
 const PRIVATE_FILE_MODE = 0o600;
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const MAX_CHUNK_BYTES = 64 * 1024;
-const REQUEST_TIMEOUT_MS = 30_000;
 const TEMP_LEAF_PATTERN =
   /^\.meshrix-materialization-[A-Za-z0-9_-]{16,128}(?:\.tmp)?$/u;
 
@@ -1095,14 +1093,27 @@ export async function createMaterializationDirectoryWorker({
   });
   let nextId = 1;
   let closed = false;
+  let childFailed = false;
   const pending = new Map<number, PendingRequest>();
   const childClosed = new Promise<void>((resolve) => {
-    child.once("close", resolve);
+    child.once("close", () => {
+      closed = true;
+      rejectPending(
+        workerError(
+          childFailed
+            ? "materialization_file_worker_unavailable"
+            : "materialization_file_worker_exited",
+          childFailed
+            ? "Materialization file worker is unavailable."
+            : "Materialization file worker exited.",
+        ),
+      );
+      resolve();
+    });
   });
 
   const rejectPending = (error: unknown): void => {
     for (const entry of pending.values()) {
-      clearTimeout(entry.timer);
       entry.reject(error);
     }
     pending.clear();
@@ -1114,7 +1125,6 @@ export async function createMaterializationDirectoryWorker({
     const entry = pending.get(id);
     if (!entry) return;
     pending.delete(id);
-    clearTimeout(entry.timer);
     if (
       !exactObject(message, ["id", "ok", "result"]) &&
       !exactObject(message, ["error", "id", "ok"])
@@ -1131,21 +1141,7 @@ export async function createMaterializationDirectoryWorker({
     else entry.reject(responseError(record?.error));
   });
   child.on("error", () => {
-    rejectPending(
-      workerError(
-        "materialization_file_worker_unavailable",
-        "Materialization file worker is unavailable.",
-      ),
-    );
-  });
-  child.on("exit", (code, signal) => {
-    closed = true;
-    rejectPending(
-      workerError(
-        "materialization_file_worker_exited",
-        `Materialization file worker exited (${signal || code || 0}).`,
-      ),
-    );
+    childFailed = true;
   });
 
   const request = (
@@ -1163,24 +1159,12 @@ export async function createMaterializationDirectoryWorker({
     const id = nextId;
     nextId += 1;
     return new Promise<unknown>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        pending.delete(id);
-        reject(
-          workerError(
-            "materialization_file_worker_timeout",
-            "Materialization file worker timed out.",
-          ),
-        );
-        child.kill("SIGKILL");
-      }, REQUEST_TIMEOUT_MS);
-      timer.unref?.();
-      pending.set(id, { reject, resolve, timer });
+      pending.set(id, { reject, resolve });
       child.send?.({ id, command, payload }, (error) => {
         if (!error) return;
         const entry = pending.get(id);
         if (!entry) return;
         pending.delete(id);
-        clearTimeout(entry.timer);
         reject(
           workerError(
             "materialization_file_worker_unavailable",
@@ -1249,13 +1233,18 @@ export async function createMaterializationDirectoryWorker({
       }
     },
     async close(): Promise<void> {
-      if (closed) return;
+      if (closed) {
+        await childClosed;
+        return;
+      }
       try {
         await request("close");
+      } catch (error: unknown) {
+        child.kill("SIGKILL");
         await childClosed;
-      } finally {
-        closed = true;
+        throw error;
       }
+      await childClosed;
     },
     terminate(): void {
       if (closed) return;

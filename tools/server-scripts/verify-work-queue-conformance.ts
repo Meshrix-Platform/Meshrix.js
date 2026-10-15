@@ -442,7 +442,6 @@ await withTempQueueStore(async ({ store, timeSource }: Record<string, any>) : Pr
   });
   const fallbackCoordinator: any = createQueueFallbackCoordinator({
     store,
-    timeSource,
     fallback: async () : Promise<any> => {
       throw new Error("fallback failed");
     },

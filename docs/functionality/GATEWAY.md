@@ -47,6 +47,22 @@ publication until `server_published`, after which it runs the service health
 check. Import never starts a service, installs a plugin, or embeds credential
 material.
 
+A portable draft can be generated from an OpenAPI 3.x JSON document with
+`meshrix upstream import-openapi --file openapi.json [--service-key NAME]
+[--base-url URL] [--output draft.json]`. Conversion is a local, network-free
+transformation: the operation list, HTTP method, `{param}` path templates,
+query/path parameters, JSON request bodies, and the first 2xx JSON response
+map onto operations carrying `structured_json` payload transports, a
+closed-schema request/response contract (local `$ref` resolution only —
+external references and recursion collapse to a permissive placeholder), a
+heuristic `risk` tier (`read_only` for safe methods, `destructive` for DELETE,
+`safe_write` otherwise), and default `gateway:read`/`gateway:write` scopes.
+Operations that need a header parameter or a non-JSON request body (multipart,
+binary) are reported on stderr as skipped rather than approximated. The emitted
+document is the same portable draft the Console import panel consumes; the
+operator reviews scope and risk assignments and publishes through the ordinary
+authenticated path.
+
 The Console observes an accepted publication with one view-owned, cancellable
 observer per retained service id and accepted service revision. The observer
 owns its status-query request and interval timer and has no attempt or business
@@ -135,6 +151,10 @@ never enumerate or dual-read the retired layout.
 Raw secrets and certificate material never enter the publishing command or manifest. Unknown or duplicate fields, prototype-mutating keys, unsafe targets or routes, control characters, excessive sizes or nesting, symlinks, non-regular files, mode or ownership mismatches, and caller-selected storage names fail closed before publication.
 
 Configured `credentialRefs` resolve through the local `secret://` store at forwarding time. The gateway checks service, exact HTTP(S) origin (scheme, host, and port), and required-scope metadata before applying secret material to HTTP or remote MCP request headers. Remote MCP descriptor headers are literal context data; environment expansion is reserved for trusted local stdio setup. Credentials and internal identity headers are removed when following a redirect to another origin. Generated reports must not contain raw credential values. A service descriptor may also include `tagPolicy`; governed services use the shared universal tag evaluator and fail closed when the tag store is unavailable.
+
+A service descriptor may declare `oauth` for upstreams that require OAuth 2.0 client-credentials authentication instead of (or in addition to) static `credentialRefs`. The block carries only public client metadata — `grantType: "client_credentials"`, `tokenUrl`, `clientId`, optional `scopes`, `audience`, and `authMethod` (`client_secret_basic` default, or `client_secret_post`) — plus `clientSecretRef`, a `secret://` URI resolved through the same local secret store. That secret must be scoped to the token endpoint's exact origin (service, host, protocol, and required scopes are checked before material is released), so a client secret bound to one identity provider cannot be replayed against another. At invocation time the gateway fetches a bearer token over the same pinned-DNS egress boundary and the service's `allowLocalNetwork` posture, injects it as the `Authorization` header on HTTP and remote MCP calls, caches it until shortly before `expires_in`, coalesces concurrent misses into a single token request, and re-fetches when the secret's revision rotates. A rejected, malformed, or unreachable token response denies the call before it touches the upstream service.
+
+A remote MCP descriptor may declare `mcp.aliases` — an operator curation map keyed by upstream tool name, whose values are either a name string or `{name, title, description}`. An alias replaces the upstream name inside the public tool name (`upstream.{prefix}.{alias}`) and may override the projected title and description without touching the upstream service; the original upstream name stays in the tool's `_meta.upstreamToolName`. Alias names are validated at publish and import (`[A-Za-z0-9_-]`, ≤80 chars), and projection is fail-closed about collisions: two tools that would claim the same public name publish only the first in upstream order — a name is never shadowed by a later tool.
 
 An older remote MCP descriptor that stores a credential directly in `mcp.headers` will no longer be loaded for forwarding. Rebind that value through a typed secret reference and republish the service. A bare `$NAME` header remains the literal text `$NAME`; Meshrix.js does not read the process environment to convert it.
 
@@ -248,11 +268,40 @@ authorizes the caller.
 1. Resolve route and upstream operation.
 2. Authenticate subject.
 3. Evaluate Operation Permission, tag policy, risk policy, and approval requirements.
-4. Apply the descriptor traffic policy through the gateway's token-bucket-with-concurrency control.
-5. Redact secrets before logging or auditing.
-6. Call the upstream service through the operation's explicit representation adapter.
-7. By default, pass the upstream response through without implicit redaction, field projection, or response reconstruction. If an operation explicitly configures `responseSchema`, `publicResponseFields`, or `sensitiveBodyFields`, apply that policy before public output. For opaque HTTP, stream permitted headers and exact bytes. For an artifact response, commit it to owner-bound storage and expose only its resource metadata.
-8. Emit audit and metrics.
+4. Evaluate the descriptor `contentPolicy` request rules over the caller's structured request data. Rules are operator-declared at service or operation scope: a `deny` rule rejects a call whose selected field (or whole request, when no `path` is given) hits a `contains` literal, a bounded `matches` regular expression, or a `oneOf` scalar; an `allow` rule fails closed unless its `path`-selected scalar satisfies `oneOf` or `matches`. Parameter-level matchers extend both sides: `eq`/`neq` scalar equality, `notIn` non-membership, `startsWith`/`endsWith` bounded affixes, `exists` presence (including `exists:false` to deny or require absence), and `compare`, a numeric conjunction (`{gt, gte, lt, lte}` — every declared bound must hold, so `{gte:0, lt:100}` expresses a range). Comparisons and affixes apply only to finite numbers and strings respectively; a type mismatch is a deny-side miss and an allow-side denial. All matchers stay declarative — executable keys such as `expression` or `regex` remain rejected. A denied call stops before it consumes traffic budget, credential material, or a protected-sink permit, and the denial audit records only the rule id and scope, never request content. Rules are opt-in; without them the gateway preserves opaque request passthrough, and opaque stream bodies are outside structured content inspection.
+5. Evaluate the operator-injected `policyGate`, when configured. This is the embedder-side seam for an external decision point (OPA, Cedar, or an in-house service): it receives a bounded context — service and operation identity, method, risk, subject type/id/grant and scopes, plus the caller's structured input — and returns `{allowed: true|false, reason?, detail?}`. It is invoked once per admission across the structured, MCP-route, and HTTP-stream paths, before any permit or upstream contact. The gate runs under a bounded deadline (default 2s, capped at 10s); a timeout, thrown error, or malformed decision fails closed as `upstream_policy_gate_unavailable`, while an explicit `{allowed:false}` denies with `upstream_policy_gate_denied`. Audit records only the sanitized reason, never gate internals or request content. The synchronous HTTP-stream preview path does not call the gate; `forwardHttpStream` enforces it authoritatively. Because plugin confinement forbids plugin-held policy authority, the gate is wired at registry construction, not by plugins or descriptors.
+
+An operation may opt into a bounded response cache through `responseCache`:
+`{ttlMs}` (1..600000 ms) with optional `maxEntries` (per-service cap, default
+128, max 256) and `maxBytes` (serialized-result cap, default 256 KiB).
+Publishing requires an explicit `risk: "read_only"` — a `responseCache` on any
+other risk class is rejected, so cached replays can never stand in for write
+or approval effects. The cache key digests the service id, the service's
+`updatedAt` revision, the operation key and the canonical caller input, so a
+republish or replace orphans stale entries without an invalidation protocol.
+A hit is served after content-policy and policy-gate evaluation but before
+credential resolution, protected-sink permit claims, traffic-slot consumption
+and upstream contact; it audits its own `upstream.forward.cache_hit` event and
+returns `cache: {hit: true, storedAt, expiresAt}` with a fresh `auditId`,
+never replaying the origin call's receipt. Failed forwards, timed-out calls
+and oversized results are never stored. The global entry count is capped at
+512; eviction is expired-first, then insertion order.
+6. Apply the descriptor traffic policy through the gateway's token-bucket-with-concurrency control.
+7. Redact secrets before logging or auditing.
+8. Call the upstream service through the operation's explicit representation adapter.
+9. By default, pass the upstream response through without implicit redaction, field projection, or response reconstruction. If an operation explicitly configures `responseSchema`, `publicResponseFields`, or `sensitiveBodyFields`, apply that policy before public output. For opaque HTTP, stream permitted headers and exact bytes. For an artifact response, commit it to owner-bound storage and expose only its resource metadata.
+10. Emit audit and metrics.
+
+`registry.getMetrics()` returns the bounded counter snapshot
+(`totalForwardCount`, `totalFailureCount`, per-service and per-status buckets
+under the shared dimension limit, `shedMetricDimensions`, and bounded runtime
+state sizes). `renderUpstreamGatewayMetricsExposition(metrics)` renders that
+snapshot as Prometheus `0.0.4` text (`meshrix_upstream_*` series), the
+OpenTelemetry-compatible pull surface — an OTel Collector `prometheus`
+receiver scrapes it directly without any push client or protobuf dependency
+in the framework. Label values carry only bounded vocabularies (service ids,
+status codes, gauge names), never payloads, inputs, or caller identity;
+`shedMetricDimensions` makes cardinality shedding itself observable.
 
 Native HTTP callers use
 `POST /api/gateway/v1/transit/:serviceId/:operationKey`; the request body and
@@ -303,6 +352,18 @@ Server protocol conformance uses a neutral downstream peer generated from the MC
 Native downstream installation requires an administrator-issued scoped API Key supplied through the documented environment variable or protected standard input. The connector validates the key before I/O, stores only the environment-variable reference, and sends only `X-Meshrix.js-Api-Key`. The server authenticates the workload before catalog projection and routes every permitted call through canonical Operation Permission; optional pending-operation approval remains a separate post-authentication control. Local uninstall removes connector-managed configuration without a credential or server request.
 
 Eligible API Key issuers receive current upstream MCP tool facts from `/api/operation-permission/v1/api-keys/issuer-scopes`. Each fact identifies one tool by service ID and public name and includes its capability, scopes, toolsets, and risk. A key policy grants only the exact discovered tool capabilities selected in the Console. The service-level `tools/call` Operation Permission record remains the internal execution authority; selecting that record or its toolset does not grant every discovered tool from the service. Discovery is reported as available, partial, or unavailable. Only confirmed tools are selectable; stale selections block issuance until removed or replaced by a current identity, and tools published after issuance remain outside that key’s capability set.
+
+A grant may also narrow its visible MCP tools by public name through
+`allowedTools` (directly or under `metadata.allowedTools`): a bounded list of
+up to 64 entries, each an exact public name or a `prefix*` glob (an interior
+`*` is treated literally). When the list is non-empty, a discovered tool whose
+public name matches no entry fails closed as `audience_tool_not_granted` in
+both discovery and execution — the shared audience decision keeps the two
+paths identical. This is the curation layer for catalogs too large to
+enumerate as per-tool capabilities. Separately, `listMcpTools` accepts an
+optional `query` string (bounded, case-insensitive) matched against public
+names, titles and descriptions so a caller can search the projected catalog
+without materializing every tool.
 
 The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. First-party adapter components are private modules bundled with `meshrix.js`; the connector resolves them from the installed root package and invokes them only for an explicit target action. Each component owns its client commands, configuration format, probes, and target-specific mutation behavior behind the bounded JSON-stdio contract. The connector owns target selection, authorization, credential custody, proxying, and install/uninstall orchestration. Client applications remain independent external products.
 

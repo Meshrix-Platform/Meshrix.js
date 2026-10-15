@@ -188,10 +188,23 @@ function isVitestEntry(entry: TestSuiteEntry): boolean {
 
 function mergeCompatibilityKey(entry: TestSuiteEntry): string | null {
   if (!isVitestEntry(entry)) return null;
+  const testArgs = entry.args.slice(3);
+  // Token-level deduplication cannot preserve a space-separated option/value
+  // pair. Keep that command intact instead of guessing the option's arity.
+  if (testArgs.some((arg, index) => arg.startsWith("-") && !arg.includes("=")
+    && testArgs[index + 1] !== undefined && !testArgs[index + 1]!.startsWith("-"))) return null;
+  // Vitest name filters apply to every file in a process. Keep focused suites
+  // separate so their filter cannot silently skip another suite's tests.
+  if (testArgs.some((arg) => arg.startsWith("-t")
+    || arg === "--testNamePattern" || arg.startsWith("--testNamePattern="))) return null;
+  // Single-value Vitest options (for example --maxWorkers) must match across a
+  // merged process; Vitest rejects repeated occurrences with different values.
+  const optionArgs = testArgs.filter((arg) => arg.startsWith("-"));
   return JSON.stringify([
     entry.sideEffects ?? "none",
     entry.flakePolicy ?? "fail",
-    [...(entry.requiredServices ?? [])].sort()
+    [...(entry.requiredServices ?? [])].sort(),
+    [...optionArgs].sort()
   ]);
 }
 

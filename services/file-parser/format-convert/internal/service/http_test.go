@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -20,6 +21,8 @@ import (
 type fakeConverter struct {
 	readyErr error
 }
+
+const testAuthToken = "format-convert-test-token-000000000000000000000000"
 
 type blockingConverter struct {
 	started   chan struct{}
@@ -65,15 +68,15 @@ func (converter fakeConverter) Convert(_ context.Context, _ string, workDir stri
 func testConfig(t *testing.T) Config {
 	t.Helper()
 	return Config{
-		Port:              8080,
-		MaxUploadBytes:    1 << 20,
-		MaxOutputBytes:    2 << 20,
-		ConversionTimeout: time.Second,
-		MaxConcurrency:    1,
-		QueueCapacity:     0,
-		QueueTimeout:      100 * time.Millisecond,
-		TempRoot:          t.TempDir(),
-		SofficeBinary:     "soffice",
+		Port:           8080,
+		MaxUploadBytes: 1 << 20,
+		MaxOutputBytes: 2 << 20,
+		MaxConcurrency: 1,
+		QueueCapacity:  0,
+		QueueTimeout:   100 * time.Millisecond,
+		TempRoot:       t.TempDir(),
+		SofficeBinary:  "soffice",
+		AuthToken:      testAuthToken,
 	}
 }
 
@@ -102,6 +105,7 @@ func multipartRequestWithTarget(t *testing.T, name string, content []byte, targe
 	}
 	request := httptest.NewRequest(http.MethodPost, "/v1/convert", &body)
 	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("Authorization", "Bearer "+testAuthToken)
 	return request
 }
 
@@ -167,9 +171,47 @@ func TestRejectsInvalidUTF8Text(t *testing.T) {
 	}
 }
 
+func testDocxArchive(t *testing.T, entries map[string]string) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	archive := zip.NewWriter(&buffer)
+	contentTypes, err := archive.Create("[Content_Types].xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := contentTypes.Write([]byte(`<?xml version="1.0"?><Types></Types>`)); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range entries {
+		member, err := archive.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := member.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+type countingConverter struct {
+	calls atomic.Int64
+}
+
+func (converter *countingConverter) Ready() error { return nil }
+
+func (converter *countingConverter) Convert(_ context.Context, _ string, workDir string) (string, error) {
+	converter.calls.Add(1)
+	output := filepath.Join(workDir, "fixture.pdf")
+	return output, os.WriteFile(output, []byte("%PDF-1.7\n%%EOF\n"), 0o600)
+}
+
 func TestConvertDOCXToPDF(t *testing.T) {
 	handler := NewHTTPHandler(testConfig(t), fakeConverter{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	request := multipartRequest(t, "report.docx", append([]byte{'P', 'K', 3, 4}, []byte("fixture")...))
+	request := multipartRequest(t, "report.docx", testDocxArchive(t, map[string]string{"word/document.xml": "<w:document/>"}))
 	response := httptest.NewRecorder()
 
 	handler.ServeHTTP(response, request)
@@ -205,7 +247,7 @@ func TestRejectsUnsupportedExtension(t *testing.T) {
 
 func TestRejectsUnsupportedTargetForDOCX(t *testing.T) {
 	handler := NewHTTPHandler(testConfig(t), fakeConverter{}, nil)
-	request := multipartRequestWithTarget(t, "report.docx", append([]byte{'P', 'K', 3, 4}, []byte("fixture")...), "docx")
+	request := multipartRequestWithTarget(t, "report.docx", testDocxArchive(t, nil), "docx")
 	response := httptest.NewRecorder()
 
 	handler.ServeHTTP(response, request)
@@ -233,6 +275,112 @@ func TestRejectsInvalidDOCXSignature(t *testing.T) {
 	}
 }
 
+func TestRejectsDOCXArchiveWithoutPackageStructure(t *testing.T) {
+	converter := &countingConverter{}
+	handler := NewHTTPHandler(testConfig(t), converter, nil)
+	var buffer bytes.Buffer
+	archive := zip.NewWriter(&buffer)
+	member, err := archive.Create("readme.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := member.Write([]byte("not an office package")); err != nil {
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, multipartRequest(t, "report.docx", buffer.Bytes()))
+
+	if response.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("expected 415, got %d: %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "input_archive_unsafe") {
+		t.Fatalf("unexpected response: %s", response.Body.String())
+	}
+	if converter.calls.Load() != 0 {
+		t.Fatal("rejected archive reached the converter")
+	}
+}
+
+func TestRejectsDOCXArchiveExpansionBombBeforeConverter(t *testing.T) {
+	converter := &countingConverter{}
+	handler := NewHTTPHandler(testConfig(t), converter, nil)
+	var buffer bytes.Buffer
+	archive := zip.NewWriter(&buffer)
+	contentTypes, err := archive.Create("[Content_Types].xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := contentTypes.Write([]byte(`<?xml version="1.0"?><Types></Types>`)); err != nil {
+		t.Fatal(err)
+	}
+	member, err := archive.Create("word/document.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := member.Write(make([]byte, 40<<20)); err != nil {
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, multipartRequest(t, "report.docx", buffer.Bytes()))
+
+	if response.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("expected 415, got %d: %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "input_archive_unsafe") {
+		t.Fatalf("unexpected response: %s", response.Body.String())
+	}
+	if converter.calls.Load() != 0 {
+		t.Fatal("expansion bomb reached the converter")
+	}
+}
+
+func TestRejectsDOCXArchiveBeyondMemberBudgetBeforeConverter(t *testing.T) {
+	converter := &countingConverter{}
+	handler := NewHTTPHandler(testConfig(t), converter, nil)
+	var buffer bytes.Buffer
+	archive := zip.NewWriter(&buffer)
+	contentTypes, err := archive.Create("[Content_Types].xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := contentTypes.Write([]byte(`<?xml version="1.0"?><Types></Types>`)); err != nil {
+		t.Fatal(err)
+	}
+	for index := 0; index < maxArchiveMembers; index++ {
+		member, err := archive.Create(fmt.Sprintf("word/part-%d.xml", index))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := member.Write([]byte("x")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, multipartRequest(t, "report.docx", buffer.Bytes()))
+
+	if response.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("expected 415, got %d: %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "input_archive_unsafe") {
+		t.Fatalf("unexpected response: %s", response.Body.String())
+	}
+	if converter.calls.Load() != 0 {
+		t.Fatal("member-count violation reached the converter")
+	}
+}
+
 func TestHealthAndReadiness(t *testing.T) {
 	handler := NewHTTPHandler(testConfig(t), fakeConverter{}, nil)
 	for _, path := range []string{"/healthz", "/readyz"} {
@@ -241,6 +389,58 @@ func TestHealthAndReadiness(t *testing.T) {
 		if response.Code != http.StatusOK {
 			t.Fatalf("%s returned %d", path, response.Code)
 		}
+	}
+}
+
+type readCounter struct {
+	reader io.Reader
+	reads  int
+}
+
+func (counter *readCounter) Read(value []byte) (int, error) {
+	counter.reads += 1
+	return counter.reader.Read(value)
+}
+
+func (counter *readCounter) Close() error { return nil }
+
+func TestConvertRequiresBearerAuthenticationBeforeBodyOrWorkspaceIO(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		header []string
+	}{
+		{name: "missing"},
+		{name: "wrong token", header: []string{"Bearer another-token-value-000000000000000000"}},
+		{name: "duplicate", header: []string{"Bearer " + testAuthToken, "Bearer " + testAuthToken}},
+		{name: "malformed", header: []string{"Bearer " + testAuthToken + " trailing"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config := testConfig(t)
+			handler := NewHTTPHandler(config, fakeConverter{}, nil)
+			request := httptest.NewRequest(http.MethodPost, "/v1/convert", nil)
+			body := &readCounter{reader: strings.NewReader("private multipart body")}
+			request.Body = body
+			for _, value := range test.header {
+				request.Header.Add("Authorization", value)
+			}
+			response := httptest.NewRecorder()
+
+			handler.ServeHTTP(response, request)
+
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("expected 401, got %d", response.Code)
+			}
+			if body.reads != 0 {
+				t.Fatalf("unauthenticated body was read %d times", body.reads)
+			}
+			entries, err := os.ReadDir(config.TempRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("unauthenticated request created %d temporary workspaces", len(entries))
+			}
+		})
 	}
 }
 
@@ -279,7 +479,7 @@ func TestLibreOfficeConcurrencyRejectsBeyondBoundedQueue(t *testing.T) {
 	}
 }
 
-func TestTXTToDOCXDoesNotWaitForLibreOfficeCapacity(t *testing.T) {
+func TestTXTToDOCXConsumesBoundedRequestCapacity(t *testing.T) {
 	config := testConfig(t)
 	converter := newBlockingConverter()
 	handler := NewHTTPHandler(config, converter, nil)
@@ -297,8 +497,8 @@ func TestTXTToDOCXDoesNotWaitForLibreOfficeCapacity(t *testing.T) {
 
 	docxResponse := httptest.NewRecorder()
 	handler.ServeHTTP(docxResponse, multipartRequestWithTarget(t, "second.txt", []byte("second document"), "docx"))
-	if docxResponse.Code != http.StatusOK || docxResponse.Header().Get("Content-Type") != docxMediaType {
-		t.Fatalf("TXT to DOCX was blocked by LibreOffice capacity: %d %s", docxResponse.Code, docxResponse.Body.String())
+	if docxResponse.Code != http.StatusServiceUnavailable || !strings.Contains(docxResponse.Body.String(), "conversion_capacity_exhausted") {
+		t.Fatalf("TXT to DOCX escaped the request capacity limit: %d %s", docxResponse.Code, docxResponse.Body.String())
 	}
 	close(converter.release)
 	<-firstDone
@@ -363,4 +563,21 @@ func readZipEntry(t *testing.T, archive *zip.Reader, name string) string {
 	}
 	t.Fatalf("missing DOCX entry %s", name)
 	return ""
+}
+
+type deadlineInspectingConverter struct{ t *testing.T }
+
+func (converter deadlineInspectingConverter) Ready() error { return nil }
+func (converter deadlineInspectingConverter) Convert(ctx context.Context, input, workDir string) (string, error) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		converter.t.Error("admitted conversion received internal deadline")
+	}
+	return (fakeConverter{}).Convert(ctx, input, workDir)
+}
+func TestAdmittedConversionHasNoInternalDurationDeadline(t *testing.T) {
+	response := httptest.NewRecorder()
+	NewHTTPHandler(testConfig(t), deadlineInspectingConverter{t}, nil).ServeHTTP(response, multipartRequestWithTarget(t, "document.docx", testDocxArchive(t, map[string]string{"word/document.xml": "<document/>"}), "pdf"))
+	if response.Code != http.StatusOK {
+		t.Fatal("normal conversion rejected")
+	}
 }

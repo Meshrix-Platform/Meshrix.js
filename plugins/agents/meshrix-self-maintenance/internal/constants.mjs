@@ -5,4 +5,3 @@ export const MAX_QUEUE_ITEMS = 1024;
 export const MAX_JOURNAL_RECORDS = 4096;
 export const MAX_RESPONSE_BYTES = 1024 * 1024;
 export const POLL_INTERVAL_MS = 30_000;
-export const REQUEST_TIMEOUT_MS = 60_000;

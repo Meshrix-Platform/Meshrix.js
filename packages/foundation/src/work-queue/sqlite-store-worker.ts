@@ -48,7 +48,6 @@ const allowed = new Set<string>([
   "drain",
   "getQueueControl",
   "recordBackgroundWrite",
-  "writeFallbackCoordinatorState",
   "writeSnapshotState",
   "writeCompactionState",
   "writeInternalHealthState",
@@ -68,7 +67,7 @@ parentPort?.on("message", async (message: unknown): Promise<void> => {
         code: "sqlite_lane_command_rejected",
       });
     }
-    if (Date.now() > Number(request?.deadlineAtMs || 0)) {
+    if (Number(request?.deadlineAtMs || 0) > 0 && Date.now() > Number(request?.deadlineAtMs)) {
       throw Object.assign(new Error("Queue SQLite command deadline elapsed."), {
         code: "sqlite_lane_deadline_exceeded",
       });

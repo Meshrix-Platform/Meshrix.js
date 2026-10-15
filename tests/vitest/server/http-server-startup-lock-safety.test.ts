@@ -11,6 +11,7 @@ import {
   LockManagerDestroyedError,
   MemoryLockManager
 } from "../../../packages/foundation/src/concurrency/lock-manager.ts";
+import { provisionVerifierLocalSecretKey } from "../../../tools/server-scripts/lib/local-secret-verifier-key.ts";
 
 class ListenerStub extends EventEmitter {
   listenError: any;
@@ -72,6 +73,7 @@ describe("HTTP startup lock safety", () : any => {
   it("fails before listen when production proof signing custody is unavailable", async () : Promise<any> => {
     const createServer: any = vi.spyOn(http, "createServer");
     const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-startup-proof-signer-"));
+    const keyCustody: any = await provisionVerifierLocalSecretKey();
     const previousPolicy: any = process.env.MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY;
     const previousSecretFile: any = process.env.MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE;
     process.env.MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY = "production";
@@ -89,6 +91,7 @@ describe("HTTP startup lock safety", () : any => {
       else process.env.MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY = previousPolicy;
       if (previousSecretFile === undefined) delete process.env.MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE;
       else process.env.MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE = previousSecretFile;
+      await keyCustody.close();
       await fs.rm(userDataPath, { recursive: true, force: true });
     }
   });
@@ -179,6 +182,7 @@ describe("HTTP startup lock safety", () : any => {
     const listenError: any = Object.assign(new Error("address unavailable"), { code: "EADDRINUSE" });
     vi.spyOn(http, "createServer").mockReturnValue(new ListenerStub({ listenError }));
     const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-startup-lock-"));
+    const keyCustody: any = await provisionVerifierLocalSecretKey();
     const manager: any = new MemoryLockManager();
 
     try {
@@ -194,6 +198,7 @@ describe("HTTP startup lock safety", () : any => {
         .rejects.toBeInstanceOf(LockManagerDestroyedError);
     } finally {
       manager.destroy();
+      await keyCustody.close();
       await fs.rm(userDataPath, {
         recursive: true,
         force: true,
@@ -206,6 +211,7 @@ describe("HTTP startup lock safety", () : any => {
   it("owns an injected manager and makes successful server close idempotent", async () : Promise<any> => {
     vi.spyOn(http, "createServer").mockReturnValue(new ListenerStub());
     const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-startup-close-lock-"));
+    const keyCustody: any = await provisionVerifierLocalSecretKey();
     const manager: any = new MemoryLockManager();
     let serverHandle: any = null;
 
@@ -227,6 +233,7 @@ describe("HTTP startup lock safety", () : any => {
     } finally {
       await serverHandle?.close?.().catch(() : any => {});
       manager.destroy();
+      await keyCustody.close();
       await fs.rm(userDataPath, {
         recursive: true,
         force: true,

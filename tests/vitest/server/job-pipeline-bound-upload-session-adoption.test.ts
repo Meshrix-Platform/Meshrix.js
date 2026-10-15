@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -34,6 +34,7 @@ vi.mock("#meshrix/product-api", async (importOriginal?: any) : Promise<any> => (
 }));
 
 import { serverToken } from "#meshrix/client-strings";
+import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
 import {
   createServerCompositionRoot
 } from "#meshrix/server-runtime/composition/composition-root";
@@ -69,6 +70,7 @@ const FORBIDDEN_STORAGE_METHODS: readonly any[] = Object.freeze([
 ]);
 const tempRoots: any = new Set<any>();
 const compositions: any = new Set<any>();
+const compositionMasterKeys: any = new Map<any, Buffer>();
 let uploadSequence: any = 0;
 
 function sha256(value?: any) : any {
@@ -94,8 +96,14 @@ async function createTempRoot() : Promise<any> {
 
 async function openComposition(root: any = null) : Promise<any> {
   const userDataPath: any = root || await createTempRoot();
+  let masterKey: Buffer | undefined = compositionMasterKeys.get(userDataPath);
+  if (!masterKey) {
+    masterKey = randomBytes(32);
+    compositionMasterKeys.set(userDataPath, masterKey);
+  }
   const composition: any = await createServerCompositionRoot({
     userDataPath,
+    secretKeyProvider: createMemoryLocalSecretKeyProvider({ key: masterKey }),
     runtimeLogger: logger(),
     runtimeOptions: {
       enabledPlugins: [],
@@ -344,6 +352,8 @@ afterEach(async () : Promise<any> => {
     await fs.rm(root, { recursive: true, force: true });
     tempRoots.delete(root);
   }
+  for (const masterKey of compositionMasterKeys.values()) masterKey.fill(0);
+  compositionMasterKeys.clear();
   uploadSequence = 0;
   pipelineSeams.events.length = 0;
   vi.clearAllMocks();

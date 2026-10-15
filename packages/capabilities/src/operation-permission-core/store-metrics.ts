@@ -250,6 +250,7 @@ export function createMetricsStoreMethods(ctx?: any) : any {
       counts: {
         toolMetricEvents: toolMetricEvents.length,
         httpRequestMetricEvents: httpRequestMetricEvents.length,
+        httpRequests: httpRequestMetricEvents.reduce((sum: number, row: any) => sum + row.eventCount, 0),
         total: toolMetricEvents.length + httpRequestMetricEvents.length
       },
       toolMetricEvents,
@@ -296,17 +297,17 @@ export function createMetricsStoreMethods(ctx?: any) : any {
     `).get(startedAt, endedAt);
     const requestRow: any = db.prepare(`
       SELECT
-        count(*) AS total,
-        coalesce(sum(CASE WHEN status_code >= 200 AND status_code < 400 THEN 1 ELSE 0 END), 0) AS success_total,
-        coalesce(sum(CASE WHEN status_code >= 400 AND status_code < 500 THEN 1 ELSE 0 END), 0) AS client_error_total,
-        coalesce(sum(CASE WHEN status_code >= 500 THEN 1 ELSE 0 END), 0) AS server_error_total,
-        coalesce(sum(CASE WHEN completion_status != 'completed' THEN 1 ELSE 0 END), 0) AS completion_failure_total,
+        coalesce(sum(event_count), 0) AS total,
+        coalesce(sum(CASE WHEN status_code >= 200 AND status_code < 400 THEN event_count ELSE 0 END), 0) AS success_total,
+        coalesce(sum(CASE WHEN status_code >= 400 AND status_code < 500 THEN event_count ELSE 0 END), 0) AS client_error_total,
+        coalesce(sum(CASE WHEN status_code >= 500 THEN event_count ELSE 0 END), 0) AS server_error_total,
+        coalesce(sum(CASE WHEN completion_status != 'completed' THEN event_count ELSE 0 END), 0) AS completion_failure_total,
         coalesce(sum(request_bytes), 0) AS request_bytes_total,
         coalesce(sum(response_bytes), 0) AS response_bytes_total,
         coalesce(sum(transfer_bytes), 0) AS transfer_bytes_total,
-        coalesce(avg(duration_ms), 0) AS average_duration_ms,
-        coalesce(avg(bytes_per_second), 0) AS average_bytes_per_second,
-        coalesce(max(bytes_per_second), 0) AS peak_bytes_per_second
+        coalesce(sum(duration_ms) * 1.0 / nullif(sum(event_count), 0), 0) AS average_duration_ms,
+        coalesce(sum(bytes_per_second * event_count) / nullif(sum(event_count), 0), 0) AS average_bytes_per_second,
+        coalesce(max(peak_bytes_per_second), 0) AS peak_bytes_per_second
       FROM http_request_metric_events
       WHERE created_at >= ? AND created_at <= ?
     `).get(startedAt, endedAt);
@@ -317,7 +318,7 @@ export function createMetricsStoreMethods(ctx?: any) : any {
       ORDER BY duration_ms ASC
     `).all(startedAt, endedAt));
     const requestDurationPercentiles: any = durationPercentilesFromRows(db.prepare(`
-      SELECT duration_ms
+      SELECT duration_ms, event_count, duration_histogram_json
       FROM http_request_metric_events
       WHERE created_at >= ? AND created_at <= ?
       ORDER BY duration_ms ASC
@@ -354,9 +355,9 @@ export function createMetricsStoreMethods(ctx?: any) : any {
         transport,
         method,
         route,
-        count(*) AS total,
+        sum(event_count) AS total,
         coalesce(sum(transfer_bytes), 0) AS transfer_bytes_total,
-        coalesce(avg(duration_ms), 0) AS average_duration_ms
+        coalesce(sum(duration_ms) * 1.0 / nullif(sum(event_count), 0), 0) AS average_duration_ms
       FROM http_request_metric_events
       WHERE created_at >= ? AND created_at <= ?
       GROUP BY transport, method, route
@@ -373,7 +374,7 @@ export function createMetricsStoreMethods(ctx?: any) : any {
         transferBytesPerSecond: Number((transferBytesTotal / normalizedWindowSeconds).toFixed(2)),
         averageDurationMs: Number(Number(row.average_duration_ms || 0).toFixed(2)),
         durationPercentiles: durationPercentilesFromRows(db.prepare(`
-          SELECT duration_ms
+          SELECT duration_ms, event_count, duration_histogram_json
           FROM http_request_metric_events
           WHERE created_at >= ? AND created_at <= ? AND transport = ? AND method = ? AND route = ?
           ORDER BY duration_ms ASC
@@ -542,13 +543,14 @@ export function createMetricsStoreMethods(ctx?: any) : any {
       const row: any = db.prepare(`
         SELECT
           count(*) AS rows,
+          coalesce(sum(event_count), 0) AS events,
           min(created_at) AS oldest_created_at,
           max(created_at) AS newest_created_at,
           coalesce(sum(request_bytes), 0) AS request_bytes_total,
           coalesce(sum(response_bytes), 0) AS response_bytes_total,
           coalesce(sum(transfer_bytes), 0) AS transfer_bytes_total,
-          coalesce(avg(bytes_per_second), 0) AS average_bytes_per_second,
-          coalesce(max(bytes_per_second), 0) AS peak_bytes_per_second
+          coalesce(sum(bytes_per_second * event_count) / nullif(sum(event_count), 0), 0) AS average_bytes_per_second,
+          coalesce(max(peak_bytes_per_second), 0) AS peak_bytes_per_second
         FROM http_request_metric_events
       `).get();
       const rows: any = Number(row.rows || 0);
@@ -560,7 +562,7 @@ export function createMetricsStoreMethods(ctx?: any) : any {
         oldestCreatedAt: row.oldest_created_at || "",
         newestCreatedAt: row.newest_created_at || "",
         observedWindowSeconds,
-        eventsPerMinute: observedWindowSeconds ? Number(((rows * 60) / observedWindowSeconds).toFixed(2)) : 0,
+        eventsPerMinute: observedWindowSeconds ? Number(((Number(row.events || 0) * 60) / observedWindowSeconds).toFixed(2)) : 0,
         requestBytesTotal: Number(row.request_bytes_total || 0),
         responseBytesTotal: Number(row.response_bytes_total || 0),
         transferBytesTotal,

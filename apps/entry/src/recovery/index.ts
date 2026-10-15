@@ -27,6 +27,7 @@ export {
   type FetchOutcome,
   type PublishOutcome,
   type SnapshotJournal,
+  type PendingSnapshotWrite,
   type SnapshotJournalPort
 } from "./snapshot-sync.ts";
 export {

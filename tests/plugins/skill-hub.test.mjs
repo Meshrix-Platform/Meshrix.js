@@ -18,7 +18,7 @@ const manifest = JSON.parse(await readFile(
 ));
 const enabledConfiguration = Object.freeze({
   enabled: true,
-  service: Object.freeze({ serviceRef: "svc_skill_hub", timeoutMs: 30_000 })
+  service: Object.freeze({ serviceRef: "svc_skill_hub" })
 });
 const serviceAuthToken = "synthetic-skill-hub-test-token-000000000000";
 
@@ -195,7 +195,7 @@ function sandboxHost() {
   });
 }
 
-async function fixture(t) {
+async function fixture(t, configuration = enabledConfiguration) {
   const dataRoot = await mkdtemp(path.join(os.tmpdir(), "meshrix-skill-hub-test-"));
   const handler = await createSkillHubHttpHandler({ dataRoot, authToken: serviceAuthToken });
   const server = createServer(handler);
@@ -203,15 +203,18 @@ async function fixture(t) {
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
   const forwardedRequests = [];
+  const forwardedOptions = [];
   const externalService = Object.freeze({
-    async request(request) {
+    async request(request, options) {
       assert.equal(request.serviceRef, "svc_skill_hub");
       assert.equal(request.operationRef.startsWith("skill_hub."), true);
       forwardedRequests.push(structuredClone(request));
+      forwardedOptions.push(options);
       const response = await fetch(`${baseUrl}/v1/operations/${request.operationRef}`, {
         method: "POST",
         headers: {
           "authorization": `Bearer ${serviceAuthToken}`,
+          "x-meshrix-skill-hub-subject": request.input.meshrixContext.principal.subjectRef,
           "content-type": "application/json"
         },
         body: JSON.stringify(request.input)
@@ -219,14 +222,15 @@ async function fixture(t) {
       return Object.freeze({ ok: response.ok, status: response.status, data: await response.json() });
     }
   });
-  const runtime = await activatePlugin({ manifest, context: { configuration: enabledConfiguration } });
+  let runtime;
   t.after(async () => {
-    await runtime.close();
+    if (runtime) await runtime.close();
     await new Promise((resolve) => server.close(resolve));
     await handler.close();
     await rm(dataRoot, { recursive: true, force: true });
   });
-  return { baseUrl, externalService, forwardedRequests, runtime };
+  runtime = await activatePlugin({ manifest, context: { configuration } });
+  return { baseUrl, externalService, forwardedRequests, forwardedOptions, runtime };
 }
 
 async function invoke(runtime, operationId, input = {}, {
@@ -253,9 +257,25 @@ async function invoke(runtime, operationId, input = {}, {
 test("Skill Hub is default-off and requires one explicit remote service binding", async () => {
   assert.deepEqual(validateSkillHubConfiguration({}), { enabled: false });
   assert.throws(
-    () => validateSkillHubConfiguration({ enabled: true, service: { serviceRef: "x", timeoutMs: 30_000 } }),
+    () => validateSkillHubConfiguration({ enabled: true, service: {} }),
     /serviceRef/u
   );
+  assert.throws(
+    () => validateSkillHubConfiguration({ enabled: true, service: { serviceRef: "x", unexpected: true } }),
+    /unsupported field/u
+  );
+  assert.deepEqual(validateSkillHubConfiguration({ enabled: true, service: { serviceRef: "svc_skill_hub" } }), {
+    enabled: true,
+    serviceRef: "svc_skill_hub"
+  });
+  assert.equal(validateSkillHubConfiguration({
+    enabled: true,
+    service: { serviceRef: "svc_skill_hub", timeoutMs: 120_000 }
+  }).timeoutMs, 120_000);
+  assert.throws(() => validateSkillHubConfiguration({
+    enabled: true,
+    service: { serviceRef: "svc_skill_hub", timeoutMs: 120_001 }
+  }), /timeoutMs/u);
   assert.throws(
     () => validateSkillHubConfiguration({ enabled: true, modules: {} }),
     /unsupported field/u
@@ -263,6 +283,18 @@ test("Skill Hub is default-off and requires one explicit remote service binding"
   const runtime = await activatePlugin({ manifest, context: { configuration: {} } });
   for (const contributions of Object.values(runtime.contributions)) assert.deepEqual(contributions, {});
   await runtime.close();
+});
+
+test("Skill Hub applies an explicitly configured external-service timeout outside request data", async (t) => {
+  const { externalService, forwardedRequests, forwardedOptions, runtime } = await fixture(t, {
+    enabled: true,
+    service: { serviceRef: "svc_skill_hub", timeoutMs: 2_000 }
+  });
+  const response = await invoke(runtime, "skill_hub.list", {}, { externalService });
+  assert.equal(response.statusCode, 200);
+  assert.equal(forwardedOptions[0].timeoutMs, 2_000);
+  assert.equal(Object.hasOwn(forwardedRequests[0], "timeoutMs"), false);
+  assert.equal(Object.hasOwn(forwardedRequests[0].input, "timeoutMs"), false);
 });
 
 test("Skill Hub service exposes health and the plugin contributes only remote adapters", async (t) => {

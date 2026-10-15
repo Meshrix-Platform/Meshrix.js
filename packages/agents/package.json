@@ -40,6 +40,11 @@
       "types": "./dist/upstream-gateway/gateway-executor.d.ts",
       "default": "./dist/upstream-gateway/gateway-executor.js"
     },
+    "./upstream-gateway/operation-projection": {
+      "source": "./src/upstream-gateway/operation-projection.ts",
+      "types": "./dist/upstream-gateway/operation-projection.d.ts",
+      "default": "./dist/upstream-gateway/operation-projection.js"
+    },
     "./service-events": {
       "source": "./src/service-events/index.ts",
       "types": "./dist/service-events/index.d.ts",

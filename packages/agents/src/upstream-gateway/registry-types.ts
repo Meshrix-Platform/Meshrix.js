@@ -60,6 +60,12 @@ export interface UpstreamGatewayTagPolicy {
   requireFreshRevision: boolean;
 }
 
+export interface UpstreamGatewayMcpToolAlias {
+  name?: string;
+  title?: string;
+  description?: string;
+}
+
 export interface UpstreamGatewayMcpConfig {
   protocolVersion: string;
   transport: string;
@@ -71,6 +77,7 @@ export interface UpstreamGatewayMcpConfig {
   protocolVersionHint: string;
   toolNamePrefix: string;
   toolsCacheTtlMs: number;
+  aliases?: Record<string, UpstreamGatewayMcpToolAlias>;
   timeoutMs?: number;
 }
 
@@ -132,6 +139,51 @@ export interface UpstreamGatewayRequiredApproval {
   readonly [member: string]: unknown;
 }
 
+/** A single operator-declared request guard rule inside a contentPolicy. */
+export interface UpstreamGatewayContentRule {
+  id: string;
+  path?: string;
+  deny?: Readonly<Record<string, unknown>>;
+  allow?: Readonly<Record<string, unknown>>;
+}
+
+export interface UpstreamGatewayContentPolicy {
+  request?: Readonly<{ rules: readonly UpstreamGatewayContentRule[] }>;
+}
+
+/** Normalized operation-level response cache declaration (read-only ops only). */
+export interface UpstreamGatewayResponseCache {
+  ttlMs: number;
+  maxEntries: number;
+  maxBytes: number;
+}
+
+/**
+ * Normalized service-level OAuth client-credentials declaration. The client
+ * secret itself never enters the record; `clientSecretRef` names the local
+ * secret-store binding resolved at invocation time.
+ */
+export interface UpstreamGatewayOauth {
+  grantType: "client_credentials";
+  tokenUrl: string;
+  clientId: string;
+  clientSecretRef: string;
+  scopes: string[];
+  audience: string;
+  authMethod: "client_secret_basic" | "client_secret_post";
+}
+
+/** Injected OAuth token provider; the registry owns the cached implementation. */
+export interface UpstreamGatewayOauthProvider {
+  accessTokenFor(input: {
+    service: UpstreamGatewayNormalizedService | UpstreamGatewayServiceRecord;
+    oauth: Readonly<Record<string, unknown>>;
+    clientSecret: string;
+    secretRevision: number;
+    signal?: AbortSignal | null;
+  }): Promise<string>;
+}
+
 export interface UpstreamGatewayOperationRecord {
   operationKey: string;
   label: string;
@@ -151,6 +203,8 @@ export interface UpstreamGatewayOperationRecord {
   requestSchema: Readonly<Record<string, unknown>>;
   responseSchema: Readonly<Record<string, unknown>>;
   payloadTransport?: UpstreamGatewayCompiledPayloadTransport;
+  contentPolicy?: UpstreamGatewayContentPolicy;
+  responseCache?: UpstreamGatewayResponseCache;
   dynamicCapability?: UpstreamGatewayOperationCapability;
   resourceContext?: Readonly<Record<string, unknown>>;
   safety?: Readonly<{ risk?: string; approvalScope?: string }>;
@@ -178,6 +232,8 @@ export interface UpstreamGatewayNormalizedService {
   credentialRefs: string[];
   credentialReferences: UpstreamGatewayCredentialReference[];
   tagPolicy: UpstreamGatewayTagPolicy | null;
+  contentPolicy: UpstreamGatewayContentPolicy | null;
+  oauth: UpstreamGatewayOauth | null;
   redactedCredentialInput: boolean;
   defaultHeaders: Record<string, string>;
   mcp?: UpstreamGatewayMcpConfig;
@@ -242,10 +298,11 @@ export interface UpstreamGatewayServiceEndpointView {
 export interface UpstreamGatewayPublicService
   extends Omit<
     UpstreamGatewayNormalizedService,
-    "baseUrl" | "endpoints" | "mcp" | "credentialRefs" | "credentialReferences"
+    "baseUrl" | "endpoints" | "mcp" | "credentialRefs" | "credentialReferences" | "oauth"
   > {
   credentialBindingIds: readonly string[];
   credentialReferenceCount: number;
+  oauthProtected: boolean;
   redactedCredentialInput: boolean;
   defaultHeaders: Readonly<Record<string, string>>;
   baseUrl: "";
@@ -499,6 +556,15 @@ export interface UpstreamSkillHubUpdate {
 
 // ── Factory options and call options ─────────────────────────────────────
 
+export type {
+  UpstreamPolicyGate,
+  UpstreamPolicyGateContext,
+  UpstreamPolicyGateDecision,
+  UpstreamPolicyGateOutcome
+} from "./policy-gate.ts";
+
+import type { UpstreamPolicyGate } from "./policy-gate.ts";
+
 export interface UpstreamGatewayRegistryOptions {
   userDataPath?: string;
   tagStore?: UpstreamGatewayTagStorePort | null;
@@ -510,6 +576,14 @@ export interface UpstreamGatewayRegistryOptions {
   /** The registry owns this port for its lifetime and closes it after active work drains. */
   schemaPort?: UpstreamSchemaPort | null;
   claimProtectedSinkAttempt?: UpstreamProtectedSinkClaim;
+  /**
+   * Operator-injected external policy gate (see policy-gate.ts). Evaluated once
+   * per admission after authorization/approval and before permit/traffic
+   * consumption; failures fail closed. This is an embedder seam, not a plugin
+   * capability.
+   */
+  policyGate?: UpstreamPolicyGate | null;
+  policyGateTimeoutMs?: number | null;
 }
 
 export interface UpstreamGatewayStreamResponse {
@@ -938,6 +1012,8 @@ export interface UpstreamGatewayForwardResult {
   response: unknown;
   resource?: unknown;
   auditId?: string;
+  /** Present when the result was served from the operation's responseCache. */
+  cache?: Readonly<{ hit: true; storedAt: number; expiresAt: number }>;
 }
 
 export interface UpstreamGatewayPluginCallResult {
@@ -1001,6 +1077,7 @@ export interface UpstreamGatewayMetrics {
   totalFailureCount?: number;
   byService?: Readonly<Record<string, number>>;
   byStatus?: Readonly<Record<string, number>>;
+  shedMetricDimensions?: number;
   boundedRuntimeState: UpstreamGatewayBoundedRuntimeState;
 }
 
@@ -1026,7 +1103,7 @@ export interface UpstreamGatewayRegistry {
     input?: UpstreamGatewayAudienceEvaluationInput
   ): UpstreamGatewayAudienceDecision;
   listMcpTools(
-    input?: { serviceId?: unknown; refresh?: boolean },
+    input?: { serviceId?: unknown; refresh?: boolean; query?: unknown },
     options?: UpstreamGatewayCallOptions
   ): Promise<UpstreamGatewayMcpToolListResult>;
   getMcpServiceForPublicToolName(publicName?: unknown): UpstreamGatewayPublicService | null;

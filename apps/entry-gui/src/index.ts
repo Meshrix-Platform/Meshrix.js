@@ -29,6 +29,8 @@ export {
   type EntryTransportLike,
   type LiveSession,
   type PairingChannelLike,
+  type PairingCompletionRelayChannelLike,
+  type PairingCompletionRelayChannelFactoryInput,
   type RecoveryChannelFactoryInput,
   type RecoveryChannelLike
 } from "./main/product-service.ts";
@@ -45,8 +47,7 @@ export {
 } from "./main/config-store.ts";
 export {
   HttpPairingChannel,
-  createHttpPairingChannel,
-  type PairingEnrollmentExtras
+  createHttpPairingChannel
 } from "./main/pairing-channel.ts";
 export {
   issueDeviceCertificate,

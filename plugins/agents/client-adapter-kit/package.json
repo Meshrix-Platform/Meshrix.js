@@ -6,6 +6,7 @@
   "license": "Apache-2.0",
   "exports": "./index.mjs",
   "files": [
+    "README.md",
     "index.mjs",
     "LICENSE"
   ],

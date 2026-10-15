@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref } from "vue";
 
 import type { GuiState } from "../../shared/gui-state.ts";
 import type { RecoveryRevealResult } from "../../shared/ipc-contract.ts";
+import { openAccountPage } from "../bridge.ts";
 import { runOp } from "../store.ts";
 
 const props = defineProps<{ state: GuiState }>();
@@ -34,11 +35,30 @@ async function reveal(): Promise<void> {
 async function confirmSaved(): Promise<void> {
   busy.value = true;
   try {
-    const ok = await runOp("recovery.confirmSaved");
+    const ok = await runOp<GuiState>("recovery.confirmSaved");
     if (ok !== null) revealedText.value = null;
+    if (ok?.account.transactionPurpose === "step_up" && ok.account.transactionId) {
+      await openAccountPage(ok.account.transactionId);
+    }
   } finally {
     busy.value = false;
   }
+}
+
+async function retryWriterRegistration(): Promise<void> {
+  busy.value = true;
+  try {
+    const result = await runOp<GuiState>("recovery.retryWriterRegistration");
+    if (result?.account.transactionPurpose === "step_up" && result.account.transactionId) {
+      await openAccountPage(result.account.transactionId);
+    }
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function checkWriterRegistration(): Promise<void> {
+  await runOp("account.checkTransaction");
 }
 
 async function beginSetup(): Promise<void> {
@@ -104,6 +124,7 @@ onUnmounted(() => {
       <button class="plain" @click="showText = !showText" :disabled="!revealedText">
         {{ showText ? "Hide" : "Unmask" }}
       </button>
+      <button class="plain" :disabled="busy" @click="abortRotation">Cancel unsaved key</button>
     </div>
     <p v-if="revealedText" class="mono recovery-text">
       {{ showText ? revealedText : "••••-••••-••••-••••-••••-••••-••••-••••" }}
@@ -111,6 +132,34 @@ onUnmounted(() => {
     <button class="primary" :disabled="busy || !recovery.keyRevealed" @click="confirmSaved">
       I saved it — finish setup
     </button>
+  </section>
+
+  <section v-if="recovery.writerRegistration.state !== 'unmanaged'" class="card">
+    <h3>Account vault writer</h3>
+    <p><span class="badge" :class="recovery.writerRegistration.state">{{ recovery.writerRegistration.state }}</span></p>
+    <p v-if="recovery.writerRegistration.detail">{{ recovery.writerRegistration.detail }}</p>
+    <p v-if="state.account.transactionPurpose === 'step_up' && state.account.actionPurpose === 'grant_access'">
+      Approve the exact new vault keys in the system browser before cloud backup can continue.
+    </p>
+    <div class="row">
+      <button
+        v-if="state.account.transactionId"
+        class="plain"
+        @click="openAccountPage(state.account.transactionId)"
+      >Open approval</button>
+      <button
+        v-if="state.account.transactionId"
+        class="primary"
+        :disabled="busy"
+        @click="checkWriterRegistration"
+      >Check approval</button>
+      <button
+        v-if="recovery.writerRegistration.state === 'prepare_pending' || recovery.writerRegistration.state === 'service_pending' || (recovery.writerRegistration.state === 'authorization_required' && !state.account.transactionId)"
+        class="plain"
+        :disabled="busy"
+        @click="retryWriterRegistration"
+      >Retry registration</button>
+    </div>
   </section>
 
   <section v-if="recovery.rotation" class="card">

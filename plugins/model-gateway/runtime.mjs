@@ -5,6 +5,7 @@ import {
 
 const MODEL_GATEWAY_ADAPTER_CONFIG_SCHEMA = "v0.0.1:model-gateway:adapter-config-1";
 const MODEL_GATEWAY_ADAPTER_MAX_TIMEOUT_MS = 120_000;
+const MAX_TIMER_TIMEOUT_MS = 2_147_483_647;
 const CONTRIBUTION_KINDS = Object.freeze([
   "operations",
   "routes",
@@ -45,15 +46,16 @@ function assertModelGatewayAdapterConfig(value) {
   if (value.enabled && serviceRef === null) {
     throw new TypeError("model_gateway_adapter_config_service_ref_required");
   }
-  if (!Number.isSafeInteger(value.timeoutMs) || value.timeoutMs <= 0 ||
-      value.timeoutMs > MODEL_GATEWAY_ADAPTER_MAX_TIMEOUT_MS) {
+  const timeoutMs = value.timeoutMs;
+  if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 ||
+      timeoutMs > MODEL_GATEWAY_ADAPTER_MAX_TIMEOUT_MS)) {
     throw new TypeError("model_gateway_adapter_config_timeout_invalid");
   }
   return Object.freeze({
     schemaVersion: MODEL_GATEWAY_ADAPTER_CONFIG_SCHEMA,
     enabled: value.enabled,
     serviceRef,
-    timeoutMs: value.timeoutMs
+    ...(timeoutMs === undefined ? {} : { timeoutMs })
   });
 }
 
@@ -75,7 +77,7 @@ function assertModelGatewayCallRequest(value) {
     throw new TypeError("model_gateway_call_input_refs_invalid");
   }
   const inputRefs = value.inputRefs.map((entry) => nonEmptyString(entry, "model_gateway_call_input_ref_invalid"));
-  if (!Number.isSafeInteger(value.deadlineMs) || value.deadlineMs <= 0) {
+  if (!Number.isSafeInteger(value.deadlineMs) || value.deadlineMs <= 0 || value.deadlineMs > MAX_TIMER_TIMEOUT_MS) {
     throw new TypeError("model_gateway_call_deadline_invalid");
   }
   if (typeof value.stream !== "boolean") throw new TypeError("model_gateway_call_stream_invalid");
@@ -131,22 +133,29 @@ function normalizeOperationInput(operationId, input, configuration) {
         providerRef: request.providerRef,
         inputRefs: request.inputRefs,
         idempotencyKey: request.idempotencyKey,
-        deadlineMs: request.deadlineMs,
         stream: request.stream
       }),
       idempotencyKey: request.idempotencyKey,
-      timeoutMs: Math.min(configuration.timeoutMs, request.deadlineMs)
+      timeoutMs: Math.min(configuration.timeoutMs ?? request.deadlineMs, request.deadlineMs)
     });
   }
   if (operationId === "models.list") {
     if (!onlyFields(input, new Set())) throw new TypeError("model_gateway_models_list_closed_schema");
-    return Object.freeze({ input: Object.freeze({}), idempotencyKey: "", timeoutMs: configuration.timeoutMs });
+    return Object.freeze({
+      input: Object.freeze({}),
+      idempotencyKey: "",
+      ...(configuration.timeoutMs === undefined ? {} : { timeoutMs: configuration.timeoutMs })
+    });
   }
   if (operationId === "models.get") {
     if (!onlyFields(input, new Set(["modelRef"]))) throw new TypeError("model_gateway_models_get_closed_schema");
     const modelRef = typeof input.modelRef === "string" ? input.modelRef.trim() : "";
     if (!modelRef || modelRef.length > 256) throw new TypeError("model_gateway_model_ref_invalid");
-    return Object.freeze({ input: Object.freeze({ modelRef }), idempotencyKey: "", timeoutMs: configuration.timeoutMs });
+    return Object.freeze({
+      input: Object.freeze({ modelRef }),
+      idempotencyKey: "",
+      ...(configuration.timeoutMs === undefined ? {} : { timeoutMs: configuration.timeoutMs })
+    });
   }
   throw new TypeError("model_gateway_operation_unknown");
 }
@@ -184,7 +193,7 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
   const configuration = validateModelGatewayConfiguration(
     plainObject(suppliedConfiguration) && Object.keys(suppliedConfiguration).length > 0
       ? suppliedConfiguration
-      : { enabled: false, serviceRef: null, timeoutMs: 30_000 }
+      : { enabled: false, serviceRef: null }
   );
   if (!configuration.enabled) {
     let closed = false;
@@ -223,9 +232,11 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
           serviceRef: configuration.serviceRef,
           operationRef: definition.id,
           input: normalized.input,
-          ...(normalized.idempotencyKey ? { idempotencyKey: normalized.idempotencyKey } : {}),
-          timeoutMs: normalized.timeoutMs
-        }, { signal })).then(projectResponse).catch((error) => {
+          ...(normalized.idempotencyKey ? { idempotencyKey: normalized.idempotencyKey } : {})
+        }, {
+          signal,
+          ...(normalized.timeoutMs === undefined ? {} : { timeoutMs: normalized.timeoutMs })
+        })).then(projectResponse).catch((error) => {
           const status = signal?.aborted ? 499 : Number(error?.status ?? 502);
           return failure(
             status === 499 ? "model_gateway_cancelled" : status === 504 ? "model_gateway_timeout" :

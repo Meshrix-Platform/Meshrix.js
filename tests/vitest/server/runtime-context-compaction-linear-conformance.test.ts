@@ -67,7 +67,7 @@ describe("context compaction linear selection", () : any => {
     expect(bytes).toBeGreaterThan(CONTEXT_COMPACTION_WORKER_THRESHOLD_BYTES);
     const lane: any = createContextCompactionExecutionLane({ maxPending: 1, maxPendingBytes: bytes + 1_024 });
     try {
-      const normalized: any[] = await lane.normalize(payload, { bytes, deadlineMs: 10_000 });
+      const normalized: any[] = await lane.normalize(payload, { bytes });
       expect(normalized).toHaveLength(320);
       expect(normalized[0]).toMatchObject({ id: "large-0", tokenEstimate: expect.any(Number) });
       expect(lane.getStats()).toMatchObject({ pending: 0, pendingBytes: 0, maxPending: 1 });

@@ -961,6 +961,12 @@
       "risk": "repair_write"
     },
     {
+      "id": "cap:api:discovery.clients.enrollment_token",
+      "operationId": "discovery.clients.enrollment_token",
+      "kind": "api",
+      "risk": "safe_write"
+    },
+    {
       "id": "cap:api:discovery.get_config",
       "operationId": "discovery.get_config",
       "kind": "api",

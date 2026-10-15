@@ -25,6 +25,7 @@ import {
   deviceIdentityFromCustody,
   encodePairingInvite,
   parseRecoveryText,
+  type CustodyAdapter,
   type RecoveryMaterial,
   type VaultTransport
 } from "@meshrix/entry";
@@ -54,6 +55,11 @@ import {
   ROUTE,
   TENANT,
   VAULT_ID,
+  GUI_TEST_RELAY_ADMISSION,
+  pairingAccountFetch,
+  serviceConfigFixture,
+  seedGuiTestAccount,
+  testOsCustody,
   inviteFixture,
   waitFor,
   type FakePairingBehavior
@@ -92,7 +98,7 @@ function writerOf(material: RecoveryMaterial) {
 interface SeededService {
   service: EntryProductService;
   dir: string;
-  custody: FileCustodyAdapter;
+  custody: CustodyAdapter;
   channel: FakePairingChannel;
   vault: FakeVault;
   sessions: FakeSession[];
@@ -107,14 +113,18 @@ async function makeService(options: {
   withVault?: boolean;
   dataDir?: string;
   wrapSecret?: Uint8Array;
+  custodyTier?: "os" | "file";
   /** Share a vault across installs — snapshots outlive a lost device. */
   vault?: FakeVault;
 } = {}): Promise<SeededService> {
   const dir = options.dataDir ?? await mkdtemp(path.join(tmpdir(), "entry-gui-ipc-"));
   dirs.push(dir);
   const wrapSecret = options.wrapSecret ?? randomBytes(32);
-  const custody = new FileCustodyAdapter({ dataDir: dir, wrapSecret });
-  const channel = new FakePairingChannel(options.behavior ?? { relayCredential: "relay.cred.test" });
+  const backingCustody = new FileCustodyAdapter({ dataDir: dir, wrapSecret });
+  const custody: CustodyAdapter = options.custodyTier === "file"
+    ? backingCustody
+    : testOsCustody(backingCustody);
+  const channel = new FakePairingChannel(options.behavior ?? { relayCredential: GUI_TEST_RELAY_ADMISSION });
   const vault = options.vault ?? new FakeVault({
     vaultId: VAULT_ID,
     verifier: { keyId: "rckey.unset", algorithm: "Ed25519", publicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" },
@@ -124,13 +134,33 @@ async function makeService(options: {
   const transports: FakeTransport[] = [];
   const recoveryChannels: SilentRecoveryChannel[] = [];
   const nowRef = { now: 1_800_000_000_000 };
+  if (options.custodyTier !== "file") {
+    await seedGuiTestAccount(dir, custody);
+  }
   const service = new EntryProductService({
     dataDir: dir,
     appVersion: "1.2.3",
     appExePath: "meshrix-entry-test",
     custody,
+    serviceConfig: serviceConfigFixture("https://account.gui.invalid"),
+    accountFetch: pairingAccountFetch({
+      accountOrigin: "https://account.gui.invalid",
+      relayAdmission: options.behavior?.relayCredential,
+      resolveDevicePublicKey: (deviceId) => channel.pairedTargets.get(deviceId)?.devicePublicKey ?? null,
+      writerGeneration: () => vault.current ? vault.generation + 1 : vault.generation,
+      onVaultWriterRotationComplete: (target) => {
+        const rotation = target.vaultWriterRotation;
+        if (!rotation) return;
+        vault.recoveryVerifier = rotation.recoveryVerifier;
+        vault.writers = [...rotation.writers];
+        vault.generation = rotation.generation;
+      },
+      revokeEnforcement: options.behavior?.revoked ? "complete" : "pending",
+      failDeviceRevoke: options.behavior?.throwOnRevoke === true
+    }),
     now: () => nowRef.now,
     pairingChannelFactory: () => channel,
+    pairingRelayChannelFactory: () => channel,
     vaultTransportFactory: (): VaultTransport => vault,
     recoveryChannelFactory: () => {
       const created = new SilentRecoveryChannel();
@@ -185,12 +215,15 @@ const INVITE_TEXT = encodePairingInvite(inviteFixture());
 async function seedConnection(seeded: SeededService): Promise<string> {
   await seeded.service.start();
   const submitted = await seeded.service.dispatch("pairing.submitInvite", { inviteText: INVITE_TEXT });
-  expect(submitted.ok).toBe(true);
+  expect(submitted).toMatchObject({ ok: true });
   const state = (submitted as { value: GuiState }).value;
   expect(state.pairing.phase).toBe("challenge_issued");
   const confirmed = await seeded.service.dispatch("pairing.confirm");
   expect(confirmed.ok).toBe(true);
-  const done = (confirmed as { value: GuiState }).value;
+  expect((confirmed as { value: GuiState }).value.pairing.phase).toBe("authorization_required");
+  const completed = await seeded.service.dispatch("pairing.continue");
+  expect(completed.ok).toBe(true);
+  const done = (completed as { value: GuiState }).value;
   expect(done.pairing.phase).toBe("enrolled");
   const connectionId = done.pairing.enrolledConnectionId;
   expect(connectionId).toBeTruthy();
@@ -208,8 +241,10 @@ async function seedRecovery(seeded: SeededService): Promise<{ recoveryText: stri
   seeded.vault.recoveryVerifier = verifierOf(material);
   seeded.vault.writers = [writerOf(material)];
   const saved = await seeded.service.dispatch("recovery.confirmSaved");
-  expect(saved.ok).toBe(true);
-  expect((saved as { value: GuiState }).value.recovery.state).toBe("ready");
+  expect(saved.ok, saved.ok ? "" : `${saved.error.code}: ${saved.error.message}`).toBe(true);
+  const registered = await seeded.service.dispatch("account.checkTransaction");
+  expect(registered.ok, registered.ok ? "" : `${registered.error.code}: ${registered.error.message}`).toBe(true);
+  expect((registered as { value: GuiState }).value.recovery.state).toBe("ready");
   return { recoveryText: reveal.recoveryText, material };
 }
 
@@ -324,7 +359,7 @@ describe("loopback api contract — auth and allowlist", () => {
 
 describe("product service — start/stop honesty", () => {
   it("starts with file custody tier reported honestly, lifecycle ready", async () => {
-    const seeded = await makeService();
+    const seeded = await makeService({ custodyTier: "file" });
     const state = await seeded.service.start();
     expect(state.appVersion).toBe("1.2.3");
     expect(state.custody.available).toBe(true);
@@ -376,9 +411,9 @@ describe("pairing", () => {
     // The relay credential and device key are in custody — never in state/config.
     const storedSecret = await seeded.custody.loadSecret({ ref: `entry-gui.relay.${connectionId}` });
     expect(storedSecret).not.toBeNull();
-    expect(new TextDecoder().decode(storedSecret!)).toBe("relay.cred.test");
+    expect(new TextDecoder().decode(storedSecret!)).toBe(GUI_TEST_RELAY_ADMISSION);
     const configText = await readFile(path.join(seeded.dir, "entry-gui.config.json"), "utf8");
-    expect(configText).not.toContain("relay.cred.test");
+    expect(configText).not.toContain(GUI_TEST_RELAY_ADMISSION);
     expect(configText).not.toContain("mrk1-");
     expect(configText).not.toContain("MC4CAQAwBQYDK2Vw");
     expect(configText).not.toContain("pt.gui.one-time");
@@ -446,7 +481,9 @@ describe("recovery — one-shot reveal and encrypted backup", () => {
     expect(state.recovery.vaultId).toBe(VAULT_ID);
     expect(state.recovery.keyId).toBe(material.signing.keyId);
     expect(state.recovery.generation).toBe(1);
-    expect(state.recovery.keyRevealed).toBe(true);
+    // The one-time confirmation clears the transient reveal indicator after
+    // saving the account-managed writer; the recovery secret is never retained in UI state.
+    expect(state.recovery.keyRevealed).toBe(false);
     // The vault accepted and committed the signed/encrypted snapshot.
     expect(seeded.vault.current?.revision).toBe(1);
     expect(state.recovery.backup.lastCommittedRevision).toBe(1);
@@ -501,27 +538,43 @@ describe("recovery — one-shot reveal and encrypted backup", () => {
 });
 
 describe("recovery rotation lifecycle", () => {
-  it("refuses a second rotation while one is in flight, and abort frees it", async () => {
+  it("keeps a confirmed account-managed writer registration exclusive until approval", async () => {
     const seeded = await makeService();
     await seedConnection(seeded);
-    await seedRecovery(seeded);
+    const { material: incumbent } = await seedRecovery(seeded);
     const begun = await seeded.service.dispatch("recovery.beginRotation");
     expect(begun.ok).toBe(true);
-    expect((begun as { value: GuiState }).value.recovery.rotation?.state).toBe("staged");
+    let state = (begun as { value: GuiState }).value;
+    expect(state.recovery.state).toBe("awaiting_save");
+    expect(state.recovery.generation).toBe(2);
+    expect(state.recovery.rotation).toBeNull();
+
+    const revealed = await seeded.service.dispatch("recovery.revealKey");
+    expect(revealed.ok).toBe(true);
+    const recoveryText = (revealed as { value: { recoveryText: string } }).value.recoveryText;
+    const candidate = deriveRecoveryMaterial(parseRecoveryText(recoveryText).secret);
+    const confirmed = await seeded.service.dispatch("recovery.confirmSaved");
+    expect(confirmed.ok).toBe(true);
+    state = (confirmed as { value: GuiState }).value;
+    expect(state.recovery.state).toBe("account_authorization_required");
+    expect(state.recovery.writerRegistration.state).toBe("authorization_required");
+    expect(state.recovery.writerRegistration.candidateGeneration).toBe(2);
+    expect(seeded.vault.generation).toBe(1);
+    expect(seeded.vault.writers.map((writer) => writer.keyId)).toContain(incumbent.writer.keyId);
+    expect(seeded.vault.writers.map((writer) => writer.keyId)).not.toContain(candidate.writer.keyId);
 
     const blocked = await seeded.service.dispatch("recovery.beginRotation");
     expect(blocked.ok).toBe(false);
-    if (!blocked.ok) expect(blocked.error.code).toBe("rotation_state_invalid");
+    if (!blocked.ok) expect(blocked.error.code).toBe("account_transaction_pending");
 
-    const aborted = await seeded.service.dispatch("recovery.abortRotation");
-    expect(aborted.ok).toBe(true);
-    const abortedState = (aborted as { value: GuiState }).value;
-    expect(abortedState.recovery.rotation?.state).toBe("aborted");
-    expect(abortedState.recovery.state).toBe("ready");
-
-    // A fresh rotation can begin — the deadlock is broken.
-    const restarted = await seeded.service.dispatch("recovery.beginRotation");
-    expect(restarted.ok).toBe(true);
+    const approved = await seeded.service.dispatch("account.checkTransaction");
+    expect(approved.ok).toBe(true);
+    state = (approved as { value: GuiState }).value;
+    expect(state.recovery.state).toBe("ready");
+    expect(state.recovery.keyId).toBe(candidate.signing.keyId);
+    expect(state.recovery.generation).toBe(2);
+    expect(state.recovery.writerRegistration.state).toBe("complete");
+    expect(seeded.vault.generation).toBe(2);
   });
 
   it("abortRotation is a typed error when nothing is in flight", async () => {
@@ -548,26 +601,36 @@ describe("recovery rotation lifecycle", () => {
     expect(restarted.ok).toBe(true);
   });
 
-  it("a restart auto-aborts a stranded staged rotation and keeps history", async () => {
+  it("a restart drops an unsaved account-managed candidate and keeps the active recovery", async () => {
     const wrapSecret = randomBytes(32);
     const seeded = await makeService({ wrapSecret });
     await seedConnection(seeded);
-    await seedRecovery(seeded);
+    const { material: incumbent } = await seedRecovery(seeded);
     const begun = await seeded.service.dispatch("recovery.beginRotation");
     expect(begun.ok).toBe(true);
+    const candidate = (begun as { value: GuiState }).value.recovery;
+    expect(candidate.state).toBe("awaiting_save");
+    expect(candidate.generation).toBe(2);
+    expect(candidate.keyId).not.toBe(incumbent.signing.keyId);
     await seeded.service.stop();
 
-    // Fresh install-like restart on the same data dir — the candidate secret
-    // never left memory, so the staged record is auto-aborted, not resumed.
+    // The account-managed candidate is memory-only until it is saved and the
+    // exact writer operation is persisted. Restart keeps the active recovery
+    // material and vault contents, then permits a fresh candidate.
     const restored = await makeService({ dataDir: seeded.dir, wrapSecret, vault: seeded.vault });
     const state = await restored.service.start();
     expect(state.recovery.state).toBe("ready");
+    expect(state.recovery.keyId).toBe(incumbent.signing.keyId);
+    expect(state.recovery.generation).toBe(1);
     expect(state.recovery.rotation).toBeNull();
     const restarted = await restored.service.dispatch("recovery.beginRotation");
     expect(restarted.ok).toBe(true);
     const rotating = (restarted as { value: GuiState }).value;
-    expect(rotating.recovery.rotation?.state).toBe("staged");
-    expect(rotating.recovery.rotation?.candidateGeneration).toBe(2);
+    expect(rotating.recovery.state).toBe("awaiting_save");
+    expect(rotating.recovery.rotation).toBeNull();
+    expect(rotating.recovery.generation).toBe(2);
+    expect(rotating.recovery.keyId).not.toBe(candidate.keyId);
+    expect(seeded.vault.current?.generation).toBe(1);
   });
 });
 
@@ -595,7 +658,7 @@ describe("fresh-install recovery import", () => {
   it("reports snapshot_missing when the vault has nothing", async () => {
     // Seed a vault on service A so the locator + channel exist, then import on
     // a FRESH install (service B) — empty vault → snapshot_missing.
-    const seededA = await makeService({ behavior: { relayCredential: "relay.cred.test" } });
+    const seededA = await makeService({ behavior: { relayCredential: GUI_TEST_RELAY_ADMISSION } });
     await seedConnection(seededA);
     const { recoveryText } = await seedRecovery(seededA);
     seededA.vault.current = null; // simulates a wiped/missing snapshot
@@ -690,24 +753,17 @@ describe("connection lifecycle and revocation", () => {
     await waitFor(() => seeded.service.snapshot().notices.filter((n) => n.includes("did not establish")).length >= 2, 5_000);
   });
 
-  it("a connection without a relay credential is honestly unreachable", async () => {
+  it("rejects an account bootstrap without relay admission before creating a connection", async () => {
     const seeded = await makeService({ behavior: { relayCredential: null } });
-    const connectionId = await seedConnection(seeded);
-    // The enrollment notice lands synchronously; wait for the fire-and-forget
-    // refresh to project "unreachable" — never a claimed channel.
-    await waitFor(() =>
-      seeded.service.snapshot().connections[0]?.routeState === "unreachable", 5_000);
-    const state = seeded.service.snapshot();
-    expect(state.notices.some((note) => note.includes("no relay credential in custody"))).toBe(true);
-    expect(state.connections[0]?.routeState).toBe("unreachable");
-    expect(state.connections[0]?.channelEstablished).toBe(false);
-    await seeded.service.dispatch("connection.refresh", { connectionId });
-    const refreshed = seeded.service.snapshot();
-    expect(refreshed.connections[0]?.routeState).toBe("unreachable");
+    await seeded.service.start();
+    const result = await seeded.service.dispatch("pairing.submitInvite", { inviteText: INVITE_TEXT });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("account_bootstrap_invalid");
+    expect(seeded.service.snapshot().connections).toHaveLength(0);
   });
 
-  it("remote revocation reports applied only when the endpoint confirms", async () => {
-    const applied = await makeService({ behavior: { relayCredential: "c1", revoked: true } });
+  it("remote revocation reports applied only after the account authority commits it", async () => {
+    const applied = await makeService({ behavior: { relayCredential: GUI_TEST_RELAY_ADMISSION, revoked: true } });
     const connectionId = await seedConnection(applied);
     const deviceId = applied.service.snapshot().connections[0]!.deviceId;
     // Custody held the credential + device key before revocation.
@@ -717,28 +773,30 @@ describe("connection lifecycle and revocation", () => {
     const result = await applied.service.dispatch("connection.revoke", { connectionId, remote: true });
     expect(result.ok).toBe(true);
     const state = (result as { value: GuiState }).value;
-    expect(state.connections).toHaveLength(0);
-    expect(state.notices.some((n) => n.includes("remote enforcement confirmed"))).toBe(true);
-    expect(applied.channel.revokeCalls).toEqual([deviceId]);
-    // Custody cleanup: device key + relay credential deleted — owned refs only.
-    expect(await applied.custody.loadSecret({ ref: `entry-gui.relay.${connectionId}` })).toBeNull();
-    expect(await deviceIdentityFromCustody({ custody: applied.custody, deviceId })).toBeNull();
-    const configText = await readFile(path.join(applied.dir, "entry-gui.config.json"), "utf8");
-    expect(configText).not.toContain(connectionId);
+    expect(state.connections).toHaveLength(1);
+    expect(state.connections[0]?.revocation).toBe("remote_applied");
+    expect(state.connections[0]?.rePairRequired).toBe(true);
+    expect(applied.channel.revokeCalls).toEqual([]);
+    // Local task history, pairing details and custody keys remain available for recovery.
+    expect(await applied.custody.loadSecret({ ref: `entry-gui.relay.${connectionId}` })).not.toBeNull();
+    expect(await deviceIdentityFromCustody({ custody: applied.custody, deviceId })).not.toBeNull();
+    expect(JSON.parse(await readFile(path.join(applied.dir, "entry-gui.config.json"), "utf8"))
+      .connections[0].routeRevocation.authorityRevoked).toBe(true);
   });
 
   it("remote revocation stays honestly pending on silence or transport failure", async () => {
-    const pending = await makeService({ behavior: { relayCredential: "c1", revoked: false } });
+    const pending = await makeService({ behavior: { relayCredential: GUI_TEST_RELAY_ADMISSION, revoked: false } });
     const connectionId = await seedConnection(pending);
     const result = await pending.service.dispatch("connection.revoke", { connectionId, remote: true });
     expect(result.ok).toBe(true);
-    expect((result as { value: GuiState }).value.notices.some((n) => n.includes("pending"))).toBe(true);
+    expect((result as { value: GuiState }).value.connections[0]?.revocation).toBe("enforcement_pending");
 
-    const unreachable = await makeService({ behavior: { relayCredential: "c1", throwOnRevoke: true } });
+    const unreachable = await makeService({ behavior: { relayCredential: GUI_TEST_RELAY_ADMISSION, throwOnRevoke: true } });
     const otherId = await seedConnection(unreachable);
     const second = await unreachable.service.dispatch("connection.revoke", { connectionId: otherId, remote: true });
-    expect(second.ok).toBe(true);
-    expect((second as { value: GuiState }).value.notices.some((n) => n.includes("pending"))).toBe(true);
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error.code).toBe("account_service_unreachable");
+    expect(unreachable.service.snapshot().connections[0]?.revocation).toBe("authority_pending");
   });
 
   it("revoking an unknown connection is a typed error", async () => {

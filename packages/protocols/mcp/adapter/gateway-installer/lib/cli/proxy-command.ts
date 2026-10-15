@@ -4,8 +4,8 @@ import {
   normalizeMcpProxySessionId
 } from "../mcp-proxy-session.ts";
 import { createBoundedStdioOutput } from "./bounded-stdio-output.ts";
-import { normalizeTarget, option } from "./basic-utils.ts";
-import { loadMcpApiKeyCredential, loadMcpConnectorPreferences } from "./credential-store.ts";
+import { normalizeBaseUrl, normalizeTarget, option } from "./basic-utils.ts";
+import { loadMcpConnectorCredential } from "./credential-store.ts";
 import { CALLER_OWNED_HTTP_LIFETIME, fetchJson, fetchResponse } from "./http-json-client.ts";
 import { authHeaders, optionsWithDiscoveredBaseUrl, registryBaseUrls, resolveApiKey } from "./discovery.ts";
 import { installerOptions } from "./installer-options.ts";
@@ -179,13 +179,14 @@ export async function forwardProxyMessage({
   const body: any = JSON.stringify(outgoing);
   const response: any = await fetchJson(`${baseUrl}/mcp`, {
     method: "POST",
+    redirect: "error",
     requestLifetime: CALLER_OWNED_HTTP_LIFETIME,
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
     signal,
     ...(dispatcherFactory ? { dispatcherFactory } : {}),
     ...(fetchImpl ? { fetchImpl } : {}),
     headers: {
-      ...authHeaders(token, target),
+      ...authHeaders(token, target, baseUrl),
       ...mcpModernRequestHeaders(outgoing),
       ...(correlationSessionId ? { [MCP_PROXY_SESSION_HEADER]: correlationSessionId } : {})
     },
@@ -602,11 +603,11 @@ export async function resolveProxyCredentials(options: Record<string, any> = {})
   const providedToken: any = await resolveApiKey(options, { required: false });
   const settings: any = installerOptions(options);
   const [storedBaseUrl] = settings.baseUrl ? [settings.baseUrl] : await registryBaseUrls(options);
-  const storedToken: any = providedToken ? "" : await loadMcpApiKeyCredential({
+  const storedCredential: any = await loadMcpConnectorCredential({
     target,
     baseUrl: storedBaseUrl
   });
-  const preferences: any = await loadMcpConnectorPreferences({ target, baseUrl: storedBaseUrl });
+  const storedToken: any = storedCredential?.apiKey || "";
   const token: any = providedToken || storedToken;
   if (!token) {
     throw new Error(`Missing API Key. Run meshrix-mcp install --target ${target}, provide --token-stdin, or set the configured token environment variable.`);
@@ -614,9 +615,19 @@ export async function resolveProxyCredentials(options: Record<string, any> = {})
   return {
     target,
     token,
-    autoUpdate: preferences.autoUpdate === true,
-    tokenSource: providedToken ? "provided" : "credential-store"
+    autoUpdate: storedCredential?.autoUpdate === true,
+    tokenSource: providedToken ? "provided" : "credential-store",
+    credentialBaseUrl: storedCredential?.baseUrl || ""
   };
+}
+
+export function assertCredentialDestinationBinding(credentials: Record<string, any>, baseUrl?: any) : any {
+  if (
+    credentials.tokenSource === "credential-store"
+    && (!credentials.credentialBaseUrl || normalizeBaseUrl(credentials.credentialBaseUrl) !== normalizeBaseUrl(baseUrl))
+  ) {
+    throw new Error("Stored Meshrix.js MCP credential is bound to a different server.");
+  }
 }
 
 function abortableDelay(milliseconds?: any, signal?: any) : any {
@@ -654,12 +665,13 @@ export async function subscribeToMcpUpdates({ baseUrl, token, target, proxySessi
       const correlationSessionId: any = normalizeMcpProxySessionId(proxySessionId);
       request = await fetchResponse(`${baseUrl}/mcp`, {
         method: "POST",
+        redirect: "error",
         requestLifetime: CALLER_OWNED_HTTP_LIFETIME,
         signal,
         fetchImpl,
         ...(dispatcherFactory ? { dispatcherFactory } : {}),
         headers: {
-          ...authHeaders(token, target),
+          ...authHeaders(token, target, baseUrl),
           ...mcpModernRequestHeaders(outgoing, { accept: "text/event-stream" }),
           ...(correlationSessionId ? { [MCP_PROXY_SESSION_HEADER]: correlationSessionId } : {})
         },
@@ -710,7 +722,11 @@ export async function proxyCommand(options: Record<string, any> = {}) : Promise<
   const resolved: any = await optionsWithDiscoveredBaseUrl(options);
   if (signal?.aborted) throw signal.reason || requestCancellationError();
   const settings: any = installerOptions(resolved);
-  const { target, token, autoUpdate } = credentials;
+  assertCredentialDestinationBinding(credentials, settings.baseUrl);
+  const { target, token } = credentials;
+  const autoUpdate: any = Boolean(credentials.autoUpdate === true
+    && credentials.credentialBaseUrl
+    && normalizeBaseUrl(credentials.credentialBaseUrl) === normalizeBaseUrl(settings.baseUrl));
   const proxySessionId: any = createMcpProxySessionId();
   const transport: any = createProxyStdioTransport({
     baseUrl: settings.baseUrl,

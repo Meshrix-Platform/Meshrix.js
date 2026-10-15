@@ -26,7 +26,7 @@ export interface StateMutationPolicy {
   maxActiveLanes: number;
   defaultQueueWaitTimeoutMs: number;
   maxQueueWaitTimeoutMs: number;
-  defaultExecutionTimeoutMs: number;
+  defaultExecutionTimeoutMs?: number;
   maxExecutionTimeoutMs: number;
   maxKeyBytes: number;
 }
@@ -62,7 +62,7 @@ interface MutationEntry {
   logger: StateLogger;
   signal: AbortSignal | null;
   queuedAt: number;
-  timeoutMs: number;
+  timeoutMs?: number;
   queueWaitTimeoutMs: number;
   resolve(value: unknown): void;
   reject(error: unknown): void;
@@ -111,14 +111,12 @@ interface DequeOperation {
 }
 
 let defaultStateMutationDispatcher: StateMutationDispatcher | null = null;
-export const STATE_MUTATION_TIMEOUT_MS = 60_000;
 export const STATE_MUTATION_POLICY: Readonly<StateMutationPolicy> = Object.freeze({
   maxQueuedPerLane: 256,
   maxQueuedGlobal: 4_096,
   maxActiveLanes: 2_048,
   defaultQueueWaitTimeoutMs: 60_000,
   maxQueueWaitTimeoutMs: 300_000,
-  defaultExecutionTimeoutMs: STATE_MUTATION_TIMEOUT_MS,
   maxExecutionTimeoutMs: 300_000,
   maxKeyBytes: 4_096
 });
@@ -168,7 +166,7 @@ function normalizeKey(key: unknown): string {
   return String(key || "default");
 }
 
-function positiveIntegerAtMost(value: unknown, fallback: number, maximum: number): number {
+function positiveIntegerAtMost(value: unknown, fallback: number | undefined, maximum: number): number | undefined {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric >= 1
     ? Math.min(Math.floor(numeric), maximum)
@@ -176,7 +174,7 @@ function positiveIntegerAtMost(value: unknown, fallback: number, maximum: number
 }
 
 function lowerPolicyLimit(value: unknown, hardLimit: number): number {
-  return positiveIntegerAtMost(value, hardLimit, hardLimit);
+  return positiveIntegerAtMost(value, hardLimit, hardLimit) ?? hardLimit;
 }
 
 function normalizeStateMutationPolicy(input: UnknownRecord = {}): Readonly<StateMutationPolicy> {
@@ -209,13 +207,14 @@ function normalizeStateMutationPolicy(input: UnknownRecord = {}): Readonly<State
       maxQueueWaitTimeoutMs
     ),
     maxQueueWaitTimeoutMs,
-    defaultExecutionTimeoutMs: Math.min(
-      lowerPolicyLimit(
-        input.defaultExecutionTimeoutMs,
-        STATE_MUTATION_POLICY.defaultExecutionTimeoutMs
-      ),
-      maxExecutionTimeoutMs
-    ),
+    ...(input.defaultExecutionTimeoutMs === undefined || input.defaultExecutionTimeoutMs === null
+      ? {}
+      : {
+          defaultExecutionTimeoutMs: Math.min(
+            lowerPolicyLimit(input.defaultExecutionTimeoutMs, maxExecutionTimeoutMs),
+            maxExecutionTimeoutMs
+          )
+        }),
     maxExecutionTimeoutMs,
     maxKeyBytes: lowerPolicyLimit(input.maxKeyBytes, STATE_MUTATION_POLICY.maxKeyBytes)
   });
@@ -420,7 +419,7 @@ export function createStateMutationCoordinator({
     const logger = entry.logger;
     const startedAt = Date.now();
     const abortController = new AbortController();
-    let terminalError: unknown = null;
+    let terminalError: StateMutationError | null = null;
     let executionTimer: NodeJS.Timeout | null = null;
     let detachActiveAbort: (() => void) | null = null;
 
@@ -445,9 +444,7 @@ export function createStateMutationCoordinator({
       lane.poison = entry;
       noteReason(error.code);
       abortController.abort(error);
-      entry.reject(error);
       rejectQueuedMutations(key, lane);
-      lane.idle.reject(fencedError());
       logger?.error?.(event, {
         waitedMs: startedAt - entry.queuedAt,
         durationMs: Date.now() - startedAt,
@@ -456,10 +453,12 @@ export function createStateMutationCoordinator({
       });
     };
 
-    executionTimer = setTimeout((): void => {
-      fenceActiveEntry(timeoutError(), "state.queue.timed_out");
-    }, entry.timeoutMs);
-    executionTimer.unref?.();
+    if (entry.timeoutMs !== undefined) {
+      executionTimer = setTimeout((): void => {
+        fenceActiveEntry(timeoutError(), "state.queue.timed_out");
+      }, entry.timeoutMs);
+      executionTimer.unref?.();
+    }
 
     if (entry.signal) {
       const abortActive = (): void => {
@@ -473,20 +472,21 @@ export function createStateMutationCoordinator({
     Promise.resolve()
       .then(() => entry.task(context))
       .then((result: unknown): void => {
-        if (terminalError) return;
-        logger?.debug?.("state.queue.completed", {
-          waitedMs: startedAt - entry.queuedAt,
-          durationMs: Date.now() - startedAt
-        });
-        entry.resolve(result);
-      }, (error: unknown): void => {
-        if (terminalError) return;
-        logger?.error?.("state.queue.failed", {
+        logger?.debug?.(terminalError ? "state.queue.completed_after_cancel" : "state.queue.completed", {
           waitedMs: startedAt - entry.queuedAt,
           durationMs: Date.now() - startedAt,
-          error: summarizeError(error)
+          ...(terminalError ? { reasonCode: terminalError.code } : {})
         });
-        entry.reject(error);
+        if (terminalError) entry.reject(terminalError);
+        else entry.resolve(result);
+      }, (error: unknown): void => {
+        logger?.error?.(terminalError ? "state.queue.failed_after_cancel" : "state.queue.failed", {
+          waitedMs: startedAt - entry.queuedAt,
+          durationMs: Date.now() - startedAt,
+          error: summarizeError(error),
+          ...(terminalError ? { reasonCode: terminalError.code } : {})
+        });
+        entry.reject(terminalError || error);
       })
       .finally((): void => {
         if (executionTimer) clearTimeout(executionTimer);
@@ -575,16 +575,18 @@ export function createStateMutationCoordinator({
     }
 
     const queuedAt = Date.now();
-    const timeoutMs = positiveIntegerAtMost(
-      options.timeoutMs,
-      policy.defaultExecutionTimeoutMs,
-      policy.maxExecutionTimeoutMs
-    );
+    const timeoutMs = options.timeoutMs === null
+      ? undefined
+      : positiveIntegerAtMost(
+          options.timeoutMs,
+          policy.defaultExecutionTimeoutMs,
+          policy.maxExecutionTimeoutMs
+        );
     const queueWaitTimeoutMs = positiveIntegerAtMost(
       options.queueWaitTimeoutMs,
       policy.defaultQueueWaitTimeoutMs,
       policy.maxQueueWaitTimeoutMs
-    );
+    ) ?? policy.defaultQueueWaitTimeoutMs;
 
     queuedCount += 1;
     let entry: MutationEntry | undefined;
@@ -594,7 +596,7 @@ export function createStateMutationCoordinator({
         logger,
         signal: options.signal || null,
         queuedAt,
-        timeoutMs,
+        ...(timeoutMs === undefined ? {} : { timeoutMs }),
         queueWaitTimeoutMs,
         resolve,
         reject,
@@ -674,7 +676,7 @@ export function createStateMutationCoordinator({
     }
     const lane = lanes.get(normalizedKey);
     if (!lane) return Promise.resolve();
-    if (lane.poison) return Promise.reject(fencedError());
+    if (lane.poison && !lane.active) return Promise.reject(fencedError());
     return lane.idle.promise;
   }
 

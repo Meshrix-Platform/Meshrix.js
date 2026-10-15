@@ -1,7 +1,7 @@
 export * from "./api-key-distribution-common.ts";
 
 const API_KEY_COMMANDS: readonly string[] = Object.freeze([
-  "getIssuerScopes", "list", "listAudienceGrants", "create", "rotate", "revoke", "authenticateRuntime",
+  "getIssuerScopes", "list", "listAudienceGrants", "create", "rotate", "revoke", "authenticateAdmission", "authenticateRuntime",
   "revalidateAuthorization", "authorizeOperation", "reserveEffect", "revalidateEffect",
   "releaseEffect", "explainLookupPlan"
 ]);

@@ -29,7 +29,6 @@
         "requiredScopes": [
           "workspace:read"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -45,7 +44,6 @@
         "requiredScopes": [
           "workspace:read"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -61,7 +59,6 @@
         "requiredScopes": [
           "workspace:read"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -77,7 +74,6 @@
         "requiredScopes": [
           "workspace:write"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -93,7 +89,6 @@
         "requiredScopes": [
           "workspace:maintain"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -109,7 +104,6 @@
         "requiredScopes": [
           "workspace:maintain"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -125,7 +119,6 @@
         "requiredScopes": [
           "workspace:maintain"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -141,7 +134,6 @@
         "requiredScopes": [
           "workspace:maintain"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -157,7 +149,6 @@
         "requiredScopes": [
           "workspace:maintain"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -173,7 +164,6 @@
         "requiredScopes": [
           "workspace:read"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -189,7 +179,6 @@
         "requiredScopes": [
           "workspace:write"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -205,7 +194,6 @@
         "requiredScopes": [
           "workspace:write"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -221,7 +209,6 @@
         "requiredScopes": [
           "workspace:maintain"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -237,7 +224,6 @@
         "requiredScopes": [
           "workspace:write"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -253,7 +239,6 @@
         "requiredScopes": [
           "workspace:read"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -269,7 +254,6 @@
         "requiredScopes": [
           "workspace:read"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -285,7 +269,6 @@
         "requiredScopes": [
           "workspace:write"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true
@@ -301,7 +284,6 @@
         "requiredScopes": [
           "workspace:maintain"
         ],
-        "timeoutMs": 120000,
         "inputSchema": {
           "type": "object",
           "additionalProperties": true

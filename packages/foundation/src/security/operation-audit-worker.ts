@@ -15,7 +15,30 @@ const COMMANDS: ReadonlySet<string> = new Set([
   "close"
 ]);
 
-const store = createOperationAuditWorkerStore(workerData);
+const input = record(workerData);
+const transferredProjectionKey = input.projectionKey;
+let store!: ReturnType<typeof createOperationAuditWorkerStore>;
+try {
+  store = createOperationAuditWorkerStore(input as { userDataPath: string; projectionKey: Uint8Array; projectionKeyId: string });
+  store.ready();
+} catch (error: unknown) {
+  try {
+    store?.close();
+  } catch {
+    // Keep startup failure reporting independent of cleanup errors.
+  }
+  const code = String(record(error).code || "");
+  parentPort?.postMessage({
+    type: "worker-start-error",
+    code: /^operation_audit_[a-z0-9_]{1,80}$/u.test(code) ? code : "operation_audit_initialization_failed"
+  });
+  throw error;
+} finally {
+  if (transferredProjectionKey instanceof Uint8Array) {
+    transferredProjectionKey.fill(0);
+  }
+}
+parentPort?.postMessage({ type: "worker-ready" });
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
@@ -44,11 +67,12 @@ function capacityStats(): Readonly<Record<string, unknown>> {
     FROM operation_audit_meta
     WHERE singleton = 1
   `).get());
+  const pageSize = Number(store.db.pragma("page_size", { simple: true }) || 0);
   return Object.freeze({
     ...meta,
     databaseBytes: Number(store.db.pragma("page_count", { simple: true }) || 0) *
-      Number(store.db.pragma("page_size", { simple: true }) || 0),
-    pageSize: Number(store.db.pragma("page_size", { simple: true }) || 0),
+      pageSize,
+    pageSize,
     maxPageCount: Number(store.db.pragma("max_page_count", { simple: true }) || 0),
     autoVacuum: Number(store.db.pragma("auto_vacuum", { simple: true }) || 0),
     journalSizeLimit: Number(store.db.pragma("journal_size_limit", { simple: true }) || 0)
@@ -67,7 +91,7 @@ parentPort?.on("message", async (message: unknown): Promise<void> => {
         code: "sqlite_lane_command_rejected"
       });
     }
-    if (Date.now() > Number(request.deadlineAtMs || 0)) {
+    if (Number(request.deadlineAtMs || 0) > 0 && Date.now() > Number(request.deadlineAtMs)) {
       throw Object.assign(new Error("Operation audit SQLite command deadline elapsed."), {
         code: "sqlite_lane_deadline_exceeded"
       });

@@ -5,6 +5,9 @@ export {
   type EndpointAuthorityPort,
   type EndpointDeviceRecord,
   type EndpointIdentityDurablePort,
+  type EndpointInvitationRecord,
+  type EndpointGrantOperationRecord,
+  type EndpointPairingOperationRecord,
   type RecoveryAuthorityRecord
 } from "./identity-store.ts";
 export {
@@ -53,3 +56,21 @@ export {
   type PrivateEndpoint,
   type PrivateEndpointOptions
 } from "./endpoint.ts";
+export {
+  EndpointAccountPairingApplication,
+  accountDeviceAuthorizationMatches,
+  type ActivePairingBootstrap,
+  type EndpointAccountPairingAuthority,
+  type EndpointPairingApplicationOptions,
+  type EndpointPairingInviteContext,
+  type EndpointPairingProofPort,
+  type PairingBeginResult,
+  type PairingCompleteResult
+} from "./account-pairing.ts";
+export {
+  AccountEndpointAuthorityClient,
+  AccountDeviceAuthorizationClient,
+  type AccountDeviceAuthorizationDecision,
+  type AccountEndpointClientOptions
+} from "./account-authority-client.ts";
+export { createFileEndpointIdentityDurablePort } from "./identity-durable-store.ts";

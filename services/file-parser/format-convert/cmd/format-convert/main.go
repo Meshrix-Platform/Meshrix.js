@@ -48,8 +48,6 @@ func main() {
 		Addr:              fmt.Sprintf(":%d", config.Port),
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       config.ConversionTimeout + 15*time.Second,
-		WriteTimeout:      config.ConversionTimeout + 15*time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    32 << 10,
 	}

@@ -27,6 +27,12 @@ const PROCESS_DOCUMENTATION_PATH_PREFIXES: readonly any[] = Object.freeze([
   "docs/reports"
 ]);
 
+// Gitignored generated staging directories (bundled build output copied from
+// already-scanned sources — scanning them verifies nothing new).
+const GENERATED_OUTPUT_PATH_PREFIXES: readonly any[] = Object.freeze([
+  "apps/entry-gui/src-tauri/resources"
+]);
+
 const REQUIRED_GITIGNORE_ENTRIES: readonly any[] = Object.freeze([
   "/meshrix-data/",
   "/build/",
@@ -48,7 +54,7 @@ const PROHIBITED: any[] = [
   },
   {
     id: "restricted client wording",
-    pattern: new RegExp(`${join("official")}\\s+${join("client")}`, "iu")
+    pattern: new RegExp(`\\b${join("official")}\\s+${join("client")}`, "iu")
   },
   {
     id: "restricted client implementation wording",
@@ -98,6 +104,12 @@ function isProcessDocumentationPath(relativePath?: any) : any {
   );
 }
 
+function isGeneratedOutputPath(relativePath?: any) : any {
+  return GENERATED_OUTPUT_PATH_PREFIXES.some((prefix?: any) : any =>
+      relativePath === prefix || relativePath.startsWith(`${prefix}/`)
+  );
+}
+
 function isPluginProductionSource(relativePath?: any) : any {
   const segments: any = relativePath.split("/");
   return segments[0] === "plugins" &&
@@ -131,7 +143,8 @@ async function walk(dir?: any, files: any = []) : Promise<any> {
   for (const entry of entries) {
     if (entry.isDirectory()) {
       const nextDir: any = path.join(dir, entry.name);
-      if (!SKIPPED_DIRS.has(entry.name) && !isProcessDocumentationPath(repoRelative(nextDir))) {
+      const nextRelative: any = repoRelative(nextDir);
+      if (!SKIPPED_DIRS.has(entry.name) && !isProcessDocumentationPath(nextRelative) && !isGeneratedOutputPath(nextRelative)) {
         await walk(nextDir, files);
       }
       continue;
@@ -139,6 +152,7 @@ async function walk(dir?: any, files: any = []) : Promise<any> {
     if (
       entry.isFile() &&
       !isProcessDocumentationPath(repoRelative(path.join(dir, entry.name))) &&
+      !isGeneratedOutputPath(repoRelative(path.join(dir, entry.name))) &&
       (TEXT_FILE_RE.test(entry.name) || TEXT_FILE_NAMES.has(entry.name))
     ) {
       files.push(path.join(dir, entry.name));

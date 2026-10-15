@@ -39,6 +39,7 @@ async function tempRoot() : Promise<any> {
 }
 
 afterEach(async () : Promise<any> => {
+  vi.useRealTimers();
   await Promise.all(roots.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
 });
 
@@ -83,6 +84,13 @@ describe("storage maintenance coordinator", () : any => {
     }));
   });
 
+  it("does not inject an elapsed-time budget into bounded storage work", () : any => {
+    expect(normalizeStorageExecutionBudget().maxDurationMs).toBeUndefined();
+    const tracker = createStorageWorkTracker({ startedAt: 0 });
+    expect(tracker.deadlineAt).toBe(Number.POSITIVE_INFINITY);
+    expect(() => tracker.assertActive()).not.toThrow();
+  });
+
   it("rejects oversized queue construction before scheduling or proportional allocation", () : any => {
     const root: any = path.join(os.tmpdir(), "meshrix-storage-oversized-queue");
     expect(() : any => runStorageMaintenanceMutation(
@@ -122,22 +130,57 @@ describe("storage maintenance coordinator", () : any => {
     expect(storageMaintenanceLaneStatus(root)).toEqual({ active: false, fenced: false, queued: 0 });
   });
 
-  it("keeps a timed-out lane fenced until the original writer terminates", async () : Promise<any> => {
+  it("keeps an explicitly budgeted writer fenced until settlement and preserves late success", async () : Promise<any> => {
+    vi.useFakeTimers();
     const root: any = await tempRoot();
     let releaseWriter: any;
+    let writerSignal: AbortSignal | null = null;
     const writerTerminal: any = new Promise((resolve?: any) : any => {
       releaseWriter = resolve;
     });
-    const writer: any = runStorageMaintenanceMutation(root, () : any => writerTerminal, {
+    let writerSettled = false;
+    const writer: any = runStorageMaintenanceMutation(root, ({ signal }: Record<string, any>) : any => {
+      writerSignal = signal;
+      return writerTerminal;
+    }, {
       budget: { maxDurationMs: 10 }
+    }).then((result?: any) : any => {
+      writerSettled = true;
+      return result;
     });
-    await expect(writer).rejects.toMatchObject({ code: "storage_operation_timeout" });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(writerSignal?.aborted).toBe(true);
+    expect(writerSettled).toBe(false);
     expect(storageMaintenanceLaneStatus(root).fenced).toBe(true);
     await expect(runStorageMaintenanceMutation(root, async () : Promise<any> => null))
       .rejects.toMatchObject({ code: "storage_operation_fenced" });
-    releaseWriter();
-    await new Promise((resolve?: any) : any => setTimeout(resolve, 0));
+    releaseWriter("committed");
+    await expect(writer).resolves.toBe("committed");
+    expect(writerSettled).toBe(true);
     expect(storageMaintenanceLaneStatus(root).fenced).toBe(false);
+  });
+
+  it("does not stop an active storage mutation when no duration was explicitly configured", async () : Promise<any> => {
+    vi.useFakeTimers();
+    const root: any = await tempRoot();
+    let releaseWriter!: (value: unknown) => void;
+    let writerSignal: AbortSignal | null = null;
+    let settled = false;
+    const gate = new Promise((resolve) => { releaseWriter = resolve; });
+    const writer = runStorageMaintenanceMutation(root, ({ signal }: Record<string, any>) : any => {
+      writerSignal = signal;
+      return gate;
+    }).then((value?: any) : any => {
+      settled = true;
+      return value;
+    });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(3_600_001);
+    expect(writerSignal?.aborted).toBe(false);
+    expect(settled).toBe(false);
+    releaseWriter("finished");
+    await expect(writer).resolves.toBe("finished");
   });
 
   it("fails closed when file, byte, or cleanup budgets are exceeded", () : any => {

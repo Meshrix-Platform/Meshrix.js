@@ -5,7 +5,6 @@ interface NormalizeCommand {
   id: number;
   kind: "normalize";
   payload: Record<string, unknown>;
-  deadlineAtMs: number;
 }
 
 interface LaneReply {
@@ -34,11 +33,6 @@ parentPort?.on("message", (message: NormalizeCommand) : void => {
     if (message?.kind !== "normalize") {
       throw Object.assign(new Error("Context compaction command is not allowed."), {
         code: "context_compaction_lane_command_rejected"
-      });
-    }
-    if (Date.now() > Number(message.deadlineAtMs || 0)) {
-      throw Object.assign(new Error("Context compaction command deadline elapsed."), {
-        code: "context_compaction_lane_deadline_exceeded"
       });
     }
     reply.result = normalizeConversationInput(message.payload);

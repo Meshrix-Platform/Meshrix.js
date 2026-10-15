@@ -99,7 +99,7 @@ export async function describeCapabilityKernelStatus(input: Record<string, unkno
       message: error instanceof Error ? error.message : String(error)
     };
   } finally {
-    provider.close?.();
+    await provider.close?.();
   }
 }
 
@@ -151,6 +151,6 @@ export async function describeCapabilityBindingGuardStatus(input: Record<string,
       message: error instanceof Error ? error.message : String(error)
     };
   } finally {
-    guard.close?.();
+    await guard.close?.();
   }
 }

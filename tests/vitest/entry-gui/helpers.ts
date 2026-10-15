@@ -25,20 +25,56 @@ import {
 } from "@meshrix/contracts/private-relay";
 import type { EndpointIdentityStore } from "@meshrix/gateway/private-endpoint";
 import type { RelayTransportPort } from "@meshrix/gateway/private-endpoint";
+import { EntryConfigStore } from "@meshrix/entry-gui";
 import {
   entryError,
   pairingProofTranscript,
   parsePairingInvite,
   verifyEd25519,
-  type PairingInvite
+  type PairingInvite,
+  type CustodyAdapter
 } from "@meshrix/entry";
 import type { PairingChannelLike } from "@meshrix/entry-gui";
+import { ACCOUNT_API_ROUTES, type AccountActionTarget } from "@meshrix/contracts/account";
+import type { PairingEndpointPort, PairingCompletionRequest, PairingCompletionReceipt } from "@meshrix/entry";
 
 export const TENANT = "tenant.gui.1";
 export const ROUTE = "route.gui.1";
 export const PRINCIPAL = "prin.gui.1";
 export const VAULT_ID = "vault.gui.1";
 export const PAIRING_SERVICE = "https://endpoint.gui.invalid";
+export const GUI_TEST_ACCOUNT = Object.freeze({ accountId: "account.gui.1", authEpoch: 1 });
+export const GUI_TEST_ACCOUNT_SESSION_REF = "entry-gui.account.session";
+export const GUI_TEST_RELAY_ADMISSION = "relay.credential.test.for.entry.gui";
+
+/** Mark a durable fake store as an available test OS key store for auth-flow tests. */
+export function testOsCustody(backing: CustodyAdapter): CustodyAdapter {
+  return {
+    kind: "test-os-custody",
+    available: () => backing.available(),
+    storeSecret: (input) => backing.storeSecret(input),
+    loadSecret: (input) => backing.loadSecret(input),
+    deleteSecret: (input) => backing.deleteSecret(input)
+  };
+}
+
+export async function seedGuiTestAccount(dataDir: string, custody: CustodyAdapter): Promise<void> {
+  const store = new EntryConfigStore({ dataDir });
+  await store.load();
+  await custody.storeSecret({
+    ref: GUI_TEST_ACCOUNT_SESSION_REF,
+    secret: new TextEncoder().encode("desktop-session-credential-for-entry-gui-test")
+  });
+  await store.update((draft) => ({
+    ...draft,
+    account: {
+      desktopDeviceId: "device.desktop.gui.1",
+      accountId: GUI_TEST_ACCOUNT.accountId,
+      authEpoch: GUI_TEST_ACCOUNT.authEpoch,
+      sessionCredentialRef: GUI_TEST_ACCOUNT_SESSION_REF
+    }
+  }));
+}
 
 const LIMITS = {
   maxFramePayloadBytes: PRIVATE_RELAY_LIMITS.maxFramePayloadBytes,
@@ -495,7 +531,7 @@ export interface FakePairingBehavior {
   relayCredential?: string | null;
   admissionGeneration?: number;
   revocationRevision?: number;
-  /** revokeDevice answer; undefined → the surface lacks remote revocation. */
+  /** Account authority relay enforcement answer for the exact device revoke. */
   revoked?: boolean;
   throwOnRevoke?: boolean;
   /** recoveryAccess issuance; undefined → surface lacks the seam. */
@@ -509,8 +545,9 @@ export interface FakePairingBehavior {
   } | "refused";
 }
 
-export class FakePairingChannel implements PairingChannelLike {
+export class FakePairingChannel implements PairingChannelLike, PairingEndpointPort {
   readonly behavior: FakePairingBehavior;
+  readonly pairedTargets = new Map<string, PairingCompletionRequest["target"]>();
   seenChallenge: string | null = null;
   seenProofSignature: string | null = null;
   revokeCalls: string[] = [];
@@ -520,16 +557,18 @@ export class FakePairingChannel implements PairingChannelLike {
     this.behavior = behavior;
   }
 
+  async connect(): Promise<void> {}
+  close(): void {}
+
   enrollmentExtras() {
     return {
-      relayCredential: this.behavior.relayCredential === undefined ? "relay.cred.test" : this.behavior.relayCredential,
+      relayCredential: this.behavior.relayCredential === undefined ? GUI_TEST_RELAY_ADMISSION : this.behavior.relayCredential,
       admissionGeneration: this.behavior.admissionGeneration ?? 3,
       revocationRevision: this.behavior.revocationRevision ?? 1
     };
   }
 
-  async beginPairing(input: { invite: PairingInvite; deviceId: string; devicePublicKey: string }) {
-    void input;
+  async beginPairing(input: Parameters<PairingEndpointPort["beginPairing"]>[0]): ReturnType<PairingEndpointPort["beginPairing"]> {
     if (this.behavior.failBegin === "unreachable") {
       throw entryError("endpoint_unreachable", "pairing surface offline");
     }
@@ -541,18 +580,20 @@ export class FakePairingChannel implements PairingChannelLike {
       outcome: "challenge" as const,
       challengeId: this.seenChallenge,
       nonce: "pn.gui.1",
-      expiresAt: "2099-01-01T00:00:00.000Z"
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      account: GUI_TEST_ACCOUNT,
+      target: {
+        tenantId: input.invite.tenantId,
+        routeId: input.invite.endpointRouteId,
+        deviceId: input.deviceId,
+        devicePublicKey: input.devicePublicKey,
+        grantRef: this.behavior.grantRef ?? "grant.staged.1",
+        scopes: ["mcp:invoke"]
+      }
     };
   }
 
-  async completePairing(input: {
-    invite: PairingInvite;
-    challengeId: string;
-    deviceId: string;
-    devicePublicKey: string;
-    capabilityGrantRef: string;
-    signature: string;
-  }) {
+  async completePairing(input: PairingCompletionRequest): Promise<PairingCompletionReceipt | { outcome: "refused"; refusal: string }> {
     if (this.behavior.failComplete === "unreachable") {
       throw entryError("endpoint_unreachable", "pairing surface lost mid-proof");
     }
@@ -564,7 +605,8 @@ export class FakePairingChannel implements PairingChannelLike {
       inviteId: input.invite.inviteId,
       endpointRouteId: input.invite.endpointRouteId,
       deviceId: input.deviceId,
-      devicePublicKey: input.devicePublicKey
+      devicePublicKey: input.devicePublicKey,
+      entryPeerIdentity: input.entryPeerIdentity
     });
     this.seenProofSignature = input.signature;
     if (!verifyEd25519({ publicKey: input.devicePublicKey, signature: input.signature, transcript })) {
@@ -573,7 +615,19 @@ export class FakePairingChannel implements PairingChannelLike {
     if (input.challengeId !== this.seenChallenge) {
       return { outcome: "refused" as const, refusal: "challenge_mismatch" };
     }
-    return { outcome: "enrolled" as const, capabilityGrantRef: this.behavior.grantRef ?? "grant.staged.1" };
+    this.pairedTargets.set(input.deviceId, structuredClone(input.target));
+    return {
+      outcome: "enrolled",
+      capabilityGrantRef: input.target.grantRef,
+      admissionGeneration: this.behavior.admissionGeneration ?? 3,
+      revocationRevision: this.behavior.revocationRevision ?? 1,
+      endpointPeerIdentity: {
+        peerId: `peer:${input.invite.tenantId}:${input.invite.endpointRouteId}:${input.invite.endpointDeviceId}`,
+        signalDeviceId: 1,
+        registrationId: 1,
+        identityKey: Buffer.alloc(33, 1).toString("base64url")
+      }
+    };
   }
 
   async revokeDevice(input: { deviceId: string }) {
@@ -673,14 +727,16 @@ export class FakeTransport {
 
 export function inviteFixture(overrides: Partial<PairingInvite> = {}): PairingInvite {
   const invite = {
-    schemaVersion: "v0.0.1:entry:pairing-invite-1",
+    schemaVersion: "v0.0.1:entry:pairing-invite-2",
     kind: "entry-pairing-invite",
     inviteId: "inv.gui.1",
     endpointRouteId: ROUTE,
     tenantId: TENANT,
     mode: "personal",
+    endpointDeviceId: "dev.endpoint.gui.1",
     endpointPrincipalRef: PRINCIPAL,
     endpointSpkiPin: "spki.gui.endpoint.pin",
+    endpointPinRef: "spki.gui.endpoint.pin",
     relayService: "https://relay.gui.invalid",
     vaultId: VAULT_ID,
     recoveryAuthority: { keyId: "rckey.gui.1", generation: 1 },
@@ -692,6 +748,137 @@ export function inviteFixture(overrides: Partial<PairingInvite> = {}): PairingIn
   const parsed = parsePairingInvite(invite);
   if (!parsed) throw new Error("fixture does not satisfy the invite schema");
   return parsed;
+}
+
+/** Installed service origins for deterministic GUI composition fixtures. */
+export function serviceConfigFixture(accountOrigin = "https://account.gui.invalid") {
+  return {
+    schemaVersion: "meshrix-entry-service-config-1" as const,
+    accountOrigin,
+    relayService: "wss://relay.gui.invalid"
+  };
+}
+
+/** Deterministic account authority for IPC tests that exercise the current pair_device flow. */
+export function pairingAccountFetch(options: {
+  readonly accountOrigin: string;
+  readonly relayAdmission?: string | null;
+  readonly resolveDevicePublicKey?: (deviceId: string) => string | null;
+  readonly writerGeneration?: (vaultId: string) => number;
+  readonly onVaultWriterRotationComplete?: (target: AccountActionTarget) => void;
+  readonly revokeEnforcement?: "pending" | "complete";
+  readonly failDeviceRevoke?: boolean;
+}): typeof fetch {
+  const transactions = new Map<string, { purpose: string; actionPurpose?: string; target?: unknown }>();
+  const writerTargets = new Map<string, AccountActionTarget>();
+  let transactionNumber = 0;
+  let bootstrapNumber = 0;
+  return async (input, init) => {
+    const url = new URL(String(input));
+    const body = init?.body === undefined ? {} : JSON.parse(String(init.body)) as Record<string, unknown>;
+    if (url.pathname === ACCOUNT_API_ROUTES.desktopTransaction) {
+      const transactionId = `txn.gui.${++transactionNumber}`;
+      transactions.set(transactionId, {
+        purpose: String(body.purpose),
+        actionPurpose: typeof body.actionPurpose === "string" ? body.actionPurpose : undefined,
+        target: body.target
+      });
+      return Response.json({ transactionId, browserUrl: `${options.accountOrigin}/account?transactionId=${transactionId}` });
+    }
+    const transactionPoll = [...transactions].find(([transactionId]) =>
+      url.pathname === ACCOUNT_API_ROUTES.desktopTransactionPoll.replace("{transactionId}", encodeURIComponent(transactionId)));
+    if (transactionPoll) {
+      const [, transaction] = transactionPoll;
+      if (transaction.purpose === "login") {
+        return Response.json({
+          state: "complete", purpose: "login", account: GUI_TEST_ACCOUNT,
+          deviceSessionCredential: "desktop-session-credential-for-entry-gui-test",
+          permitId: null, target: null
+        });
+      }
+      return Response.json({
+        state: "complete", purpose: "step_up", actionPurpose: transaction.actionPurpose,
+        account: GUI_TEST_ACCOUNT, deviceSessionCredential: null, permitId: "_" + "C".repeat(41) + "A", target: transaction.target
+      });
+    }
+    if ([...transactions.keys()].some((transactionId) =>
+      url.pathname === ACCOUNT_API_ROUTES.desktopTransactionAcknowledge.replace("{transactionId}", encodeURIComponent(transactionId)))) {
+      return Response.json({ acknowledged: true });
+    }
+    if (url.pathname === ACCOUNT_API_ROUTES.desktopPairingBootstrap) {
+      return Response.json({
+        bootstrapId: `bootstrap.gui.${++bootstrapNumber}`,
+        account: GUI_TEST_ACCOUNT,
+        tenantId: body.tenantId,
+        routeId: body.routeId,
+        entryDeviceId: body.entryDeviceId,
+        endpointDeviceId: inviteFixture().endpointDeviceId,
+        endpointPinRef: body.endpointPinRef,
+        role: "entry",
+        mode: body.mode,
+        admissionGeneration: 3,
+        revocationRevision: 1,
+        relayAdmission: options.relayAdmission === null ? "" : options.relayAdmission ?? GUI_TEST_RELAY_ADMISSION,
+        expiresAt: "2099-01-01T00:00:00.000Z"
+      });
+    }
+    if (url.pathname === ACCOUNT_API_ROUTES.desktopVaultWriterRotationPrepare) {
+      const operationId = String(body.operationId ?? "");
+      const vaultId = String(body.vaultId ?? "");
+      const deviceProof = body.deviceProof as { tenantId?: unknown; routeId?: unknown; deviceId?: unknown } | undefined;
+      const deviceId = typeof deviceProof?.deviceId === "string" ? deviceProof.deviceId : "";
+      const devicePublicKey = options.resolveDevicePublicKey?.(deviceId);
+      const writers = Array.isArray(body.writers)
+        ? body.writers as NonNullable<AccountActionTarget["vaultWriterRotation"]>["writers"]
+        : [];
+      const recoveryVerifier = body.recoveryVerifier as NonNullable<AccountActionTarget["vaultWriterRotation"]>["recoveryVerifier"];
+      if (!devicePublicKey || typeof deviceProof?.tenantId !== "string" || typeof deviceProof.routeId !== "string") {
+        return Response.json({ error: "device_not_found" }, { status: 404 });
+      }
+      const target: AccountActionTarget = {
+        tenantId: deviceProof.tenantId,
+        routeId: deviceProof.routeId,
+        deviceId,
+        devicePublicKey,
+        grantRef: "grant.writer.gui.1",
+        scopes: ["vault:write"],
+        vaultWriterRotation: {
+          vaultId,
+          generation: options.writerGeneration?.(vaultId) ?? 1,
+          writers,
+          recoveryVerifier
+        }
+      };
+      writerTargets.set(operationId, target);
+      return Response.json({ operationId, account: GUI_TEST_ACCOUNT, target, expiresAt: "2099-01-01T00:00:00.000Z" });
+    }
+    if (url.pathname === ACCOUNT_API_ROUTES.desktopVaultWriterRotationComplete) {
+      const operationId = String(body.operationId ?? "");
+      const target = writerTargets.get(operationId);
+      if (!target?.vaultWriterRotation) return Response.json({ error: "operation_not_found" }, { status: 404 });
+      options.onVaultWriterRotationComplete?.(target);
+      return Response.json({
+        state: "complete",
+        account: GUI_TEST_ACCOUNT,
+        operationId,
+        vaultId: target.vaultWriterRotation.vaultId,
+        generation: target.vaultWriterRotation.generation
+      });
+    }
+    if (url.pathname === ACCOUNT_API_ROUTES.deviceRevoke) {
+      if (options.failDeviceRevoke) throw new TypeError("Synthetic account authority transport loss");
+      return Response.json({
+        authorityRevoked: true,
+        operationId: body.operationId,
+        target: "device",
+        tenantId: body.tenantId,
+        routeId: body.routeId,
+        deviceId: body.deviceId,
+        enforcement: options.revokeEnforcement ?? "complete"
+      });
+    }
+    throw new Error(`Unexpected synthetic account route ${url.pathname}`);
+  };
 }
 
 export const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

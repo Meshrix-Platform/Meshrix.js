@@ -69,11 +69,12 @@ export function redactOperationAuditValue(value?: unknown, depth = 0): unknown {
   }
   if (typeof value !== "object") return value;
   if (Buffer.isBuffer(value)) {
+    const bytes = value as Buffer;
     return {
       redacted: true,
       reason: "buffer",
-      byteLength: value.length,
-      sha256: crypto.createHash("sha256").update(value).digest("hex")
+      byteLength: bytes.length,
+      sha256: crypto.createHash("sha256").update(bytes).digest("hex")
     };
   }
   if (Array.isArray(value)) {

@@ -92,8 +92,14 @@ func TestPrometheusEndpointExportsStandardAndConversionMetrics(t *testing.T) {
 		t.Fatalf("conversion returned %d", conversionResponse.Code)
 	}
 	metricsResponse := httptest.NewRecorder()
+	unauthenticatedMetrics := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticatedMetrics, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if unauthenticatedMetrics.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated metrics returned %d", unauthenticatedMetrics.Code)
+	}
 	metricsRequest := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	metricsRequest.Header.Set("Accept", "application/openmetrics-text; version=1.0.0")
+	metricsRequest.Header.Set("Authorization", "Bearer "+testAuthToken)
 	handler.ServeHTTP(metricsResponse, metricsRequest)
 	if metricsResponse.Code != http.StatusOK {
 		t.Fatalf("metrics returned %d", metricsResponse.Code)
@@ -128,7 +134,9 @@ func TestOTELSDKDisabledUsesNoopProviders(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, multipartRequestWithTarget(t, "classic.txt", []byte("text"), "docx"))
 	metricsResponse := httptest.NewRecorder()
-	handler.ServeHTTP(metricsResponse, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	metricsRequest := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsRequest.Header.Set("Authorization", "Bearer "+testAuthToken)
+	handler.ServeHTTP(metricsResponse, metricsRequest)
 	if strings.Contains(metricsResponse.Body.String(), "format_convert_requests") {
 		t.Fatal("conversion metrics were emitted while OTEL_SDK_DISABLED=true")
 	}

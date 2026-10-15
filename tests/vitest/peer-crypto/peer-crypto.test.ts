@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -30,6 +30,8 @@ import {
   replenishPeerPrekeys,
   resumePeerSession,
   serializePeerEnvelope,
+  signPeerIdentityMessage,
+  verifyPeerIdentityMessage,
   type PeerCryptoStore,
   type PeerEnvelope,
   type PeerIdentity
@@ -39,7 +41,7 @@ import {
  * Real PQXDH + Double Ratchet coverage between two device identities.
  * No transport double: envelopes are handed over directly, so every failure
  * observed is produced by the actual crypto layer — the same failures the
- * mailbox will project into receipts.
+ * peer client records alongside signed delivery receipts.
  */
 
 const ALICE = "peer.alice.1";
@@ -57,6 +59,18 @@ async function makeDevice(peerId: string, store?: PeerCryptoStore): Promise<Devi
 }
 
 async function pairSessions(alice: Device, bob: Device) {
+  // These public identities represent the exact trust exchanged by the
+  // authenticated pairing completion before the relay bundle is fetched.
+  await pinPeerIdentity(alice.store, {
+    peerId: bob.identity.peerId,
+    identityKey: bob.identity.publicKey.serialize(),
+    peerDeviceId: bob.identity.deviceId
+  });
+  await pinPeerIdentity(bob.store, {
+    peerId: alice.identity.peerId,
+    identityKey: alice.identity.publicKey.serialize(),
+    peerDeviceId: alice.identity.deviceId
+  });
   const bobBundle = await generatePrekeyBundle(bob.identity);
   const aliceSession = await initiatePeerSession({
     identity: alice.identity,
@@ -192,16 +206,21 @@ describe("peer-crypto X3DH/PQXDH + Double Ratchet", () => {
       remoteBundle: bobBundle
     });
     const prekeyEnvelope = envelopeOf(initiator, await initiator.encrypt(new TextEncoder().encode("not for carol")));
-    await expectPeerError(stray.decryptEnvelope(prekeyEnvelope), "peer_message_unauthentic");
+    await expectPeerError(stray.decryptEnvelope(prekeyEnvelope), "peer_identity_changed");
     await expectPeerError(
       resumePeerSession({ identity: carol.identity, localStore: carol.store, peerId: ALICE }),
       "peer_identity_changed"
     );
   });
 
-  it("pins the remote identity on first contact and never silently re-trusts a changed key", async () => {
+  it("requires an authenticated pairing pin and never trusts a bundle on first contact", async () => {
     const alice = await makeDevice(ALICE);
     const bob = await makeDevice(BOB);
+    const initialBundle = await generatePrekeyBundle(bob.identity);
+    await expectPeerError(
+      initiatePeerSession({ identity: alice.identity, localStore: alice.store, remoteBundle: initialBundle }),
+      "peer_identity_changed"
+    );
     await pairSessions(alice, bob);
 
     // A different device identity presenting the same peerId must be refused.
@@ -229,6 +248,11 @@ describe("peer-crypto X3DH/PQXDH + Double Ratchet", () => {
 
     // An attacker with a different identity forges an envelope as ALICE.
     const mallory = await makeDevice("peer.mallory.1");
+    await pinPeerIdentity(mallory.store, {
+      peerId: BOB,
+      identityKey: bob.identity.publicKey.serialize(),
+      peerDeviceId: bob.identity.deviceId
+    });
     const bobBundle = await generatePrekeyBundle(bob.identity);
     const mallorySession = await initiatePeerSession({
       identity: mallory.identity,
@@ -286,6 +310,11 @@ describe("peer-crypto X3DH/PQXDH + Double Ratchet", () => {
     });
     const first = await reInitiated.encrypt(new TextEncoder().encode("after re-pair"));
     expect(first.messageType).toBe("prekey");
+    await pinPeerIdentity(bobReplacement.store, {
+      peerId: alice.identity.peerId,
+      identityKey: alice.identity.publicKey.serialize(),
+      peerDeviceId: alice.identity.deviceId
+    });
     const accepted = await acceptPeerSession({
       identity: bobReplacement.identity,
       localStore: bobReplacement.store,
@@ -383,6 +412,68 @@ describe("peer-crypto X3DH/PQXDH + Double Ratchet", () => {
     }
   });
 
+  it("distinguishes missing store directories from I/O errors and preserves WAL sources on validation failure", async () => {
+    const root = await mkdtemp(join(tmpdir(), "peer-crypto-wal-test-"));
+    const store = createFilePeerCryptoStore(root);
+    const currentPath = join(root, "peer-operation.json");
+    const legacyPath = join(root, "inbound-receive.json");
+    try {
+      await rm(join(root, "prekeys"), { recursive: true });
+      await rm(join(root, "sessions"), { recursive: true });
+      expect(await store.listPreKeys()).toEqual([]);
+      expect(await store.listSessionKeys()).toEqual([]);
+
+      await writeFile(join(root, "prekeys"), "not a directory");
+      await expect(store.listPreKeys()).rejects.toMatchObject({ code: "ENOTDIR" });
+      await rm(join(root, "prekeys"));
+
+      await writeFile(join(root, "sessions"), "not a directory");
+      await expect(store.listSessionKeys()).rejects.toMatchObject({ code: "ENOTDIR" });
+      await rm(join(root, "sessions"));
+
+      const legacyRecord = JSON.stringify({
+        v: 1,
+        state: "prepared",
+        messageId: "legacy-message",
+        preparedAt: "2026-10-12T00:00:00.000Z",
+        mutations: [],
+        applicationRecord: "e30"
+      });
+      await writeFile(legacyPath, legacyRecord);
+      for (const invalidPreparedRecord of [
+        JSON.stringify({
+          v: 1,
+          state: "prepared",
+          messageId: "current-message-without-kind",
+          preparedAt: "2026-10-12T00:00:00.000Z",
+          mutations: [],
+          applicationRecord: "e30"
+        }),
+        JSON.stringify({
+          v: 1,
+          state: "prepared",
+          kind: "receive",
+          messageId: "current-message-without-application-record",
+          preparedAt: "2026-10-12T00:00:00.000Z",
+          mutations: []
+        })
+      ]) {
+        await writeFile(currentPath, invalidPreparedRecord);
+        await expectPeerError(store.loadPreparedOperation(), "peer_store_error");
+        expect(await readFile(currentPath, "utf8")).toBe(invalidPreparedRecord);
+        expect(await readFile(legacyPath, "utf8")).toBe(legacyRecord);
+      }
+
+      const invalidFinalizedRecord = JSON.stringify({ v: 1, state: "finalized", messageId: "finalized-without-kind" });
+      await writeFile(currentPath, invalidFinalizedRecord);
+      await expectPeerError(store.loadPreparedOperation(), "peer_store_error");
+      expect(await readFile(currentPath, "utf8")).toBe(invalidFinalizedRecord);
+      expect(await readFile(legacyPath, "utf8")).toBe(legacyRecord);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("serializes only public material: no private key bytes reach wire or log surfaces", async () => {
     const alice = await makeDevice(ALICE);
     const bob = await makeDevice(BOB);
@@ -430,5 +521,18 @@ describe("peer-crypto X3DH/PQXDH + Double Ratchet", () => {
     expect(aliceSide.length).toBeGreaterThan(20);
     expect(bobSession.direction).toBe("responder");
     expect(peerSessionAddressKey(BOB, 1)).toBe("1--peer.bob.1");
+  });
+
+  it("signs and verifies domain-separated controls only with the pinned Signal identity", async () => {
+    const alice = await makeDevice(ALICE);
+    const bob = await makeDevice(BOB);
+    const message = new TextEncoder().encode("meshrix-peer-delivery-ack-v1\ntenant\nroute\nalice\nbob\nmsg.one\nsha256:abc");
+    const signature = signPeerIdentityMessage(alice.identity, message);
+
+    expect(signature.byteLength).toBe(64);
+    expect(verifyPeerIdentityMessage(alice.identity.publicKey.serialize(), message, signature)).toBe(true);
+    expect(verifyPeerIdentityMessage(bob.identity.publicKey.serialize(), message, signature)).toBe(false);
+    expect(verifyPeerIdentityMessage(alice.identity.publicKey.serialize(), new TextEncoder().encode(`${new TextDecoder().decode(message)}\nchanged`), signature)).toBe(false);
+    expect(verifyPeerIdentityMessage(alice.identity.publicKey.serialize(), message, signature.subarray(0, 63))).toBe(false);
   });
 });

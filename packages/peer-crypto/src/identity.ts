@@ -80,6 +80,25 @@ export class PeerIdentity {
   }
 }
 
+/** Sign a domain-separated peer control transcript with the enrolled Signal identity. */
+export function signPeerIdentityMessage(identity: PeerIdentity, message: Uint8Array): Uint8Array {
+  return new Uint8Array(identity.identityKeyPair.privateKey.sign(toExactBytes(message)));
+}
+
+/** Verify a Signal identity signature against bytes obtained from pairing-pinned custody. */
+export function verifyPeerIdentityMessage(
+  identityKey: Uint8Array,
+  message: Uint8Array,
+  signature: Uint8Array
+): boolean {
+  if (signature.byteLength !== 64) return false;
+  try {
+    return PublicKey.deserialize(toExactBytes(identityKey)).verify(toExactBytes(message), toExactBytes(signature));
+  } catch {
+    return false;
+  }
+}
+
 async function nextId(store: PeerCryptoStore, field: "nextPreKeyId" | "nextSignedPreKeyId" | "nextKyberPreKeyId"): Promise<number> {
   const counters = await store.loadCounters()
     ?? Object.freeze({ nextPreKeyId: 1, nextSignedPreKeyId: 1, nextKyberPreKeyId: 1 });

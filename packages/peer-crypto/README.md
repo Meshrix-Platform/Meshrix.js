@@ -1,10 +1,11 @@
 # `@meshrix/peer-crypto`
 
-Device-side Signal protocol layer for one-to-one peer messaging under
-`DEC-PEER-ENCRYPTED-MAILBOX`. The package owns everything that must never
+Device-side Signal protocol layer for one-to-one peer messaging over the
+online private relay. The package owns everything that must never
 reach the relay: PQXDH-family prekey exchange, Double Ratchet sessions,
 Sesame-style single-session resolution per peer pair, and the durable secret
-store. The relay/mailbox only ever sees the opaque peer envelope.
+store. The relay forwards only the opaque peer envelope; plaintext and key
+material remain device-local.
 
 ## Composition
 

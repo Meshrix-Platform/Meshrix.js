@@ -96,29 +96,15 @@ class SignalIdentityKeyStoreBridge implements IdentityKeyStore {
     return this.#identity.registrationId;
   }
 
-  /**
-   * Pinning rule for Sesame-style trust: a first contact pins the presented
-   * identity key; a matching pin confirms; a differing key — or any
-   * `blocked` binding — is never silently re-trusted and never overwrites the
-   * pinned record. The library calls this after a successful trust decision;
-   * reaching this branch with a different key means the trust decision was
-   * bypassed, so the write itself refuses.
-   */
+  /** The pairing transaction must pin the key before Signal accepts it. */
   async saveIdentity(name: ProtocolAddress, key: PublicKey): Promise<IdentityChange> {
     const peerId = name.name();
     const existing = await this.#store.loadPeerBinding(peerId);
-    const encoded = base64urlEncode(key.serialize());
     if (!existing) {
-      const binding: PeerIdentityBinding = Object.freeze({
-        peerId,
-        deviceId: name.deviceId(),
-        identityKey: encoded,
-        trustGeneration: 1,
-        pinnedAt: new Date().toISOString(),
-        state: "active"
-      });
-      await this.#store.savePeerBinding(binding);
-      return IdentityChange.NewOrUnchanged;
+      throw peerCryptoError(
+        "peer_identity_changed",
+        `Remote identity for ${peerId} has no authenticated pairing pin; explicit pairing is required.`
+      );
     }
     if (existing.state === "active" && existing.deviceId === name.deviceId() && bindingKeyEqual(existing.identityKey, key)) {
       return IdentityChange.NewOrUnchanged;
@@ -132,11 +118,7 @@ class SignalIdentityKeyStoreBridge implements IdentityKeyStore {
   async isTrustedIdentity(name: ProtocolAddress, key: PublicKey, _direction: Direction): Promise<boolean> {
     if (name.deviceId() !== PEER_DEVICE_ID) return false;
     const existing = await this.#store.loadPeerBinding(name.name());
-    if (!existing) {
-      // First contact inside an authorized pairing: trust-on-first-use; the
-      // pin is committed by saveIdentity before plaintext is released.
-      return true;
-    }
+    if (!existing) return false;
     if (existing.state !== "active") return false;
     if (existing.deviceId !== name.deviceId()) return false;
     return bindingKeyEqual(existing.identityKey, key);

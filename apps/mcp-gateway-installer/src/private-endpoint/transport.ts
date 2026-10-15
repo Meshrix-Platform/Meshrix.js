@@ -259,7 +259,7 @@ export class RelayWebSocketTransport implements RelayTransportPort {
     // Recovery/operation kinds are validated by the recovery parser — anything
     // else never reaches the wire, matching relay-side rejection.
     if (parsePrivateRelayRecoveryMessage(message)) return JSON.stringify(message);
-    // Peer mailbox kinds share the admitted session channel; the contract
+    // Peer message kinds share the admitted session channel; the contract
     // encoder is the authority — a non-peer object still drops loudly.
     const peerWire = encodePrivateRelayPeerMessage(message);
     if (peerWire) return peerWire;

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 import { reportPayloadDigest } from "../../../packages/foundation/src/observability/sensitive-report-scan.ts";
@@ -32,6 +33,7 @@ import {
   withAcceptanceExecutionLease
 } from "../../../tools/server-scripts/lib/platform-acceptance-generation-store.ts";
 
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const roots: any[] = [];
 const RELEASE_EVIDENCE_INVENTORY: readonly any[] = Object.freeze([Object.freeze({
   reportPath: "build/reports/child.json",
@@ -61,27 +63,15 @@ function candidateIdentity(workspace?: any, sourceRevision: string = String(git(
 }
 
 async function fixtureRoot() : Promise<any> {
-  const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-generation-"));
-  roots.push(root);
+  const fixture: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-generation-"));
+  roots.push(fixture);
+  const root: any = path.join(fixture, "repository");
+  const cloned: any = spawnSync("git", ["clone", "--shared", "--quiet", REPO_ROOT, root], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  });
+  expect(cloned.status, cloned.stderr).toBe(0);
   await fs.mkdir(path.join(root, "node_modules"), { recursive: true });
-  await fs.writeFile(
-    path.join(root, ".gitignore"),
-    "/build/\n/local-workflow/\n/node_modules/\n",
-    "utf8"
-  );
-  await fs.writeFile(path.join(root, "package.json"), "{}\n", "utf8");
-  git(root, ["init", "--quiet"]);
-  git(root, ["add", ".gitignore", "package.json"]);
-  git(root, [
-    "-c",
-    "user.name=Meshrix.js Test",
-    "-c",
-    "user.email=test@example.invalid",
-    "commit",
-    "--quiet",
-    "-m",
-    "candidate"
-  ]);
   return root;
 }
 
@@ -253,25 +243,9 @@ afterEach(async () : Promise<any> => {
 
 describe("platform acceptance generation store", () : any => {
   it("preserves clean Git evidence when the source is a detached worktree", async () : Promise<any> => {
-    const fixture: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-detached-"));
-    roots.push(fixture);
-    const repository: any = path.join(fixture, "repository");
+    const repository: any = await fixtureRoot();
+    const fixture: any = path.dirname(repository);
     const detached: any = path.join(fixture, "detached");
-    await fs.mkdir(path.join(repository, "node_modules"), { recursive: true });
-    await fs.writeFile(path.join(repository, ".gitignore"), "/build/\n/node_modules/\n", "utf8");
-    await fs.writeFile(path.join(repository, "package.json"), "{}\n", "utf8");
-    git(repository, ["init", "--quiet"]);
-    git(repository, ["add", ".gitignore", "package.json"]);
-    git(repository, [
-      "-c",
-      "user.name=Meshrix.js Test",
-      "-c",
-      "user.email=test@example.invalid",
-      "commit",
-      "--quiet",
-      "-m",
-      "candidate"
-    ]);
     git(repository, ["worktree", "add", "--quiet", "--detach", detached, "HEAD"]);
     await fs.mkdir(path.join(detached, "node_modules"), { recursive: true });
 

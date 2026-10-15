@@ -485,12 +485,7 @@ export function localMcpTargetBindingDecision(grant: Record<string, any> = {}, r
   }
   const requestedTarget: any = mcpTargetHeaderFromRequest(request);
   if (!requestedTarget) {
-    return {
-      ok: false,
-      reasonCode: "mcp_target_binding_missing",
-      requestedTarget,
-      allowedTargets: targets
-    };
+    return { ok: true };
   }
   if (!targets.includes(requestedTarget)) {
     return {

@@ -2,7 +2,7 @@
   "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.ts",
   "version": "v1.0.0",
   "generatedAt": "2026-06-30T09:41:12.259Z",
-  "routeCount": 578,
+  "routeCount": 580,
   "routes": [
     {
       "method": "GET",
@@ -2546,6 +2546,22 @@
       "operationId": "discovery.clients.alignment_command",
       "feature": "discovery",
       "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/discovery/clients/enrollment-token",
+      "operationId": "discovery.clients.enrollment_token",
+      "feature": "discovery",
+      "risk": "safe_write",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "discovery.clients.enrollment_token",
+      "operationId": "discovery.clients.enrollment_token",
+      "feature": "discovery",
+      "risk": "safe_write",
       "public": false
     },
     {

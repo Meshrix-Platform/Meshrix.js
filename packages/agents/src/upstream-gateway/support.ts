@@ -1,5 +1,10 @@
 import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
-import { normalizeUpstreamMcpContextHeaders } from "@meshrix/contracts/upstream-service-publishing";
+import {
+  normalizeUpstreamMcpContextHeaders,
+  validateUpstreamContentPolicy,
+  validateUpstreamOauth,
+  validateUpstreamResponseCache
+} from "@meshrix/contracts/upstream-service-publishing";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { ServerConfig } from "@meshrix/foundation/config/server-config";
@@ -330,6 +335,44 @@ export function normalizeServiceTagPolicy(input: Record<string, any> = {}, exist
     : null;
 }
 
+export function normalizeContentPolicy(value: any) : any {
+  if (value === undefined || value === null) return null;
+  validateUpstreamContentPolicy(value, "contentPolicy");
+  return clone(value);
+}
+
+export function normalizeServiceOauth(value: any) : any {
+  if (value === undefined || value === null) return null;
+  validateUpstreamOauth(value, "oauth");
+  const source: any = object(value);
+  return {
+    grantType: "client_credentials",
+    tokenUrl: text(source.tokenUrl),
+    clientId: text(source.clientId),
+    clientSecretRef: text(source.clientSecretRef),
+    scopes: asArray(source.scopes).map(text).filter(Boolean),
+    audience: text(source.audience),
+    authMethod: text(source.authMethod || "client_secret_basic") === "client_secret_post"
+      ? "client_secret_post"
+      : "client_secret_basic"
+  };
+}
+
+export function normalizeResponseCache(value: any) : any {
+  if (value === undefined || value === null) return null;
+  validateUpstreamResponseCache(value, "responseCache");
+  const source: any = object(value);
+  return {
+    ttlMs: Number(source.ttlMs),
+    maxEntries: Number.isSafeInteger(Number(source.maxEntries)) && Number(source.maxEntries) > 0
+      ? Number(source.maxEntries)
+      : 128,
+    maxBytes: Number.isSafeInteger(Number(source.maxBytes)) && Number(source.maxBytes) > 0
+      ? Number(source.maxBytes)
+      : 256 * 1024
+  };
+}
+
 export function hasInputField(input: Record<string, any> = {}, field?: any) : any {
   return Object.prototype.hasOwnProperty.call(object(input), field) && input[field] !== undefined;
 }
@@ -401,6 +444,8 @@ export function normalizeOperation(input: Record<string, any> = {}, index: any =
   };
   const payloadTransport: any = serviceProtocol === "mcp" ? null : compilePayloadTransport(input);
   const timeoutMs: any = normalizeOptionalTimeoutMs(input.timeoutMs, "operation.timeoutMs");
+  const contentPolicy: any = normalizeContentPolicy(input.contentPolicy);
+  const responseCache: any = normalizeResponseCache(input.responseCache);
   return {
     operationKey,
     label: text(input.label || operationKey),
@@ -426,7 +471,9 @@ export function normalizeOperation(input: Record<string, any> = {}, index: any =
     ),
     requestSchema: object(input.requestSchema),
     responseSchema: object(input.responseSchema),
-    ...(payloadTransport ? { payloadTransport } : {})
+    ...(payloadTransport ? { payloadTransport } : {}),
+    ...(contentPolicy ? { contentPolicy } : {}),
+    ...(responseCache ? { responseCache } : {})
   };
 }
 
@@ -495,8 +542,30 @@ export function normalizeMcpConfig(input: Record<string, any> = {}, existing: Re
     protocolVersionHint: text(source.protocolVersion || previous.protocolVersionHint || ""),
     toolNamePrefix: safePublicToolSegment(source.toolNamePrefix || source.prefix || previous.toolNamePrefix || serviceId),
     toolsCacheTtlMs: Math.max(0, Math.min(Number(source.toolsCacheTtlMs ?? previous.toolsCacheTtlMs ?? 30_000), 600_000)),
+    aliases: normalizeMcpToolAliases(source.aliases || previous.aliases),
     ...(timeoutMs === undefined ? {} : { timeoutMs })
   };
+}
+
+export function normalizeMcpToolAliases(input: any = {}) : Record<string, { name?: string; title?: string; description?: string }> {
+  const output: Record<string, { name?: string; title?: string; description?: string }> = {};
+  const source: any = object(input);
+  for (const [upstreamName, raw] of (Object.entries(source) as [string, any][]).slice(0, 128)) {
+    const key: any = text(upstreamName).slice(0, 128);
+    if (!key || ["__proto__", "constructor", "prototype"].includes(key)) continue;
+    const record: any = typeof raw === "string" ? { name: raw } : object(raw);
+    const rawName: any = text(record.name);
+    const name: any = rawName ? safePublicToolSegment(rawName) : "";
+    const title: any = text(record.title).slice(0, 160);
+    const description: any = text(record.description).slice(0, 2048);
+    if (!name && !title && !description) continue;
+    output[key] = Object.freeze({
+      ...(name ? { name } : {}),
+      ...(title ? { title } : {}),
+      ...(description ? { description } : {})
+    });
+  }
+  return output;
 }
 
 export function publicUrl(value: any = "") : any {
@@ -659,6 +728,8 @@ export function normalizeService(input: Record<string, any> = {}, existing: Upst
     credentialRefs,
     credentialReferences,
     tagPolicy: normalizeServiceTagPolicy(input, existing, serviceId),
+    contentPolicy: normalizeContentPolicy(input.contentPolicy || existing.contentPolicy),
+    oauth: normalizeServiceOauth(input.oauth !== undefined ? input.oauth : existing.oauth),
     redactedCredentialInput: redactSecretInput(input).hasRawCredentialInput,
     defaultHeaders: sanitizeHeaders(input.defaultHeaders || input.headers || existing.defaultHeaders),
     ...(mcp ? { mcp } : {}),
@@ -675,6 +746,7 @@ export function publicService(service: UpstreamGatewayServiceRecord) : UpstreamG
     credentialRefs: privateCredentialRefs,
     credentialReferences: _privateCredentialReferences,
     mcp: privateMcpConfig,
+    oauth: _privateOauth,
     ...publicFields
   } = service;
   const endpointRef: any = service.baseUrl
@@ -691,6 +763,7 @@ export function publicService(service: UpstreamGatewayServiceRecord) : UpstreamG
       .filter(Boolean)
       .map((reference?: any) : any => `credential:${hash(reference, 16)}`))],
     credentialReferenceCount: asArray(privateCredentialRefs).length,
+    oauthProtected: service.oauth !== null && service.oauth !== undefined,
     redactedCredentialInput: service.redactedCredentialInput === true,
     defaultHeaders: sanitizeHeaders(service.defaultHeaders),
     baseUrl: "",

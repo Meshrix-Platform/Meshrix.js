@@ -29,15 +29,13 @@ interface AuthorizationStoreOptions {
   rootPath?: string;
   maxPending?: number;
   maxPendingBytes?: number;
-  defaultDeadlineMs?: number;
 }
 
 export function createAuthorizationStore({
   userDataPath = "",
   rootPath = "",
   maxPending = 1024,
-  maxPendingBytes = 16 * 1024 * 1024,
-  defaultDeadlineMs = 30_000
+  maxPendingBytes = 16 * 1024 * 1024
 }: AuthorizationStoreOptions = {}): Readonly<AuthorizationStore> {
   const lane = createSqliteExecutionLane({
     owner: "authorization-evidence",
@@ -48,8 +46,7 @@ export function createAuthorizationStore({
     workerData: { userDataPath, rootPath },
     allowedCommands: COMMANDS,
     maxPending,
-    maxPendingBytes,
-    defaultDeadlineMs
+    maxPendingBytes
   });
   const execute = (kind: string, payload: AuthorizationStoreInput = {}): Promise<unknown> => lane.execute(kind, payload);
   return Object.freeze({

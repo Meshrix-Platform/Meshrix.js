@@ -420,6 +420,62 @@ describe("dispatch operation recorder", () => {
     expect(report.pendingObligations).toEqual([]);
   });
 
+  it("redacts configured and forbidden keys at any depth before artifact custody", () => {
+    const store = openStore(tempRoot(), policyWith({
+      content: categorySelection({
+        fieldAllow: ["summary", "config"],
+        fieldRedact: ["sessionTag"],
+        retention: { maxAgeSeconds: 3_600, maxRecords: 64, maxContentBytes: 65_536, maxIndexBytes: 65_536 }
+      })
+    }));
+    const recorder = recorderFor(store, {
+      operationInput: {
+        summary: "quarterly report",
+        config: {
+          endpoint: "https://svc.internal",
+          sessionTag: "redacted-by-policy",
+          token: "nested-forbidden",
+          nested: {
+            keep: "visible",
+            deeper: { apiKey: "nested-api-key", privateKey: "nested-private-key" }
+          },
+          list: [{ name: "a", secret: "in-array" }, { name: "b" }]
+        },
+        secret: "top-level-forbidden-field"
+      }
+    });
+    expect(recorder.admitBeforeEffect().ok).toBe(true);
+    recorder.settle({ status: "ok" });
+
+    const content = listAll(store, "content", recorder.operationRef);
+    expect(content.length).toBe(1);
+    expect(content[0].detail.fieldNames).toEqual(["summary", "config"]);
+    const artifact = store.readArtifact({
+      artifactRef: content[0].detail.artifactRefs[0],
+      role: READER
+    });
+    const bytes = artifact.bytes.toString("utf8");
+    // Allowed parents keep their ordinary values; configured redaction and
+    // the forbidden key set apply recursively — nothing nested reaches
+    // custody inside an allowed field, inside arrays included.
+    expect(JSON.parse(bytes)).toEqual({
+      summary: "quarterly report",
+      config: {
+        endpoint: "https://svc.internal",
+        nested: { keep: "visible", deeper: {} },
+        list: [{ name: "a" }, { name: "b" }]
+      }
+    });
+    for (const leaked of [
+      "redacted-by-policy", "nested-forbidden", "nested-api-key",
+      "nested-private-key", "in-array", "top-level-forbidden-field",
+      "sessionTag", "token", "apiKey", "privateKey", "secret"
+    ]) {
+      expect(bytes).not.toContain(leaked);
+    }
+    expect(JSON.stringify(content[0].detail)).not.toContain("nested-forbidden");
+  });
+
   it("never fabricates a terminal execution event for an in_doubt dispatch", () => {
     const store = openStore(tempRoot(), policyWith());
     const recorder = recorderFor(store);

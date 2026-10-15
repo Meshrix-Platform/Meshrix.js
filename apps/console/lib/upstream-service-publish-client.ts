@@ -41,7 +41,7 @@ export type {
 /** Runtime health payload returned by the gateway health route. */
 export type UpstreamServiceRuntimeHealth = { ok: boolean; [key: string]: unknown };
 
-export const UPSTREAM_SERVICE_OBSERVATION_INTERVAL_MS = 500;
+export const UPSTREAM_SERVICE_OBSERVATION_INTERVAL_MS = 2_000;
 
 /** The accepted server publication an observer tracks; the server keeps it. */
 export interface UpstreamServicePublicationObservationTarget {

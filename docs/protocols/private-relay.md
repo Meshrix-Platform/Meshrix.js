@@ -12,7 +12,7 @@ trust, semantics and plaintext live exclusively at the endpoints.
 
 This file owns protocol shape and semantics. Runtime implementations (Workerd
 relay, endpoint gateway, installed entry) are separate deliveries and consume
-these schemas rather than redefining them. The actual Workerd relay's
+these schemas rather than redefining them. The hosted Workerd relay's
 build/check/deploy boundary, privacy projection, operational error taxonomy
 and cost honesty are maintained in the private operations repository and are
 not part of the public source.
@@ -23,21 +23,33 @@ not part of the public source.
 | --- | --- | --- |
 | Session/admission wire | `PRIVATE_RELAY_SCHEMA_VERSION` | `v0.0.1:private-relay:wire-1` |
 | Recovery/vault wire | `PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION` | `v0.0.1:private-relay:recovery-1` |
-| Peer mailbox wire | `PRIVATE_RELAY_PEER_SCHEMA_VERSION` | `v0.0.1:private-relay:peer-1` |
+| Peer wire | `PRIVATE_RELAY_PEER_SCHEMA_VERSION` | `v0.0.1:private-relay:peer-1` |
 | Wire protocol tag | `PRIVATE_RELAY_WIRE_PROTOCOL` | `meshrix-private-relay/0` |
 
 All messages are strict exact-key JSON objects. Unknown, missing, extra or
-misplaced fields are rejected. Protocol revisions must bump the version
-constants and extend the neutral corpus.
+misplaced fields are rejected. Changes that alter an existing message shape or
+meaning require a new protocol revision; an additive purpose or message in the
+unpublished wire contract updates the same constants and neutral corpus.
 
 ## Roles, modes and purposes
 
 - Roles: `entry` (installed client), `endpoint` (receiving gateway).
 - Modes: `personal`, `enterprise`. A session open whose admission mode does not
   match the enrolled mode is rejected; there is no inferred or fallback mode.
-- Session purposes: `forward` (normal opaque forwarding) and `recover_device`
+- Session purposes: `forward` (normal opaque forwarding), `recover_device`
   (recovery channel; admits only recovery message kinds plus
-  `session-close`/`session-reconnect` — see `recoveryChannelAdmitsOnlyRecovery`).
+  `session-close`/`session-reconnect` — see `recoveryChannelAdmitsOnlyRecovery`),
+  and `pair_device` (pairing bootstrap; admits only opaque `frame`,
+  `frame-ack`, and `session-close` from the Entry — see
+  `pairingChannelAdmitsOnlyPairing`). Unknown purposes are rejected; they never
+  fall back to `forward`.
+- Before a `pair_device` frame reaches the receiving endpoint, the relay sends
+  the endpoint a `pairing-bootstrap` notification containing only the opaque
+  `bootstrapId` and the relay-issued `entrySessionId`. The endpoint must
+  authenticate the bootstrap through account authority before pinning the
+  provisional Entry key, and must reject frames from any other Entry session.
+  The notification carries no key, pin, grant, or authorization and is not
+  itself authority.
 
 ## Privacy boundary
 
@@ -169,111 +181,58 @@ capability grant reference. They travel only inside the authenticated inner
 channel or approved endpoint storage and are never copied into relay
 admission or telemetry.
 
-## Peer messaging mailbox
+## Online peer messaging
 
-The peer wire (`private-relay-peer.ts`, schema `v0.0.1:private-relay:peer-1`)
-adds reliable one-to-one agent messaging: a per-recipient mailbox partition
-that stores only Signal-family ciphertext envelopes, durable positions and
-typed receipts. One device pairs with exactly one peer on its route; the
-mailbox runtime re-checks the same directory admission authority session
-sockets use, and request messages carry `tenantId`/`routeId`/`deviceId` only
-so that authority can bind them — the wire itself never selects a tenant or a
-route, and a `targetTenantId`-style steering field fails exact-key parsing.
+The peer wire (`private-relay-peer.ts`, schema
+`v0.0.1:private-relay:peer-1`) carries one-to-one Signal ciphertext and
+authenticated receipt events over the same admitted `forward` WebSocket as
+frame traffic. A route pairs at most one Entry and one endpoint. Directory
+checks bind each peer operation to the current authenticated device, route,
+pairing and revocation state. The private account-authority binding separately
+checks account, epoch, tenant and managed-route currentness once per operation;
+both checks remain required. Request-supplied identities never select another
+tenant or route, and extra steering fields fail exact-key parsing. Peer messages
+are not accepted on recovery or pairing-only channels.
 
 Wire kinds (`PRIVATE_RELAY_PEER_KINDS`):
 
 | Kind | Direction | Semantics |
 | --- | --- | --- |
-| `peer-bundle-publish` → `peer-bundle-published` | device → mailbox → device | Publish the device's Signal prekey bundle (`format` from `PRIVATE_RELAY_PEER_SIGNAL_PROFILES`, `bundleId`, monotonic `revision`, opaque public `material`). Response reports `published`/`superseded`/`refused` with a typed `PRIVATE_RELAY_PEER_REFUSALS` reason. |
-| `peer-bundle-fetch` → `peer-bundle` | device → mailbox → device | Fetch the paired peer's current bundle. Response reports `available` + bundle, `unpublished` (honest absence), or `refused` + typed refusal. |
-| `peer-send` → `peer-accepted` | sender → mailbox → sender | Enqueue an encrypted envelope into the recipient partition. Response reports `accepted`/`duplicate`/`conflict` plus the durable `position`; accepted/duplicate carries the `accepted` receipt, conflict carries none. |
-| `peer-fetch` → `peer-messages` | recipient → mailbox → recipient | Cursor page (`afterSeq`, bounded `limit`) returning stored messages in strictly ascending position order, `nextAfterSeq` resume cursor, `more` continuation flag and `gaps` tombstones. |
-| `peer-ack` → `peer-acked` | recipient → mailbox → recipient | Idempotently record `received` acknowledgements plus optional application-level `reports`. Response returns `recorded` receipts and `refused` entries with `PRIVATE_RELAY_PEER_ACK_REFUSALS`; `peerAckFullyRecorded` requires every requested id to be recorded or explicitly refused — never silently dropped or invented. |
-| `peer-receipt` → `peer-status` | sender → mailbox → sender | Query receipt status for sender-scoped `messageIds`. Each status reports `position` (`0` = unknown, never inventing receipts) plus the recorded receipt list. |
-| `peer-retention-policy` | mailbox → device | Enrollment-time advertisement of the deployment-selected finite `mailboxCapacityBytes`, `mailboxRetentionMs` and `mailboxMaxItems`. Shape only — runtime enforcement and cleanup scheduling belong to the mailbox delivery. |
+| `peer-bundle-publish` → `peer-bundle-published` | device → Directory → device | Publish a public Signal prekey bundle (`format`, `bundleId`, positive monotonic `revision`, opaque `material`). Directory stores bundle material separately from route inventory and responds `published`/`superseded`/`refused` with the current revision and typed refusal. |
+| `peer-bundle-fetch` → `peer-bundle` | device → Directory → device | Fetch only the currently paired peer's public bundle. Response is `available`, `unpublished`, or `refused`; a caller cannot fetch a bundle for an unpaired device. |
+| `peer-presence` | relay → paired device | Snapshot or transition for the authenticated local `deviceId` and its exact `peerDeviceId`. `reachable` carries the peer's opaque current session generation; `unreachable` carries `sessionId: null`. This is a retry wakeup, never an authorization token. |
+| `peer-send` → `peer-forwarded` | sender → online paired recipient; result to sender | Forward one encrypted envelope only to the exact paired, admitted, online peer. `forwarded` means the socket send was attempted; it is not durable delivery. Offline targets return `endpoint_unreachable`; bounded admission may return `backpressured`; authorization failures are typed `refused`. |
+| `peer-delivery-ack` → `peer-forwarded` | recipient → original sender; result to recipient | Forward the recipient's signed receipt to the original sender. The exact original tuple, canonical `sha256:` digest of ciphertext, and XEdDSA signature from the pairing-pinned Signal identity bind the receipt to that message. The recipient persists the receipt before sending; clients verify its signature against the already paired key. The relay does not store it or send an ACK-of-ACK. |
 
-The `PeerEnvelope` is `format` + `headers` + `ciphertext`. Headers carry only
-session metadata the peer crypto layer owns — `messageType`
-(`prekey`/`session`), sender/recipient bundle ids and nullable prekey
-references — so the mailbox can route and store without ever reading
-plaintext. `PRIVATE_RELAY_PEER_MAILBOX_SEES_PLAINTEXT === false` and
-`containsForbiddenPeerKeys` reject a message carrying `grants`, `plaintext`,
-tool names, credentials or agent-intent fields at any nesting depth
+`PeerEnvelope` contains `format`, exact Signal session headers and opaque
+`ciphertext`. The relay forwards the envelope bytes unchanged and never sees
+plaintext. `containsForbiddenPeerKeys` rejects `grants`, plaintext, tool names,
+credentials and agent-intent fields at any nesting depth
 (`assertPeerEnvelopeCipherOnly`).
 
-Sender-scoped `messageId` is the deduplication key within
-(tenant, route, sender, recipient): a resend with identical envelope bytes is
-an idempotent `retry` answered by the stored `accepted` receipt (`duplicate`
-outcome); the same id with different bytes is a typed `conflict`
-(`peerSendReplayClass`). The stored first write decides the binding — a send
-cannot smuggle a body digest or a conflict-resolution field to overwrite it.
+The relay holds no business delivery state: it does not queue an offline
+message, save an inbox, create durable positions, persist receipts, or infer
+Agent completion. Each client owns its durable outbox, inbox, crypto state and
+application status. A send is retried from that local outbox after a matching
+`peer-presence` reachability wakeup or a fresh session snapshot. A lost
+`peer-forwarded` response does not lose the outbox entry. `peerSendReplayClass`
+lets a client resend the same `(tenant, route, sender, recipient, messageId)`
+with the same envelope safely; reusing that tuple with different ciphertext
+is a local conflict, never a server-side overwrite.
 
-Receipt taxonomy (`PRIVATE_RELAY_PEER_RECEIPT_KINDS`):
-
-- `accepted` — issued by the mailbox (`source: "mailbox"`) when the envelope
-  is durably stored.
-- `received` — issued by the authenticated recipient (`source: "recipient"`)
-  when its inbox entry is durably recorded.
-- `accepted_by_agent`, `completed`, `rejected` — independent application
-  reports (`source: "agent"`) submitted through `peer-ack` `reports`. They are
-  never inferred from mailbox acknowledgements:
-  `PRIVATE_RELAY_PEER_APP_RECEIPTS_FROM_ACKS === false`, and the parser pins
-  each kind to its only honest source. A mailbox `accepted` or a recipient
-  `received` says nothing about agent execution — delivery acknowledgement is
-  not consumption evidence, mirroring
-  `PRIVATE_RELAY_ACK_IS_CONSUMPTION_PROOF === false`.
-
-Retention is deployment-selected and explicit (no invented default):
-expiry or capacity truncation removes envelopes but produces observable
-`gaps` tombstones — `{fromSeq, toSeq, cause, messageIds}` with typed
-`PRIVATE_RELAY_PEER_GAP_CAUSES` (`expired`, `capacity_truncated`) — so a
-cursor never silently advances past lost messages, and a sender can still
-reconcile the lost `messageIds` through `peer-status` (position `0`, empty
-receipts). A disconnected receiver resumes from `afterSeq` plus its
-unacknowledged ids; unknown delivery state stays explicit.
-
-### Mailbox runtime behavior (`NODE-MAILBOX-RUNTIME`)
-
-The hosted Workerd runtime implements this wire as `MailboxDO` — one SQLite-backed Durable Object
-per `(tenantId, routeId, deviceId)` recipient partition. Peer kinds travel
-as request/response on the same admitted `forward`-purpose session socket
-the frame channel uses; they are never forwarded peer-to-peer and never
-admitted on a `recover_device` channel. The session object binds each
-request to the credential-authenticated identity (a `tenantId`/`routeId`/
-`deviceId` mismatch is a protocol error) and stamps the live
-`revocationRevision`/`admissionGeneration`; the partition re-validates the
-binding and resolves the route pairing through the tenant directory, the
-same admission authority the session uses — revocation is pushed to live
-sockets *and* to partitions, so a revoked owner answers honestly where the
-wire carries a refusal (`peer-bundle-published`/`peer-bundle`/`peer-acked`
-`refused`) and drops where it cannot (`peer-send`/`peer-fetch` have no
-refusal outcome; the revoked device's socket is already closed by the
-authority path).
-
-- `peer-send` routes to the `peerDeviceId` partition; `peer-fetch`/
-  `peer-ack`/`peer-bundle-publish` hit the caller's own; `peer-bundle-fetch`
-  hits the named peer's; `peer-receipt` resolves the paired peer through
-  the directory. Position is a per-partition monotonic counter, commits are
-  transactional, and cursor reads are indexed range scans on position.
-- A committed send pushes the next `peer-messages` page to the recipient's
-  live socket (event-driven wakeup); `peer-fetch` pull remains the
-  supported fallback.
-- `peer-retention-policy` is pushed on session admission and re-served on
-  pull; the values come from `RELAY_MAILBOX_CAPACITY_BYTES`,
-  `RELAY_MAILBOX_RETENTION_MS` and `RELAY_MAILBOX_MAX_ITEMS` (clamped to
-  `PRIVATE_RELAY_PEER_LIMITS`), never an invented default.
-- Expiry runs on one scheduled alarm while data exists; capacity evicts
-  the oldest envelopes at send time. Both write tombstones; `peer-status`
-  reconciles truncated ids as position `0` with empty receipts.
+The durable signed receipt means only that the recipient attests it recorded
+the exact ciphertext digest. Application execution and task results remain
+client-owned state; neither a successful socket send nor a receipt proves
+that an Agent executed or completed work.
 
 ### Product surfaces (`NODE-PEER-INTEGRATION`)
 
 `PeerClient` (`packages/peer-client`) is the embedded runtime on both ends
 of a route. It owns durable file stores — Signal crypto state, the durable
-outbox, the deduplicated inbox with its committed cursor, pending
-application reports and learned retention-gap tombstones — under a
-caller-chosen state directory, and it speaks only the peer-schema kinds on
-the caller-supplied session channel.
+outbox, deduplicated inbox, pending application status and signed receive
+receipts — under a caller-chosen state directory. It speaks only the peer
+schema kinds on the caller-supplied session channel and replays pending sends
+after its paired peer becomes reachable.
 
 `createPeerSessionChannel` (`packages/entry-transport/peer-channel.ts`)
 binds that client to the **same** admitted `forward` session the frame
@@ -283,34 +242,40 @@ entering a stale generation. `isPeerSchemaMessage` lets each product demux
 peer kinds to `PeerClient.handleInboundMessage` before its session driver
 interprets frame/recovery traffic, so no second connection exists.
 `peerIdForRouteDevice` derives the deterministic crypto identity
-`peer:<tenantId>:<routeId>:<deviceId>`; `routePeerDirectory` resolves the
-same id for a counterparty device, so safety numbers are always computed
-from pinned identities and route bindings — never from wire-supplied ids.
+`peer:<tenantId>:<routeId>:<deviceId>`. The peer client resolves a
+counterparty's paired Signal identity from the authenticated pairing record,
+bound to that route and wire device; it never trusts a relay-delivered key or
+an ID derived from an unverified device identifier.
 
-- **Endpoint** (`private-endpoint` profile, opt-in `peer` config block):
-  `EndpointPeerRuntime` stores state under `peer.storageDir` (default
-  `<configDir>/peer-state`, owner-only) and exposes the loopback admin
-  routes `/peer/status`, `/peer/inbox`, `/peer/pair-safety`,
-  `/peer/send`, `/peer/ack-outcome`, `/peer/reconcile` and `/peer/sync`.
-  When the block is absent or disabled the routes answer `404
-  peer_disabled` and no peer traffic is emitted or accepted.
+- **Endpoint** (`private-endpoint` profile): `EndpointPeerRuntime` stores
+  state under `peer.storageDir` (default `<configDir>/peer-state`,
+  owner-only) and exposes the loopback routes `/peer/status`, `/peer/inbox`,
+  `/peer/pair-safety` and `/peer/send`. Without an enabled `peer` config
+  block these routes answer `404 peer_disabled` and no peer traffic is
+  accepted.
 - **Entry product** (`@meshrix/entry-gui`): `EntryPeerRuntime` keeps a
-  per-connection store at `<dataDir>/peer/<connectionId>/`, exposed
-  through the closed IPC op set `peer.status`, `peer.send`, `peer.inbox`,
-  `peer.sync`, `peer.ackOutcome` and `peer.pairSafety`. Revoking or
-  uninstalling a connection deletes only that connection's peer store.
+  per-connection store at `<dataDir>/peer/<connectionId>/`, exposed through
+  the closed IPC operation set `peer.status`, `peer.send`, `peer.inbox` and
+  `peer.pairSafety`. Revoking or uninstalling a connection removes only that
+  connection's peer store.
+- **Application events** (`@meshrix/peer-client`):
+  `PeerApplicationEngine` sends encrypted discovery, task, permission,
+  cancellation and result events to an explicitly paired peer. Long logical
+  inputs and catalogs are fragmented within the shared wire-size bound and
+  reassembled locally before dispatch. Accepted operations are journaled on
+  the device before calling the host Agent; duplicate delivery of the same
+  operation identity does not call the Agent again.
 
-Both runtimes are **record-only**: inbound messages are durably recorded
-and surfaced, never executed. Application outcomes travel only through the
-explicit `peer-ack` `reports` field (`accepted_by_agent` / `completed` /
-`rejected`), submitted by a host that actually consumed the message; the
-peer layer itself never fabricates an application receipt, never upgrades
-a mailbox `accepted`/`received` into one, and reports undecryptable
-envelopes as stored `decryptError` evidence rather than plaintext guesses.
+The peer transport itself records inbound ciphertext in the device's durable
+inbox before issuing the pairing-pinned signed receipt. Application events
+are decrypted and processed only by the explicitly configured host
+integration. The relay does not execute Agent work, infer application
+completion, or interpret message plaintext.
 
-Explicit boundary of this integration: no agent execution of peer content,
-no group or fan-out messaging, and no bundled host dispatch — a host
-integration remains a separately authorized, explicitly injected handler.
+This integration supports authenticated one-to-one personal routes; group
+and fan-out delivery are outside this wire contract. Device ownership and
+team membership come from account and pairing authority, not from a client
+supplied routing field.
 
 ## Neutral wire corpus
 
@@ -321,21 +286,20 @@ payloads, invented reject reasons, inverted or unknown-cause gaps, cross-purpose
 proofs, reusable/expired challenges, missing CAS fields, snapshots carrying
 configuration or secrets, lost-ack-as-not-started, completed-without-result,
 global-complete rotation claims, generation regressions, unknown trust modes,
-and short nonces. The `peer` section covers every mailbox kind plus hostile
-shapes: cross-tenant steering fields, a replayed messageId carrying a smuggled
-body-digest claim, envelopes smuggling `grants`/`plaintext`, invented or
-mailbox-derived receipt kinds, self-addressed sends, negative sequence
-cursors, oversized fields, non-monotonic pages, empty ack batches, and
-zero-valued retention. All fixtures are neutral — no real credentials,
-plaintext, or machine-private data.
+and short nonces. The `peer` section covers every current wire kind plus
+hostile shapes: cross-tenant steering fields, forged presence, replayed
+message ids carrying changed ciphertext, envelopes smuggling
+`grants`/`plaintext`, invalid ciphertext digests or signatures, self-addressed
+sends, unpaired targets and oversized fields. All fixtures are neutral — no
+real credentials, plaintext, or machine-private data.
 
 The focused suite `tests/vitest/contracts/private-relay-contract.test.ts`
 (registry id `contracts.private-relay-wire`) enforces exact-key parsing,
 peer agreement on valid messages, rejection of every invalid case, the session
 and rotation state machines, reachability/retry honesty, bounded frame
-accounting, and snapshot visibility. For the peer wire it additionally pins
-the receipt taxonomy, sender-scoped idempotency/conflict, ack coverage
-honesty and the ciphertext-only envelope boundary.
+accounting, and snapshot visibility. For the peer wire it pins exact pairing,
+online-only forwarding, local retry identity, signed receipt binding, public
+bundle publication and the ciphertext-only envelope boundary.
 
 ## Endpoint operator profile
 
@@ -346,10 +310,11 @@ gateway with `createPrivateGatewayEndpoint` over a real `wss:` WebSocket
 transport (`ws:` only for literal loopback fixtures) and supervises the session
 lifecycle the contract requires:
 
-- The endpoint state surface reports `reachable` only for a live admitted
-  session; otherwise new work receives `endpoint_unreachable` and nothing is
-  queued for later execution (`PRIVATE_RELAY_OFFLINE_NEW_CALL_QUEUES ===
-  false`).
+- The endpoint reports its own session lifecycle separately from the exact
+  paired peer's presence. New work requires the intended peer to be reachable
+  on an admitted session; otherwise it returns `endpoint_unreachable` and
+  remains in the sender's durable pending state for retry with the original
+  ciphertext when that peer reconnects. The relay has no offline queue.
 - Reconnects preserve session cursors through `session-reconnect`; a
   retryable `session-rejected` is re-presented with the relay-expected
   revocation revision on a fresh session driver, and non-retryable rejections,
@@ -358,8 +323,13 @@ lifecycle the contract requires:
   locally staged changes from relay-acknowledged ones (`pending` until the
   admission revision catches up — never "applied" off local staging).
 - Endpoint administration is not published through the relay: state and
-  control are served only on an optional loopback listener or inside the
-  pinned inner channel. Credentials, inner-TLS keys, grants, catalog data and
+  control are served only on an optional authenticated loopback listener or
+  inside the pinned inner channel. The listener requires a bearer from an
+  env/file binding or an automatically provisioned owner-only credential
+  file. Offline `check` delivers the credential reference, never the secret;
+  local callers and endpoint claims resolve that same credential. Supported
+  loopback Host/Origin checks and browser preflight do not bypass bearer
+  authentication on actual reads or effects. Credentials, inner-TLS keys, grants, catalog data and
   recovery secrets never appear in relay frames or status output.
 - `SIGTERM`/`SIGINT` send `session-close`, terminate the transport and drain
   the gateway; no timer interrupts a healthy in-flight operation.
@@ -372,17 +342,17 @@ honest state surface, inner-channel dispatch over pinned TLS and signal drain.
 
 ## Ownership
 
-| Concern | Owner |
-| --- | --- |
-| Wire schemas, corpus, limits, state tables | `NODE-PRIVATE-WIRE` (`packages/contracts/src/private-relay/`) |
-| Peer mailbox wire schemas, corpus, receipt taxonomy | `NODE-PEER-WIRE` (`packages/contracts/src/private-relay/private-relay-peer.ts`) |
-| Mailbox Durable Object runtime | `NODE-MAILBOX-RUNTIME` |
-| Relay runtime admission/forwarding (Workerd/DO) | `NODE-RELAY-RUNTIME` |
-| Relay metrics exposition, directory inventory fan-out | `NODE-METRICS-EXPORT` (hosted relay runtime) |
-| Endpoint gateway transitions, operation recovery execution | `NODE-ENDPOINT-GATEWAY` |
-| Endpoint trust/recovery proof implementation | `NODE-ENDPOINT-GATEWAY` |
-| Endpoint packaging/start/stop/state surface | `NODE-ENDPOINT-PROFILE` (`apps/mcp-gateway-installer/src/private-endpoint/`) |
-| Vault storage implementation | `NODE-RELAY-RUNTIME` |
+The current delivery's implementation ownership is:
+
+| Concern | Current source | Delivery owner |
+| --- | --- | --- |
+| Peer wire schemas, corpus, forwarding outcomes and signed-receipt taxonomy | `packages/contracts/src/private-relay/` | `NODE-COST-PEER-WIRE` |
+| Online relay, route-scoped presence, Directory bundles and ephemeral metrics | hosted relay runtime (private operations repository) | `NODE-COST-RELAY` |
+| Account/epoch/tenant/managed-route authority and device revocation targets | `packages/contracts/src/account/`, hosted account authority (private operations repository) | `NODE-COST-ACCOUNT` |
+| Device-local crypto, durable inbox/outbox, receipt replay and paged history | `packages/peer-crypto/`, `packages/peer-client/` | `NODE-COST-PEER-CLIENT` |
+| Entry and endpoint application-event journaling, fragmentation and recovery | `apps/entry-gui/`, `apps/mcp-gateway-installer/`, `packages/entry-transport/` | `NODE-COST-APPLICATION` |
+| Private local storage and available-capacity checks | `packages/foundation/src/storage/` | `NODE-COST-PRIVATE-IO` |
+| Skill Hub registry transaction and legacy-file archive | `services/skill-hub/` | `NODE-COST-SKILL-HUB` |
 
 No real cloud deployment, public service publication or hosted identity is
 claimed by this contract. Inner-channel encryption profiles (Signal 1:1, MLS

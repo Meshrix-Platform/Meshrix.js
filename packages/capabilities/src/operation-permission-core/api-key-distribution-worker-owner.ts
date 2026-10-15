@@ -12,6 +12,9 @@ import { toolExecuteCapabilityId } from "@meshrix/foundation/security/authorizat
 export const API_KEY_CREDENTIAL_VERSION = "mxak1";
 export const API_KEY_CREDENTIAL_PATTERN = /^mxak1\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/u;
 export const API_KEY_STATUSES = Object.freeze(["active", "revoked", "expired", "exhausted"] as const);
+export const API_KEY_READ_STATUSES = Object.freeze([...API_KEY_STATUSES, "unclaimed"] as const);
+/** Minted keys that never complete one successful authentication die here. */
+export const API_KEY_UNCLAIMED_WINDOW_MS = 72 * 60 * 60 * 1000;
 
 export function reconcileApiKeyOwnerRecoveryAssignments({
   securityPermissions = null
@@ -238,10 +241,9 @@ function normalizePolicy(input: any, registry: any): any {
     },
     catalogFingerprint: text(input.catalogFingerprint, "policy.catalogFingerprint", 512)
   };
-  // Empty targetIds means the key is not restricted to a specific Meshrix
-  // MCP connector target; generic MCP clients (for example Command Code) do
-  // not send the x-meshrix.js-mcp-target header and must be usable with such
-  // a key. A non-empty list still restricts to those targets.
+  // targetIds and connectorPackageIds validate a client-declared identity only
+  // when that header is present. An omitted header is not a restriction, even
+  // when the stored list is non-empty. A presented value must still be in the list.
   const catalog: any = registry?.getCatalog?.() || null;
   if (catalog?.fingerprint && normalized.catalogFingerprint !== catalog.fingerprint) {
     fail("api_key_authority_unavailable", "Operation Permission catalog changed.", 503);
@@ -384,6 +386,8 @@ function recordFromRow(row: any, nowMs = Date.now()): any {
   let status: any = row.status;
   if (status === "active" && Date.parse(row.expires_at) <= nowMs) status = "expired";
   else if (status === "active" && Number(row.use_count) >= Number(row.max_uses)) status = "exhausted";
+  else if (status === "active" && !row.claimed_at &&
+      Date.parse(row.created_at) + API_KEY_UNCLAIMED_WINDOW_MS <= nowMs) status = "unclaimed";
   return Object.freeze({
     keyId: row.key_id,
     displayPrefix: row.display_prefix,
@@ -402,12 +406,14 @@ function recordFromRow(row: any, nowMs = Date.now()): any {
     createdAt: row.created_at,
     rotatedAt: row.rotated_at || null,
     revokedAt: row.revoked_at || null,
+    claimedAt: row.claimed_at || null,
     expiresAt: row.expires_at
   });
 }
 
 function errorForInactive(record: any): never {
   if (record.status === "exhausted") fail("api_key_use_limit_reached", "API Key use limit reached.", 429);
+  if (record.status === "unclaimed") fail("api_key_unclaimed_expired", "API Key was never claimed and its claim window has closed.", 410);
   fail("api_key_inactive", "API Key is inactive.", 410);
 }
 
@@ -781,7 +787,7 @@ export function createApiKeyDistributionWorkerOwner({
     const requestedNode: any = input.organizationNodeId ? text(input.organizationNodeId, "organizationNodeId", 160) : "";
     if (requestedNode) assertApiKeyIssuerTarget(scopes, requestedNode);
     const status: any = input.status ? text(input.status, "status", 16) : "";
-    if (status && !API_KEY_STATUSES.includes(status as any)) fail("api_key_input_invalid", "status is invalid.");
+    if (status && !(API_KEY_READ_STATUSES as readonly string[]).includes(status)) fail("api_key_input_invalid", "status is invalid.");
     const limit: any = input.limit === undefined ? 50 : positiveInteger(input.limit, "limit", 100);
     let cursorCreated: any = "";
     let cursorKeyId: any = "";
@@ -802,8 +808,10 @@ export function createApiKeyDistributionWorkerOwner({
       clauses.push(`(CASE
         WHEN status = 'active' AND expires_at <= ? THEN 'expired'
         WHEN status = 'active' AND use_count >= max_uses THEN 'exhausted'
+        WHEN status = 'active' AND claimed_at IS NULL AND created_at <= ? THEN 'unclaimed'
         ELSE status END) = ?`);
-      parameters.push(new Date(now()).toISOString(), status);
+      parameters.push(new Date(now()).toISOString(),
+        new Date(now() - API_KEY_UNCLAIMED_WINDOW_MS).toISOString(), status);
     }
     if (cursorCreated) {
       clauses.push("(created_at > ? OR (created_at = ? AND key_id > ?))");
@@ -930,8 +938,7 @@ export function createApiKeyDistributionWorkerOwner({
     return Object.freeze({ ...verified, fingerprint });
   }
 
-  async function authenticateRuntime(input: Record<string, any> = {}): Promise<any> {
-    exactKeys(input, ["credential", "serverAudience", "targetId", "connectorPackageId", "processIdentityEvidence"]);
+  async function authenticateCredential(input: Record<string, any>): Promise<any> {
     const parsed: any = parseApiKeyCredential(input.credential);
     if (!parsed) fail("api_key_invalid", "API Key is invalid.", 401);
     const row: any = getRow(parsed.keyId); // one primary-key lookup; verifier material is never scanned
@@ -943,24 +950,33 @@ export function createApiKeyDistributionWorkerOwner({
     }
     const record: any = recordFromRow(row, now());
     if (record.status !== "active") {
-      if (row.status === "active" && ["expired", "exhausted"].includes(record.status)) {
+      if (row.status === "active" && ["expired", "exhausted", "unclaimed"].includes(record.status)) {
+        // "unclaimed" settles to the stored "expired" status — the stored
+        // CHECK only permits the four lifecycle statuses; the event reason
+        // preserves that the key died unclaimed.
+        const storedStatus: any = record.status === "unclaimed" ? "expired" : record.status;
         db.transaction(() : any => {
           const update: any = db.prepare(`UPDATE api_key_records SET status = ?, lifecycle_revision = lifecycle_revision + 1
             WHERE key_id = ? AND status = 'active' AND lifecycle_revision = ?`)
-            .run(record.status, row.key_id, row.lifecycle_revision);
+            .run(storedStatus, row.key_id, row.lifecycle_revision);
           if (update.changes === 1) {
             const current: any = getRow(row.key_id);
-            emitEvent(current, record.status, `api_key_${record.status}`, current.organization_revision_at_issue);
+            emitEvent(current, storedStatus, `api_key_${record.status}`, current.organization_revision_at_issue);
           }
         })();
       }
       errorForInactive(record);
     }
-  const targetIds: any[] = Array.isArray(record.policy.audience.targetIds) ? record.policy.audience.targetIds : [];
-  if (record.policy.audience.serverAudience !== String(input.serverAudience || "") ||
-      (targetIds.length > 0 && !targetIds.includes(String(input.targetId || ""))) ||
-      (record.policy.audience.connectorPackageIds.length > 0 &&
-        !record.policy.audience.connectorPackageIds.includes(String(input.connectorPackageId || "")))) {
+    const presentedTargetId: string = String(input.targetId || "").trim();
+    const presentedConnectorPackageId: string = String(input.connectorPackageId || "").trim();
+    const targetIds: any[] = Array.isArray(record.policy.audience.targetIds) ? record.policy.audience.targetIds : [];
+    const connectorPackageIds: any[] = Array.isArray(record.policy.audience.connectorPackageIds)
+      ? record.policy.audience.connectorPackageIds
+      : [];
+    if (record.policy.audience.serverAudience !== String(input.serverAudience || "") ||
+        (presentedTargetId && targetIds.length > 0 && !targetIds.includes(presentedTargetId)) ||
+        (presentedConnectorPackageId && connectorPackageIds.length > 0 &&
+          !connectorPackageIds.includes(presentedConnectorPackageId))) {
       fail("api_key_policy_denied", "API Key audience is not allowed.", 403);
     }
     const { nodesById } = currentNodes();
@@ -968,6 +984,30 @@ export function createApiKeyDistributionWorkerOwner({
         organizationLineageDigest(record.organizationNodeId, nodesById) !== record.organizationLineageDigest) {
       fail("api_key_inactive", "API Key organization lineage changed.", 410);
     }
+    if (!row.claimed_at) {
+      // First fully successful authentication claims the key. One write ever
+      // per key; claimed rows skip this entirely via the in-memory check.
+      db.prepare("UPDATE api_key_records SET claimed_at = ? WHERE key_id = ? AND claimed_at IS NULL")
+        .run(new Date(now()).toISOString(), row.key_id);
+    }
+    return record;
+  }
+
+  // Admission identifies possession only. This shape deliberately excludes
+  // policy, process evidence and authorization revisions usable by an effect.
+  async function authenticateAdmission(input: Record<string, any> = {}): Promise<any> {
+    exactKeys(input, ["credential", "serverAudience", "targetId", "connectorPackageId"]);
+    const record = await authenticateCredential(input);
+    return Object.freeze({
+      credentialKind: "api-key-admission",
+      subjectId: record.workloadPrincipalId,
+      tenantId: record.organizationNodeId
+    });
+  }
+
+  async function authenticateRuntime(input: Record<string, any> = {}): Promise<any> {
+    exactKeys(input, ["credential", "serverAudience", "targetId", "connectorPackageId", "processIdentityEvidence"]);
+    const record = await authenticateCredential(input);
     const processIdentity: any = await verifyProcessIdentity(record.policy, input.processIdentityEvidence);
     return Object.freeze({
       credentialKind: "scoped_api_key",
@@ -1066,8 +1106,9 @@ export function createApiKeyDistributionWorkerOwner({
 
   function authorizeOperation(input: Record<string, any> = {}): any {
     exactKeys(input, ["authorization", "operation"]);
-    requireAllowedOperation(input.authorization?.policy, input.operation);
-    return revalidateAuthorization(input.authorization);
+    const authorization = revalidateAuthorization(input.authorization);
+    requireAllowedOperation(authorization.policy, input.operation);
+    return authorization;
   }
 
   async function revalidateEffect(lease: any): Promise<any> {
@@ -1124,6 +1165,7 @@ export function createApiKeyDistributionWorkerOwner({
     create,
     rotate,
     revoke,
+    authenticateAdmission,
     authenticateRuntime,
     revalidateAuthorization,
     authorizeOperation,

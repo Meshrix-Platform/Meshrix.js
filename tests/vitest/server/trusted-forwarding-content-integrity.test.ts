@@ -1,5 +1,6 @@
 import http from "node:http";
-import { describe, expect, it } from "vitest";
+import { PassThrough } from "node:stream";
+import { describe, expect, it, vi } from "vitest";
 import { digestGovernedExecutionRequest } from "#meshrix/foundation/security/governed-execution-permit-authority";
 import { riskControlInputHash } from "#meshrix/server-runtime/composition/dispatch-operation-risk-control";
 import { proxyApiRequest } from "../../../apps/server/runtime/http-server-proxy.ts";
@@ -97,5 +98,77 @@ describe("trusted forwarding content integrity", () : any => {
     expect(captured.status).toBe(302);
     expect(captured.headers).not.toHaveProperty("location");
     expect(captured.headers).not.toHaveProperty("set-cookie");
+  });
+
+  it("keeps a healthy upstream response open without an inactivity cutoff", async () : Promise<any> => {
+    const upstream: any = http.createServer((_request?: any, response?: any) : any => {
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.write("first");
+      setTimeout(() : any => response.end("second"), 40);
+    });
+    await new Promise((resolve?: any, reject?: any) : any => {
+      upstream.once("error", reject);
+      upstream.listen(0, "127.0.0.1", resolve);
+    });
+    const address: any = upstream.address();
+    const requestSpy: any = vi.spyOn(http, "request");
+    const response: any = new PassThrough();
+    const chunks: Buffer[] = [];
+    let statusCode = 0;
+    response.writeHead = (status?: any) : any => { statusCode = status; };
+    response.on("data", (chunk?: any) : any => chunks.push(Buffer.from(chunk)));
+
+    try {
+      await proxyApiRequest({
+        request: { method: "GET", url: "/long-response", headers: {} },
+        response,
+        requestBody: Buffer.alloc(0),
+        targetBaseUrl: `http://127.0.0.1:${address.port}`
+      });
+      expect(statusCode).toBe(200);
+      expect(Buffer.concat(chunks).toString("utf8")).toBe("firstsecond");
+      expect(requestSpy).toHaveBeenCalledOnce();
+      expect(requestSpy.mock.calls[0][1]).not.toHaveProperty("timeout");
+    } finally {
+      requestSpy.mockRestore();
+      await new Promise((resolve?: any, reject?: any) : any => upstream.close((error?: any) : any => error ? reject(error) : resolve()));
+    }
+  });
+
+  it("still closes an upstream request when its caller cancels it", async () : Promise<any> => {
+    let observeRequest: any;
+    let observeResponseClose: any;
+    const requestStarted: any = new Promise((resolve?: any) : any => { observeRequest = resolve; });
+    const upstreamResponseClosed: any = new Promise((resolve?: any) : any => { observeResponseClose = resolve; });
+    const upstream: any = http.createServer((_request?: any, response?: any) : any => {
+      response.on("close", observeResponseClose);
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.write("partial");
+      observeRequest();
+    });
+    await new Promise((resolve?: any, reject?: any) : any => {
+      upstream.once("error", reject);
+      upstream.listen(0, "127.0.0.1", resolve);
+    });
+    const address: any = upstream.address();
+    const controller = new AbortController();
+    const response: any = new PassThrough();
+    response.writeHead = () : any => {};
+    const pending = proxyApiRequest({
+      request: { method: "GET", url: "/cancelled", headers: {} },
+      response,
+      requestBody: Buffer.alloc(0),
+      targetBaseUrl: `http://127.0.0.1:${address.port}`,
+      signal: controller.signal
+    });
+    try {
+      await requestStarted;
+      controller.abort();
+      await expect(pending).rejects.toMatchObject({ code: "forward_proxy_cancelled" });
+      await upstreamResponseClosed;
+    } finally {
+      response.destroy();
+      await new Promise((resolve?: any, reject?: any) : any => upstream.close((error?: any) : any => error ? reject(error) : resolve()));
+    }
   });
 });

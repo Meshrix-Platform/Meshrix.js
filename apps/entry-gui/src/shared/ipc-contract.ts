@@ -33,6 +33,7 @@ export interface GuiIpcError {
   readonly code: string;
   readonly message: string;
   readonly detail?: string;
+  readonly effectOutcome?: "not_started" | "unknown";
 }
 
 export type GuiIpcResult<T = unknown> =
@@ -54,13 +55,35 @@ export const GUI_OPS = Object.freeze([
   "state.get",
   "pairing.submitInvite",
   "pairing.confirm",
+  "pairing.continue",
   "pairing.cancel",
   "pairing.reset",
   "connection.refresh",
+  "connection.disconnect",
   "connection.revoke",
+  "connection.grantCatalog",
+  "connection.grantAccess",
+  "account.beginLogin",
+  "account.checkTransaction",
+  "account.signOut",
+  "account.openSettings",
+  "personal.status",
+  "personal.enroll",
+  "personal.createInvite",
+  "agent.list",
+  "agent.register",
+  "agent.remove",
+  "application.destinations",
+  "application.discover",
+  "application.submit",
+  "application.list",
+  "application.get",
+  "application.cancel",
+  "application.resolvePermission",
   "recovery.beginSetup",
   "recovery.revealKey",
   "recovery.confirmSaved",
+  "recovery.retryWriterRegistration",
   "recovery.beginRotation",
   "recovery.abortRotation",
   "recovery.retryRotation",
@@ -70,8 +93,6 @@ export const GUI_OPS = Object.freeze([
   "peer.status",
   "peer.send",
   "peer.inbox",
-  "peer.sync",
-  "peer.ackOutcome",
   "peer.pairSafety",
   "lifecycle.ownedPaths",
   "app.stop"
@@ -85,12 +106,51 @@ export function isGuiOp(value: unknown): value is GuiOp {
 
 export interface PairingSubmitArgs {
   readonly inviteText: string;
-  /** Pairing surface base URL (endpoint admin host); defaults to the invite's relayService origin. */
-  readonly pairingService?: string;
+}
+
+export interface AccountTransactionArgs {
+  readonly transactionId?: string;
 }
 
 export interface ConnectionArgs {
   readonly connectionId: string;
+}
+
+export interface AgentRegisterArgs {
+  readonly id: string;
+  readonly displayName: string;
+  readonly description?: string | null;
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly cwd: string;
+  readonly environment: Readonly<Record<string,
+    | { readonly kind: "host_environment"; readonly variable: string }
+    | { readonly kind: "secret_reference"; readonly reference: string }
+  >>;
+  readonly permissionPolicy: "ask";
+  readonly enabled?: boolean;
+}
+
+export interface ApplicationSubmitArgs {
+  readonly operationId: string;
+  readonly destinationHandle: string;
+  readonly targetAgentId: string;
+  readonly prompt: string;
+  readonly requesterAgentId?: string;
+}
+
+export interface ApplicationOperationArgs {
+  readonly operationId: string;
+}
+
+export interface ApplicationDiscoverArgs {
+  readonly destinationHandle: string;
+}
+
+export interface ApplicationPermissionArgs extends ApplicationOperationArgs {
+  readonly permissionRequestId: string;
+  readonly outcome: "selected" | "cancelled";
+  readonly optionId?: string;
 }
 
 export interface ConnectionRevokeArgs extends ConnectionArgs {
@@ -98,14 +158,15 @@ export interface ConnectionRevokeArgs extends ConnectionArgs {
   readonly remote?: boolean;
 }
 
+export interface ConnectionGrantAccessArgs extends ConnectionArgs {
+  readonly scopes: readonly string[];
+}
+
 /**
  * Peer messaging op args. `peerDeviceId` is the counterparty's wire device
  * id — the crypto peer binding is derived locally, never supplied by the
  * caller. The payload is exactly one of `text` (UTF-8) or
- * `plaintextBase64url`. `peer.ackOutcome` records an EXPLICIT application
- * receipt (`accepted_by_agent` | `completed` | `rejected`): evidence
- * supplied by the operator or local agent, never derived from mailbox
- * acknowledgements — the receipt honesty invariant forbids it.
+ * `plaintextBase64url`.
  */
 export interface PeerStatusArgs extends ConnectionArgs {}
 
@@ -118,12 +179,6 @@ export interface PeerSendArgs extends ConnectionArgs {
 
 export interface PeerInboxArgs extends ConnectionArgs {
   readonly limit?: number;
-}
-
-export interface PeerAckOutcomeArgs extends ConnectionArgs {
-  readonly messageId: string;
-  readonly outcome: "accepted_by_agent" | "completed" | "rejected";
-  readonly detailBase64url?: string;
 }
 
 export interface PeerPairSafetyArgs extends ConnectionArgs {

@@ -24,7 +24,6 @@ function channel(adapter: "caddy" | "nginx" | "direct") {
     maxConcurrency: 1,
     maxRatePerSecond: 10,
     maxQueueDepth: 1,
-    timeoutMs: 50,
     circuitFailureThreshold: 1,
     circuitResetMs: 100
   };

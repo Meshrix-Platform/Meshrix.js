@@ -120,13 +120,30 @@ describe("work queue worker lease fencing", () : any => {
       maxHandlerDurationMs: 20
     });
     const { workItem, lease } = leasedFixture();
-    await expect(runtime.runLeased({
+    let releaseHandler!: () => void;
+    let markHandlerAborted!: () => void;
+    const handlerGate = new Promise<void>((resolve) => { releaseHandler = resolve; });
+    const handlerAborted = new Promise<void>((resolve) => { markHandlerAborted = resolve; });
+    let runSettled = false;
+    const running = runtime.runLeased({
       workItem,
       lease,
       handler: async (_input?: any, context?: any) : Promise<any> => new Promise((resolve?: any) : any => {
-        context.signal.addEventListener("abort", () : any => resolve({ action: "completed" }), { once: true });
+        context.signal.addEventListener("abort", async () : Promise<any> => {
+          markHandlerAborted();
+          await handlerGate;
+          resolve({ action: "completed" });
+        }, { once: true });
       })
-    })).resolves.toMatchObject({ settled: true, interrupted: true });
+    }).then((result?: any) : any => {
+      runSettled = true;
+      return result;
+    });
+    await handlerAborted;
+    expect(runSettled).toBe(false);
+    expect(store.markInDoubt).not.toHaveBeenCalled();
+    releaseHandler();
+    await expect(running).resolves.toMatchObject({ settled: true, interrupted: true });
     expect(store.complete).not.toHaveBeenCalled();
     expect(store.retry).not.toHaveBeenCalled();
     expect(store.markInDoubt).toHaveBeenCalledWith(expect.objectContaining({

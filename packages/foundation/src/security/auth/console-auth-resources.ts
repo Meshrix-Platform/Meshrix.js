@@ -66,8 +66,6 @@ export interface ConsoleUserDbRow extends Record<string, unknown> {
   created_at: string;
   updated_at: string;
   last_login_at: string;
-  failed_attempts: number;
-  locked_until: string;
 }
 
 export interface ConsoleSessionDbRow extends ConsoleUserDbRow {

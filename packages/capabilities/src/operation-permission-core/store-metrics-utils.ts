@@ -1,4 +1,43 @@
 import fs from "node:fs";
+import { SERVER_API_OPERATIONS } from "@meshrix/contracts/operations/operation-registry";
+
+const metricRouteTemplates = new Set<string>();
+const metricRoutePatterns = new Map<string, { template: string; pattern: RegExp }[]>();
+const metricRouteLiterals = new Set(["/", "/mcp", "/.well-known/meshrix/mcp.json", "/api/mcp/handshake", "unmatched", "overflow"]);
+const routePrefix = (route: string) => route.split("/", 3).join("/");
+for (const operation of SERVER_API_OPERATIONS) {
+  if (!operation.http?.path) continue;
+  const template = String(operation.http.path);
+  metricRouteTemplates.add(template);
+  if (!template.includes(":")) continue;
+  const pattern = template.split("/").map((segment: string) => segment.startsWith(":") ? "[^/]+" : segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("/");
+  const prefix = routePrefix(template).includes(":") ? "" : routePrefix(template);
+  const patterns = metricRoutePatterns.get(prefix) || [];
+  patterns.push({ template, pattern: new RegExp(`^${pattern}$`, "u") });
+  metricRoutePatterns.set(prefix, patterns);
+}
+
+export function projectHttpMetricRoute(value: unknown): string {
+  const route = String(value || "").split(/[?#]/u, 1)[0];
+  if (metricRouteLiterals.has(route) || metricRouteTemplates.has(route)) return route;
+  if (route.startsWith("/api/plugins/v1/console-sandboxes/")) return "/api/plugins/v1/console-sandboxes/:ref";
+  if (route.startsWith("/api/plugins/v1/console-bridges/")) return "/api/plugins/v1/console-bridges/:ref";
+  for (const patterns of [metricRoutePatterns.get(routePrefix(route)), metricRoutePatterns.get("")]) {
+    const match = patterns?.find(({ pattern }) => pattern.test(route));
+    if (match) return match.template;
+  }
+  return "unmatched";
+}
+
+export function projectHttpMetricMethod(value: unknown): string {
+  const method = String(value || "").toUpperCase();
+  return ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", "TRACE"].includes(method) ? method : "OTHER";
+}
+
+export function requestMetricCount(row: any): number {
+  return Math.max(1, Number(row.event_count || 1));
+}
+
 
 export function summarizeRequestMetricRows(rows: any = []) : any {
   const byStatusCode: Record<string, any> = {};
@@ -6,6 +45,7 @@ export function summarizeRequestMetricRows(rows: any = []) : any {
   const byMethod: Record<string, any> = {};
   const byRoute: Record<string, any> = {};
   const byTransport: Record<string, any> = {};
+  let total = 0;
   let durationTotal: any = 0;
   let requestBytesTotal: any = 0;
   let responseBytesTotal: any = 0;
@@ -21,14 +61,16 @@ export function summarizeRequestMetricRows(rows: any = []) : any {
   let lastTimestamp: any = 0;
 
   for (const row of rows) {
+    const count = requestMetricCount(row);
+    total += count;
     const statusKey: any = String(row.status_code || 0);
     const statusCode: any = Number(row.status_code || 0);
     const completionStatus: any = row.completion_status || "unknown";
-    byStatusCode[statusKey] = (byStatusCode[statusKey] || 0) + 1;
-    byCompletionStatus[completionStatus] = (byCompletionStatus[completionStatus] || 0) + 1;
-    byMethod[row.method || ""] = (byMethod[row.method || ""] || 0) + 1;
-    byRoute[row.route || ""] = (byRoute[row.route || ""] || 0) + 1;
-    byTransport[row.transport || "http"] = (byTransport[row.transport || "http"] || 0) + 1;
+    byStatusCode[statusKey] = (byStatusCode[statusKey] || 0) + count;
+    byCompletionStatus[completionStatus] = (byCompletionStatus[completionStatus] || 0) + count;
+    byMethod[row.method || ""] = (byMethod[row.method || ""] || 0) + count;
+    byRoute[projectHttpMetricRoute(row.route)] = (byRoute[projectHttpMetricRoute(row.route)] || 0) + count;
+    byTransport[row.transport || "http"] = (byTransport[row.transport || "http"] || 0) + count;
 
     const durationMs: any = Number(row.duration_ms || 0);
     const requestBytes: any = Number(row.request_bytes || 0);
@@ -36,16 +78,16 @@ export function summarizeRequestMetricRows(rows: any = []) : any {
     const transferBytes: any = Number(row.transfer_bytes || requestBytes + responseBytes);
     const bytesPerSecond: any = Number(row.bytes_per_second || 0);
     durationTotal += durationMs;
-    durationRows.push({ duration_ms: durationMs });
+    durationRows.push(row);
     requestBytesTotal += requestBytes;
     responseBytesTotal += responseBytes;
     transferBytesTotal += transferBytes;
-    byteRateTotal += bytesPerSecond;
-    peakBytesPerSecond = Math.max(peakBytesPerSecond, bytesPerSecond);
-    successTotal += statusCode >= 200 && statusCode < 400 ? 1 : 0;
-    clientErrorTotal += statusCode >= 400 && statusCode < 500 ? 1 : 0;
-    serverErrorTotal += statusCode >= 500 ? 1 : 0;
-    completionFailureTotal += completionStatus === "completed" ? 0 : 1;
+    byteRateTotal += bytesPerSecond * count;
+    peakBytesPerSecond = Math.max(peakBytesPerSecond, Number(row.peak_bytes_per_second ?? bytesPerSecond));
+    successTotal += statusCode >= 200 && statusCode < 400 ? count : 0;
+    clientErrorTotal += statusCode >= 400 && statusCode < 500 ? count : 0;
+    serverErrorTotal += statusCode >= 500 ? count : 0;
+    completionFailureTotal += completionStatus === "completed" ? 0 : count;
 
     const timestamp: any = Date.parse(row.created_at || "");
     if (Number.isFinite(timestamp)) {
@@ -54,12 +96,12 @@ export function summarizeRequestMetricRows(rows: any = []) : any {
     }
   }
 
-  const observedWindowSeconds: any = rows.length
+  const observedWindowSeconds: any = total
     ? Math.max(1, Number(((lastTimestamp - firstTimestamp) / 1000).toFixed(3)) || 1)
     : 0;
 
   return {
-    total: rows.length,
+    total: total,
     byStatusCode,
     byCompletionStatus,
     byMethod,
@@ -69,22 +111,22 @@ export function summarizeRequestMetricRows(rows: any = []) : any {
     clientErrorTotal,
     serverErrorTotal,
     completionFailureTotal,
-    serverErrorRate: ratio(serverErrorTotal, rows.length),
-    clientErrorRate: ratio(clientErrorTotal, rows.length),
-    completionFailureRate: ratio(completionFailureTotal, rows.length),
+    serverErrorRate: ratio(serverErrorTotal, total),
+    clientErrorRate: ratio(clientErrorTotal, total),
+    completionFailureRate: ratio(completionFailureTotal, total),
     requestBytesTotal,
     responseBytesTotal,
     transferBytesTotal,
-    averageDurationMs: rows.length ? Number((durationTotal / rows.length).toFixed(2)) : 0,
+    averageDurationMs: total ? Number((durationTotal / total).toFixed(2)) : 0,
     durationPercentiles: durationPercentilesFromRows(durationRows),
     observedWindowSeconds,
     requestsPerMinute: observedWindowSeconds
-      ? Number(((rows.length * 60) / observedWindowSeconds).toFixed(2))
+      ? Number(((total * 60) / observedWindowSeconds).toFixed(2))
       : 0,
     transferBytesPerSecond: observedWindowSeconds
       ? Number((transferBytesTotal / observedWindowSeconds).toFixed(2))
       : 0,
-    averageBytesPerSecond: rows.length ? Number((byteRateTotal / rows.length).toFixed(2)) : 0,
+    averageBytesPerSecond: total ? Number((byteRateTotal / total).toFixed(2)) : 0,
     peakBytesPerSecond
   };
 }
@@ -173,24 +215,36 @@ export function ratio(part?: any, total?: any) : any {
   return Number((Number(part || 0) / denominator).toFixed(4));
 }
 
-function percentileFromSortedValues(values: any = [], quantile: any = 0) : any {
-  if (!values.length) {
-    return 0;
-  }
-  const normalizedQuantile: any = Math.min(1, Math.max(0, Number(quantile || 0)));
-  const index: any = Math.min(values.length - 1, Math.max(0, Math.ceil(normalizedQuantile * values.length) - 1));
-  return Number(Number(values[index] || 0).toFixed(2));
-}
-
 export function durationPercentilesFromRows(rows: any = []) : any {
-  const values: any = rows
-    .map((row?: any) : any => Number(row.duration_ms || 0))
-    .filter((value?: any) : any => Number.isFinite(value) && value >= 0)
-    .sort((left?: any, right?: any) : any => left - right);
+  const weighted = new Map<number, number>();
+  let approximate = false;
+  for (const row of rows) {
+    let histogram: any = null;
+    try { histogram = JSON.parse(row.duration_histogram_json || "null"); } catch { /* invalid legacy metadata */ }
+    if (histogram && typeof histogram === "object") {
+      approximate = true;
+      for (const [duration, count] of Object.entries(histogram)) {
+        const value = Number(duration);
+        if (Number.isFinite(value) && Number(count) > 0) weighted.set(value, (weighted.get(value) || 0) + Number(count));
+      }
+    } else {
+      const value = Number(row.duration_ms || 0);
+      if (Number.isFinite(value) && value >= 0) weighted.set(value, (weighted.get(value) || 0) + requestMetricCount(row));
+    }
+  }
+  const values = [...weighted].sort(([left], [right]) => left - right);
+  const total = values.reduce((sum, [, count]) => sum + count, 0);
+  const percentile = (quantile: number) => {
+    let seen = 0;
+    for (const [value, count] of values) {
+      seen += count;
+      if (seen >= Math.ceil(total * quantile)) return value;
+    }
+    return 0;
+  };
   return {
-    p50Ms: percentileFromSortedValues(values, 0.5),
-    p95Ms: percentileFromSortedValues(values, 0.95),
-    p99Ms: percentileFromSortedValues(values, 0.99)
+    p50Ms: percentile(0.5), p95Ms: percentile(0.95), p99Ms: percentile(0.99),
+    ...(approximate ? { approximation: "power-of-two-ms-upper-bound" } : {})
   };
 }
 
@@ -456,7 +510,8 @@ export function rowToHttpRequestMetricEvent(row?: any) : any {
     requestId: row.request_id,
     transport: row.transport,
     method: row.method,
-    route: row.route,
+    route: projectHttpMetricRoute(row.route),
+    eventCount: requestMetricCount(row),
     statusCode: row.status_code,
     completionStatus: row.completion_status,
     requestBytes: row.request_bytes,
@@ -464,6 +519,7 @@ export function rowToHttpRequestMetricEvent(row?: any) : any {
     transferBytes: row.transfer_bytes,
     durationMs: row.duration_ms,
     bytesPerSecond: row.bytes_per_second,
+    peakBytesPerSecond: row.peak_bytes_per_second ?? row.bytes_per_second,
     createdAt: row.created_at
   };
 }
@@ -550,24 +606,25 @@ export function summarizeMetricBuckets({ toolRows = [], requestRows = [], bucket
     if (!bucket) {
       continue;
     }
+    const count = requestMetricCount(row);
     const statusCode: any = String(row.status_code || 0);
     const numericStatusCode: any = Number(row.status_code || 0);
     const completionStatus: any = row.completion_status || "unknown";
-    const route: any = row.route || "";
+    const route: any = projectHttpMetricRoute(row.route);
     const transport: any = row.transport || "http";
     const requestBytes: any = Number(row.request_bytes || 0);
     const responseBytes: any = Number(row.response_bytes || 0);
     const transferBytes: any = Number(row.transfer_bytes || requestBytes + responseBytes);
-    bucket.requests.total += 1;
-    bucket.requests.byStatusCode[statusCode] = (bucket.requests.byStatusCode[statusCode] || 0) + 1;
+    bucket.requests.total += count;
+    bucket.requests.byStatusCode[statusCode] = (bucket.requests.byStatusCode[statusCode] || 0) + count;
     bucket.requests.byCompletionStatus[completionStatus] =
-      (bucket.requests.byCompletionStatus[completionStatus] || 0) + 1;
-    bucket.requests.byRoute[route] = (bucket.requests.byRoute[route] || 0) + 1;
-    bucket.requests.byTransport[transport] = (bucket.requests.byTransport[transport] || 0) + 1;
-    bucket.requests.successTotal += numericStatusCode >= 200 && numericStatusCode < 400 ? 1 : 0;
-    bucket.requests.clientErrorTotal += numericStatusCode >= 400 && numericStatusCode < 500 ? 1 : 0;
-    bucket.requests.serverErrorTotal += numericStatusCode >= 500 ? 1 : 0;
-    bucket.requests.completionFailureTotal += completionStatus === "completed" ? 0 : 1;
+      (bucket.requests.byCompletionStatus[completionStatus] || 0) + count;
+    bucket.requests.byRoute[route] = (bucket.requests.byRoute[route] || 0) + count;
+    bucket.requests.byTransport[transport] = (bucket.requests.byTransport[transport] || 0) + count;
+    bucket.requests.successTotal += numericStatusCode >= 200 && numericStatusCode < 400 ? count : 0;
+    bucket.requests.clientErrorTotal += numericStatusCode >= 400 && numericStatusCode < 500 ? count : 0;
+    bucket.requests.serverErrorTotal += numericStatusCode >= 500 ? count : 0;
+    bucket.requests.completionFailureTotal += completionStatus === "completed" ? 0 : count;
     bucket.requests.requestBytesTotal += requestBytes;
     bucket.requests.responseBytesTotal += responseBytes;
     bucket.requests.transferBytesTotal += transferBytes;

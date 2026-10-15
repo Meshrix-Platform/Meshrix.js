@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.svg" alt="" width="64" />
+<img src="assets/brand/logo.svg" alt="" width="64" />
 
 # Meshrix.js
 

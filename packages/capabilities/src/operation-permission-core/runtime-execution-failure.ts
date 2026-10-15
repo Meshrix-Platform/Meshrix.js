@@ -55,7 +55,8 @@ export async function completeToolExecutionFailure({
   store,
   inputBytes,
   publishEvent,
-  startedAt
+  startedAt,
+  dispatchSettlement = null
 }: Record<string, any>) : Promise<any> {
   const durationMs: any = Date.now() - startedAtMs;
   const failure: any = executionFailureProjection(error);
@@ -70,6 +71,24 @@ export async function completeToolExecutionFailure({
     durationMs,
     error: summarizeError(error)
   });
+  const resultSummary: Record<string, any> = {
+    type: "runtime_error",
+    errorCode,
+    policy: policySummary
+  };
+  if (["tool_aborted", "tool_timeout"].includes(errorCode) && dispatchSettlement &&
+      ["fulfilled", "rejected"].includes(String(dispatchSettlement.outcome || ""))) {
+    resultSummary.dispatchSettlement = Object.freeze({
+      outcome: dispatchSettlement.outcome,
+      responseStatusCode: Number.isSafeInteger(dispatchSettlement.responseStatusCode)
+        ? Math.max(0, Math.min(599, dispatchSettlement.responseStatusCode))
+        : 0,
+      responseEnded: dispatchSettlement.responseEnded === true,
+      responseBytes: Number.isSafeInteger(dispatchSettlement.responseBytes)
+        ? Math.max(0, dispatchSettlement.responseBytes)
+        : 0
+    });
+  }
   await appendExecution({
     toolExecutionId,
     traceId,
@@ -85,11 +104,7 @@ export async function completeToolExecutionFailure({
     risk: tool.risk,
     decision: policy.effect,
     input,
-    resultSummary: {
-      type: "runtime_error",
-      errorCode,
-      policy: policySummary
-    },
+    resultSummary,
     status: "failed",
     errorCode,
     durationMs,

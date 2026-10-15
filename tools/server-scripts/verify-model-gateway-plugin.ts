@@ -16,7 +16,7 @@ assert.deepEqual(manifest.operations, ["model_gateway.call", "models.list", "mod
 assert.deepEqual(manifest.routes, []);
 assert.deepEqual(manifest.consoleEntries, []);
 assert.deepEqual(manifest.hostCapabilities, []);
-assert.deepEqual(configurationSchema.required, ["enabled", "serviceRef", "timeoutMs"]);
+assert.deepEqual(configurationSchema.required, ["enabled", "serviceRef"]);
 assert.equal(configurationSchema.additionalProperties, false);
 
 const disabled = await runtime.activatePlugin({ manifest, context: {} });
@@ -27,7 +27,7 @@ await disabled.close();
 
 const enabled = await runtime.activatePlugin({
   manifest,
-  context: { configuration: { enabled: true, serviceRef: "svc_model", timeoutMs: 30_000 } }
+  context: { configuration: { enabled: true, serviceRef: "svc_model" } }
 });
 assert.deepEqual(Object.keys(enabled.contributions.operations).sort(), ["model_gateway.call", "models.get", "models.list"]);
 assert.ok(Object.values(enabled.contributions.operations).every((entry: unknown) =>

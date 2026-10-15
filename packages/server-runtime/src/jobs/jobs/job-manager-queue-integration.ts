@@ -92,29 +92,12 @@ export function createJobManagerQueue(ctx: QueueContext) {
     await forEachActiveProjection(async (projectedJob) => {
       const job = await normalizeRecoveredJob(projectedJob);
       knownIds.add(job.id);
-      if (job.checkpointTreeId && ["queued", "running"].includes(job.status)) {
-        await ensureJobCheckpointTree(job).catch(() => null);
-        await updateJobCheckpointNode(job, {
-          nodeId: "recovered-queue",
-          parentId: "import-parse-job",
-          label: RECOVERY_STAGE_MESSAGE,
-          status: "running",
-          cursor: {
-            status: job.status,
-            progressPercent: Number(job.progressPercent || 0),
-            stage: job.stage || ""
-          }
-        });
-      }
       jobs.set(job.id, job);
       if (job.checkpointId) {
         checkpointJobs.set(job.checkpointId, job.id);
       }
       if (["queued", "running"].includes(job.status)) {
         rememberActiveManifestJob(job);
-        await durableWorkflows.recoverWorkflow(job.workflowId || workflowIdForJob(job), {
-          reason: "job_manager_refresh_recovery"
-        }).catch(() => null);
       } else {
         forgetActiveManifestJob(job);
       }

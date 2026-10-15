@@ -68,9 +68,9 @@ describe("delegated grant parent index", () : any => {
 
       await store.revokeGrant(root.grant.id, "indexed_subtree_test");
       expect(store.db.prepare("SELECT count(*) AS count FROM tool_grants WHERE enabled = 0").get().count).toBe(121);
-      expect(store.db.prepare("PRAGMA user_version").get().user_version).toBe(14);
+      expect(store.db.prepare("PRAGMA user_version").get().user_version).toBe(15);
     } finally {
-      store.close();
+      await store.close();
     }
   });
 
@@ -85,7 +85,7 @@ describe("delegated grant parent index", () : any => {
         .rejects.toThrow(/operation_permission_delegated_parent_cycle/u);
       expect(store.getGrant("cycle-child")).toMatchObject({ enabled: true, revokedAt: "" });
     } finally {
-      store.close();
+      await store.close();
     }
   });
 });

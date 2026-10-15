@@ -12,6 +12,8 @@ Participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 ## Development Setup
 
 Requirements are declared in `package.json`. Use the current Node.js range from `engines.node`.
+Local server startup also requires the external master-key file described in
+the [runbook's local startup section](docs/RUNBOOK.md#local-startup).
 
 ```bash
 npm ci

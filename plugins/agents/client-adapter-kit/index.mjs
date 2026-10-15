@@ -13,7 +13,6 @@ export const ADAPTER_DESCRIPTOR_SCHEMA = "v0.0.1:meshrix:client-adapter-descript
 export const MCP_SERVER_NAME = "lico";
 const MAX_INPUT_BYTES = 256 * 1024;
 const MAX_OUTPUT_BYTES = 256 * 1024;
-const DEFAULT_TIMEOUT_MS = 15_000;
 const SECRET_KEY = /^(?:token|accessToken|refreshToken|apiKey|secret|password|privateKey)$/iu;
 
 export function descriptor(value) {
@@ -37,12 +36,31 @@ export function connectorFrom(request, target) {
   }
   const baseUrl = String(request.baseUrl || "").trim();
   const tokenEnv = String(request.tokenEnv || "MESHRIX_MCP_TOKEN").trim();
-  if (!/^https?:\/\/[^\s]+$/u.test(baseUrl)) throw adapterError("invalid_base_url", "A valid HTTP base URL is required.", 64);
+  let endpoint;
+  try {
+    endpoint = new URL(baseUrl);
+  } catch {
+    throw adapterError("invalid_base_url", "A valid HTTPS base URL is required.", 64);
+  }
+  if (!/^https?:$/u.test(endpoint.protocol) || !endpoint.hostname || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
+    throw adapterError("invalid_base_url", "A valid HTTPS base URL without embedded credentials, query, or fragment is required.", 64);
+  }
+  if (endpoint.protocol === "http:" && !isLiteralLoopback(endpoint.hostname)) {
+    throw adapterError("insecure_base_url", "HTTP is allowed only for a literal loopback development endpoint; use HTTPS for remote endpoints.", 64);
+  }
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(tokenEnv)) throw adapterError("invalid_token_binding", "The credential environment binding is invalid.", 64);
   return {
     command: connector.command.trim(),
     args: [...connector.args, "proxy", "--target", target, "--url", baseUrl, "--token-env", tokenEnv]
   };
+}
+
+function isLiteralLoopback(hostname) {
+  const address = hostname.replace(/^\[|\]$/gu, "");
+  if (address.toLowerCase() === "::1") return true;
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(address)) return false;
+  const octets = address.split(".").map(Number);
+  return octets.every((octet) => octet <= 255) && octets[0] === 127;
 }
 
 export function clientCommand(request, fallback) {
@@ -81,7 +99,6 @@ function assertNoSecrets(value, location = "request") {
 export async function run(command, args = [], {
   allowFailure = false,
   input = "",
-  timeoutMs = DEFAULT_TIMEOUT_MS,
   env = process.env
 } = {}) {
   if (!command || !Array.isArray(args) || args.some((entry) => typeof entry !== "string")) {
@@ -95,7 +112,6 @@ export async function run(command, args = [], {
     const finish = (callback) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
       callback();
     };
     const append = (current, chunk) => {
@@ -118,10 +134,6 @@ export async function run(command, args = [], {
       if (!result.ok && !allowFailure) reject(adapterError("client_command_failed", "The client command failed.", 70));
       else resolve(result);
     }));
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      finish(() => reject(adapterError("client_timeout", "The client command timed out.", 70)));
-    }, Math.max(100, Math.min(Number(timeoutMs) || DEFAULT_TIMEOUT_MS, 60_000)));
     child.stdin.end(input);
   });
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateEngineeringOutcomes,
+  localCiRunnerArguments,
   parseLocalCiArguments,
   sourceNodeEnvironment,
   suiteFlowResults
@@ -8,6 +9,18 @@ import {
 import { sanitizeVerificationLog } from "../../../tools/server-scripts/localize-verify-failure.ts";
 
 describe("automatic local verification entry", () => {
+  it("projects explicit registered suites through the maintained runner and rejects ambiguous selection", () => {
+    const options = parseLocalCiArguments(["--suite", "security.http-resource-admission", "--suite=peer.product-wiring"]);
+    expect(options.suites).toEqual(["security.http-resource-admission", "peer.product-wiring"]);
+    expect(localCiRunnerArguments("engineering-public", "build/runner.json", options.suites)).toEqual([
+      "tests/run.ts", "--profile", "engineering-public", "--continue-on-failure", "--strict-platform", "--report", "build/runner.json",
+      "--suite", "security.http-resource-admission", "--suite", "peer.product-wiring",
+    ]);
+    expect(() => parseLocalCiArguments(["--scope", "changed", "--suite", "security.http-resource-admission"])).toThrow("local_ci_selection_conflict");
+    for (const value of ["", "--help", "../private", "a,b"]) {
+      expect(() => parseLocalCiArguments(["--suite", value])).toThrow("local_ci_suite_invalid");
+    }
+  });
   it("reads the maintained runner summary and preserves every failed or unexecuted suite", () => {
     const report = {
       summary: { reportLeakScan: true },

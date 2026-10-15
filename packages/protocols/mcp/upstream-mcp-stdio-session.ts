@@ -3,7 +3,6 @@ import {
   asObject,
   assertNegotiatedProtocolVersion,
   assertJsonRpcResponse,
-  DEFAULT_MCP_INITIALIZE_TIMEOUT_MS,
   fatalSessionError,
   initializeParams,
   jsonRpcNotification,
@@ -11,7 +10,6 @@ import {
   normalizeTransportConfig,
   notifySafely,
   parseJson,
-  positiveInt,
   protocolError,
   requestTimeoutMs,
   requestedProtocolVersion,
@@ -275,8 +273,8 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
     });
   }
 
-  async function notify(method?: any, params: Record<string, any> = {}) : Promise<any> {
-    await writePayload(jsonRpcNotification(method, params));
+  async function notify(method?: any, params: Record<string, any> = {}, signal?: AbortSignal) : Promise<any> {
+    await writePayload(jsonRpcNotification(method, params), undefined, signal);
   }
 
   function sendCancellation(requestId?: any, timedOut?: any) : any {
@@ -394,17 +392,13 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
   }
 
   try {
-    const initializeTimeoutMs: any = positiveInt(
-      normalized.timeoutMs,
-      DEFAULT_MCP_INITIALIZE_TIMEOUT_MS
-    );
     initializedResult = await request("initialize", initializeParams(normalized), {
-      timeoutMs: initializeTimeoutMs,
-      cancelNotification: false
+      cancelNotification: false,
+      ...(options.signal ? { signal: options.signal } : {})
     });
     assertNegotiatedProtocolVersion(initializedResult, requestedProtocolVersion(normalized));
     initialized = true;
-    await notify("notifications/initialized", {});
+    await notify("notifications/initialized", {}, options.signal);
     updateReferences();
   } catch (error: any) {
     closed = true;

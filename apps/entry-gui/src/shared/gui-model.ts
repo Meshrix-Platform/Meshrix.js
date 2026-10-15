@@ -11,6 +11,8 @@ import {
   GUI_STATE_SCHEMA_VERSION,
   assertGuiStateSecretFree,
   type GuiConnectionView,
+  type GuiAccountView,
+  type GuiGrantView,
   type GuiCustodyView,
   type GuiInviteSummary,
   type GuiLifecycleView,
@@ -19,8 +21,11 @@ import {
   type GuiPairingView,
   type GuiRecoveryImportView,
   type GuiRecoveryView,
+  type GuiVaultWriterRegistrationState,
   type GuiRevocationState,
   type GuiRouteState,
+  type GuiPersonalEndpointView,
+  type GuiApplicationView,
   type GuiState
 } from "./gui-state.ts";
 
@@ -33,16 +38,22 @@ export type GuiEvent =
   | { readonly type: "pairing.enrolled"; readonly connection: GuiConnectionView }
   | { readonly type: "pairing.reset" }
   | { readonly type: "connection.upsert"; readonly connection: GuiConnectionView }
-  | { readonly type: "connection.state"; readonly connectionId: string; readonly routeState?: GuiRouteState; readonly channelEstablished?: boolean; readonly acceptsNewWork?: boolean; readonly revocation?: GuiRevocationState; readonly boundRecoveryKeyId?: string | null }
+  | { readonly type: "connection.state"; readonly connectionId: string; readonly routeState?: GuiRouteState; readonly channelEstablished?: boolean; readonly acceptsNewWork?: boolean; readonly revocation?: GuiRevocationState; readonly boundRecoveryKeyId?: string | null; readonly rePairRequired?: boolean }
   | { readonly type: "connection.removed"; readonly connectionId: string }
   | { readonly type: "recovery.generated"; readonly vaultId: string; readonly keyId: string; readonly generation: number }
   | { readonly type: "recovery.revealed" }
+  | { readonly type: "recovery.candidateCancelled"; readonly recovery: GuiRecoveryView }
   | { readonly type: "recovery.confirmed" }
+  | { readonly type: "recovery.writerRegistration"; readonly state: GuiVaultWriterRegistrationState; readonly candidateVaultId?: string; readonly candidateKeyId?: string; readonly candidateGeneration?: number; readonly detail?: string | null }
   | { readonly type: "recovery.imported"; readonly vaultId: string; readonly keyId: string; readonly generation: number; readonly connection: GuiConnectionView }
   | { readonly type: "recovery.backup"; readonly lastSuccessAt?: string | null; readonly lastCommittedRevision?: number | null; readonly lastError?: string | null }
   | { readonly type: "recovery.rotation"; readonly rotation: GuiRecoveryView["rotation"] }
   | { readonly type: "recoveryImport.phase"; readonly phase: GuiRecoveryImportView["phase"]; readonly detail?: string | null; readonly enrolledConnectionId?: string | null }
   | { readonly type: "mcp.configured"; readonly snippet: string | null; readonly configuredPath?: string | null }
+  | { readonly type: "account.updated"; readonly account: GuiAccountView }
+  | { readonly type: "personal.endpoint"; readonly endpoint: GuiPersonalEndpointView }
+  | { readonly type: "applications.updated"; readonly applications: GuiApplicationView }
+  | { readonly type: "grant.updated"; readonly grant: GuiGrantView }
   | { readonly type: "notice"; readonly text: string };
 
 const MAX_NOTICES = 20;
@@ -65,9 +76,22 @@ function emptyRecovery(): GuiRecoveryView {
     keyId: null,
     generation: null,
     keyRevealed: false,
+    writerRegistration: { state: "unmanaged", candidateGeneration: null, detail: null },
     backup: { lastSuccessAt: null, lastCommittedRevision: null, lastError: null },
     rotation: null
   };
+}
+
+function emptyGrant(): GuiGrantView {
+  return { connectionId: null, availableScopes: [], targetScopes: [], grantRef: null, status: "idle", notice: null };
+}
+
+function emptyPersonalEndpoint(): GuiPersonalEndpointView {
+  return { state: "unregistered", tenantId: null, routeId: null, deviceId: null, fingerprint: null, relayState: "unknown", canCreatePairingInvite: false };
+}
+
+function emptyApplications(): GuiApplicationView {
+  return { destinations: [], agents: [], operations: [] };
 }
 
 export class EntryGuiModel {
@@ -81,6 +105,10 @@ export class EntryGuiModel {
     recoveryImport: { phase: "idle", detail: null, enrolledConnectionId: null },
     connections: [],
     mcp: { transport: "stdio", snippet: null, configuredPath: null },
+    account: { state: "unconfigured", accountId: null, authEpoch: null, transactionId: null, transactionPurpose: null, actionPurpose: null, originAvailable: false, custodyAvailable: false, notice: null },
+    personalEndpoint: emptyPersonalEndpoint(),
+    applications: emptyApplications(),
+    grant: emptyGrant(),
     notices: []
   };
 
@@ -154,6 +182,7 @@ export class EntryGuiModel {
               channelEstablished: event.channelEstablished ?? connection.channelEstablished,
               acceptsNewWork: event.acceptsNewWork ?? connection.acceptsNewWork,
               revocation: event.revocation ?? connection.revocation,
+              rePairRequired: event.rePairRequired ?? connection.rePairRequired,
               boundRecoveryKeyId: event.boundRecoveryKeyId !== undefined ? event.boundRecoveryKeyId : connection.boundRecoveryKeyId
             };
           })
@@ -183,10 +212,36 @@ export class EntryGuiModel {
           recovery: { ...this.#state.recovery, keyRevealed: true }
         };
         break;
+      case "recovery.candidateCancelled":
+        this.#state = { ...this.#state, recovery: event.recovery };
+        break;
       case "recovery.confirmed":
         this.#state = {
           ...this.#state,
           recovery: { ...this.#state.recovery, state: "ready", keyRevealed: this.#state.recovery.keyRevealed }
+        };
+        break;
+      case "recovery.writerRegistration":
+        this.#state = {
+          ...this.#state,
+          recovery: {
+            ...this.#state.recovery,
+            ...(this.#state.recovery.vaultId ? {} : event.candidateVaultId ? { vaultId: event.candidateVaultId } : {}),
+            ...(this.#state.recovery.keyId ? {} : event.candidateKeyId ? { keyId: event.candidateKeyId } : {}),
+            ...(this.#state.recovery.generation ? {} : event.candidateGeneration ? { generation: event.candidateGeneration } : {}),
+            writerRegistration: {
+              state: event.state,
+              candidateGeneration: event.candidateGeneration ?? this.#state.recovery.writerRegistration.candidateGeneration,
+              detail: event.detail ?? null
+            },
+            state: event.state === "authorization_required" || event.state === "prepare_pending"
+              ? "account_authorization_required"
+              : event.state === "service_pending"
+                ? "account_writer_pending"
+                : event.state === "complete"
+                  ? "ready"
+                  : this.#state.recovery.state
+          }
         };
         break;
       case "recovery.imported":
@@ -245,6 +300,18 @@ export class EntryGuiModel {
           mcp: { ...this.#state.mcp, snippet: event.snippet, configuredPath: event.configuredPath ?? this.#state.mcp.configuredPath }
         };
         break;
+      case "account.updated":
+        this.#state = { ...this.#state, account: event.account };
+        break;
+      case "personal.endpoint":
+        this.#state = { ...this.#state, personalEndpoint: event.endpoint };
+        break;
+      case "applications.updated":
+        this.#state = { ...this.#state, applications: event.applications };
+        break;
+      case "grant.updated":
+        this.#state = { ...this.#state, grant: event.grant };
+        break;
       case "notice": {
         const notices = [...this.#state.notices, event.text].slice(-MAX_NOTICES);
         this.#state = { ...this.#state, notices };
@@ -297,6 +364,12 @@ export function restoreGuiState(model: EntryGuiModel, input: {
     }
     if (input.recovery.backup) model.apply({ type: "recovery.backup", ...input.recovery.backup });
     if (input.recovery.rotation) model.apply({ type: "recovery.rotation", rotation: input.recovery.rotation });
+    if (input.recovery.writerRegistration) model.apply({
+      type: "recovery.writerRegistration",
+      state: input.recovery.writerRegistration.state,
+      candidateGeneration: input.recovery.writerRegistration.candidateGeneration ?? undefined,
+      detail: input.recovery.writerRegistration.detail
+    });
   }
   if (input.mcp?.snippet !== undefined) {
     model.apply({ type: "mcp.configured", snippet: input.mcp.snippet ?? null, configuredPath: input.mcp.configuredPath ?? null });

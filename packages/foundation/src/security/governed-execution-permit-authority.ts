@@ -148,7 +148,7 @@ export function mintGovernedExecutionPermit({
     deny("governed_execution_permit_binding_incomplete", "Governed execution permit binding is incomplete.");
   }
   const lifetime = Math.min(DEFAULT_TTL_MS, Math.max(1, Number(ttlMs) || DEFAULT_TTL_MS));
-  const token = `${PERMIT_PREFIX}${crypto.randomBytes(32).toString("base64url")}`;
+  const token = `${PERMIT_PREFIX}${Buffer.from(crypto.randomBytes(32)).toString("base64url")}`;
   const permitDigest = sha256(token);
   purgeExpired(now);
   activePermits.set(permitDigest, Object.freeze({

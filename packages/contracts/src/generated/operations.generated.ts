@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:574cd61e3bb67e4d
+ * Hash: sha256:f6224a49aaf0e4de
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:574cd61e3bb67e4d";
+export const GENERATED_OPERATIONS_HASH = "sha256:f6224a49aaf0e4de";
 export const SERVER_API_OPERATIONS: any = [
   {
     "id": "readiness.baseline.status",
@@ -26477,6 +26477,137 @@ export const SERVER_API_OPERATIONS: any = [
     "otel": {
       "semanticGroup": "discovery",
       "operationName": "discovery_clients_alignment_command"
+    },
+    "auditPolicy": {
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "discovery.clients.enrollment_token",
+    "feature": "discovery",
+    "label": "签发客户端登记令牌",
+    "target": {
+      "controller": "system",
+      "method": "handleCreateDiscoveryEnrollmentToken"
+    },
+    "http": {
+      "method": "POST",
+      "path": "/api/discovery/clients/enrollment-token",
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "discovery.clients.enrollment_token",
+      "body": "params"
+    },
+    "cli": {
+      "command": [
+        "discovery",
+        "clients",
+        "enrollment-token"
+      ],
+      "usage": "discovery clients enrollment-token --body enrollment.json"
+    },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "ttlSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400
+        }
+      },
+      "required": []
+    },
+    "safety": {
+      "risk": "safe_write",
+      "readOnly": false,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "requiredScopes": [
+      "runtime:admin"
+    ],
+    "log": {
+      "enabled": true,
+      "redaction": "secret",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "trafficModel": "gateway_transit",
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "readOnly": false,
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "discovery",
+      "resourceKind": "discovery",
+      "capabilityVerb": "enrollment-token",
+      "effectKind": "safe-write",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "discovery",
+      "resourceKind": "discovery",
+      "capabilityVerb": "enrollment-token",
+      "effectKind": "safe-write",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "full",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "two-stage",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "discovery.clients.enrollment_token",
+      "maxParallel": 1,
+      "cost": 2
+    },
+    "audit": {
+      "enabled": true,
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": true
+    },
+    "aspects": [
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "description": "签发客户端登记令牌",
+    "risk": "safe_write",
+    "otel": {
+      "semanticGroup": "discovery",
+      "operationName": "discovery_clients_enrollment_token"
     },
     "auditPolicy": {
       "recordInput": true,

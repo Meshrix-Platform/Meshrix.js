@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { MXAK1_CREDENTIAL_PATTERN, normalizeBaseUrl, normalizeTarget } from "./basic-utils.ts";
+import { SUPPORTED_TARGETS } from "./constants.ts";
 
 export const MESHRIX_MCP_CREDENTIAL_DIR_ENV: any = "MESHRIX_MCP_CREDENTIAL_DIR";
 
@@ -17,7 +18,7 @@ function credentialRoot() : any {
 function credentialBinding({ target, baseUrl }: Record<string, any>) : any {
   const normalizedTarget: any = normalizeTarget(target);
   const normalizedBaseUrl: any = normalizeBaseUrl(baseUrl);
-  if (!normalizedTarget || !normalizedBaseUrl) {
+  if (!SUPPORTED_TARGETS.includes(normalizedTarget) || !normalizedBaseUrl) {
     throw new Error("A target and Meshrix.js base URL are required for credential storage.");
   }
   const serverHash: any = createHash("sha256").update(normalizedBaseUrl, "utf8").digest("hex").slice(0, 24);
@@ -47,7 +48,7 @@ function parseCredential(value?: any, expected: Record<string, any> = {}) : any 
 async function writePrivateJson(filePath?: any, value?: any) : Promise<any> {
   const directory: any = path.dirname(filePath);
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
-  await fs.chmod(directory, 0o700).catch(() : any => {});
+  if (process.platform !== "win32") await fs.chmod(directory, 0o700);
   const temporaryPath: any = path.join(
     directory,
     `.${path.basename(filePath)}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`
@@ -59,8 +60,8 @@ async function writePrivateJson(filePath?: any, value?: any) : Promise<any> {
     await handle.sync();
     await handle.close();
     handle = null;
+    if (process.platform !== "win32") await fs.chmod(temporaryPath, 0o600);
     await fs.rename(temporaryPath, filePath);
-    await fs.chmod(filePath, 0o600).catch(() : any => {});
   } finally {
     if (handle) await handle.close().catch(() : any => {});
     await fs.rm(temporaryPath, { force: true }).catch(() : any => {});
@@ -83,29 +84,26 @@ export async function saveMcpApiKeyCredential({ target, baseUrl, token, autoUpda
   return { stored: true, backend: "connector-private-file" };
 }
 
-export async function loadMcpApiKeyCredential({ target, baseUrl }: Record<string, any>) : Promise<any> {
-  if (!normalizeTarget(target) || !normalizeBaseUrl(baseUrl)) return "";
+export async function loadMcpConnectorCredential({ target, baseUrl }: Record<string, any>) : Promise<any> {
+  if (!normalizeTarget(target) || !normalizeBaseUrl(baseUrl)) return null;
   const binding: any = credentialBinding({ target, baseUrl });
   let serialized: any;
   try {
     serialized = await fs.readFile(binding.filePath, "utf8");
   } catch (error: any) {
-    if (error?.code === "ENOENT") return "";
+    if (error?.code === "ENOENT") return null;
     throw error;
   }
-  return parseCredential(serialized, binding).apiKey;
+  return Object.freeze({ ...parseCredential(serialized, binding), baseUrl: binding.baseUrl });
+}
+
+export async function loadMcpApiKeyCredential({ target, baseUrl }: Record<string, any>) : Promise<any> {
+  return (await loadMcpConnectorCredential({ target, baseUrl }))?.apiKey || "";
 }
 
 export async function loadMcpConnectorPreferences({ target, baseUrl }: Record<string, any>) : Promise<any> {
-  if (!normalizeTarget(target) || !normalizeBaseUrl(baseUrl)) return Object.freeze({ autoUpdate: false });
-  const binding: any = credentialBinding({ target, baseUrl });
-  try {
-    const credential: any = parseCredential(await fs.readFile(binding.filePath, "utf8"), binding);
-    return Object.freeze({ autoUpdate: credential.autoUpdate });
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return Object.freeze({ autoUpdate: false });
-    throw error;
-  }
+  const credential: any = await loadMcpConnectorCredential({ target, baseUrl });
+  return Object.freeze({ autoUpdate: credential?.autoUpdate === true });
 }
 
 export async function deleteMcpApiKeyCredential({ target, baseUrl }: Record<string, any>) : Promise<any> {

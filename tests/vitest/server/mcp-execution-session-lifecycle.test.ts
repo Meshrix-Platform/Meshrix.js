@@ -387,7 +387,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     });
   });
 
-  it("still rebuilds an ephemeral HTTP session after a not-found", async () : Promise<any> => {
+  it("does not replay an ephemeral tools/call after a not-found, then rebuilds for a later call", async () : Promise<any> => {
     const fixture: any = await createLifecycleHttpFixture();
     const manager: any = createUpstreamMcpSessionManager({
       fetchTransport: async (url?: any, init?: any) : Promise<any> => ({
@@ -404,10 +404,16 @@ describe("Stateful MCP execution session lifecycle", () : any => {
       sessionKind: "ephemeral"
     };
     await manager.callTool(config, { name: "echo" });
-    const recovered: any = await manager.callTool(config, { name: "vanish" });
-    expect(recovered.result.structuredContent.name).toBe("vanish");
+    await expect(manager.callTool(config, { name: "vanish" })).rejects.toMatchObject({
+      code: "UPSTREAM_MCP_SESSION_NOT_FOUND"
+    });
+    expect(fixture.evidence.calls.filter((call?: any) : any => call.name === "vanish")).toHaveLength(1);
+    expect(fixture.evidence.initializations).toHaveLength(1);
+
+    const recovered: any = await manager.callTool(config, { name: "echo" });
+    expect(recovered.result.structuredContent.name).toBe("echo");
     expect(fixture.evidence.initializations).toHaveLength(2);
-    expect(fixture.evidence.calls.filter((call?: any) : any => call.name === "vanish")).toHaveLength(2);
+    expect(fixture.evidence.calls.filter((call?: any) : any => call.name === "vanish")).toHaveLength(1);
   });
 
   it("keeps catalog refresh for an existing caller when execution sessions fill capacity", async () : Promise<any> => {

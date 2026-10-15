@@ -1,7 +1,7 @@
 /**
  * Canonical proof transcripts for the private-relay recovery wire.
  *
- * The vault transcript byte shapes are fixed by the recovery-vault
+ * The vault transcript byte shapes are fixed by the hosted recovery-vault
  * implementation (maintained in the separate private operations repository) —
  * UTF-8, "|"-joined, fixed field order — and duplicated here because the
  * installed entry is a separate runtime that must not import hosted internals:
@@ -55,9 +55,62 @@ export function vaultWriteTranscript(
   ].join("|"));
 }
 
-/** sha256 over the UTF-8 bytes of the canonical base64url ciphertext string. */
-export function snapshotCiphertextDigest(ciphertextBase64Url: string): string {
-  return `sha256:${createHash("sha256").update(utf8Bytes(ciphertextBase64Url)).digest("hex")}`;
+/**
+ * The full protected snapshot surface the write digest signs over — the
+ * mirror of `VaultProtectedSnapshot` in the hosted recovery-vault
+ * implementation. The contract parser
+ * guarantees this shape at runtime; its `byteLength` field types as
+ * `unknown`, so cast parsed records to this interface at call sites.
+ */
+export interface VaultProtectedSnapshot {
+  readonly schemaVersion: string;
+  readonly kind: string;
+  readonly vaultId: string;
+  readonly formatVersion: number;
+  readonly generation: number;
+  readonly revision: number;
+  readonly snapshot: {
+    readonly algorithm: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+    readonly byteLength: number;
+  };
+  readonly publicVerifier: {
+    readonly keyId: string;
+    readonly algorithm: string;
+    readonly publicKey: string;
+  };
+}
+
+/**
+ * sha256 over the canonical "|"-joined protected-snapshot field list —
+ * the mirror of `vaultSnapshotDigest` in the hosted recovery-vault
+ * implementation. The digest covers the full
+ * signed surface (schemaVersion, kind, vaultId, formatVersion, generation,
+ * revision, AEAD algorithm/nonce/byteLength/ciphertext, and the public
+ * verifier's keyId/algorithm/publicKey), so a substituted field produces
+ * a different digest and the write is refused before any state write.
+ * Every covered field is a wire-bounded token or integer — none can
+ * contain "|", so the join is unambiguous.
+ */
+export function vaultSnapshotDigest(snapshot: VaultProtectedSnapshot): string {
+  return `sha256:${createHash("sha256").update(utf8Bytes([
+    VAULT_TRANSCRIPT_DOMAIN,
+    "vault_snapshot",
+    snapshot.schemaVersion,
+    snapshot.kind,
+    snapshot.vaultId,
+    String(snapshot.formatVersion),
+    String(snapshot.generation),
+    String(snapshot.revision),
+    snapshot.snapshot.algorithm,
+    snapshot.snapshot.nonce,
+    String(snapshot.snapshot.byteLength),
+    snapshot.snapshot.ciphertext,
+    snapshot.publicVerifier.keyId,
+    snapshot.publicVerifier.algorithm,
+    snapshot.publicVerifier.publicKey
+  ].join("|"))).digest("hex")}`;
 }
 
 /**

@@ -15,12 +15,10 @@ export class ContextCompactionLaneError extends Error {
 export interface ContextCompactionExecutionLaneOptions {
   maxPending?: number;
   maxPendingBytes?: number;
-  defaultDeadlineMs?: number;
 }
 
 export interface ContextCompactionNormalizeOptions {
   bytes?: number;
-  deadlineMs?: number;
 }
 
 export interface ContextCompactionExecutionLaneStats {
@@ -50,7 +48,6 @@ interface LaneWorkerMessage {
 interface PendingLaneEntry {
   resolve: (value: unknown) => void;
   reject: (reason?: unknown) => void;
-  timer: ReturnType<typeof setTimeout>;
   bytes: number;
 }
 
@@ -88,8 +85,7 @@ export function conversationPayloadBytes(input: Record<string, unknown> = {}) : 
 
 export function createContextCompactionExecutionLane({
   maxPending = 4,
-  maxPendingBytes = 32 * 1024 * 1024,
-  defaultDeadlineMs = 30_000
+  maxPendingBytes = 32 * 1024 * 1024
 }: ContextCompactionExecutionLaneOptions = {}) : ContextCompactionExecutionLane {
   const worker = new Worker(new URL(
     `./execution-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`,
@@ -102,7 +98,6 @@ export function createContextCompactionExecutionLane({
 
   function rejectAll(error?: unknown) : void {
     for (const entry of pending.values()) {
-      clearTimeout(entry.timer);
       entry.reject(error);
     }
     pending.clear();
@@ -114,7 +109,6 @@ export function createContextCompactionExecutionLane({
     if (!entry) return;
     pending.delete(Number(message.id));
     pendingBytes -= entry.bytes;
-    clearTimeout(entry.timer);
     if (message.ok) entry.resolve(message.result);
     else entry.reject(new ContextCompactionLaneError(message.error?.code, message.error?.message));
   });
@@ -127,30 +121,20 @@ export function createContextCompactionExecutionLane({
     rejectAll(new ContextCompactionLaneError("context_compaction_lane_closed"));
   });
 
-  function normalize(payload: unknown, { bytes, deadlineMs = defaultDeadlineMs }: ContextCompactionNormalizeOptions = {}) : Promise<unknown> {
+  function normalize(payload: unknown, { bytes }: ContextCompactionNormalizeOptions = {}) : Promise<unknown> {
     if (closed) return Promise.reject(new ContextCompactionLaneError("context_compaction_lane_closed"));
     const admittedBytes = Math.max(0, Number(bytes) || 0);
     if (pending.size >= maxPending || pendingBytes + admittedBytes > maxPendingBytes) {
       return Promise.reject(new ContextCompactionLaneError("context_compaction_lane_capacity_exceeded"));
     }
-    const boundedDeadlineMs = Math.max(1, Math.min(Number(deadlineMs) || defaultDeadlineMs, 120_000));
     const id = ++sequence;
     return new Promise<unknown>((resolve: (value: unknown) => void, reject: (reason?: unknown) => void) : void => {
-      const timer = setTimeout(() : void => {
-        const entry = pending.get(id);
-        if (!entry) return;
-        pending.delete(id);
-        pendingBytes -= entry.bytes;
-        reject(new ContextCompactionLaneError("context_compaction_lane_deadline_exceeded"));
-      }, boundedDeadlineMs);
-      timer.unref?.();
-      pending.set(id, { resolve, reject, timer, bytes: admittedBytes });
+      pending.set(id, { resolve, reject, bytes: admittedBytes });
       pendingBytes += admittedBytes;
       worker.postMessage(Object.freeze({
         id,
         kind: "normalize",
-        payload: structuredClone(payload),
-        deadlineAtMs: Date.now() + boundedDeadlineMs
+        payload: structuredClone(payload)
       }));
     });
   }

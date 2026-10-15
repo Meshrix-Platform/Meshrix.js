@@ -19,6 +19,9 @@ interface JsonlTailOptions {
   maxScanBytes?: number;
   reverse?: boolean;
   ignoreMalformed?: boolean;
+  healTornTail?: boolean;
+  filter?: (value: unknown) => boolean;
+  waitForIdle?: boolean;
 }
 
 interface BoundedJsonlOptions {
@@ -52,39 +55,82 @@ function positiveInteger(value: unknown, fallback: number, maximum = Number.MAX_
   return Math.min(parsed, maximum);
 }
 
-async function readRecentCompleteLines(filePath: string, maxScanBytes: number): Promise<string[]> {
+async function readRecentCompleteLines(
+  filePath: string,
+  maxScanBytes: number,
+  maxLines = Number.POSITIVE_INFINITY,
+  healTornTail = true,
+  acceptLine?: (line: string) => boolean
+): Promise<string[]> {
   let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
   try {
     handle = await fs.open(filePath, "r");
-    const stat = await handle.stat();
-    const length = Math.min(stat.size, maxScanBytes);
-    const start = Math.max(0, stat.size - length);
-    const buffer = Buffer.allocUnsafe(length);
-    let offset = 0;
-    while (offset < length) {
-      const { bytesRead } = await handle.read(buffer, offset, length - offset, start + offset);
-      if (bytesRead === 0) break;
-      offset += bytesRead;
+    let fileSize = Number((await handle.stat()).size || 0);
+    let position = fileSize;
+    let scannedBytes = 0;
+    let suffix = Buffer.alloc(0);
+    const reverseLines: string[] = [];
+    let checkedTail = false;
+
+    while (position > 0 && scannedBytes < maxScanBytes && reverseLines.length < maxLines) {
+      const length = Math.min(64 * 1024, maxScanBytes - scannedBytes, position);
+      const chunkStart = position - length;
+      const buffer = Buffer.allocUnsafe(length);
+      let offset = 0;
+      while (offset < length) {
+        const { bytesRead } = await handle.read(buffer, offset, length - offset, chunkStart + offset);
+        if (bytesRead === 0) break;
+        offset += bytesRead;
+      }
+      if (offset === 0) break;
+
+      let chunk = buffer.subarray(0, offset);
+      if (!checkedTail) {
+        checkedTail = true;
+        if (chunkStart + offset === fileSize && chunk.at(-1) !== 0x0a) {
+          if (healTornTail) {
+            await queueStateMutation(stateFileKey(filePath), async (): Promise<void> => {
+              await truncateTornJsonLineTail(filePath);
+            });
+            fileSize = Number((await handle.stat()).size || 0);
+            position = fileSize;
+            scannedBytes = 0;
+            suffix = Buffer.alloc(0);
+            reverseLines.length = 0;
+            checkedTail = false;
+            continue;
+          }
+          const lastCompleteBoundary = chunk.lastIndexOf(0x0a);
+          chunk = lastCompleteBoundary < 0 ? Buffer.alloc(0) : chunk.subarray(0, lastCompleteBoundary + 1);
+          suffix = Buffer.alloc(0);
+        }
+      }
+
+      const combined = suffix.length > 0
+        ? Buffer.concat([chunk, suffix])
+        : chunk;
+      let right = combined.length;
+      for (let index = combined.length - 1; index >= 0; index -= 1) {
+        if (combined[index] !== 0x0a) continue;
+        const line = combined.subarray(index + 1, right).toString("utf8").trim();
+        if (line && (!acceptLine || acceptLine(line))) reverseLines.push(line);
+        right = index;
+        if (reverseLines.length >= maxLines) break;
+      }
+      if (reverseLines.length >= maxLines) break;
+
+      const prefix = combined.subarray(0, right);
+      position = chunkStart;
+      scannedBytes += offset;
+      if (position === 0) {
+        const firstLine = prefix.toString("utf8").trim();
+        if (firstLine && (!acceptLine || acceptLine(firstLine))) reverseLines.push(firstLine);
+        break;
+      }
+      suffix = prefix;
     }
-    let content = buffer.subarray(0, offset).toString("utf8");
-    if (start > 0) {
-      const firstLineBreak = content.indexOf("\n");
-      content = firstLineBreak >= 0 ? content.slice(firstLineBreak + 1) : "";
-    }
-    // A crash mid-append can leave a torn final line without its newline
-    // terminator. When the read reaches the real end of file and the last
-    // byte is not a newline, heal the tail the same way the append path does
-    // so subsequent reads (and repairs) see only complete records.
-    let healed = false;
-    if (start + offset === stat.size && offset > 0 && !content.endsWith("\n")) {
-      await queueStateMutation(stateFileKey(filePath), async (): Promise<void> => {
-        await truncateTornJsonLineTail(filePath);
-      });
-      healed = true;
-    }
-    const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    // The final line was torn; it has just been truncated away on disk.
-    return healed ? lines.slice(0, -1) : lines;
+
+    return reverseLines.reverse();
   } catch (error: unknown) {
     if (errorCode(error) === "ENOENT") return [];
     throw error;
@@ -97,18 +143,43 @@ export async function readJsonlTail(filePath: string, {
   limit = 50,
   maxScanBytes = DEFAULT_MAX_SCAN_BYTES,
   reverse = false,
-  ignoreMalformed = false
+  ignoreMalformed = false,
+  healTornTail = true,
+  filter,
+  waitForIdle = true
 }: JsonlTailOptions = {}): Promise<unknown[]> {
-  await waitForStateIdle(stateFileKey(filePath));
+  if (waitForIdle) await waitForStateIdle(stateFileKey(filePath));
   const safeLimit = positiveInteger(limit, 50, 10_000);
+  const parsedRecords: unknown[] = [];
+  const acceptLine = ignoreMalformed || filter
+    ? (line: string): boolean => {
+      try {
+        const value = JSON.parse(line) as unknown;
+        const accepted = filter ? filter(value) : true;
+        if (accepted) parsedRecords.push(value);
+        return accepted;
+      } catch (error: unknown) {
+        if (!ignoreMalformed) throw error;
+        return false;
+      }
+    }
+    : undefined;
   const lines = await readRecentCompleteLines(
     filePath,
-    positiveInteger(maxScanBytes, DEFAULT_MAX_SCAN_BYTES, 64 * 1024 * 1024)
+    positiveInteger(maxScanBytes, DEFAULT_MAX_SCAN_BYTES, 64 * 1024 * 1024),
+    safeLimit,
+    healTornTail,
+    acceptLine
   );
+  if (acceptLine) {
+    parsedRecords.reverse();
+    return reverse ? parsedRecords.reverse() : parsedRecords;
+  }
   const records: unknown[] = [];
-  for (const line of lines.slice(-safeLimit)) {
+  for (const line of lines) {
     try {
-      records.push(JSON.parse(line));
+      const record = JSON.parse(line) as unknown;
+      records.push(record);
     } catch (error: unknown) {
       if (!ignoreMalformed) throw error;
     }

@@ -17,9 +17,7 @@ describe("configured default platform upstream transport", () => {
       for await (const chunk of request) chunks.push(chunk);
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       wire.push({ method: body.method, headers: request.headers, params: body.params });
-      const result = body.method === "server/discover"
-        ? { resultType: "complete", supportedVersions: ["2026-07-28"] }
-        : body.method === "tools/list"
+      const result = body.method === "tools/list"
           ? { resultType: "complete", tools: [{ name: "echo", inputSchema: recursiveSchema, outputSchema: { type: "object", properties: { source: { type: "string" } }, required: ["source"] } }] }
           : body.method === "tools/call"
             ? { resultType: "complete", content: [{ type: "text", text: "real-peer" }], structuredContent: { source: "real-peer" }, _meta: { businessId: "metadata-kept" } }
@@ -70,14 +68,14 @@ describe("configured default platform upstream transport", () => {
     expect(published).toBeDefined();
     expect(published?.inputSchema).toMatchObject({ $defs: { payload: { required: ["value"] } } });
     expect((await call("tools/call", { name: published!.name, arguments: { payload: { value: 2 } } })).body).toMatchObject({ error: { data: { code: "schema_validation_failed" } } });
-    expect(wire.map((item) => item.method)).toEqual(["server/discover", "tools/list"]);
+    expect(wire.map((item) => item.method)).toEqual(["tools/list"]);
     const result = await call("tools/call", { name: published!.name, arguments: { payload: { value: "定義✳" }, _meta: { businessId: "input-kept" } } });
     expect(result.body).toMatchObject({ result: { resultType: "complete", structuredContent: { source: "real-peer" }, _meta: { businessId: "metadata-kept" } } });
-    expect(wire.map((item) => item.method)).toEqual(["server/discover", "tools/list", "server/discover", "tools/call"]);
-    expect(wire[3].headers["x-context-scope"]).toBe("synthetic");
-    expect(wire[3].params._meta).toMatchObject({ "io.modelcontextprotocol/protocolVersion": "2026-07-28" });
-    expect((wire[3].params.arguments as { _meta: unknown })._meta).toEqual({ businessId: "input-kept" });
-    expect((wire[3].params.arguments as { payload: { value: string } }).payload.value).toBe("定義✳");
+    expect(wire.map((item) => item.method)).toEqual(["tools/list", "tools/call"]);
+    expect(wire[1].headers["x-context-scope"]).toBe("synthetic");
+    expect(wire[1].params._meta).toMatchObject({ "io.modelcontextprotocol/protocolVersion": "2026-07-28" });
+    expect((wire[1].params.arguments as { _meta: unknown })._meta).toEqual({ businessId: "input-kept" });
+    expect((wire[1].params.arguments as { payload: { value: string } }).payload.value).toBe("定義✳");
     expect(legacyForward).not.toHaveBeenCalled();
   }, 15_000);
 

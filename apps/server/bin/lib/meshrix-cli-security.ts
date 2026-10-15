@@ -284,7 +284,11 @@ export async function runSecurityCommand(args?: any) : Promise<any> {
     }
     throw new Error(`未知 security recovery 命令：${args._.join(" ")}`);
   } finally {
-    provider.close?.();
-    bindingGuard.close?.();
+    const closeResults = await Promise.allSettled([
+      Promise.resolve().then(() => provider.close?.()),
+      Promise.resolve().then(() => bindingGuard.close?.())
+    ]);
+    const failedClose = closeResults.find((result) => result.status === "rejected");
+    if (failedClose?.status === "rejected") throw failedClose.reason;
   }
 }

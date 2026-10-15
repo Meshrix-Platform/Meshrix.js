@@ -12,7 +12,10 @@ import {
   UPSTREAM_SCALAR_PART_FIELDS,
   UPSTREAM_SERVICE_DESCRIPTOR_FIELDS,
   UPSTREAM_SERVICE_ENDPOINT_FIELDS,
-  UPSTREAM_SERVICE_OPERATION_FIELDS
+  UPSTREAM_SERVICE_OPERATION_FIELDS,
+  validateUpstreamContentPolicy,
+  validateUpstreamOauth,
+  validateUpstreamResponseCache
 } from "@meshrix/contracts/upstream-service-publishing";
 import type {
   UpstreamPublishingAction,
@@ -27,7 +30,7 @@ import {
 } from "@meshrix/foundation/storage/storage-ports";
 import type { TypedManifestReference } from "@meshrix/foundation/storage/storage-ports";
 import { compileClosedJsonSchema } from "@meshrix/foundation/security/closed-json-schema";
-import { classifyOutboundHost } from "@meshrix/foundation/security/outbound-egress-policy";
+import { classifyOutboundHost } from "@meshrix/foundation/security/outbound-host-classifier";
 import { parseWithDuplicateRejection, rejectPollutionKeys, rejectUnsafeUnicode } from "./manifest-compiler.ts";
 import { compilePayloadTransport } from "./payload-contract.ts";
 import { object, text } from "./support.ts";
@@ -55,7 +58,8 @@ const MCP_DESCRIPTOR_FIELDS: any = new Set<any>([
   "prefix",
   "protocolVersion",
   "toolsCacheTtlMs",
-  "timeoutMs"
+  "timeoutMs",
+  "aliases"
 ]);
 const REMOTE_MCP_TRANSPORTS: any = new Set<any>(["http", "https", "remote", "streamable-http", "sse"]);
 const SAFE_KEY: any = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/u;
@@ -160,6 +164,33 @@ function validateClosedPolicy(value?: any, fields?: any, label?: any) : any {
   assertClosedFields(policy, fields, label);
 }
 
+function validateContentPolicyField(value?: any, label?: any) : any {
+  if (value === undefined) return;
+  try {
+    validateUpstreamContentPolicy(value, label);
+  } catch (error: any) {
+    throw publishingError("upstream_publishing_schema_invalid", 400, error.message);
+  }
+}
+
+function validateResponseCacheField(value?: any, label?: any) : any {
+  if (value === undefined) return;
+  try {
+    validateUpstreamResponseCache(value, label);
+  } catch (error: any) {
+    throw publishingError("upstream_publishing_schema_invalid", 400, error.message);
+  }
+}
+
+function validateOauthField(value?: any, label?: any) : any {
+  if (value === undefined) return;
+  try {
+    validateUpstreamOauth(value, label);
+  } catch (error: any) {
+    throw publishingError("upstream_publishing_schema_invalid", 400, error.message);
+  }
+}
+
 function validatePayloadTransport(operation?: any, serviceProtocol?: any) : any {
   const transport: any = assertPlainObject(
     operation.payloadTransport,
@@ -237,6 +268,7 @@ function validateDescriptorPolicies(descriptor?: any) : any {
       });
     }
   }
+  validateContentPolicyField(descriptor.contentPolicy, "descriptor.contentPolicy");
 }
 
 function authenticate(subject?: any) : any {
@@ -457,6 +489,28 @@ function validateRemoteMcpDescriptor(descriptor?: any, allowLocalNetwork?: any) 
     );
   }
   validateOptionalExecutionTimeout(mcp.timeoutMs, "descriptor.mcp.timeoutMs");
+  if (mcp.aliases !== undefined) {
+    const aliases: any = assertPlainObject(mcp.aliases, "Publishing descriptor.mcp.aliases must be an object.");
+    const entries: any = Object.entries(aliases);
+    if (entries.length > 128) {
+      throw Object.assign(new Error("descriptor.mcp.aliases supports at most 128 entries."), { status: 400, reasonCode: "upstream_publishing_mcp_aliases_invalid" });
+    }
+    for (const [upstreamName, alias] of entries) {
+      if (typeof upstreamName !== "string" || upstreamName.length === 0 || upstreamName.length > 128 ||
+          ["__proto__", "constructor", "prototype"].includes(upstreamName)) {
+        throw Object.assign(new Error("descriptor.mcp.aliases keys must be bounded upstream tool names."), { status: 400, reasonCode: "upstream_publishing_mcp_aliases_invalid" });
+      }
+      const record: any = typeof alias === "string"
+        ? { name: alias }
+        : (alias !== null && typeof alias === "object" && !Array.isArray(alias) ? alias : null);
+      if (record === null ||
+          (record.name !== undefined && (typeof record.name !== "string" || !/^[A-Za-z0-9_-]{1,80}$/u.test(record.name))) ||
+          (record.title !== undefined && (typeof record.title !== "string" || record.title.length > 2048)) ||
+          (record.description !== undefined && (typeof record.description !== "string" || record.description.length > 2048))) {
+        throw Object.assign(new Error("descriptor.mcp.aliases values must be a name string or {name,title,description}."), { status: 400, reasonCode: "upstream_publishing_mcp_aliases_invalid" });
+      }
+    }
+  }
   if (descriptor.operations !== undefined) {
     throw publishingError(
       "upstream_publishing_descriptor_invalid",
@@ -480,6 +534,10 @@ function validateOptionalExecutionTimeout(value?: any, field: any = "timeoutMs")
 function validateDescriptorSafety(descriptor?: any, allowLocalNetwork?: any) : any {
   rejectExecutableContent(descriptor);
   validateDescriptorPolicies(descriptor);
+  if (descriptor.oauth !== undefined) {
+    validateOauthField(descriptor.oauth, "descriptor.oauth");
+    validateReachableTargetUrl(descriptor.oauth?.tokenUrl, "descriptor.oauth.tokenUrl", allowLocalNetwork);
+  }
   if (descriptor.references !== undefined && !Array.isArray(descriptor.references)) {
     throw publishingError("upstream_publishing_descriptor_invalid", 400, "descriptor.references must be an array.");
   }
@@ -552,6 +610,12 @@ function validateDescriptorSafety(descriptor?: any, allowLocalNetwork?: any) : a
         throw publishingError("upstream_publishing_descriptor_invalid", 400, "HTTP operations cannot declare JSON-RPC routing fields.");
       }
       validateClosedPolicy(operation.requiredApproval, POLICY_FIELDS.requiredApproval, "descriptor.operations.requiredApproval");
+      validateContentPolicyField(operation.contentPolicy, "descriptor.operations.contentPolicy");
+      validateResponseCacheField(operation.responseCache, "descriptor.operations.responseCache");
+      if (operation.responseCache !== undefined && operation.risk !== "read_only") {
+        throw publishingError("upstream_publishing_descriptor_invalid", 400,
+          "descriptor.operations.responseCache requires an explicit risk of \"read_only\".");
+      }
       validatePayloadTransport(operation, descriptor.serviceProtocol);
       if (operation.requestSchema !== undefined) {
         validateJsonSchema(operation.requestSchema, "descriptor.operations.requestSchema", {

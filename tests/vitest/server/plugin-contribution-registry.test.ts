@@ -726,8 +726,8 @@ describe("plugin contribution registry", () : any => {
         operationRef: input.operationRef || "demo.run",
         input: { owner: "fixture", repository: "demo" },
         idempotencyKey: "fixture-request-1",
-        timeoutMs: 500
-      }, { signal })
+        ...(input.includeTimeout ? { timeoutMs: 500 } : {})
+      }, { signal, ...(input.useTimeout ? { timeoutMs: input.timeoutValue ?? 500 } : {}) })
     }));
     const registry: any = createRegistry(enabledContributions({
       execute,
@@ -784,6 +784,14 @@ describe("plugin contribution registry", () : any => {
       .rejects.toMatchObject({ code: "plugin_external_service_binding_denied" });
     expect(requestPluginExternalService).not.toHaveBeenCalled();
 
+    await expect(authorizedCall({ includeTimeout: true }, createCapturedResponse()))
+      .rejects.toMatchObject({ code: "plugin_external_service_request_invalid" });
+    expect(requestPluginExternalService).not.toHaveBeenCalled();
+
+    await expect(authorizedCall({ useTimeout: true, timeoutValue: 0 }, createCapturedResponse()))
+      .rejects.toMatchObject({ code: "plugin_external_service_timeout_invalid" });
+    expect(requestPluginExternalService).not.toHaveBeenCalled();
+
     requestPluginExternalService.mockRejectedValueOnce(Object.assign(new Error("private provider detail"), {
       status: 502
     }));
@@ -814,7 +822,6 @@ describe("plugin contribution registry", () : any => {
       operationRef: "demo.run",
       input: { owner: "fixture", repository: "demo" },
       idempotencyKey: "fixture-request-1",
-      timeoutMs: 500,
       governance: {
         authorizationContextDigest: expect.stringMatching(/^[a-f0-9]{64}$/u),
         riskDecisionRef: "decision-fixture",
@@ -828,6 +835,13 @@ describe("plugin contribution registry", () : any => {
     });
     expect(JSON.stringify(parseCapturedResult({ operation, captured: response })))
       .not.toContain("private-upstream-audit-record");
+
+    const timeoutResponse: any = createCapturedResponse();
+    await authorizedCall({ useTimeout: true }, timeoutResponse);
+    const [timeoutRequest, timeoutOptions] = requestPluginExternalService.mock.calls[2];
+    expect(timeoutRequest.timeoutMs).toBe(500);
+    expect(timeoutRequest.input).not.toHaveProperty("timeoutMs");
+    expect(timeoutOptions.signal).toBeNull();
   });
 
   it("binds stable pairwise principals and opaque idempotency to Skill Hub service requests", async () : Promise<any> => {
@@ -856,8 +870,7 @@ describe("plugin contribution registry", () : any => {
                 ...(input.spoof === true ? { principal: { subjectRef: "raw-subject" } } : {})
               }
             },
-            idempotencyKey: "skill-hub:plugin-request",
-            timeoutMs: 500
+            idempotencyKey: "skill-hub:plugin-request"
           }, { signal });
         }
       })
@@ -922,6 +935,107 @@ describe("plugin contribution registry", () : any => {
     expect(JSON.stringify(forwarded)).not.toContain("tenant-fixture");
     expect(JSON.stringify(forwarded)).not.toContain("grant-fixture");
     expect(JSON.stringify(forwarded)).not.toContain("plugin-forged-subject");
+  });
+
+  it("binds Model Gateway idempotency to the current Core subject and tenant", async () : Promise<any> => {
+    const forwarded: any[] = [];
+    const replayableResponses = new Map<string, any>();
+    const requestPluginExternalService: any = vi.fn(async (request: any) : Promise<any> => {
+      forwarded.push(structuredClone(request));
+      let data = replayableResponses.get(request.idempotencyKey);
+      if (!data) {
+        data = { responseRef: `response-${replayableResponses.size + 1}` };
+        replayableResponses.set(request.idempotencyKey, data);
+      }
+      return { ok: true, status: 200, data };
+    });
+    const operation: any = definition("model_gateway.call");
+    const record: any = Object.freeze({
+      pluginId: "model-gateway",
+      kind: "operations",
+      id: operation.id,
+      implementation: Object.freeze({
+        requiredHostPorts: Object.freeze(["externalService"]),
+        async execute({ host, input, signal }: Record<string, any>) : Promise<any> {
+          return host.externalService.request({
+            serviceRef: "svc_model_gateway",
+            operationRef: operation.id,
+            input: {
+              modelRef: input.modelRef,
+              providerRef: input.providerRef,
+              inputRefs: input.inputRefs,
+              idempotencyKey: input.idempotencyKey,
+              deadlineMs: input.deadlineMs,
+              stream: input.stream
+            },
+            idempotencyKey: input.idempotencyKey,
+          }, { signal });
+        }
+      })
+    });
+    const registry: any = {
+      operations: new Map([[operation.id, record]]),
+      requireOperation(id: any) { return id === operation.id ? record : null; }
+    };
+    const controller: any = createPluginContributionController({
+      registry,
+      hostPorts: { externalService: { requestPluginExternalService } }
+    });
+    const invoke = async (userId: string, tenantId: string) : Promise<any> => {
+      const response = createCapturedResponse();
+      await controller.executePluginOperation({
+        operation,
+        input: {
+          modelRef: "model.primary",
+          providerRef: "provider.primary",
+          inputRefs: ["same-input-ref"],
+          idempotencyKey: "caller-chosen-retry-key",
+          deadlineMs: 5_000,
+          stream: false
+        },
+        authSession: { user: { userId, tenantId, scopes: ["model:call"] } },
+        request: {
+          __meshrixToolRuntimeAuthorization: {
+            ok: true,
+            grant: {
+              id: `grant:${userId}`,
+              scopes: ["model:call"],
+              capabilities: ["cap:external:model-gateway"],
+              metadata: { policyRevision: "policy-fixture" }
+            },
+            policy: { decisionId: "decision-fixture" }
+          }
+        },
+        response
+      });
+      return parseCapturedResult({ operation, captured: response });
+    };
+
+    const firstUserResult = await invoke("subject-one", "tenant-one");
+    const replayedFirstUserResult = await invoke("subject-one", "tenant-one");
+    const secondTenantResult = await invoke("subject-one", "tenant-two");
+    const secondUserResult = await invoke("subject-two", "tenant-one");
+
+    expect(firstUserResult).toMatchObject({ data: { responseRef: "response-1" } });
+    expect(replayedFirstUserResult).toMatchObject({ data: { responseRef: "response-1" } });
+    expect(secondTenantResult).toMatchObject({ data: { responseRef: "response-2" } });
+    expect(secondUserResult).toMatchObject({ data: { responseRef: "response-3" } });
+    expect(forwarded).toHaveLength(4);
+    expect(forwarded[0].idempotencyKey).toMatch(/^model_gateway:[a-f0-9]{64}$/u);
+    expect(forwarded[1].idempotencyKey).toEqual(forwarded[0].idempotencyKey);
+    expect(forwarded[2].idempotencyKey).not.toEqual(forwarded[0].idempotencyKey);
+    expect(forwarded[3].idempotencyKey).not.toEqual(forwarded[0].idempotencyKey);
+    expect(forwarded[2].idempotencyKey).not.toEqual(forwarded[3].idempotencyKey);
+    expect(forwarded.every((request?: any) : any =>
+      request.input.idempotencyKey === request.idempotencyKey
+    )).toBe(true);
+    expect(JSON.stringify(forwarded)).not.toContain("subject-one");
+    expect(JSON.stringify(forwarded)).not.toContain("subject-two");
+    expect(JSON.stringify(forwarded)).not.toContain("tenant-one");
+    expect(JSON.stringify(forwarded)).not.toContain("tenant-two");
+    expect(requestPluginExternalService.mock.calls[0][1].subject.subjectId).toBe("subject-one");
+    expect(requestPluginExternalService.mock.calls[2][1].subject.subjectId).toBe("subject-one");
+    expect(requestPluginExternalService.mock.calls[3][1].subject.subjectId).toBe("subject-two");
   });
 
   it("seals declared base64 before plugin execution and preserves HTTP/MCP parity", async () : Promise<any> => {

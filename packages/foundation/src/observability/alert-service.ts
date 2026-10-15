@@ -12,7 +12,12 @@ import {
   throwIfObservabilityAborted
 } from "./observability-budgets.ts";
 
-const alertMachine: any = createStateMachine(loadBuiltinDefinition("alert.lifecycle"));
+let alertMachineCache: any = null;
+/** Built-in definitions load from disk; defer so importing this module stays workerd-safe. */
+function alertMachine(): any {
+  if (!alertMachineCache) alertMachineCache = createStateMachine(loadBuiltinDefinition("alert.lifecycle"));
+  return alertMachineCache;
+}
 const EVENT_REASONS: Readonly<Record<string, any>> = Object.freeze({
   condition_matched: "condition_matched",
   acknowledge: "operator_acknowledged",
@@ -68,7 +73,7 @@ export function transitionAlertRecord(record?: any, event?: any, {
   }
   const current: any = record?.lifecycleStatus || "rule_loaded";
   const timestamp: any = nowIso(now);
-  const result: any = alertMachine.transition({
+  const result: any = alertMachine().transition({
     entityId: record?.alertId || "alert",
     currentStatus: current
   }, event, {
@@ -124,5 +129,5 @@ export function activateAlertRecord(signal?: any, previous: any = null, options:
 }
 
 export function alertLifecycleDefinition() : any {
-  return alertMachine.definition;
+  return alertMachine().definition;
 }

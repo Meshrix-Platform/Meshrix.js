@@ -13,6 +13,7 @@ import os
 import secrets
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import zipfile
@@ -29,8 +30,18 @@ TRACE_IDS = (
     "6bf92f3577b34da6a3ce929d0e0e4737",
     "7bf92f3577b34da6a3ce929d0e0e4738",
     "8bf92f3577b34da6a3ce929d0e0e4739",
-    "9bf92f3577b34da6a3ce929d0e0e4740",
 )
+
+
+# Shared by the actual service and its compiled qualification binary.
+CONTAINER_POLICY = [
+    "--read-only", "--cap-drop", "ALL",
+    "--security-opt", "no-new-privileges=true",
+    "--security-opt", f"seccomp={SERVICE_ROOT / 'security' / 'seccomp-office.json'}",
+    "--cpus", "1", "--memory", "2g", "--memory-swap", "2g", "--pids-limit", "256",
+    "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777",
+    "--env", "GOMAXPROCS=1", "--env", "MAX_CONCURRENCY=1", "--env", "QUEUE_CAPACITY=1",
+]
 
 
 class AcceptanceError(Exception):
@@ -39,7 +50,7 @@ class AcceptanceError(Exception):
         self.code = code
 
 
-def run(arguments: list[str], *, timeout: int = 120, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run(arguments: list[str], *, timeout: int | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
     try:
         result = subprocess.run(
             arguments,
@@ -99,7 +110,7 @@ def http_request(
     *,
     body: bytes | None = None,
     headers: dict[str, str] | None = None,
-    timeout: int = 150,
+    timeout: int | None = None,
 ) -> tuple[int, dict[str, str], bytes]:
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
     try:
@@ -139,16 +150,19 @@ def validate_digest(headers: dict[str, str], content: bytes) -> None:
         raise AcceptanceError("response-digest-invalid")
 
 
-def wait_until_ready(port: int) -> None:
-    for _ in range(60):
+def wait_until_ready(port: int, container_name: str) -> None:
+    while True:
         try:
             status, _, _ = http_request(port, "GET", "/readyz", timeout=2)
             if status == 200:
                 return
+            raise AcceptanceError("service-isolation-readiness-rejected")
         except OSError:
             pass
+        state = run(["docker", "inspect", "--format", "{{.State.Running}}", container_name], check=False)
+        if state.returncode != 0 or state.stdout.strip() != "true":
+            raise AcceptanceError("service-exited-before-ready")
         time.sleep(0.5)
-    raise AcceptanceError("service-readiness-timeout")
 
 
 def verify_structured_logs(container_name: str) -> None:
@@ -189,14 +203,25 @@ def stop_container(container_name: str) -> None:
 def main() -> int:
     checks: list[str] = []
     container_name = "format-convert-acceptance-" + secrets.token_hex(5)
+    auth_token = secrets.token_urlsafe(32)
+    token_directory = tempfile.TemporaryDirectory(prefix="format-convert-auth-")
+    token_path = Path(token_directory.name) / "request-auth-token"
+    token_path.write_text(auth_token, encoding="ascii")
+    # The image runs as UID 10001; the private temporary parent protects the
+    # synthetic token while its file mode lets that container user read it.
+    token_path.chmod(0o444)
+    request_auth = {"Authorization": f"Bearer {auth_token}"}
     sink = OTLPSink()
     sink_thread = threading.Thread(target=sink.serve_forever, daemon=True)
     sink_thread.start()
     container_started = False
     try:
         run(["docker", "version"], timeout=30)
-        run(["docker", "build", "--pull=false", "--tag", IMAGE_TAG, "."], timeout=600)
-        checks.extend(("source-tests", "go-vet", "container-build", "otlp-protocol-contracts"))
+        run(["docker", "build", "--pull=false", "--tag", IMAGE_TAG, "."], timeout=None)
+        qualification_image = IMAGE_TAG + "-qualification"
+        run(["docker", "build", "--pull=false", "--target", "qualification", "--tag", qualification_image, "."])
+        run(["docker", "run", "--rm", *CONTAINER_POLICY, qualification_image, "-test.v"])
+        checks.extend(("go-tests-production-policy", "go-vet", "container-build", "otlp-protocol-contracts"))
 
         sink_port = sink.server_address[1]
         run(
@@ -209,23 +234,11 @@ def main() -> int:
                 container_name,
                 "--add-host",
                 "host.docker.internal:host-gateway",
-                "--read-only",
-                "--cpus",
-                "2",
-                "--memory",
-                "4g",
-                "--memory-swap",
-                "4g",
-                "--pids-limit",
-                "512",
-                "--tmpfs",
-                # In-container scratch mount; the literal is split so no
-                # deployment path is committed. The runtime value is unchanged.
-                "/" + "tmp:rw,noexec,nosuid,size=512m,mode=1777",
+                *CONTAINER_POLICY,
                 "--env",
-                "GOMAXPROCS=2",
-                "--env",
-                "MAX_CONCURRENCY=2",
+                "FORMAT_CONVERT_AUTH_TOKEN_FILE=/run/secrets/format-convert-auth-token",
+                "--mount",
+                f"type=bind,src={token_path},dst=/run/secrets/format-convert-auth-token,readonly",
                 "--env",
                 "OTEL_SERVICE_NAME=format-convert",
                 "--env",
@@ -246,7 +259,7 @@ def main() -> int:
         )
         container_started = True
         port = service_port(container_name)
-        wait_until_ready(port)
+        wait_until_ready(port, container_name)
         checks.append("readiness")
 
         source_text = b"A public-domain format-convert acceptance fixture.\n"
@@ -256,7 +269,7 @@ def main() -> int:
             "POST",
             "/v1/convert",
             body=body,
-            headers={"Content-Type": content_type, "traceparent": traceparent(TRACE_IDS[0])},
+            headers={**request_auth, "Content-Type": content_type, "traceparent": traceparent(TRACE_IDS[0])},
         )
         if status != 200 or headers.get("cache-control") != "no-store":
             raise AcceptanceError("txt-docx-conversion-failed")
@@ -272,7 +285,7 @@ def main() -> int:
             "POST",
             "/v1/convert",
             body=body,
-            headers={"Content-Type": content_type, "traceparent": traceparent(TRACE_IDS[1])},
+            headers={**request_auth, "Content-Type": content_type, "traceparent": traceparent(TRACE_IDS[1])},
         )
         if status != 200 or not pdf.startswith(b"%PDF-"):
             raise AcceptanceError("docx-pdf-conversion-failed")
@@ -286,7 +299,7 @@ def main() -> int:
                 "POST",
                 "/v1/convert",
                 body=request_body,
-                headers={"Content-Type": request_content_type, "traceparent": traceparent(trace_id)},
+                headers={**request_auth, "Content-Type": request_content_type, "traceparent": traceparent(trace_id)},
             )
             if request_status != 200 or not request_pdf.startswith(b"%PDF-"):
                 raise AcceptanceError("concurrent-conversion-failed")
@@ -302,7 +315,7 @@ def main() -> int:
             port,
             "GET",
             "/metrics",
-            headers={"Accept": "application/openmetrics-text; version=1.0.0"},
+            headers={**request_auth, "Accept": "application/openmetrics-text; version=1.0.0"},
         )
         metric_names = (b"format_convert_requests_total", b"format_convert_stage_duration_seconds", b"http_server_request_duration_seconds")
         if status != 200 or not headers.get("content-type", "").startswith("application/openmetrics-text") or not all(name in metrics for name in metric_names):
@@ -335,6 +348,7 @@ def main() -> int:
     finally:
         if container_started:
             stop_container(container_name)
+        token_directory.cleanup()
         sink.shutdown()
         sink.server_close()
         sink_thread.join(timeout=2)

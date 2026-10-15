@@ -1,7 +1,11 @@
-export type ConsoleRole = {
+export type ConsoleRoleOption = {
   roleId: "owner" | "maintainer" | "viewer" | string;
   label: string;
+};
+
+export type ConsoleRole = ConsoleRoleOption & {
   scopes: string[];
+  resourcePolicies?: unknown[];
 };
 
 export type ConsoleUser = {
@@ -43,8 +47,7 @@ export type ConsoleAuthSummary = {
     tokenFilePath: string;
   };
   session: ConsoleAuthSession;
-  roles: ConsoleRole[];
-  oidc: ConsoleOidcConfig;
+  roles?: ConsoleRoleOption[];
 };
 
 export type ConsoleAuditItem = {

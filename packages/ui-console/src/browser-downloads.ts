@@ -1,4 +1,4 @@
-import { browserWindow } from "./browser-window";
+import { browserWindow } from "./browser-window.ts";
 
 export type BrowserDownloadOptions = {
   rel?: string;

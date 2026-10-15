@@ -67,6 +67,8 @@ export const UPSTREAM_SERVICE_DESCRIPTOR_FIELDS = Object.freeze([
   "audience",
   "tagPolicy",
   "circuitBreaker",
+  "contentPolicy",
+  "oauth",
   "operations",
   "mcp"
 ]);
@@ -98,7 +100,25 @@ export const UPSTREAM_SERVICE_OPERATION_FIELDS = Object.freeze([
   "publicResponseFields",
   "requestSchema",
   "responseSchema",
-  "payloadTransport"
+  "payloadTransport",
+  "contentPolicy",
+  "responseCache"
+]);
+
+export const UPSTREAM_SERVICE_OAUTH_FIELDS = Object.freeze([
+  "grantType",
+  "tokenUrl",
+  "clientId",
+  "clientSecretRef",
+  "scopes",
+  "audience",
+  "authMethod"
+]);
+
+export const UPSTREAM_OAUTH_GRANT_TYPES = Object.freeze(["client_credentials"]);
+export const UPSTREAM_OAUTH_AUTH_METHODS = Object.freeze([
+  "client_secret_basic",
+  "client_secret_post"
 ]);
 
 export const UPSTREAM_MCP_DESCRIPTOR_FIELDS = Object.freeze([
@@ -111,8 +131,21 @@ export const UPSTREAM_MCP_DESCRIPTOR_FIELDS = Object.freeze([
   "prefix",
   "protocolVersion",
   "toolsCacheTtlMs",
-  "timeoutMs"
+  "timeoutMs",
+  "aliases"
 ] as const);
+
+const UPSTREAM_MCP_ALIAS_MAX_ENTRIES = 128;
+const UPSTREAM_MCP_ALIAS_KEY_MAX = 128;
+const UPSTREAM_MCP_ALIAS_NAME = /^[A-Za-z0-9_-]{1,80}$/u;
+const UPSTREAM_MCP_ALIAS_TEXT_MAX = 2048;
+
+export interface UpstreamMcpToolAlias {
+  /** Public tool-name segment replacing the upstream name under `upstream.{prefix}.`. */
+  name?: string;
+  title?: string;
+  description?: string;
+}
 
 export const UPSTREAM_MCP_REMOTE_TRANSPORTS = Object.freeze([
   "http",
@@ -237,6 +270,8 @@ export interface UpstreamMcpDescriptor {
   protocolVersion?: typeof UPSTREAM_MCP_PROTOCOL_VERSIONS[number];
   toolsCacheTtlMs?: number;
   timeoutMs?: number;
+  /** Operator curation map: upstream tool name -> public alias. */
+  aliases?: Record<string, string | UpstreamMcpToolAlias>;
 }
 
 export interface UpstreamPayloadTransport {
@@ -259,6 +294,85 @@ export interface UpstreamPayloadTransport {
   };
 }
 
+type UpstreamContentScalar = string | number | boolean | null;
+
+/**
+ * Numeric comparison conjunction: every declared bound must hold, so
+ * `{gte: 0, lt: 100}` expresses a range. Bounds are finite numbers and the
+ * selected value must be a finite number — a non-numeric selection is a miss
+ * on the deny side and a denial on the allow side.
+ */
+export interface UpstreamServiceContentCompare {
+  gt?: number;
+  gte?: number;
+  lt?: number;
+  lte?: number;
+}
+
+export interface UpstreamServiceContentRule {
+  id: string;
+  path?: string;
+  deny?: {
+    contains?: string[];
+    matches?: string[];
+    oneOf?: UpstreamContentScalar[];
+    notIn?: UpstreamContentScalar[];
+    eq?: UpstreamContentScalar;
+    neq?: UpstreamContentScalar;
+    startsWith?: string;
+    endsWith?: string;
+    exists?: boolean;
+    compare?: UpstreamServiceContentCompare;
+  };
+  allow?: {
+    oneOf?: UpstreamContentScalar[];
+    notIn?: UpstreamContentScalar[];
+    matches?: string[];
+    eq?: UpstreamContentScalar;
+    neq?: UpstreamContentScalar;
+    startsWith?: string;
+    endsWith?: string;
+    exists?: boolean;
+    compare?: UpstreamServiceContentCompare;
+  };
+}
+
+export interface UpstreamServiceContentPolicy {
+  request?: {
+    rules: UpstreamServiceContentRule[];
+  };
+}
+
+/**
+ * Operation-level response cache declaration. Honored only on `read_only`
+ * operations that do not require approval; cache hits bypass credential
+ * resolution, permit claims and upstream contact but still consume the
+ * traffic slot and audit trail.
+ */
+export interface UpstreamServiceResponseCache {
+  /** Milliseconds a stored response stays fresh; 1..600000. */
+  ttlMs: number;
+  /** Per-service entry cap; 1..256, default 128. */
+  maxEntries?: number;
+  /** Serialized response byte cap; 1..262144, default 262144. */
+  maxBytes?: number;
+}
+
+/**
+ * Service-level OAuth client lifecycle for the upstream credential path.
+ * Only the machine-to-machine client_credentials grant is supported; the
+ * client secret stays inside the local secret store and is referenced by URI.
+ */
+export interface UpstreamServiceOauth {
+  grantType: "client_credentials";
+  tokenUrl: string;
+  clientId: string;
+  clientSecretRef: string;
+  scopes?: string[];
+  audience?: string;
+  authMethod?: "client_secret_basic" | "client_secret_post";
+}
+
 export interface UpstreamServiceOperation {
   operationKey: string;
   label?: string;
@@ -278,6 +392,8 @@ export interface UpstreamServiceOperation {
   requestSchema?: Record<string, unknown>;
   responseSchema?: Record<string, unknown>;
   payloadTransport: UpstreamPayloadTransport;
+  contentPolicy?: UpstreamServiceContentPolicy;
+  responseCache?: UpstreamServiceResponseCache;
 }
 
 export interface UpstreamServiceDescriptor {
@@ -301,6 +417,8 @@ export interface UpstreamServiceDescriptor {
   audience?: Record<string, unknown>;
   tagPolicy?: Record<string, unknown>;
   circuitBreaker?: Record<string, unknown>;
+  contentPolicy?: UpstreamServiceContentPolicy;
+  oauth?: UpstreamServiceOauth;
 }
 
 export interface PortableUpstreamServiceImport {
@@ -878,6 +996,264 @@ function unknownFields(value: Record<string, unknown>, fields: ReadonlySet<strin
   return Object.keys(value).filter((key) => !fields.has(key));
 }
 
+const CONTENT_POLICY_FIELDS = new Set(["request"]);
+const CONTENT_POLICY_REQUEST_FIELDS = new Set(["rules"]);
+const CONTENT_POLICY_RULE_FIELDS = new Set(["id", "path", "deny", "allow"]);
+const CONTENT_POLICY_COMPARE_FIELDS = new Set(["gt", "gte", "lt", "lte"]);
+const CONTENT_POLICY_DENY_FIELDS = new Set([
+  "contains", "matches", "oneOf", "notIn", "eq", "neq", "startsWith", "endsWith", "exists", "compare"
+]);
+const CONTENT_POLICY_ALLOW_FIELDS = new Set([
+  "oneOf", "matches", "notIn", "eq", "neq", "startsWith", "endsWith", "exists", "compare"
+]);
+const CONTENT_POLICY_MAX_AFFIX_LENGTH = 256;
+const CONTENT_POLICY_MAX_RULES = 32;
+const CONTENT_POLICY_RULE_ID = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/u;
+const CONTENT_POLICY_PATH_SEGMENT = /^[A-Za-z0-9_-]{1,64}$/u;
+const CONTENT_POLICY_MAX_PATH_SEGMENTS = 8;
+const CONTENT_POLICY_FORBIDDEN_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
+const CONTENT_POLICY_MAX_PATTERN_COUNT = 16;
+const CONTENT_POLICY_MAX_PATTERN_LENGTH = 512;
+const CONTENT_POLICY_MAX_LITERAL_COUNT = 64;
+const CONTENT_POLICY_MAX_LITERAL_LENGTH = 1024;
+const CONTENT_POLICY_MAX_ONE_OF_COUNT = 128;
+const OAUTH_FIELDS = new Set<string>(UPSTREAM_SERVICE_OAUTH_FIELDS);
+const OAUTH_GRANT_TYPES = new Set<string>(UPSTREAM_OAUTH_GRANT_TYPES);
+const OAUTH_AUTH_METHODS = new Set<string>(UPSTREAM_OAUTH_AUTH_METHODS);
+const OAUTH_CLIENT_ID = /^[\x21-\x7e]{1,256}$/u;
+const OAUTH_SECRET_REF = /^secret:\/\/[A-Za-z0-9._~:/-]+$/u;
+const OAUTH_SCOPE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/u;
+const OAUTH_MAX_SCOPES = 64;
+const OAUTH_MAX_AUDIENCE_LENGTH = 1024;
+
+function validateContentPolicyLiteralList(value: unknown, field: string, { maxCount, maxLength }: { maxCount: number; maxLength: number }): void {
+  if (!Array.isArray(value) || value.length === 0 || value.length > maxCount) {
+    throw new Error(`${field} must be an array of 1..${maxCount} entries.`);
+  }
+  for (const entry of value) {
+    if (typeof entry !== "string" || entry.length === 0 || entry.length > maxLength) {
+      throw new Error(`${field} entries must be strings of 1..${maxLength} characters.`);
+    }
+  }
+}
+
+function validateContentPolicyMatches(value: unknown, field: string): void {
+  validateContentPolicyLiteralList(value, field, {
+    maxCount: CONTENT_POLICY_MAX_PATTERN_COUNT,
+    maxLength: CONTENT_POLICY_MAX_PATTERN_LENGTH
+  });
+  for (const entry of value as string[]) {
+    try {
+      new RegExp(entry, "u");
+    } catch {
+      throw new Error(`${field} contains a pattern that does not compile.`);
+    }
+  }
+}
+
+function validateContentPolicyScalarList(value: unknown, field: string): void {
+  if (!Array.isArray(value) || value.length === 0 || value.length > CONTENT_POLICY_MAX_ONE_OF_COUNT) {
+    throw new Error(`${field} must be an array of 1..${CONTENT_POLICY_MAX_ONE_OF_COUNT} scalar entries.`);
+  }
+  for (const entry of value) {
+    const scalar = entry === null || ["string", "number", "boolean"].includes(typeof entry);
+    if (!scalar || (typeof entry === "number" && !Number.isFinite(entry)) ||
+        (typeof entry === "string" && entry.length > CONTENT_POLICY_MAX_LITERAL_LENGTH)) {
+      throw new Error(`${field} entries must be finite numbers, booleans, null, or strings of at most ${CONTENT_POLICY_MAX_LITERAL_LENGTH} characters.`);
+    }
+  }
+}
+
+function validateContentPolicyScalar(value: unknown, field: string): void {
+  const scalar = value === null || ["string", "number", "boolean"].includes(typeof value);
+  if (!scalar || (typeof value === "number" && !Number.isFinite(value)) ||
+      (typeof value === "string" && value.length > CONTENT_POLICY_MAX_LITERAL_LENGTH)) {
+    throw new Error(`${field} must be a finite number, boolean, null, or a string of at most ${CONTENT_POLICY_MAX_LITERAL_LENGTH} characters.`);
+  }
+}
+
+function validateContentPolicyCompare(value: unknown, field: string): void {
+  if (!isPlainObject(value)) throw new Error(`${field} must be an object.`);
+  const unsupported = unknownFields(value, CONTENT_POLICY_COMPARE_FIELDS);
+  if (unsupported.length) throw new Error(`Unknown ${field} field(s): ${unsupported.join(", ")}.`);
+  const declared = Object.keys(value).filter((key) => (value as Record<string, unknown>)[key] !== undefined);
+  if (declared.length === 0) throw new Error(`${field} declares no comparison bound.`);
+  for (const key of declared) {
+    const bound = (value as Record<string, unknown>)[key];
+    if (typeof bound !== "number" || !Number.isFinite(bound)) {
+      throw new Error(`${field}.${key} must be a finite number.`);
+    }
+  }
+}
+
+function validateContentPolicyMatcherExtensions(matcher: unknown, field: string): void {
+  const rule = matcher as Record<string, unknown>;
+  for (const key of ["eq", "neq"] as const) {
+    if (rule[key] !== undefined) validateContentPolicyScalar(rule[key], `${field}.${key}`);
+  }
+  for (const key of ["startsWith", "endsWith"] as const) {
+    if (rule[key] !== undefined) {
+      const affix = rule[key];
+      if (typeof affix !== "string" || affix.length === 0 || affix.length > CONTENT_POLICY_MAX_AFFIX_LENGTH) {
+        throw new Error(`${field}.${key} must be a string of 1..${CONTENT_POLICY_MAX_AFFIX_LENGTH} characters.`);
+      }
+    }
+  }
+  if (rule.exists !== undefined && typeof rule.exists !== "boolean") {
+    throw new Error(`${field}.exists must be a boolean.`);
+  }
+  if (rule.notIn !== undefined) {
+    validateContentPolicyScalarList(rule.notIn, `${field}.notIn`);
+  }
+  if (rule.compare !== undefined) {
+    validateContentPolicyCompare(rule.compare, `${field}.compare`);
+  }
+}
+
+function validateContentPolicyPath(value: unknown, field: string): void {
+  if (typeof value !== "string" || value.length === 0 || value.length > 512) {
+    throw new Error(`${field} must be a selector path of at most 512 characters.`);
+  }
+  const segments = value.split(".");
+  if (segments.length > CONTENT_POLICY_MAX_PATH_SEGMENTS ||
+      segments.some((segment) => !CONTENT_POLICY_PATH_SEGMENT.test(segment) || CONTENT_POLICY_FORBIDDEN_SEGMENTS.has(segment))) {
+    throw new Error(`${field} must be a dotted path of up to ${CONTENT_POLICY_MAX_PATH_SEGMENTS} safe property segments.`);
+  }
+}
+
+export function validateUpstreamContentPolicy(value: unknown, field: string = "contentPolicy"): void {
+  if (!isPlainObject(value)) throw new Error(`${field} must be an object.`);
+  const unsupported = unknownFields(value, CONTENT_POLICY_FIELDS);
+  if (unsupported.length) throw new Error(`Unknown ${field} field(s): ${unsupported.join(", ")}.`);
+  if (!isPlainObject(value.request)) {
+    throw new Error(`${field} requires a request policy object.`);
+  }
+  const unsupportedRequestFields = unknownFields(value.request, CONTENT_POLICY_REQUEST_FIELDS);
+  if (unsupportedRequestFields.length) {
+    throw new Error(`Unknown ${field}.request field(s): ${unsupportedRequestFields.join(", ")}.`);
+  }
+  const rules = value.request.rules;
+  if (!Array.isArray(rules) || rules.length === 0 || rules.length > CONTENT_POLICY_MAX_RULES) {
+    throw new Error(`${field}.request.rules must be an array of 1..${CONTENT_POLICY_MAX_RULES} rules.`);
+  }
+  const seenIds = new Set<string>();
+  rules.forEach((rule, index) => {
+    const label = `${field}.request.rules[${index}]`;
+    if (!isPlainObject(rule)) throw new Error(`${label} must be an object.`);
+    const unsupportedRuleFields = unknownFields(rule, CONTENT_POLICY_RULE_FIELDS);
+    if (unsupportedRuleFields.length) {
+      throw new Error(`Unknown ${label} field(s): ${unsupportedRuleFields.join(", ")}.`);
+    }
+    if (typeof rule.id !== "string" || !CONTENT_POLICY_RULE_ID.test(rule.id)) {
+      throw new Error(`${label}.id must be a stable rule identifier.`);
+    }
+    if (seenIds.has(rule.id)) throw new Error(`${label}.id duplicates an earlier rule id.`);
+    seenIds.add(rule.id);
+    if (rule.path !== undefined) validateContentPolicyPath(rule.path, `${label}.path`);
+    const hasDeny = rule.deny !== undefined;
+    const hasAllow = rule.allow !== undefined;
+    if (hasDeny === hasAllow) {
+      throw new Error(`${label} requires exactly one of deny or allow.`);
+    }
+    const matcher = hasDeny ? rule.deny : rule.allow;
+    const matcherFields = hasDeny ? CONTENT_POLICY_DENY_FIELDS : CONTENT_POLICY_ALLOW_FIELDS;
+    if (!isPlainObject(matcher)) throw new Error(`${label}.${hasDeny ? "deny" : "allow"} must be an object.`);
+    const unsupportedMatcherFields = unknownFields(matcher, matcherFields);
+    if (unsupportedMatcherFields.length) {
+      throw new Error(`Unknown ${label}.${hasDeny ? "deny" : "allow"} field(s): ${unsupportedMatcherFields.join(", ")}.`);
+    }
+    const declared = Object.keys(matcher).filter((key) => matcher[key] !== undefined);
+    if (declared.length === 0) {
+      throw new Error(`${label}.${hasDeny ? "deny" : "allow"} declares no matcher.`);
+    }
+    if (matcher.contains !== undefined) validateContentPolicyLiteralList(matcher.contains, `${label}.deny.contains`, {
+      maxCount: CONTENT_POLICY_MAX_LITERAL_COUNT,
+      maxLength: CONTENT_POLICY_MAX_LITERAL_LENGTH
+    });
+    if (matcher.matches !== undefined) {
+      validateContentPolicyMatches(matcher.matches, `${label}.${hasDeny ? "deny" : "allow"}.matches`);
+    }
+    if (matcher.oneOf !== undefined) {
+      validateContentPolicyScalarList(matcher.oneOf, `${label}.${hasDeny ? "deny" : "allow"}.oneOf`);
+    }
+    validateContentPolicyMatcherExtensions(matcher, `${label}.${hasDeny ? "deny" : "allow"}`);
+    if (hasAllow && rule.path === undefined) {
+      throw new Error(`${label}.allow requires a path selector.`);
+    }
+  });
+}
+
+const RESPONSE_CACHE_FIELDS = new Set(["ttlMs", "maxEntries", "maxBytes"]);
+const RESPONSE_CACHE_MAX_TTL_MS = 600_000;
+const RESPONSE_CACHE_MAX_ENTRIES_LIMIT = 256;
+const RESPONSE_CACHE_MAX_BYTES_LIMIT = 256 * 1024;
+
+/**
+ * Operation-level response cache declaration. Honored only on `read_only`
+ * operations that do not require approval; every bound is capped so a
+ * descriptor cannot turn the cache into an unbounded store.
+ */
+export function validateUpstreamResponseCache(value: unknown, field: string = "responseCache"): void {
+  if (!isPlainObject(value)) throw new Error(`${field} must be an object.`);
+  const unsupported = unknownFields(value, RESPONSE_CACHE_FIELDS);
+  if (unsupported.length) throw new Error(`Unknown ${field} field(s): ${unsupported.join(", ")}.`);
+  const ttlMs = Number(value.ttlMs);
+  if (!Number.isSafeInteger(ttlMs) || ttlMs < 1 || ttlMs > RESPONSE_CACHE_MAX_TTL_MS) {
+    throw new Error(`${field}.ttlMs must be a whole number of milliseconds in 1..${RESPONSE_CACHE_MAX_TTL_MS}.`);
+  }
+  if (value.maxEntries !== undefined) {
+    const maxEntries = Number(value.maxEntries);
+    if (!Number.isSafeInteger(maxEntries) || maxEntries < 1 || maxEntries > RESPONSE_CACHE_MAX_ENTRIES_LIMIT) {
+      throw new Error(`${field}.maxEntries must be a whole number in 1..${RESPONSE_CACHE_MAX_ENTRIES_LIMIT}.`);
+    }
+  }
+  if (value.maxBytes !== undefined) {
+    const maxBytes = Number(value.maxBytes);
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > RESPONSE_CACHE_MAX_BYTES_LIMIT) {
+      throw new Error(`${field}.maxBytes must be a whole number in 1..${RESPONSE_CACHE_MAX_BYTES_LIMIT}.`);
+    }
+  }
+}
+
+/**
+ * Validates a service-level OAuth client declaration. The descriptor only
+ * carries public client metadata and a secret:// reference; the client secret
+ * itself lives in the local secret store scoped to the token endpoint origin.
+ */
+export function validateUpstreamOauth(value: unknown, field: string = "oauth"): void {
+  if (!isPlainObject(value)) throw new Error(`${field} must be an object.`);
+  const unsupported = unknownFields(value, OAUTH_FIELDS);
+  if (unsupported.length) throw new Error(`Unknown ${field} field(s): ${unsupported.join(", ")}.`);
+  if (value.grantType !== undefined) {
+    if (typeof value.grantType !== "string" || !OAUTH_GRANT_TYPES.has(value.grantType)) {
+      throw new Error(`${field}.grantType must be "client_credentials".`);
+    }
+  }
+  assertPortableRemoteUrl(value.tokenUrl, `${field}.tokenUrl`);
+  if (typeof value.clientId !== "string" || !OAUTH_CLIENT_ID.test(value.clientId)) {
+    throw new Error(`${field}.clientId must be a printable client identifier of at most 256 characters.`);
+  }
+  if (typeof value.clientSecretRef !== "string" || value.clientSecretRef.length > 512 ||
+      !OAUTH_SECRET_REF.test(value.clientSecretRef) || /[@?#]/u.test(value.clientSecretRef)) {
+    throw new Error(`${field}.clientSecretRef must be a secret:// URI bound through the local secret store.`);
+  }
+  if (value.scopes !== undefined) {
+    if (!Array.isArray(value.scopes) || value.scopes.length > OAUTH_MAX_SCOPES ||
+        value.scopes.some((scope) => typeof scope !== "string" || !OAUTH_SCOPE.test(scope)) ||
+        new Set(value.scopes).size !== value.scopes.length) {
+      throw new Error(`${field}.scopes must contain up to ${OAUTH_MAX_SCOPES} unique scope identifiers.`);
+    }
+  }
+  if (value.audience !== undefined &&
+      (typeof value.audience !== "string" || value.audience.length === 0 || value.audience.length > OAUTH_MAX_AUDIENCE_LENGTH)) {
+    throw new Error(`${field}.audience must be a string of 1..${OAUTH_MAX_AUDIENCE_LENGTH} characters.`);
+  }
+  if (value.authMethod !== undefined &&
+      (typeof value.authMethod !== "string" || !OAUTH_AUTH_METHODS.has(value.authMethod))) {
+    throw new Error(`${field}.authMethod must be "client_secret_basic" or "client_secret_post".`);
+  }
+}
+
 function validatePortablePayloadTransport(
   value: unknown,
   operationIndex: number,
@@ -1020,6 +1396,30 @@ function validatePortableMcpDescriptor(value: unknown, descriptor: Record<string
     }
   }
   validateOptionalExecutionTimeout(value.timeoutMs, "descriptor.mcp.timeoutMs");
+  if (value.aliases !== undefined) {
+    if (!isPlainObject(value.aliases)) throw new Error("descriptor.mcp.aliases must be an object.");
+    const entries = Object.entries(value.aliases);
+    if (entries.length > UPSTREAM_MCP_ALIAS_MAX_ENTRIES) {
+      throw new Error(`descriptor.mcp.aliases supports at most ${UPSTREAM_MCP_ALIAS_MAX_ENTRIES} entries.`);
+    }
+    for (const [upstreamName, alias] of entries) {
+      if (typeof upstreamName !== "string" || upstreamName.length === 0 || upstreamName.length > UPSTREAM_MCP_ALIAS_KEY_MAX ||
+          ["__proto__", "constructor", "prototype"].includes(upstreamName)) {
+        throw new Error("descriptor.mcp.aliases keys must be bounded upstream tool names.");
+      }
+      const record = typeof alias === "string" ? { name: alias } : isPlainObject(alias) ? alias : null;
+      if (!record) throw new Error("descriptor.mcp.aliases values must be a name string or an object.");
+      if (record.name !== undefined && (typeof record.name !== "string" || !UPSTREAM_MCP_ALIAS_NAME.test(record.name))) {
+        throw new Error("descriptor.mcp.aliases name must match [A-Za-z0-9_-] within 80 characters.");
+      }
+      for (const field of ["title", "description"] as const) {
+        if (record[field] !== undefined &&
+            (typeof record[field] !== "string" || record[field].length > UPSTREAM_MCP_ALIAS_TEXT_MAX)) {
+          throw new Error(`descriptor.mcp.aliases ${field} must be a string within ${UPSTREAM_MCP_ALIAS_TEXT_MAX} characters.`);
+        }
+      }
+    }
+  }
 }
 
 function validateOptionalExecutionTimeout(value: unknown, field: string): void {
@@ -1039,6 +1439,12 @@ function validatePortableDescriptor(
   }
   if (descriptor.allowLocalNetwork !== undefined && typeof descriptor.allowLocalNetwork !== "boolean") {
     throw new Error("descriptor.allowLocalNetwork must be boolean.");
+  }
+  if (descriptor.contentPolicy !== undefined) {
+    validateUpstreamContentPolicy(descriptor.contentPolicy, "descriptor.contentPolicy");
+  }
+  if (descriptor.oauth !== undefined) {
+    validateUpstreamOauth(descriptor.oauth, "descriptor.oauth");
   }
   if (descriptor.serviceProtocol === "mcp") {
     validatePortableMcpDescriptor(descriptor.mcp, descriptor);
@@ -1081,6 +1487,12 @@ function validatePortableDescriptor(
     }
     validateOptionalExecutionTimeout(operation.timeoutMs, `descriptor.operations[${index}].timeoutMs`);
     validatePortablePayloadTransport(operation.payloadTransport, index, descriptor.serviceProtocol);
+    if (operation.contentPolicy !== undefined) {
+      validateUpstreamContentPolicy(operation.contentPolicy, `descriptor.operations[${index}].contentPolicy`);
+    }
+    if (operation.responseCache !== undefined) {
+      validateUpstreamResponseCache(operation.responseCache, `descriptor.operations[${index}].responseCache`);
+    }
   });
 }
 
@@ -1116,5 +1528,370 @@ export function parsePortableUpstreamServiceImport(text: string): PortableUpstre
     schemaVersion: PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION,
     serviceKey,
     descriptor: parsed.descriptor
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* OpenAPI 3.x document -> portable upstream service import draft.     */
+/* ------------------------------------------------------------------ */
+
+const OPENAPI_IMPORT_MAX_BYTES = 4 * 1024 * 1024;
+const OPENAPI_IMPORT_MAX_OPERATIONS = 256;
+const OPENAPI_IMPORT_MAX_SCHEMA_BYTES = 64 * 1024;
+const OPENAPI_IMPORT_MAX_REF_DEPTH = 8;
+const OPENAPI_HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "options"]);
+const OPENAPI_OPERATION_KEY = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/u;
+// Mirrors the closed JSON-schema vocabulary enforced at publish time; every
+// other OpenAPI schema keyword is dropped so the draft compiles unchanged.
+const OPENAPI_SCHEMA_KEYWORDS = new Set([
+  "type", "enum", "const", "format", "pattern", "properties", "required",
+  "additionalProperties", "items", "allOf", "anyOf", "oneOf", "not",
+  "maximum", "minimum", "maxItems", "minItems", "maxLength", "minLength",
+  "maxProperties", "minProperties"
+]);
+// Schema-valued keywords whose object value is a map of NAME -> schema; the
+// names are data, not keywords, and must survive the keyword filter.
+const OPENAPI_SCHEMA_MAP_KEYS = new Set(["properties", "patternProperties", "dependentSchemas"]);
+const OPENAPI_UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+export interface OpenApiImportSkippedOperation {
+  path: string;
+  method: string;
+  reason: string;
+}
+
+export interface UpstreamServiceOpenApiImport {
+  document: PortableUpstreamServiceImport;
+  skippedOperations: OpenApiImportSkippedOperation[];
+  warnings: string[];
+}
+
+function openApiImportError(message: string): Error {
+  return new Error(`OpenAPI import failed: ${message}`);
+}
+
+function openApiPointer(root: unknown, ref: string): unknown {
+  if (!ref.startsWith("#/")) return undefined;
+  let current: unknown = root;
+  for (const rawSegment of ref.slice(2).split("/")) {
+    const segment = rawSegment.replace(/~1/gu, "/").replace(/~0/gu, "~");
+    if (!isPlainObject(current) && !Array.isArray(current)) return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+function resolveOpenApiSchema(schema: unknown, root: unknown, depth: number, stack: ReadonlySet<string>): unknown {
+  if (depth > OPENAPI_IMPORT_MAX_REF_DEPTH) return true;
+  if (Array.isArray(schema)) {
+    return schema.map((entry) => resolveOpenApiSchema(entry, root, depth + 1, stack));
+  }
+  if (!isPlainObject(schema)) return schema;
+  const reference = typeof schema.$ref === "string" ? schema.$ref : "";
+  if (reference) {
+    // External references are never fetched; recursive ones stop the loop.
+    if (!reference.startsWith("#/") || stack.has(reference)) return true;
+    const target = openApiPointer(root, reference);
+    if (target === undefined) return true;
+    const next = new Set<string>(stack);
+    next.add(reference);
+    return resolveOpenApiSchema(target, root, depth + 1, next);
+  }
+  const output: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (!OPENAPI_SCHEMA_KEYWORDS.has(key)) continue;
+    if (OPENAPI_SCHEMA_MAP_KEYS.has(key)) {
+      if (!isPlainObject(value)) continue;
+      const resolvedMap: Record<string, unknown> = {};
+      for (const [propertyName, propertySchema] of Object.entries(value)) {
+        if (OPENAPI_UNSAFE_KEYS.has(propertyName)) continue;
+        resolvedMap[propertyName] = resolveOpenApiSchema(propertySchema, root, depth + 1, stack);
+      }
+      output[key] = resolvedMap;
+      continue;
+    }
+    output[key] = resolveOpenApiSchema(value, root, depth + 1, stack);
+  }
+  // OpenAPI 3.0 `nullable` widens a declared type to include null.
+  if (schema.nullable === true) {
+    if (typeof output.type === "string") output.type = [output.type, "null"];
+    else if (Array.isArray(output.type) && !output.type.includes("null")) {
+      output.type = [...output.type, "null"];
+    }
+  }
+  return output;
+}
+
+function openApiServiceKey(value: unknown): string {
+  const slug = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .slice(0, 64);
+  return slug;
+}
+
+function openApiOperationKey(operation: Record<string, unknown>, method: string, path: string, used: Set<string>): string {
+  const raw = typeof operation.operationId === "string" ? operation.operationId : "";
+  let key = raw.replace(/[^A-Za-z0-9_.-]/gu, "_");
+  if (!key || !/^[A-Za-z]/u.test(key)) {
+    const segments = path
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => segment.replace(/^\{(.+)\}$/u, "by-$1"))
+      .map((segment) => segment.replace(/[^A-Za-z0-9]+/gu, "_"))
+      .filter(Boolean);
+    key = `${method.toLowerCase()}_${segments.join("_") || "root"}`;
+    if (!/^[A-Za-z]/u.test(key)) key = `op_${key}`;
+  }
+  key = key.slice(0, 128);
+  if (!OPENAPI_OPERATION_KEY.test(key)) key = `op_${key.slice(0, 124)}`;
+  let candidate = key;
+  for (let index = 2; used.has(candidate); index += 1) {
+    candidate = `${key.slice(0, 120)}_${index}`;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+function openApiJsonMediaTypes(content: unknown): string[] {
+  if (!isPlainObject(content)) return [];
+  return Object.keys(content).filter((type) =>
+    /^application\/json$/iu.test(type) || /^application\/[A-Za-z0-9.+*-]+\+json$/iu.test(type)
+  );
+}
+
+function openApiServerBaseUrl(document: Record<string, unknown>, override: unknown): string {
+  const servers = Array.isArray(document.servers) ? document.servers : [];
+  const first = isPlainObject(servers[0]) ? servers[0] : {};
+  let candidate = typeof override === "string" && override.trim() ? override.trim() : "";
+  if (!candidate && typeof first.url === "string") {
+    candidate = first.url.trim();
+    const variables = isPlainObject(first.variables) ? first.variables : {};
+    candidate = candidate.replace(/\{([A-Za-z][A-Za-z0-9_]{0,63})\}/gu, (match: string, name: string) => {
+      const variable = isPlainObject(variables[name]) ? variables[name] : {};
+      return typeof variable.default === "string" ? variable.default : match;
+    });
+  }
+  if (!isUpstreamServiceRemoteUrl(candidate)) {
+    throw openApiImportError(
+      "the document's servers[0].url is not an absolute HTTP(S) URL; pass baseUrl explicitly."
+    );
+  }
+  return candidate;
+}
+
+function openApiParameterSchema(parameter: Record<string, unknown>, root: unknown): Record<string, unknown> {
+  const schema = isPlainObject(parameter.schema)
+    ? resolveOpenApiSchema(parameter.schema, root, 0, new Set<string>())
+    : { type: "string" };
+  return isPlainObject(schema) ? schema : { type: "string" };
+}
+
+function openApiOperationSchema(
+  parameters: Array<Record<string, unknown>>,
+  bodySchema: unknown,
+  bodyRequired: boolean,
+  root: unknown,
+  warnings: string[],
+  label: string
+): Record<string, unknown> | undefined {
+  const properties: Record<string, unknown> = {};
+  const required = new Set<string>();
+  for (const parameter of parameters) {
+    const name = typeof parameter.name === "string" ? parameter.name : "";
+    if (!name || ["__proto__", "constructor", "prototype"].includes(name)) continue;
+    properties[name] = openApiParameterSchema(parameter, root);
+    if (parameter.required === true || parameter.in === "path") required.add(name);
+  }
+  const schema: Record<string, unknown> = { type: "object", properties };
+  if (isPlainObject(bodySchema)) {
+    const merged = bodySchema as Record<string, unknown>;
+    if ((merged.type === "object" || merged.type === undefined) && isPlainObject(merged.properties)) {
+      // The caller-argument object IS the request body for write operations,
+      // so object body properties merge flat into the argument schema.
+      for (const [name, value] of Object.entries(merged.properties as Record<string, unknown>)) {
+        if (["__proto__", "constructor", "prototype"].includes(name)) continue;
+        if (properties[name] === undefined) properties[name] = value;
+      }
+      for (const name of Array.isArray(merged.required) ? merged.required : []) {
+        if (typeof name === "string") required.add(name);
+      }
+      if (merged.additionalProperties !== undefined) schema.additionalProperties = merged.additionalProperties;
+    } else {
+      properties.body = merged;
+      if (bodyRequired) required.add("body");
+    }
+  }
+  if (Object.keys(properties).length === 0) return undefined;
+  if (required.size > 0) schema.required = [...required];
+  if (Buffer.byteLength(JSON.stringify(schema), "utf8") > OPENAPI_IMPORT_MAX_SCHEMA_BYTES) {
+    warnings.push(`${label}: request schema exceeded ${OPENAPI_IMPORT_MAX_SCHEMA_BYTES} bytes and was dropped.`);
+    return undefined;
+  }
+  return schema;
+}
+
+function openApiResponseSchema(operation: Record<string, unknown>, root: unknown): Record<string, unknown> | undefined {
+  const responses = isPlainObject(operation.responses) ? operation.responses : {};
+  for (const [status, response] of Object.entries(responses)) {
+    if (!/^2[0-9]{2}$/u.test(status) || !isPlainObject(response)) continue;
+    const mediaTypes = openApiJsonMediaTypes(response.content);
+    if (mediaTypes.length === 0) continue;
+    const media = isPlainObject((response.content as Record<string, unknown>)[mediaTypes[0]])
+      ? (response.content as Record<string, unknown>)[mediaTypes[0]] as Record<string, unknown>
+      : {};
+    if (!isPlainObject(media.schema)) continue;
+    const schema = resolveOpenApiSchema(media.schema, root, 0, new Set<string>());
+    if (isPlainObject(schema) && Buffer.byteLength(JSON.stringify(schema), "utf8") <= OPENAPI_IMPORT_MAX_SCHEMA_BYTES) {
+      return schema;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Converts an OpenAPI 3.x JSON document into a portable upstream service
+ * import draft. The result is a descriptor draft: it validates against the
+ * portable-import contract, but callers should review scope and risk
+ * assignments before publishing. Non-JSON request bodies (multipart, binary)
+ * are reported in `skippedOperations`, never silently approximated.
+ */
+export function upstreamServiceImportFromOpenApi(
+  documentText: string,
+  options: { serviceKey?: unknown; baseUrl?: unknown } = {}
+): UpstreamServiceOpenApiImport {
+  if (typeof documentText !== "string" || documentText.length === 0 ||
+      Buffer.byteLength(documentText, "utf8") > OPENAPI_IMPORT_MAX_BYTES) {
+    throw openApiImportError(`document must be a JSON text of at most ${OPENAPI_IMPORT_MAX_BYTES} bytes.`);
+  }
+  let document: unknown;
+  try {
+    document = JSON.parse(documentText);
+  } catch {
+    throw openApiImportError("document is not valid JSON (YAML documents need conversion to JSON first).");
+  }
+  if (!isPlainObject(document)) throw openApiImportError("document must be a JSON object.");
+  const version = typeof document.openapi === "string" ? document.openapi : "";
+  if (!/^3\./u.test(version)) {
+    throw openApiImportError(document.swagger !== undefined
+      ? "Swagger/OpenAPI 2.x documents are not supported; convert to OpenAPI 3.x first."
+      : "document does not declare an OpenAPI 3.x version.");
+  }
+  const info = isPlainObject(document.info) ? document.info : {};
+  const serviceKey = typeof options.serviceKey === "string" && options.serviceKey.trim()
+    ? options.serviceKey.trim()
+    : openApiServiceKey(info.title);
+  if (!isUpstreamServiceKey(serviceKey)) {
+    throw openApiImportError("a serviceKey could not be derived from info.title; pass serviceKey explicitly.");
+  }
+  const baseUrl = openApiServerBaseUrl(document, options.baseUrl);
+  const paths = isPlainObject(document.paths) ? document.paths : {};
+  const operations: Array<Record<string, unknown>> = [];
+  const skippedOperations: OpenApiImportSkippedOperation[] = [];
+  const warnings: string[] = [];
+  const usedKeys = new Set<string>();
+  for (const [path, pathItem] of Object.entries(paths)) {
+    if (typeof path !== "string" || !path.startsWith("/") || !isPlainObject(pathItem)) continue;
+    for (const [method, rawOperation] of Object.entries(pathItem)) {
+      if (!OPENAPI_HTTP_METHODS.has(method.toLowerCase()) || !isPlainObject(rawOperation)) continue;
+      const operation = rawOperation as Record<string, unknown>;
+      const label = `${method.toUpperCase()} ${path}`;
+      if (operations.length >= OPENAPI_IMPORT_MAX_OPERATIONS) {
+        throw openApiImportError(`document declares more than ${OPENAPI_IMPORT_MAX_OPERATIONS} operations.`);
+      }
+      const pathParameters = [
+        ...(Array.isArray(pathItem.parameters) ? pathItem.parameters : []),
+        ...(Array.isArray(operation.parameters) ? operation.parameters : [])
+      ].filter((parameter): parameter is Record<string, unknown> => isPlainObject(parameter));
+      const requiredHeader = pathParameters.find((parameter) =>
+        parameter.in === "header" && parameter.required === true);
+      if (requiredHeader) {
+        skippedOperations.push({ path, method, reason: "requires a header parameter" });
+        continue;
+      }
+      const requestBody = isPlainObject(operation.requestBody) ? operation.requestBody : null;
+      const requestMediaTypes = requestBody ? openApiJsonMediaTypes(requestBody.content) : [];
+      if (requestBody && requestMediaTypes.length === 0) {
+        skippedOperations.push({ path, method, reason: "request body has no JSON media type" });
+        continue;
+      }
+      const bodyMedia = requestBody && requestMediaTypes.length > 0
+        ? (requestBody.content as Record<string, unknown>)[requestMediaTypes[0]]
+        : null;
+      const bodySchema = isPlainObject(bodyMedia) && isPlainObject(bodyMedia.schema)
+        ? resolveOpenApiSchema(bodyMedia.schema, document, 0, new Set<string>())
+        : null;
+      const readOnly = ["get", "head", "options"].includes(method.toLowerCase());
+      const risk = method.toLowerCase() === "delete" ? "destructive" : readOnly ? "read_only" : "safe_write";
+      const requestSchema = openApiOperationSchema(
+        pathParameters.filter((parameter) => parameter.in === "path" || parameter.in === "query"),
+        bodySchema,
+        requestBody?.required === true,
+        document,
+        warnings,
+        label
+      );
+      const responseSchema = openApiResponseSchema(operation, document);
+      operations.push({
+        operationKey: openApiOperationKey(operation, method, path, usedKeys),
+        label: typeof operation.summary === "string" && operation.summary.trim()
+          ? operation.summary.trim().slice(0, 160)
+          : label,
+        method: method.toUpperCase(),
+        path,
+        requiredScopes: [readOnly ? "gateway:read" : "gateway:write"],
+        risk,
+        ...(requestSchema ? { requestSchema } : {}),
+        ...(responseSchema ? { responseSchema } : {}),
+        payloadTransport: {
+          request: {
+            mode: "structured_json",
+            maxBytes: 1024 * 1024,
+            mediaTypes: requestMediaTypes.length > 0 ? requestMediaTypes : ["application/json"]
+          },
+          response: {
+            mode: "structured_json",
+            maxBytes: 8 * 1024 * 1024,
+            mediaTypes: (() => {
+              const mediaTypes = new Set<string>();
+              const responses = isPlainObject(operation.responses) ? operation.responses : {};
+              for (const response of Object.values(responses)) {
+                if (isPlainObject(response)) {
+                  for (const type of openApiJsonMediaTypes((response as Record<string, unknown>).content)) {
+                    mediaTypes.add(type);
+                  }
+                }
+              }
+              return mediaTypes.size > 0 ? [...mediaTypes] : ["application/json"];
+            })()
+          }
+        }
+      });
+    }
+  }
+  if (operations.length === 0) {
+    throw openApiImportError("document exposes no importable HTTP operations.");
+  }
+  const descriptor: Record<string, unknown> = {
+    serviceProtocol: "http",
+    label: typeof info.title === "string" && info.title.trim() ? info.title.trim().slice(0, 160) : serviceKey,
+    ...(typeof info.description === "string" && info.description.trim()
+      ? { description: info.description.trim().slice(0, 2048) }
+      : {}),
+    baseUrl,
+    operations
+  };
+  validatePortableDescriptor(descriptor);
+  return {
+    document: {
+      kind: PORTABLE_UPSTREAM_SERVICE_KIND,
+      schemaVersion: PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION,
+      serviceKey,
+      descriptor: descriptor as PortableUpstreamServiceImport["descriptor"]
+    },
+    skippedOperations,
+    warnings
   };
 }

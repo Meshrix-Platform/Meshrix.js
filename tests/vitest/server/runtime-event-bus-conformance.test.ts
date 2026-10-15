@@ -25,7 +25,6 @@ function createStore() : any {
       };
     },
     async getLatest() : Promise<any> { return []; },
-    async getRevision() : Promise<any> { return revision; },
     async getStats() : Promise<any> { return { eventCount: events.length, revision }; },
     get reads() : any { return reads; }
   };

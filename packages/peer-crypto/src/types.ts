@@ -24,7 +24,7 @@ export const PEER_PREKEY_BUNDLE_VERSION = 1;
 export const PEER_STORE_RECORD_VERSION = 1;
 
 /** Opaque peer identifiers reuse the relay admission charset and bound. */
-export const PEER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+export const PEER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:~-]{0,127}$/u;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/u;
 
 /** Serialized ciphertext upper bound; aligned with the relay frame payload cap. */

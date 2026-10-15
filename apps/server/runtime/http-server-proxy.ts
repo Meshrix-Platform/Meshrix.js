@@ -131,14 +131,10 @@ export async function proxyApiRequest({
         upstreamUrl,
         {
           method: request.method || "GET",
-          headers: Object.fromEntries(headers.entries()),
-          timeout: 30_000
+          headers: Object.fromEntries(headers.entries())
         },
         (upstreamResponse?: any) : any => resolve(upstreamResponse)
       );
-      upstreamRequest.on("timeout", () : any => {
-        upstreamRequest.destroy(new Error("上游服务请求超时。"));
-      });
       upstreamRequest.on("error", reject);
       abortUpstream = () : any => upstreamRequest.destroy(Object.assign(new Error("Forward proxy request cancelled."), {
         code: "forward_proxy_cancelled"

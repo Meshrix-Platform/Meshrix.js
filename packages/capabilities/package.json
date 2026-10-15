@@ -23,6 +23,36 @@
       "types": "./dist/operation-permission-core/store.d.ts",
       "default": "./dist/operation-permission-core/store.js"
     },
+    "./operation-permission-core/store-schema": {
+      "source": "./src/operation-permission-core/store-schema.ts",
+      "types": "./dist/operation-permission-core/store-schema.d.ts",
+      "default": "./dist/operation-permission-core/store-schema.js"
+    },
+    "./operation-permission-core/store-worker-owner": {
+      "source": "./src/operation-permission-core/store-worker-owner.ts",
+      "types": "./dist/operation-permission-core/store-worker-owner.d.ts",
+      "default": "./dist/operation-permission-core/store-worker-owner.js"
+    },
+    "./operation-permission-core/api-key-distribution-worker-owner": {
+      "source": "./src/operation-permission-core/api-key-distribution-worker-owner.ts",
+      "types": "./dist/operation-permission-core/api-key-distribution-worker-owner.d.ts",
+      "default": "./dist/operation-permission-core/api-key-distribution-worker-owner.js"
+    },
+    "./operation-permission-core/catalog": {
+      "source": "./src/operation-permission-core/catalog.ts",
+      "types": "./dist/operation-permission-core/catalog.d.ts",
+      "default": "./dist/operation-permission-core/catalog.js"
+    },
+    "./operation-permission-core/http": {
+      "source": "./src/operation-permission-core/http.ts",
+      "types": "./dist/operation-permission-core/http.d.ts",
+      "default": "./dist/operation-permission-core/http.js"
+    },
+    "./operation-permission-core/policy": {
+      "source": "./src/operation-permission-core/policy.ts",
+      "types": "./dist/operation-permission-core/policy.d.ts",
+      "default": "./dist/operation-permission-core/policy.js"
+    },
     "./skills/tool-skill-management-provider": {
       "source": "./src/skills/tool-skill-management-provider.ts",
       "types": "./dist/skills/tool-skill-management-provider.d.ts",

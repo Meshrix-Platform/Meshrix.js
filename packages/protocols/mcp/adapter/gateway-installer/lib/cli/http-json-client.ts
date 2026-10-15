@@ -24,9 +24,9 @@ export function isLoopbackHost(hostname?: any) : any {
 
 /**
  * Starts a connector-owned request and returns an owner that must remain alive
- * until its response body is consumed. Caller-owned mode disables only
- * Undici's implicit response-header/body inactivity deadlines; connection
- * establishment and explicitly selected request deadlines stay in force.
+ * until its response body is consumed. Caller-owned mode disables Undici's
+ * implicit connection and response inactivity deadlines; explicit caller
+ * cancellation and an explicitly selected request deadline stay in force.
  */
 export async function fetchResponse(url?: any, options: Record<string, any> = {}) : Promise<any> {
   const {
@@ -58,7 +58,7 @@ export async function fetchResponse(url?: any, options: Record<string, any> = {}
   const controller: any = new AbortController();
   const performFetch: any = fetchImpl || (requestLifetime === CALLER_OWNED_HTTP_LIFETIME ? undiciFetch : fetch);
   const dispatcher: any = requestLifetime === CALLER_OWNED_HTTP_LIFETIME
-    ? dispatcherFactory({ headersTimeout: 0, bodyTimeout: 0 })
+    ? dispatcherFactory({ connectTimeout: 0, headersTimeout: 0, bodyTimeout: 0 })
     : null;
   let timeout: any = null;
   let disposed = false;

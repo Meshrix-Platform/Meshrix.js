@@ -348,7 +348,10 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
         return result(200, protocolPayload({
           ...buildContributionStatsDashboard({
             items,
-            auditEvents: typeof registry.listAuditEvents === "function" ? await registry.listAuditEvents() : [],
+            auditSummary: typeof registry.getAuditSummary === "function" ? await registry.getAuditSummary() : null,
+            auditEvents: typeof registry.getAuditSummary !== "function" && typeof registry.listAuditEvents === "function"
+              ? await registry.listAuditEvents()
+              : [],
             protocolVersion: "v0.0.1:skill-hub:runtime-1",
             workspaceId: typeof input.workspaceId === "string" ? input.workspaceId.trim() : "",
             contributionType: "skill",
@@ -373,8 +376,7 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
 
       if (id === "skill_hub.submit") {
         const packagePolicy = assertSkillHubPackagePolicy(input);
-        if (!context.packageCustody ||
-            typeof context.packageCustody.delete !== "function") {
+        if (context.packageCustody?.custodyRef !== packagePolicy.packageBundle.custodyRef) {
           throw new Error("Skill package submission requires service package custody.");
         }
         const workspaceId = workspaceIdFrom(input);
@@ -384,68 +386,45 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
           envelopeDigest: packagePolicy.packageBundle.envelopeDigest,
           byteCount: packagePolicy.packageBundle.byteCount
         };
-        let committed = false;
-        try {
-          const packageChecksum = sealed.contentDigest;
-          const resultPayload = await registry.submitContribution({
-            ...input,
-            workspaceId,
-            contributorId,
-            contributorKind,
-            sourceAgentId: subject.type === "tool-grant"
-              ? callerId
-              : input.sourceAgentId || subject.subjectId || subject.username || contributorId,
-            sourceAgentKind: input.sourceAgentKind || contributorKind,
-            contributionType: "skill",
-            title: input.title || input.name || "Skill Hub contribution",
-            payloadRefs: packagePolicy.refs,
-            skillManifestRef: packagePolicy.refs[0],
-            packageSize: packagePolicy.packageSize,
-            packageChecksum,
-            packageBundle: {
-              path: SKILL_HUB_PACKAGE_PATH,
-              digest: packageChecksum,
-              size: packagePolicy.packageSize,
-              custodyRef: sealed.handle,
-              envelopeDigest: sealed.envelopeDigest
-            },
-            packageCustodyRef: sealed.handle,
-            packageContentDigest: sealed.contentDigest,
-            packageEnvelopeDigest: sealed.envelopeDigest,
-            custodyState: "blocked",
-            executionState: "blocked",
-            runtimeKind: packagePolicy.runtimeKind,
-            entryPoint: packagePolicy.entryPoint,
-            declaredPermissions: packagePolicy.declaredPermissions,
-            license: packagePolicy.license,
-            requestedVisibility: input.requestedVisibility || "public",
-            requestedActions: input.requestedActions || input.actions || packagePolicy.declaredPermissions
-          });
-          committed = true;
-          return result(201, protocolPayload({
-            protocolVersion: "v0.0.1:skill-hub:runtime-1",
-            skill: projectPublicContribution(resultPayload.contribution)
-          }));
-        } catch (error) {
-          if (sealed.handle && !committed) {
-            try {
-              await context.packageCustody.delete({
-                handle: sealed.handle,
-                authorizationRef: `skill-hub-submission-rollback:${skillHubSha256(sealed.handle, 32)}`,
-                ownerBinding: {
-                  tenantRef: context.principal?.tenantRef || workspaceId,
-                  workspaceRef: workspaceId
-                }
-              });
-            } catch (rollbackError) {
-              throw new AggregateError(
-                [error, rollbackError],
-                "Skill package submission failed and service custody rollback did not complete."
-              );
-            }
-          }
-          throw error;
-        }
+        const packageChecksum = sealed.contentDigest;
+        const resultPayload = await registry.submitContribution({
+          ...input,
+          workspaceId,
+          contributorId,
+          contributorKind,
+          sourceAgentId: subject.type === "tool-grant"
+            ? callerId
+            : input.sourceAgentId || subject.subjectId || subject.username || contributorId,
+          sourceAgentKind: input.sourceAgentKind || contributorKind,
+          contributionType: "skill",
+          title: input.title || input.name || "Skill Hub contribution",
+          payloadRefs: packagePolicy.refs,
+          skillManifestRef: packagePolicy.refs[0],
+          packageSize: packagePolicy.packageSize,
+          packageChecksum,
+          packageBundle: {
+            path: SKILL_HUB_PACKAGE_PATH,
+            digest: packageChecksum,
+            size: packagePolicy.packageSize,
+            custodyRef: sealed.handle,
+            envelopeDigest: sealed.envelopeDigest
+          },
+          packageCustodyRef: sealed.handle,
+          packageContentDigest: sealed.contentDigest,
+          packageEnvelopeDigest: sealed.envelopeDigest,
+          custodyState: "blocked",
+          executionState: "blocked",
+          runtimeKind: packagePolicy.runtimeKind,
+          entryPoint: packagePolicy.entryPoint,
+          declaredPermissions: packagePolicy.declaredPermissions,
+          license: packagePolicy.license,
+          requestedVisibility: input.requestedVisibility || "public",
+          requestedActions: input.requestedActions || input.actions || packagePolicy.declaredPermissions
+        });
+        return result(201, protocolPayload({
+          protocolVersion: "v0.0.1:skill-hub:runtime-1",
+          skill: projectPublicContribution(resultPayload.contribution)
+        }));
       }
 
       const targetSkillId = skillHubSkillId(input, context);
@@ -478,14 +457,14 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
           });
         }
         const integrity = await readSkillHubAssetManifest(skill, context);
-        const downloadEvent = await registry.recordDownload(targetSkillId, {
+        const { contribution: committedSkill, ...downloadEvent } = await registry.recordDownload(targetSkillId, {
           actorId: callerId,
           workspaceId: workspaceIdFrom(input)
         });
         return result(200, protocolPayload({
           protocolVersion: "v0.0.1:skill-hub:runtime-1",
-          skill: projectPublicContribution(await registry.getContribution(targetSkillId)),
-          download: skillHubPackageReference(await registry.getContribution(targetSkillId), integrity),
+          skill: projectPublicContribution(committedSkill),
+          download: skillHubPackageReference(committedSkill, integrity),
           downloadEvent
         }));
       }

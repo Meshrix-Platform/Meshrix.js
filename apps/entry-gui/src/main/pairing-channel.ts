@@ -1,32 +1,9 @@
 /**
- * Production pairing channel — the narrow HTTPS binding of the
- * `PairingEndpointPort` contract.
- *
- * The endpoint product's admin surface owns invite issuance; pairing runs as
- * two bounded JSON exchanges against that surface:
- *
- *   POST {base}/pairing/begin     {kind:"entry-pairing-begin",    invite, deviceId, devicePublicKey}
- *       → {outcome:"challenge", challengeId, nonce, expiresAt} | {outcome:"refused", refusal}
- *   POST {base}/pairing/complete  {kind:"entry-pairing-complete", invite, challengeId,
- *                                  deviceId, devicePublicKey, capabilityGrantRef, signature}
- *       → {outcome:"enrolled", capabilityGrantRef, relayCredential?, admissionGeneration?,
- *          revocationRevision?} | {outcome:"refused", refusal}
- *   POST {base}/pairing/revoke    {kind:"entry-pairing-revoke",   deviceId}
- *       → {revoked: boolean}   (best-effort remote enforcement)
- *
- * The invite's one-time `pairingToken` travels inside the invite body — it is
- * the bearer proof that authorizes enrollment on the endpoint's side.
- * `enrollmentExtras()` exposes the post-enrollment material the port's fixed
- * return type cannot carry (relay credential, relay counters); it is never
- * part of the redacted GUI snapshot.
+ * Legacy endpoint maintenance channel. Device enrollment itself is exclusively
+ * performed over the restricted relay + pinned inner-TLS channel in
+ * `EntryPairingRelayChannel`; this adapter exposes only remote revoke.
  */
-import { entryError, type PairingEndpointPort, type PairingInvite } from "@meshrix/entry";
-
-export interface PairingEnrollmentExtras {
-  readonly relayCredential: string | null;
-  readonly admissionGeneration: number | null;
-  readonly revocationRevision: number | null;
-}
+import { entryError } from "@meshrix/entry";
 
 const PAIRING_MAX_BODY_BYTES = 64 * 1024;
 
@@ -34,14 +11,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export class HttpPairingChannel implements PairingEndpointPort {
+export class HttpPairingChannel {
   readonly #baseUrl: string;
   readonly #fetchImpl: typeof fetch;
-  #extras: PairingEnrollmentExtras = {
-    relayCredential: null,
-    admissionGeneration: null,
-    revocationRevision: null
-  };
 
   constructor(options: {
     readonly baseUrl: string;
@@ -56,72 +28,6 @@ export class HttpPairingChannel implements PairingEndpointPort {
     }
     this.#baseUrl = url.toString().replace(/\/+$/u, "");
     this.#fetchImpl = options.fetchImpl ?? fetch;
-  }
-
-  /** Extras captured from the last enrolled response — non-state, main-process only. */
-  enrollmentExtras(): PairingEnrollmentExtras {
-    return this.#extras;
-  }
-
-  async beginPairing(input: {
-    readonly invite: PairingInvite;
-    readonly deviceId: string;
-    readonly devicePublicKey: string;
-  }) {
-    const body = await this.#post("/pairing/begin", {
-      schemaVersion: "v0.0.1:entry:pairing-exchange-1",
-      kind: "entry-pairing-begin",
-      invite: input.invite,
-      deviceId: input.deviceId,
-      devicePublicKey: input.devicePublicKey
-    });
-    if (isRecord(body) && body.outcome === "challenge"
-      && typeof body.challengeId === "string"
-      && typeof body.nonce === "string"
-      && typeof body.expiresAt === "string") {
-      return {
-        outcome: "challenge" as const,
-        challengeId: body.challengeId,
-        nonce: body.nonce,
-        expiresAt: body.expiresAt
-      };
-    }
-    if (isRecord(body) && body.outcome === "refused" && typeof body.refusal === "string") {
-      return { outcome: "refused" as const, refusal: body.refusal };
-    }
-    throw entryError("endpoint_unexpected_response", "The pairing surface returned an unexpected begin response.");
-  }
-
-  async completePairing(input: {
-    readonly invite: PairingInvite;
-    readonly challengeId: string;
-    readonly deviceId: string;
-    readonly devicePublicKey: string;
-    readonly capabilityGrantRef: string;
-    readonly signature: string;
-  }) {
-    const body = await this.#post("/pairing/complete", {
-      schemaVersion: "v0.0.1:entry:pairing-exchange-1",
-      kind: "entry-pairing-complete",
-      invite: input.invite,
-      challengeId: input.challengeId,
-      deviceId: input.deviceId,
-      devicePublicKey: input.devicePublicKey,
-      capabilityGrantRef: input.capabilityGrantRef,
-      signature: input.signature
-    });
-    if (isRecord(body) && body.outcome === "enrolled" && typeof body.capabilityGrantRef === "string") {
-      this.#extras = {
-        relayCredential: typeof body.relayCredential === "string" ? body.relayCredential : null,
-        admissionGeneration: Number.isSafeInteger(body.admissionGeneration) ? Number(body.admissionGeneration) : null,
-        revocationRevision: Number.isSafeInteger(body.revocationRevision) ? Number(body.revocationRevision) : null
-      };
-      return { outcome: "enrolled" as const, capabilityGrantRef: body.capabilityGrantRef };
-    }
-    if (isRecord(body) && body.outcome === "refused" && typeof body.refusal === "string") {
-      return { outcome: "refused" as const, refusal: body.refusal };
-    }
-    throw entryError("endpoint_unexpected_response", "The pairing surface returned an unexpected complete response.");
   }
 
   /** Best-effort remote revocation report; throws endpoint_unreachable on transport failure. */

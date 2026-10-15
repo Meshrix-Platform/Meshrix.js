@@ -1,38 +1,45 @@
-/**
- * Host-supplied channel port for the peer client.
- *
- * All 13 peer wire kinds travel as request/response pairs on the SAME
- * authenticated admitted session channel the device already owns (the relay
- * session transport, like frames/recovery do). The transport owns raw
- * message serialization and demux: `send` emits one wire request object,
- * `onMessage` delivers every decoded inbound wire object — responses and
- * unsolicited pushes alike. The client correlates a response to its single
- * in-flight request by expected kind and treats everything else as a push
- * (`peer-messages` wakeup pages, `peer-retention-policy` advertisements).
- *
- * A transport that cannot surface inbound objects (poll-only wiring) may
- * omit `onMessage`; the host then calls `PeerClient.handleInboundMessage`
- * for every decoded channel message.
- */
+import { base64urlEncode } from "@meshrix/peer-crypto";
+import type { PeerIdentity } from "@meshrix/peer-crypto";
+
+/** Host-supplied channel port for online Peer forwarding. `onMessage` may
+ * receive `peer-presence` as a wakeup for local pending retries; the client
+ * must still rely on fresh session admission for authority. */
 export interface PeerClientTransport {
   send(message: Record<string, unknown>): void | Promise<void>;
   onMessage?(handler: (message: Record<string, unknown>) => void): void;
 }
 
 /**
- * Pairing-layer lookup the host owns: maps a wire device id to the stable
- * crypto peer id. The client consults it before initiating a session and
- * falls back to bindings learned from fetched bundles and decrypted
- * envelopes — it never invents a peer id.
+ * Pairing-layer lookup the host owns. The returned Signal public identity
+ * must have been persisted in the authenticated pairing completion record;
+ * relay-provided metadata is never a trust source.
  */
+export interface PeerPairedSignalIdentity {
+  readonly peerId: string;
+  readonly signalDeviceId: number;
+  readonly registrationId: number;
+  /** Canonical unpadded base64url of `PeerIdentity.publicKey.serialize()`. */
+  readonly identityKey: string;
+}
+
+/** Safe public projection for the signed pairing transcript; contains no private key bytes. */
+export function peerIdentityPublicDescriptor(identity: PeerIdentity): PeerPairedSignalIdentity {
+  return Object.freeze({
+    peerId: identity.peerId,
+    signalDeviceId: identity.deviceId,
+    registrationId: identity.registrationId,
+    identityKey: base64urlEncode(identity.publicKey.serialize())
+  });
+}
+
 export interface PeerDeviceDirectory {
-  resolvePeerId(peerDeviceId: string): string | null | Promise<string | null>;
+  resolvePeerIdentity(peerDeviceId: string): PeerPairedSignalIdentity | null | Promise<PeerPairedSignalIdentity | null>;
 }
 
 /** Static directory for fixed pairings and tests. */
-export function staticPeerDirectory(bindings: Readonly<Record<string, string>>): PeerDeviceDirectory {
+export function staticPeerDirectory(bindings: Readonly<Record<string, PeerPairedSignalIdentity>>): PeerDeviceDirectory {
   return Object.freeze({
-    resolvePeerId(peerDeviceId: string): string | null {
+    resolvePeerIdentity(peerDeviceId: string): PeerPairedSignalIdentity | null {
       return bindings[peerDeviceId] ?? null;
     }
   });

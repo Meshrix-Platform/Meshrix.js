@@ -22,6 +22,12 @@ with Meshrix.
 - The plugin calls the Model Gateway Service directly over HTTP.
 - The plugin calls Meshrix only as an ordinary governed external client through
   allowed operations in `operationAllowlist`.
+- Remote service targets require HTTPS. Plain HTTP is limited to literal IPv4
+  and IPv6 loopback development endpoints.
+- Per-UTC-day request and operation budget reservations are stored durably in
+  the private run journal before egress. Stable reservation and idempotency keys
+  let recovery repeat an uncertain request without charging the local budget a
+  second time; uncertain requests remain reserved.
 - `credentialRefs` are references only; secret material never appears in the
   configuration file.
 - Meshrix cannot call, schedule, cancel, observe, configure, start, stop, or

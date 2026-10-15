@@ -53,11 +53,11 @@ function strictPackage(execution) {
   return bytes;
 }
 
-export async function executeRemoteSandboxOperation({ operation, input, call, signal, host, remote }) {
+export async function executeRemoteSandboxOperation({ operation, input, call, signal, host, remote, invocationId }) {
   if (typeof host.sandboxExecution?.executeConfigured !== "function") {
     return failure("skill_hub_sandbox_operation_failed", 503);
   }
-  const prepared = await remote.request({ operation, input, call, signal, host, phase: "prepare" });
+  const prepared = await remote.request({ operation, input, call, signal, host, phase: "prepare", invocationId });
   if (prepared.statusCode >= 400) return prepared;
   const execution = prepared.body?.execution;
   const request = execution?.request;
@@ -76,7 +76,7 @@ export async function executeRemoteSandboxOperation({ operation, input, call, si
       });
     }, { signal });
     if (operation.id === "skill_hub.scan") receipt = await acceptScanOutput(receipt, host.sandboxExecution);
-    return remote.request({ operation, input, call, signal, host, phase: "commit", receipt });
+    return remote.request({ operation, input, call, signal, host, phase: "commit", invocationId, receipt });
   } catch {
     return failure("skill_hub_sandbox_operation_failed");
   } finally {

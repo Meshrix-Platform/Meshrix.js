@@ -19,18 +19,11 @@ import {
   skillHubSandboxPolicy
 } from "./skill-hub-storage.mjs";
 
-function safePathSegment(value) {
-  return String(value || "asset")
-    .trim()
-    .replace(/[^a-zA-Z0-9._-]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 120) || "asset";
-}
-
 export function materializeSkillHubAsset(contribution, {
   persistenceEnabled = false,
   serviceData = null,
   schedulePersistence = null,
+  registryScope,
   lifecycleState = contribution.status || "submitted",
   targetWorkspaceId = contribution.workspaceId,
   relation = "canonical",
@@ -47,11 +40,11 @@ export function materializeSkillHubAsset(contribution, {
     throw error;
   }
   const storageDirectories = [SKILL_HUB_STORAGE_ROOT_DIR, SKILL_HUB_SKILL_STORAGE_DIR];
-  const assetPath = skillHubAssetRelativePath({
+  const assetBasePath = skillHubAssetRelativePath({
     workspaceId: targetWorkspaceId,
     contributionId: contribution.contributionId,
     relation,
-    safePathSegment
+    registryScope
   });
   if (!contribution.packageCustodyRef) {
     throw new Error("Skill Hub assets require a service custody bundle.");
@@ -106,6 +99,9 @@ export function materializeSkillHubAsset(contribution, {
     createdAt: timestamp
   };
   const manifestHash = hash(stableJson(manifest), 32);
+  // The registry transaction selects a revision only after its file is durable.
+  // Failed commits must never overwrite a manifest referenced by committed state.
+  const assetPath = assetBasePath.replace(/\.json$/u, `.${manifestHash}.json`);
   const record = assetRecordProjector({
     assetId: stableId("skill_hub_asset", {
       contributionId: contribution.contributionId,

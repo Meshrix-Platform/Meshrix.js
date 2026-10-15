@@ -65,6 +65,22 @@ async function authorizeTransit({
       url,
       method
     });
+    if (toolAuthorization?.ok === true) {
+      const apiKeyAuthorization: any = toolAuthorization.apiKeyAuthorization || {};
+      const grant: any = toolAuthorization.grant || {};
+      const admission: any = await request?.__meshrixPrincipalAdmission?.({
+        credentialKind: toolAuthorization.credentialKind === "scoped_api_key" ? "api-key" : "grant",
+        subjectId: String(apiKeyAuthorization.workloadPrincipalId || grant.subjectId || grant.id || ""),
+        tenantId: String(apiKeyAuthorization.organizationNodeId || grant.tenantId || "")
+      });
+      if (admission?.allowed === false) {
+        return {
+          ok: false,
+          status: 429,
+          error: "Gateway payload transit rate is limited."
+        };
+      }
+    }
     if (toolAuthorization?.ok === true && toolAuthorization.credentialKind === "scoped_api_key") {
       const operationAuthorization: any = await toolSkillManagementProvider.authorizeApiKeyOperation?.({
         authorization: toolAuthorization.apiKeyAuthorization,

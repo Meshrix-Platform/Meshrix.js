@@ -23,6 +23,8 @@ import {
 import {
   discoverReleaseJourneyClients
 } from "../../../tools/server-scripts/lib/release-journey-adapter.ts";
+import { composeEnv } from "../../../tools/server-scripts/lib/release-journey-compose.ts";
+import { releaseJourneyServiceId } from "../../../tools/server-scripts/lib/release-journey-console.ts";
 import {
   apiKeyUploadAuthSession,
   authSubjectFromSession
@@ -210,6 +212,35 @@ describe("release-journey native upload", () : any => {
     expect(calls.every((call?: any) : any => !call.options.headers["x-meshrix-signature"])).toBe(true);
     expect(result.receipt.processIdentityBound).toBe(false);
     expect(result.receipt.workloadIdentityBound).toBe(true);
+  });
+});
+
+describe("release-journey secret wiring", () : any => {
+  it("passes only operator-custodied secret file paths into Compose", () : any => {
+    const env = composeEnv({
+      hostPort: 7228,
+      converterImage: "converter:fixture",
+      masterKeySource: "/private/work/master-key",
+      converterTokenSource: "/private/work/converter-token"
+    });
+
+    expect(env.MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE).toBe("/private/work/master-key");
+    expect(env.MESHRIX_FORMAT_CONVERT_AUTH_TOKEN_SOURCE).toBe("/private/work/converter-token");
+    expect(env).not.toHaveProperty("MESHRIX_LOCAL_SECRET_MASTER_KEY");
+    expect(env).not.toHaveProperty("FORMAT_CONVERT_AUTH_TOKEN");
+  });
+
+  it("matches the published owner-and-service-key identity derivation", async () : Promise<any> => {
+    const { createHash } = await import("node:crypto");
+    const expected = `svc_${createHash("sha256")
+      .update("upstream-service")
+      .update("\0")
+      .update("owner-subject")
+      .update("\0")
+      .update("file-parser/format-convert")
+      .digest("base64url")}`;
+
+    expect(releaseJourneyServiceId("owner-subject", "file-parser/format-convert")).toBe(expected);
   });
 });
 

@@ -30,6 +30,16 @@ sampled, or shed under fixed budgets and does not retain payload copies. The
 owning security, operation, gateway, observability, runtime, and protocol
 documents specify the detailed behavior.
 
+## Private project planning
+
+The maintainer-designated private project workspace owns the current development
+Programme, requirement catalogue and referenced split Tree/Task/Node workspaces.
+This repository's ignored `docs/plans/` retains inactive predecessor evidence;
+it is not a second current plan. Planning records are excluded from public
+documentation and release artifacts. A plan reader may display a safe progress
+projection without starting work. Current product and publication facts continue
+to belong to [Status](STATUS.md), not to plan completion.
+
 ## Start here
 
 | Goal | Reference |
@@ -77,6 +87,7 @@ documents specify the detailed behavior.
 | Compatibility reference (informational, not a deployment gate) | [COMPATIBILITY.md](COMPATIBILITY.md) |
 | Examples | [examples/README.md](examples/README.md) |
 | Implemented decisions | [adrs/README.md](adrs/README.md) |
+| Frontend design and art asset index | [design/README.md](design/README.md) |
 
 ## Develop Meshrix.js
 
@@ -96,7 +107,6 @@ documents specify the detailed behavior.
 | Operation Permission | [OPERATION-PERMISSION.md](functionality/OPERATION-PERMISSION.md) |
 | Security and authorization | [SECURITY-AUTHORIZATION.md](functionality/SECURITY-AUTHORIZATION.md) (`docs/functionality/SECURITY-AUTHORIZATION.md`) |
 | Operations and observability | [OPERATIONS-OBSERVABILITY.md](functionality/OPERATIONS-OBSERVABILITY.md) |
-| Enterprise recording | [ENTERPRISE-RECORDING.md](functionality/ENTERPRISE-RECORDING.md) |
 | Format conversion | [format-convert.md](functionality/format-convert.md) |
 
 ## Verification

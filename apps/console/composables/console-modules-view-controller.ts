@@ -18,8 +18,7 @@ export function useModulesViewConsole() {
     async select(input): Promise<void> {
       gatewayChannelBusy.value = true;
       try {
-        await selectGatewayChannel(input);
-        await refreshGatewayChannels();
+        gatewayChannelState.value = await selectGatewayChannel(input);
       } finally {
         gatewayChannelBusy.value = false;
       }

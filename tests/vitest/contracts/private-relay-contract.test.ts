@@ -9,6 +9,7 @@ import {
   PRIVATE_RELAY_LIMITS,
   PRIVATE_RELAY_MODES,
   PRIVATE_RELAY_OFFLINE_NEW_CALL_QUEUES,
+  PRIVATE_RELAY_PAIRING_RELAY_KINDS,
   PRIVATE_RELAY_RECOVERY_KINDS,
   PRIVATE_RELAY_ROLES,
   PRIVATE_RELAY_SCHEMA_VERSION,
@@ -18,24 +19,21 @@ import {
   PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION,
   PRIVATE_RELAY_ROTATION_STATES,
   PRIVATE_RELAY_OPERATION_STATES,
-  PRIVATE_RELAY_PEER_ACK_REFUSALS,
-  PRIVATE_RELAY_PEER_APPLICATION_RECEIPT_KINDS,
-  PRIVATE_RELAY_PEER_APP_RECEIPTS_FROM_ACKS,
-  PRIVATE_RELAY_PEER_GAP_CAUSES,
+  PRIVATE_RELAY_PEER_DELIVERY_ACK_DOMAIN,
+  PRIVATE_RELAY_PEER_FORWARD_REQUEST_KINDS,
+  PRIVATE_RELAY_PEER_FORWARD_OUTCOMES,
+  PRIVATE_RELAY_PEER_FORWARD_REFUSALS,
   PRIVATE_RELAY_PEER_KINDS,
   PRIVATE_RELAY_PEER_LIMITS,
-  PRIVATE_RELAY_PEER_MAILBOX_RECEIPT_KINDS,
-  PRIVATE_RELAY_PEER_MAILBOX_SEES_PLAINTEXT,
-  PRIVATE_RELAY_PEER_RECEIPT_KINDS,
+  PRIVATE_RELAY_PEER_PRESENCE_STATES,
+  PRIVATE_RELAY_PEER_RELAY_SEES_PLAINTEXT,
   PRIVATE_RELAY_PEER_SCHEMA_VERSION,
-  PRIVATE_RELAY_PEER_SEND_OUTCOMES,
   admitOutboundFrame,
   acknowledgeFrames,
   agreePrivateRelayPeers,
   assertOfflineCallHandling,
   assertOperationStatusHonest,
   assertPeerEnvelopeCipherOnly,
-  assertPeerReceiptIndependent,
   assertRecoveryPurposeSeparation,
   assertRelayAdmissionOnlyRouting,
   assertRelaySessionTransition,
@@ -45,6 +43,9 @@ import {
   containsForbiddenRelayKeys,
   containsForbiddenSnapshotKeys,
   createPrivateRelayPeer,
+  createPeerDeliveryAck,
+  createPeerForwarded,
+  createPeerPresence,
   decodePrivateRelayMessage,
   decodePrivateRelayPeerMessage,
   endpointReachabilityForNewWork,
@@ -52,12 +53,17 @@ import {
   encodePrivateRelayPeerMessage,
   initialFrameAccounting,
   operationRetryPermitted,
+  pairingChannelAdmitsOnlyPairing,
   parsePrivateRelayMessage,
+  createPairingBootstrap,
+  parsePairingBootstrap,
   parsePrivateRelayPeerMessage,
+  peerIdForRouteDevice,
   parsePrivateRelayRecoveryMessage,
-  peerAckFullyRecorded,
-  peerReceiptIsApplicationReport,
-  peerReceiptIsMailboxIssued,
+  peerCiphertextDigest,
+  peerDeliveryAckMatchesSend,
+  peerDeliveryAckSigningInputForSend,
+  peerDeliveryAckTranscript,
   peerSendReplayClass,
   recoveryChannelAdmitsOnlyRecovery,
   relaySessionTransition,
@@ -73,17 +79,34 @@ const corpus: any = JSON.parse(fs.readFileSync(
 ));
 
 describe("private relay wire contract", () : any => {
+  it.each(["constructor", "toString", "valueOf", "__proto__"])("rejects inherited object key %s as an unknown wire kind", (kind) => {
+    const candidate = { kind };
+    expect(parsePrivateRelayMessage(candidate)).toBeNull();
+    expect(parsePrivateRelayPeerMessage(candidate)).toBeNull();
+    expect(parsePrivateRelayRecoveryMessage(candidate)).toBeNull();
+  });
+
   it("freezes versioned schemas, roles, modes, purposes and bounded limits", () : any => {
     expect(PRIVATE_RELAY_SCHEMA_VERSION).toBe("v0.0.1:private-relay:wire-1");
     expect(PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION).toBe("v0.0.1:private-relay:recovery-1");
     expect(PRIVATE_RELAY_WIRE_PROTOCOL).toBe("meshrix-private-relay/0");
     expect([...PRIVATE_RELAY_ROLES].sort()).toEqual(["endpoint", "entry"]);
     expect([...PRIVATE_RELAY_MODES].sort()).toEqual(["enterprise", "personal"]);
-    expect([...PRIVATE_RELAY_SESSION_PURPOSES].sort()).toEqual(["forward", "recover_device"]);
+    expect([...PRIVATE_RELAY_SESSION_PURPOSES].sort()).toEqual(["forward", "pair_device", "recover_device"]);
+    expect([...PRIVATE_RELAY_PAIRING_RELAY_KINDS]).toEqual(["pairing-bootstrap"]);
     expect(PRIVATE_RELAY_LIMITS.maxFramePayloadBytes).toBe(262_144);
     expect(PRIVATE_RELAY_LIMITS.maxOutstandingBytes).toBe(4_194_304);
     expect(PRIVATE_RELAY_ACK_IS_CONSUMPTION_PROOF).toBe(false);
     expect(PRIVATE_RELAY_OFFLINE_NEW_CALL_QUEUES).toBe(false);
+  });
+
+  it("derives route peer identities unambiguously for account-assigned tenant identifiers", () : any => {
+    expect(peerIdForRouteDevice({ tenantId: "tenant.safe", routeId: "route.safe", deviceId: "device.safe" }))
+      .toBe("peer:tenant.safe:route.safe:device.safe");
+    expect(peerIdForRouteDevice({ tenantId: "personal:acct_1", routeId: "route.safe", deviceId: "device_1" }))
+      .toBe("peer:personal~acct_1:route.safe:device_1");
+    expect(peerIdForRouteDevice({ tenantId: "aa:bb", routeId: "cc", deviceId: "device.safe" }))
+      .not.toBe(peerIdForRouteDevice({ tenantId: "aa", routeId: "bb:cc", deviceId: "device.safe" }));
   });
 
   it("lets two neutral peers agree on every frozen session message", () : any => {
@@ -108,6 +131,31 @@ describe("private relay wire contract", () : any => {
     expect(containsForbiddenRelayKeys(corpus.session.invalid.frameCarriesPlaintext)).toBe(true);
     expect(containsForbiddenRelayKeys(corpus.session.invalid.routeStatusSemanticDetail)).toBe(true);
     expect(containsForbiddenRelayKeys(corpus.session.valid["session-open"])).toBe(false);
+  });
+
+  it("keeps pair-device sessions to opaque pairing frames and delivery control", () : any => {
+    for (const kind of ["frame", "frame-ack", "session-close"]) {
+      expect(pairingChannelAdmitsOnlyPairing(kind, "pair_device"), kind).toBe(true);
+    }
+    for (const kind of [
+      "route-bind", "route-query", "route-status", "frame-status", "flow-credit",
+      "session-open", "session-reconnect", "recovery-request", "vault-fetch",
+      "peer-bundle-publish", "pairing-bootstrap"
+    ]) {
+      expect(pairingChannelAdmitsOnlyPairing(kind, "pair_device"), kind).toBe(false);
+    }
+    expect(pairingChannelAdmitsOnlyPairing("route-query", "forward")).toBe(true);
+    expect(pairingChannelAdmitsOnlyPairing("route-query", "unknown")).toBe(false);
+  });
+
+  it("keeps the pre-TLS pairing bootstrap to opaque relay identifiers", () : any => {
+    const message = corpus.session.valid["pairing-bootstrap"];
+    expect(parsePairingBootstrap(message)).toEqual(message);
+    expect(createPairingBootstrap({
+      bootstrapId: message.bootstrapId,
+      entrySessionId: message.entrySessionId
+    })).toEqual(message);
+    expect(parsePrivateRelayMessage(corpus.session.invalid.pairingBootstrapCarriesPeerKey)).toBeNull();
   });
 
   it("keeps relay admission to routing identifiers only", () : any => {
@@ -251,30 +299,29 @@ describe("private relay wire contract", () : any => {
     }
   });
 
-  it("freezes peer messaging kinds, the receipt taxonomy and bounded mailbox limits", () : any => {
+  it("freezes online peer forwarding, presence, signed ACK and public bundle kinds", () : any => {
     expect(PRIVATE_RELAY_PEER_SCHEMA_VERSION).toBe("v0.0.1:private-relay:peer-1");
     expect([...PRIVATE_RELAY_PEER_KINDS].sort()).toEqual([
-      "peer-accepted", "peer-ack", "peer-acked", "peer-bundle", "peer-bundle-fetch",
-      "peer-bundle-publish", "peer-bundle-published", "peer-fetch", "peer-messages",
-      "peer-receipt", "peer-retention-policy", "peer-send", "peer-status"
+      "peer-bundle", "peer-bundle-fetch", "peer-bundle-publish", "peer-bundle-published",
+      "peer-delivery-ack", "peer-forwarded", "peer-presence", "peer-send"
     ]);
-    expect([...PRIVATE_RELAY_PEER_RECEIPT_KINDS].sort()).toEqual([
-      "accepted", "accepted_by_agent", "completed", "received", "rejected"
+    expect([...PRIVATE_RELAY_PEER_FORWARD_OUTCOMES].sort()).toEqual([
+      "backpressured", "endpoint_unreachable", "forwarded", "refused"
     ]);
-    expect([...PRIVATE_RELAY_PEER_MAILBOX_RECEIPT_KINDS].sort()).toEqual(["accepted", "received"]);
-    expect([...PRIVATE_RELAY_PEER_APPLICATION_RECEIPT_KINDS].sort()).toEqual([
-      "accepted_by_agent", "completed", "rejected"
+    expect([...PRIVATE_RELAY_PEER_FORWARD_REQUEST_KINDS].sort()).toEqual([
+      "peer-delivery-ack", "peer-send"
     ]);
-    expect([...PRIVATE_RELAY_PEER_SEND_OUTCOMES].sort()).toEqual(["accepted", "conflict", "duplicate"]);
-    expect([...PRIVATE_RELAY_PEER_GAP_CAUSES].sort()).toEqual(["capacity_truncated", "expired"]);
-    expect(PRIVATE_RELAY_PEER_APP_RECEIPTS_FROM_ACKS).toBe(false);
-    expect(PRIVATE_RELAY_PEER_MAILBOX_SEES_PLAINTEXT).toBe(false);
+    expect([...PRIVATE_RELAY_PEER_FORWARD_REFUSALS].sort()).toEqual([
+      "authority_stale", "peer_unpaired", "rate_limited", "revoked"
+    ]);
+    expect([...PRIVATE_RELAY_PEER_PRESENCE_STATES].sort()).toEqual(["reachable", "unreachable"]);
+    expect(PRIVATE_RELAY_PEER_DELIVERY_ACK_DOMAIN).toBe("meshrix-peer-delivery-ack-v1");
+    expect(PRIVATE_RELAY_PEER_RELAY_SEES_PLAINTEXT).toBe(false);
     expect(PRIVATE_RELAY_PEER_LIMITS.maxEnvelopeBytes).toBe(65_536);
-    expect(PRIVATE_RELAY_PEER_LIMITS.maxPageMessages).toBe(64);
-    expect(PRIVATE_RELAY_PEER_LIMITS.maxAckEntries).toBe(64);
+    expect(PRIVATE_RELAY_PEER_LIMITS.maxSignatureBytes).toBe(64);
   });
 
-  it("lets neutral peers agree on every frozen peer mailbox message", () : any => {
+  it("lets neutral peers agree on every frozen peer wire message", () : any => {
     const kinds: any[] = [];
     for (const [name, message] of Object.entries(corpus.peer.valid)) {
       const parsed: any = parsePrivateRelayPeerMessage(message);
@@ -296,10 +343,10 @@ describe("private relay wire contract", () : any => {
 
   it("keeps peer envelopes to ciphertext plus session headers and rejects semantic or plaintext fields", () : any => {
     expect(assertPeerEnvelopeCipherOnly(corpus.peer.valid["peer-send"])).toBe(true);
-    expect(containsForbiddenPeerKeys(corpus.peer.invalid.peerSendSmuggledSemanticGrants)).toBe(true);
+    expect(containsForbiddenPeerKeys(corpus.peer.invalid.peerSendSmuggledSemanticGrant)).toBe(true);
     expect(containsForbiddenPeerKeys(corpus.peer.invalid.peerSendCarriesPlaintextField)).toBe(true);
     expect(() : any => assertPeerEnvelopeCipherOnly(
-      corpus.peer.invalid.peerSendSmuggledSemanticGrants
+      corpus.peer.invalid.peerSendSmuggledSemanticGrant
     )).toThrow();
     expect(() : any => assertPeerEnvelopeCipherOnly(
       corpus.peer.invalid.peerSendCarriesPlaintextField
@@ -307,51 +354,60 @@ describe("private relay wire contract", () : any => {
     expect(containsForbiddenPeerKeys(corpus.peer.valid["peer-send"])).toBe(false);
   });
 
-  it("enforces sender-scoped idempotent resend and typed conflict rejection", () : any => {
+  it("enforces stable message identity and byte-identical retry classification", () : any => {
     const send: any = corpus.peer.valid["peer-send"];
     expect(peerSendReplayClass(send, corpus.peer.valid["peer-send-retry"])).toBe("retry");
-    expect(peerSendReplayClass(send, corpus.peer.valid["peer-send-conflict"])).toBe("conflict");
+    expect(peerSendReplayClass(send, { ...send, envelope: { ...send.envelope, ciphertext: "RElGRkVSRU5UX0JPRFlfRk9SX01TR18xMDA" } })).toBe("conflict");
     expect(peerSendReplayClass(send, { ...send, messageId: "msg.pr.999" })).toBe("distinct");
     expect(peerSendReplayClass(send, corpus.peer.invalid.peerSendSelfAddressed)).toBeNull();
-    const conflict: any = corpus.peer.valid["peer-accepted-conflict"];
-    expect(conflict.outcome).toBe("conflict");
-    expect(conflict.receipt).toBeNull();
-    const accepted: any = corpus.peer.valid["peer-accepted"];
-    expect(accepted.receipt.kind).toBe("accepted");
-    expect(peerReceiptIsMailboxIssued(accepted.receipt)).toBe(true);
   });
 
-  it("keeps application receipts independent of mailbox acknowledgements", () : any => {
-    const ackReports: any = corpus.peer.valid["peer-ack"].reports;
-    expect(assertPeerReceiptIndependent(ackReports[0])).toBe(true);
-    expect(peerReceiptIsApplicationReport(ackReports[0])).toBe(true);
-    for (const status of corpus.peer.valid["peer-status"].statuses as any[]) {
-      for (const receipt of status.receipts) expect(assertPeerReceiptIndependent(receipt)).toBe(true);
+  it("binds a durable ACK transcript to the exact route, device pair, message and ciphertext", async () : any => {
+    const send: any = corpus.peer.valid["peer-send"];
+    const ack: any = corpus.peer.valid["peer-delivery-ack"];
+    const input: any = await peerDeliveryAckSigningInputForSend(send);
+    expect(input).toEqual({
+      tenantId: send.tenantId,
+      routeId: send.routeId,
+      senderDeviceId: send.senderDeviceId,
+      recipientDeviceId: send.recipientDeviceId,
+      messageId: send.messageId,
+      ciphertextDigest: ack.ciphertextDigest
+    });
+    expect(await peerCiphertextDigest(send)).toBe(ack.ciphertextDigest);
+    expect(peerDeliveryAckTranscript(input)).toBe([
+      "meshrix-peer-delivery-ack-v1",
+      send.tenantId,
+      send.routeId,
+      send.senderDeviceId,
+      send.recipientDeviceId,
+      send.messageId,
+      ack.ciphertextDigest
+    ].join("\n"));
+    expect(await peerDeliveryAckMatchesSend(ack, send)).toBe(true);
+    for (const [name, substituted] of Object.entries(corpus.peer.contextualInvalid)) {
+      expect(parsePrivateRelayPeerMessage(substituted), name).toBeTruthy();
+      expect(await peerDeliveryAckMatchesSend(substituted, send), name).toBe(false);
     }
-    expect(() : any => assertPeerReceiptIndependent(
-      corpus.peer.invalid.peerAcceptedDerivesAgentReceipt.receipt
-    )).toThrow();
-    expect(() : any => assertPeerReceiptIndependent(
-      corpus.peer.invalid.peerStatusReceiptDerivedFromAck.statuses[0].receipts[0]
-    )).toThrow();
-    expect(() : any => assertPeerReceiptIndependent(
-      corpus.peer.invalid.peerAckInventedReceiptKind.reports[0]
-    )).toThrow();
+    expect(createPeerDeliveryAck(ack)).toEqual(ack);
   });
 
-  it("records acknowledged sends without silent drops or invented outcomes", () : any => {
-    expect(peerAckFullyRecorded(corpus.peer.valid["peer-ack"], corpus.peer.valid["peer-acked"])).toBe(true);
-    const dropped: any = {
-      ...corpus.peer.valid["peer-acked"],
-      recorded: corpus.peer.valid["peer-acked"].recorded.slice(1)
-    };
-    expect(peerAckFullyRecorded(corpus.peer.valid["peer-ack"], dropped)).toBe(false);
-    const invented: any = {
-      ...corpus.peer.valid["peer-acked"],
-      refused: [...corpus.peer.valid["peer-acked"].refused, { messageId: "msg.pr.777", refusal: "message_unknown" }]
-    };
-    expect(peerAckFullyRecorded(corpus.peer.valid["peer-ack"], invented)).toBe(false);
-    for (const refusal of PRIVATE_RELAY_PEER_ACK_REFUSALS) expect(typeof refusal).toBe("string");
+  it("treats forwarding and presence as wakeup evidence only", () : any => {
+    const forwarded: any = corpus.peer.valid["peer-forwarded"];
+    const ackForwarded: any = corpus.peer.valid["peer-forwarded-ack"];
+    const presence: any = corpus.peer.valid["peer-presence"];
+    const replaced: any = corpus.peer.valid["peer-presence-replaced-session"];
+    expect(forwarded.outcome).toBe("forwarded");
+    expect(forwarded.requestKind).toBe("peer-send");
+    expect(forwarded).not.toHaveProperty("delivered");
+    expect(ackForwarded.requestKind).toBe("peer-delivery-ack");
+    expect(ackForwarded.messageId).toBe(forwarded.messageId);
+    expect(ackForwarded.sourceDeviceId).toBe(forwarded.targetDeviceId);
+    expect(ackForwarded.targetDeviceId).toBe(forwarded.sourceDeviceId);
+    expect(createPeerForwarded(ackForwarded)).toEqual(ackForwarded);
+    expect(createPeerPresence(presence)).toEqual(presence);
+    expect(createPeerPresence(replaced).sessionId).not.toBe(presence.sessionId);
+    expect(parsePrivateRelayPeerMessage(corpus.peer.valid["peer-presence-unreachable"])).toBeTruthy();
   });
 
   it("round-trips encoded frames and rejects tampered bytes", () : any => {

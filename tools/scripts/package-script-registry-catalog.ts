@@ -661,6 +661,27 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     ],
     outputs: ["build/reports/upstream-service-publishing.html"],
   },
+  "generate:design-assets": {
+    scriptName: "generate:design-assets", command: "npm run generate:design-assets", category: "verifier", subsystem: "repository",
+    owner: "platform", tier: "hygiene", sideEffects: "source-write",
+    requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
+    inputs: [
+      "tools/generators/sync-design-assets.ts",
+      "assets/brand/**"
+    ],
+    outputs: ["apps/console/favicon.svg"],
+  },
+  "verify:design-assets": {
+    scriptName: "verify:design-assets", command: "npm run verify:design-assets", category: "verifier", subsystem: "repository",
+    owner: "platform", tier: "hygiene", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
+    inputs: [
+      "tools/generators/sync-design-assets.ts",
+      "assets/brand/**",
+      "apps/console/favicon.svg"
+    ],
+    outputs: [],
+  },
   "server:verify:deployment-flow:podman": {
     scriptName: "server:verify:deployment-flow:podman", command: "npm run server:verify:deployment-flow:podman", category: "verifier", subsystem: "deployment",
     owner: "platform", tier: "external", sideEffects: "docker",

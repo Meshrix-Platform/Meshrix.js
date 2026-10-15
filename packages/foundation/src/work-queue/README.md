@@ -16,8 +16,9 @@ The module provides:
 - lease-fenced claim, completion, retry, progress, cancellation, expiry, and
   failed-work recovery primitives;
 - absolute work-expiry deadlines that bound claim and lease renewal;
-- automatic lease renewal, lease-loss cancellation, and a finite server-owned
-  handler duration ceiling before any terminal transition;
+- automatic lease renewal and lease-loss cancellation; no internal handler
+  duration cutoff is injected, and an explicitly configured cooperative abort
+  budget keeps the lease and worker occupied until the handler settles;
 - automatic delayed retry and transactional expired-lease recovery;
 - fallback coordination that resolves into the canonical lifecycle;
 - Queue Worker Runtime for upper-layer handlers;

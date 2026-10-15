@@ -256,7 +256,7 @@ async function verifyServiceFlow() : Promise<any> {
     assert.equal(receiptDecision.ok, true);
     assert.equal(receiptDecision.receiptDigestSha256, revoked.revocationReceipt.receiptDigestSha256);
   } finally {
-    service.close();
+    await service.close();
     await fs.rm(dataDir, { recursive: true, force: true });
   }
 }

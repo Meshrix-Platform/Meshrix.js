@@ -68,9 +68,9 @@ export interface SqliteProtocolEventStore {
   policy: ProtocolEventStorePolicy;
   databasePath: string;
   publish(candidate: ProtocolEventCandidate, options?: { retain?: boolean }): Promise<{ event: Readonly<ProtocolEvent>; revision: number }>;
-  read(options?: { cursor?: number; topics?: readonly string[]; limit?: number }): Promise<{ events: ProtocolEvent[]; nextCursor: number; revision: number }>;
+  read(options?: { cursor?: number; topics?: readonly string[]; limit?: number; includeRevision?: true }): Promise<{ events: ProtocolEvent[]; nextCursor: number; revision: number }>;
+  read(options: { cursor?: number; topics?: readonly string[]; limit?: number; includeRevision: false }): Promise<{ events: ProtocolEvent[]; nextCursor: number; revision?: never }>;
   getLatest(topics?: readonly string[]): Promise<ProtocolEvent[]>;
-  getRevision(): Promise<number>;
   getStats(): Promise<Readonly<StoreCounters & ProtocolEventStorePolicy>>;
   explainRead(options?: { topics?: readonly string[] }): unknown[];
   checkpoint(): void;
@@ -280,13 +280,45 @@ function readCounters(db: Database.Database): StoreCounters {
 }
 
 function updateCounters(db: Database.Database, counters: StoreCounters): void {
-  const update = prepareCached(db, "UPDATE protocol_event_meta SET value=? WHERE key=?");
-  update.run(counters.eventCount, "event_count");
-  update.run(counters.eventBytes, "event_bytes");
-  update.run(counters.latestCount, "latest_count");
-  update.run(counters.latestBytes, "latest_bytes");
-  update.run(counters.revision, "revision");
-  update.run(counters.retentionPending, "retention_pending");
+  prepareCached(db, `
+    UPDATE protocol_event_meta
+    SET value = CASE key
+      WHEN 'event_count' THEN ?
+      WHEN 'event_bytes' THEN ?
+      WHEN 'latest_count' THEN ?
+      WHEN 'latest_bytes' THEN ?
+      WHEN 'revision' THEN ?
+      WHEN 'retention_pending' THEN ?
+      ELSE value
+    END
+    WHERE key IN ('event_count','event_bytes','latest_count','latest_bytes','revision','retention_pending')
+  `).run(
+    counters.eventCount,
+    counters.eventBytes,
+    counters.latestCount,
+    counters.latestBytes,
+    counters.revision,
+    counters.retentionPending
+  );
+}
+
+function readPageState(
+  db: Database.Database,
+  { includeMaxOffset, includeRevision }: { includeMaxOffset: boolean; includeRevision: boolean }
+): { maxOffset?: number; revision?: number } {
+  const columns: string[] = [];
+  if (includeMaxOffset) {
+    columns.push("(SELECT COALESCE(MAX(offset),0) FROM protocol_events) AS maxOffset");
+  }
+  if (includeRevision) {
+    columns.push("(SELECT value FROM protocol_event_meta WHERE key='revision') AS revision");
+  }
+  if (columns.length === 0) return {};
+  const row = prepareCached(db, `SELECT ${columns.join(", ")}`).get() as UnknownRecord;
+  return {
+    ...(includeMaxOffset ? { maxOffset: Number(row.maxOffset || 0) } : {}),
+    ...(includeRevision ? { revision: Number(row.revision || 0) } : {})
+  };
 }
 
 function pruneAtWatermark(db: Database.Database, counters: StoreCounters, policy: ProtocolEventStorePolicy, incomingBytes: number, nowMs: number): number {
@@ -506,6 +538,46 @@ export function createSqliteProtocolEventStore({
     }
   };
 
+  function read(options?: { cursor?: number; topics?: readonly string[]; limit?: number; includeRevision?: true }): Promise<{ events: ProtocolEvent[]; nextCursor: number; revision: number }>;
+  function read(options: { cursor?: number; topics?: readonly string[]; limit?: number; includeRevision: false }): Promise<{ events: ProtocolEvent[]; nextCursor: number; revision?: never }>;
+  async function read({ cursor = 0, topics = [], limit = 100, includeRevision = true }: {
+    cursor?: number;
+    topics?: readonly string[];
+    limit?: number;
+    includeRevision?: boolean;
+  } = {}): Promise<{ events: ProtocolEvent[]; nextCursor: number; revision?: number }> {
+    requireOpen();
+    const afterOffset = Math.max(0, Number(cursor) || 0);
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 100));
+    const normalizedTopics = [...new Set(topics.map(String).filter(Boolean))];
+    const params: Array<string | number> = [afterOffset];
+    let where = "offset>?";
+    if (normalizedTopics.length > 0) {
+      where += ` AND topic IN (${normalizedTopics.map(() => "?").join(",")})`;
+      params.push(...normalizedTopics);
+    }
+    params.push(safeLimit);
+    const rows = prepareCached(db, `
+      SELECT *
+      FROM protocol_events
+      WHERE ${where}
+      ORDER BY offset ASC
+      LIMIT ?
+    `).all(...params) as UnknownRecord[];
+    const needsMaxOffset = rows.length < safeLimit;
+    const pageState = readPageState(db, {
+      includeMaxOffset: needsMaxOffset,
+      includeRevision: includeRevision === true
+    });
+    return {
+      events: rows.map(eventFromRow).filter((event): event is ProtocolEvent => event !== null),
+      nextCursor: rows.length >= safeLimit
+        ? Number(rows.at(-1)?.offset || afterOffset)
+        : Math.max(afterOffset, Number(pageState.maxOffset || 0)),
+      ...(includeRevision ? { revision: Number(pageState.revision || 0) } : {})
+    };
+  }
+
   return Object.freeze({
     policy,
     databasePath: selectedPath,
@@ -515,36 +587,7 @@ export function createSqliteProtocolEventStore({
       if (result.error) throw result.error;
       return { event: result.event, revision: result.revision };
     },
-    async read({ cursor = 0, topics = [], limit = 100 }: { cursor?: number; topics?: readonly string[]; limit?: number } = {}) {
-      requireOpen();
-      const afterOffset = Math.max(0, Number(cursor) || 0);
-      const safeLimit = Math.max(1, Math.min(500, Number(limit) || 100));
-      const normalizedTopics = [...new Set(topics.map(String).filter(Boolean))];
-      const params: Array<string | number> = [afterOffset];
-      let where = "offset>?";
-      if (normalizedTopics.length > 0) {
-        where += ` AND topic IN (${normalizedTopics.map(() => "?").join(",")})`;
-        params.push(...normalizedTopics);
-      }
-      params.push(safeLimit);
-      const rows = prepareCached(db, `
-        SELECT *
-        FROM protocol_events
-        WHERE ${where}
-        ORDER BY offset ASC
-        LIMIT ?
-      `).all(...params) as UnknownRecord[];
-      const maxOffset = Number(
-        (prepareCached(db, "SELECT COALESCE(MAX(offset),0) AS value FROM protocol_events").get() as UnknownRecord).value
-      );
-      return {
-        events: rows.map(eventFromRow).filter((event): event is ProtocolEvent => event !== null),
-        nextCursor: rows.length >= safeLimit
-          ? Number(rows.at(-1)?.offset || afterOffset)
-          : Math.max(afterOffset, maxOffset),
-        revision: readCounters(db).revision
-      };
-    },
+    read,
     async getLatest(topics: readonly string[] = []): Promise<ProtocolEvent[]> {
       requireOpen();
       const normalizedTopics = [...new Set(topics.map(String).filter(Boolean))]
@@ -563,10 +606,6 @@ export function createSqliteProtocolEventStore({
         ORDER BY offset ASC
       `).all(...normalizedTopics)
         .map((entry) => JSON.parse(String((entry as UnknownRecord).event_json)) as ProtocolEvent);
-    },
-    async getRevision(): Promise<number> {
-      requireOpen();
-      return readCounters(db).revision;
     },
     async getStats() {
       requireOpen();

@@ -161,7 +161,7 @@ export interface ProcessIdentityService {
   revokeOwnerProcessBindings(input?: Record<string, unknown>): Promise<ProcessIdentityDecision>;
   verifyOwnerProcessBindingsRevoked(input?: Record<string, unknown>): Promise<ProcessIdentityDecision>;
   describe(): Promise<ProcessIdentityDecision>;
-  close(): void;
+  close(): Promise<void>;
 }
 
 function isProcessIdentityState(value: ProcessIdentityObject): value is ProcessIdentityState {
@@ -214,6 +214,8 @@ export function createProcessIdentityService({
   let record: ProcessIdentityObject | null = null;
   let state: ProcessIdentityState;
   let mutationQueue: Promise<unknown> = Promise.resolve();
+  let closing = false;
+  let closePromise: Promise<void> | null = null;
   const configuredMaxNonceCache = Number(maxNonceCache);
   const resolvedMaxNonceCache = Number.isSafeInteger(configuredMaxNonceCache) && configuredMaxNonceCache > 0
     ? configuredMaxNonceCache
@@ -251,7 +253,9 @@ export function createProcessIdentityService({
   }
 
   function enqueueMutation<T>(action: () => Promise<T> | T): Promise<T> {
+    if (closing) return Promise.reject(Object.assign(new Error("Process identity service is closing."), { code: "process_identity_service_closed" }));
     const run = mutationQueue.catch(()  => {}).then(async ()  => {
+      if (closing) throw Object.assign(new Error("Process identity service is closing."), { code: "process_identity_service_closed" });
       await load();
       return action();
     });
@@ -1051,9 +1055,25 @@ export function createProcessIdentityService({
     describe,
     capabilityKeyProvider: resolvedCapabilityKeyProvider,
     capabilityBindingGuard: resolvedBindingGuard,
-    close()  {
-      resolvedCapabilityKeyProvider.close?.();
-      resolvedBindingGuard.close?.();
+    close(): Promise<void> {
+      if (closePromise) return closePromise;
+      closing = true;
+      closePromise = (async () => {
+        let failed = false;
+        try {
+          await resolvedCapabilityKeyProvider.close?.();
+        } catch {
+          failed = true;
+        }
+        await mutationQueue.catch(() => {});
+        try {
+          await resolvedBindingGuard.close?.();
+        } catch {
+          failed = true;
+        }
+        if (failed) throw new Error("Process identity service did not close cleanly.");
+      })();
+      return closePromise;
     }
   });
 }

@@ -10,6 +10,7 @@ import {
 } from "./support.ts";
 import type {
   UpstreamGatewayNormalizedService,
+  UpstreamGatewayOauthProvider,
   UpstreamGatewayOperationSelection,
   UpstreamGatewayResolvedCredentialMaterial,
   UpstreamGatewayResolvedMcpServiceConfig,
@@ -120,72 +121,142 @@ function parseOptionalUrl(value: any = "") : any {
   }
 }
 
+function emptyCredentialMaterial() : UpstreamGatewayResolvedCredentialMaterial {
+  return {
+    headers: {},
+    env: {},
+    credentialRefCount: 0,
+    resolvedCredentialRefCount: 0,
+    credentialRevisions: []
+  };
+}
+
+function oauthClientSecret(payload: any) : any {
+  const source: any = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  for (const key of ["clientSecret", "secret", "value", "token"]) {
+    const candidate: any = source[key];
+    if (typeof candidate === "string" && candidate) return candidate;
+  }
+  const nested: any = object(source.oauth);
+  if (typeof nested.clientSecret === "string" && nested.clientSecret) return nested.clientSecret;
+  throw Object.assign(new Error("Upstream OAuth client secret payload does not contain a usable secret."), {
+    status: 503,
+    reasonCode: "upstream_oauth_client_secret_invalid"
+  });
+}
+
 export async function resolveCredentialMaterial({
   userDataPath = "",
   service,
   operation = {},
   targetUrl = null,
-  secretKeyProvider = null
+  secretKeyProvider = null,
+  oauthProvider = null,
+  signal = null
 }: {
   userDataPath?: string;
   service: UpstreamGatewayCredentialService;
   operation?: UpstreamGatewayOperationSelection;
   targetUrl?: URL | null;
   secretKeyProvider?: LocalSecretKeyProvider | null;
+  oauthProvider?: UpstreamGatewayOauthProvider | null;
+  signal?: AbortSignal | null;
 }) : Promise<UpstreamGatewayResolvedCredentialMaterial> {
   const target: any = targetUrl || parseOptionalUrl(service.baseUrl || service.mcp?.url || "");
+  const oauthConfig: any = object(service.oauth);
+  const oauthEnabled: any = Boolean(text(oauthConfig.tokenUrl));
   const declaredBindings: any = asArray(service.credentialReferences)
     .filter((entry?: any) : any => entry && typeof entry === "object" && !Array.isArray(entry));
   const candidateBindings: any = (declaredBindings.length > 0
     ? declaredBindings
     : asArray(service.credentialRefs).map((reference?: any) : any => ({ reference })))
     .filter((entry?: any) : any => entry && typeof entry === "object" && !Array.isArray(entry));
-  if (candidateBindings.length === 0) {
-    return {
-      headers: {},
-      env: {},
-      credentialRefCount: 0,
-      resolvedCredentialRefCount: 0,
-      credentialRevisions: []
+  const operationScopes = asArray(operation.requiredScopes).map(text).filter(Boolean);
+  if (candidateBindings.length === 0 && !oauthEnabled) return emptyCredentialMaterial();
+  let resolved: UpstreamGatewayResolvedCredentialMaterial = emptyCredentialMaterial();
+  if (candidateBindings.length > 0) {
+    if (!target) {
+      throw Object.assign(new Error("Upstream credential binding was denied."), {
+        status: 403,
+        reasonCode: "upstream_credential_binding_denied"
+      });
+    }
+    resolved = await resolveUpstreamCredentialMaterial({
+      bindings: candidateBindings,
+      targetOrigin: target.origin,
+      operationKey: text(operation.operationKey),
+      requiredScopes: operationScopes,
+      resolveSecretPayload: async (binding, targetOrigin) => {
+        const targetUrl = new URL(targetOrigin);
+        const localResolved: any = await resolveLocalSecretPayload({
+          dataDir: userDataPath,
+          secretRef: binding.reference,
+          ...(Number.isSafeInteger(binding.revision) && Number(binding.revision) > 0
+            ? { expectedRevision: binding.revision }
+            : {}),
+          expectedScope: {
+            serviceId: service.serviceId,
+            requiredScopes: operationScopes,
+            origin: targetOrigin,
+            host: targetUrl.hostname.replace(/^\[|\]$/gu, ""),
+            protocol: targetUrl.protocol.slice(0, -1)
+          },
+          keyProvider: secretKeyProvider
+        });
+        return {
+          secretRef: localResolved.secretRef,
+          revision: localResolved.revision,
+          payload: localResolved.payload
+        };
+      }
+    }) as UpstreamGatewayResolvedCredentialMaterial;
+  }
+  if (oauthEnabled) {
+    // The client secret is a first-class secret-store binding scoped to the
+    // token endpoint origin — not to the service target — so a leaked or
+    // mis-scoped record cannot be replayed against the resource server.
+    const tokenUrl: any = parseOptionalUrl(oauthConfig.tokenUrl);
+    if (!tokenUrl || !/^https?:$/u.test(tokenUrl.protocol)) {
+      throw Object.assign(new Error("Upstream OAuth token endpoint is unavailable."), {
+        status: 502,
+        reasonCode: "upstream_oauth_token_invalid"
+      });
+    }
+    if (typeof oauthProvider?.accessTokenFor !== "function") {
+      throw Object.assign(new Error("Upstream OAuth token provider is unavailable."), {
+        status: 503,
+        reasonCode: "upstream_oauth_unavailable"
+      });
+    }
+    const secretResolved: any = await resolveLocalSecretPayload({
+      dataDir: userDataPath,
+      secretRef: text(oauthConfig.clientSecretRef),
+      expectedScope: {
+        serviceId: service.serviceId,
+        requiredScopes: operationScopes,
+        origin: tokenUrl.origin,
+        host: tokenUrl.hostname.replace(/^\[|\]$/gu, ""),
+        protocol: tokenUrl.protocol.slice(0, -1)
+      },
+      keyProvider: secretKeyProvider
+    });
+    const accessToken: any = await oauthProvider.accessTokenFor({
+      service,
+      oauth: oauthConfig,
+      clientSecret: oauthClientSecret(secretResolved.payload),
+      secretRevision: Number(secretResolved.revision || 0),
+      signal
+    });
+    resolved = {
+      ...resolved,
+      headers: { ...resolved.headers, authorization: `Bearer ${accessToken}` },
+      credentialRevisions: [
+        ...resolved.credentialRevisions,
+        { secretRef: text(secretResolved.secretRef || oauthConfig.clientSecretRef), revision: Number(secretResolved.revision || 0) }
+      ]
     };
   }
-  if (!target) {
-    throw Object.assign(new Error("Upstream credential binding was denied."), {
-      status: 403,
-      reasonCode: "upstream_credential_binding_denied"
-    });
-  }
-  const operationScopes = asArray(operation.requiredScopes).map(text).filter(Boolean);
-  const resolved = await resolveUpstreamCredentialMaterial({
-    bindings: candidateBindings,
-    targetOrigin: target.origin,
-    operationKey: text(operation.operationKey),
-    requiredScopes: operationScopes,
-    resolveSecretPayload: async (binding, targetOrigin) => {
-      const targetUrl = new URL(targetOrigin);
-      const localResolved: any = await resolveLocalSecretPayload({
-        dataDir: userDataPath,
-        secretRef: binding.reference,
-        ...(Number.isSafeInteger(binding.revision) && Number(binding.revision) > 0
-          ? { expectedRevision: binding.revision }
-          : {}),
-        expectedScope: {
-          serviceId: service.serviceId,
-          requiredScopes: operationScopes,
-          origin: targetOrigin,
-          host: targetUrl.hostname.replace(/^\[|\]$/gu, ""),
-          protocol: targetUrl.protocol.slice(0, -1)
-        },
-        keyProvider: secretKeyProvider
-      });
-      return {
-        secretRef: localResolved.secretRef,
-        revision: localResolved.revision,
-        payload: localResolved.payload
-      };
-    }
-  });
-  return resolved as UpstreamGatewayResolvedCredentialMaterial;
+  return resolved;
 }
 
 export async function resolveMcpServiceConfigWithCredentials({
@@ -194,7 +265,9 @@ export async function resolveMcpServiceConfigWithCredentials({
   operation = {},
   secretKeyProvider = null,
   purpose = "discovery",
-  subject = null
+  subject = null,
+  oauthProvider = null,
+  signal = null
 }: {
   userDataPath?: string;
   service: UpstreamGatewayCredentialService;
@@ -202,6 +275,8 @@ export async function resolveMcpServiceConfigWithCredentials({
   secretKeyProvider?: LocalSecretKeyProvider | null;
   purpose?: string;
   subject?: Readonly<Record<string, unknown>> | null;
+  oauthProvider?: UpstreamGatewayOauthProvider | null;
+  signal?: AbortSignal | null;
 }) : Promise<UpstreamGatewayResolvedMcpServiceConfig> {
   const config: Record<string, any> = {
     ...mcpServiceConfig(service),
@@ -213,7 +288,9 @@ export async function resolveMcpServiceConfigWithCredentials({
     service,
     operation,
     secretKeyProvider,
-    targetUrl: parseOptionalUrl(config.url || service.baseUrl || "")
+    targetUrl: parseOptionalUrl(config.url || service.baseUrl || ""),
+    oauthProvider,
+    signal
   });
   const allowCredentialEnvironment: any = text(config.transport).toLowerCase() === "stdio";
   const sessionPurpose: any = mcpSessionPurpose(purpose);

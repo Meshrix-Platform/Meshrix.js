@@ -8,6 +8,7 @@ import {
   applyCommonSafetyFlags,
   applyCommonSafetyHeaders,
   buildBodyFromCliParams,
+  parseServerJsonResponse,
   readBody,
   readHeaders,
   readHttpPayload,
@@ -36,7 +37,7 @@ export async function runRpc(args?: any) : Promise<any> {
   if (/json/i.test(contentType)) {
     await writeResponse({
       args,
-      result: JSON.parse(buffer.toString("utf8") || "{}"),
+      result: parseServerJsonResponse(buffer),
       rawBuffer: args.output ? buffer : null,
       contentType
     });
@@ -520,7 +521,7 @@ export async function runNamedRpc(args?: any, { usage = () : any => "" }: Record
   if (/json/i.test(contentType)) {
     await writeResponse({
       args,
-      result: JSON.parse(buffer.toString("utf8") || "{}"),
+      result: parseServerJsonResponse(buffer),
       rawBuffer: args.output ? buffer : null,
       contentType
     });

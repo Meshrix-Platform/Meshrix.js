@@ -22,12 +22,17 @@ export const emptyState: GuiState = {
     keyId: null,
     generation: null,
     keyRevealed: false,
+    writerRegistration: { state: "unmanaged", candidateGeneration: null, detail: null },
     backup: { lastSuccessAt: null, lastCommittedRevision: null, lastError: null },
     rotation: null
   },
   recoveryImport: { phase: "idle", detail: null, enrolledConnectionId: null },
   connections: [],
   mcp: { transport: "stdio", snippet: null, configuredPath: null },
+  account: { state: "unconfigured", accountId: null, authEpoch: null, transactionId: null, transactionPurpose: null, actionPurpose: null, originAvailable: false, custodyAvailable: false, notice: null },
+  personalEndpoint: { state: "unregistered", tenantId: null, routeId: null, deviceId: null, fingerprint: null, relayState: "unknown", canCreatePairingInvite: false },
+  applications: { destinations: [], agents: [], operations: [] },
+  grant: { connectionId: null, availableScopes: [], targetScopes: [], grantRef: null, status: "idle", notice: null },
   notices: []
 };
 

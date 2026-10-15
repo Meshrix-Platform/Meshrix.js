@@ -52,11 +52,12 @@ export interface EntrySessionOptions {
     readonly pinnedPeerSpki: readonly string[];
     readonly handshakeTimeoutMs?: number;
   };
-  readonly purpose?: "forward" | "recover_device";
+  readonly purpose?: "forward" | "recover_device" | "pair_device";
   readonly maxPendingRequests?: number;
   readonly maxInnerLineBytes?: number;
   readonly requestTimeoutMs?: number;
-  readonly connectTimeoutMs?: number;
+  /** `null` waits for a real relay/channel outcome or explicit cancellation. */
+  readonly connectTimeoutMs?: number | null;
   readonly operationPrincipal?: EntryOperationPrincipal;
   readonly operationQueryTimeoutMs?: number;
   readonly nonceFactory?: () => string;
@@ -178,7 +179,7 @@ export class EntryRelaySession {
   /** Open the session and wait for the pinned inner channel to come up. */
   async connect(): Promise<void> {
     if (this.#options.transport.ready !== undefined) await this.#options.transport.ready;
-    const ready = this.#readyWaiter(this.#options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS);
+    const ready = this.#readyWaiter(this.#connectBudget());
     try {
       if (!this.#session.open()) {
         throw entryError("entry_session_state", `A session in state "${this.#session.state}" cannot open.`);
@@ -197,7 +198,7 @@ export class EntryRelaySession {
    */
   async reconnect(input: { readonly revocationRevision?: number } = {}): Promise<void> {
     if (this.#options.transport.reopen) await this.#options.transport.reopen();
-    const ready = this.#readyWaiter(this.#options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS);
+    const ready = this.#readyWaiter(this.#connectBudget());
     try {
       if (!this.#session.reconnect(input)) {
         throw entryError("entry_session_state", `A session in state "${this.#session.state}" cannot reconnect.`);
@@ -319,15 +320,23 @@ export class EntryRelaySession {
     this.#readyWaiters.clear();
   }
 
-  #readyWaiter(timeoutMs: number): Promise<void> {
+  #connectBudget(): number | undefined {
+    return this.#options.connectTimeoutMs === null
+      ? undefined
+      : this.#options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
+  }
+
+  #readyWaiter(timeoutMs: number | undefined): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const waiter: ReadyWaiter = { resolve, reject };
       this.#readyWaiters.add(waiter);
-      setTimeout(() => {
-        if (this.#readyWaiters.delete(waiter)) {
-          reject(entryError("entry_connect_timeout", "The inner channel did not establish within the connect budget.", { effectOutcome: "not_started" }));
-        }
-      }, timeoutMs).unref();
+      if (timeoutMs !== undefined) {
+        setTimeout(() => {
+          if (this.#readyWaiters.delete(waiter)) {
+            reject(entryError("entry_connect_timeout", "The inner channel did not establish within the connect budget.", { effectOutcome: "not_started" }));
+          }
+        }, timeoutMs).unref();
+      }
     });
   }
 

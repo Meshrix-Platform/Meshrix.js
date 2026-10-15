@@ -7,6 +7,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { startHttpServer } from "../../../apps/server/runtime/http-server.ts";
+import { provisionVerifierLocalSecretKey } from "../../../tools/server-scripts/lib/local-secret-verifier-key.ts";
 
 class ListenerStub extends EventEmitter {
   listening: any;
@@ -45,6 +46,8 @@ async function startStubbedServer({ discoveryOptions = {} }: Record<string, any>
   vi.spyOn(http, "createServer").mockReturnValue(new ListenerStub());
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-advertised-url-"));
   cleanups.push(() : any => fs.rm(userDataPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }));
+  const keyCustody: any = await provisionVerifierLocalSecretKey();
+  cleanups.push(() : any => keyCustody.close());
   const serverHandle: any = await startHttpServer({
     userDataPath,
     distPath: "",

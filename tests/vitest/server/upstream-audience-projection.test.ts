@@ -484,4 +484,100 @@ describe("upstream audience projection", () : any => {
     expect(key).not.toContain("grant-secret-subject");
     expect(key).not.toContain("digest-1");
   });
+
+  it("filters plugin and console MCP lists and calls to explicitly granted tools", async () : Promise<any> => {
+    const invoked: string[] = [];
+    const registry: any = createUpstreamGatewayRegistry({
+      schemaPort: createGatewaySchemaPort(),
+      claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ ok: true }),
+      mcpSessionManager: {
+        listTools: async () : Promise<any> => ({
+          tools: [
+            { name: "read_selected", inputSchema: { type: "object" } },
+            { name: "read_sibling", inputSchema: { type: "object" } }
+          ]
+        }),
+        invokeGateway: async (_config: any, request: any, options: any) : Promise<any> => {
+          await options?.beforeSend?.();
+          invoked.push(String(request?.params?.name || ""));
+          return { result: { content: [{ type: "text", text: "selected" }] } };
+        },
+        retireScope: async () : Promise<any> => ({ retired: 0 }),
+        close: async () : Promise<any> => {}
+      }
+    });
+    try {
+      await installUpstreamRuntimeServices(registry, [{
+        serviceId: "svc_plugin_mcp",
+        serviceProtocol: "mcp",
+        label: "Plugin MCP fixture",
+        allowLocalNetwork: true,
+        trafficPolicy: { perMinute: 20, burst: 20 },
+        operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+        mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18", toolsCacheTtlMs: 60_000 }
+      }]);
+      const catalog: any = await registry.listMcpTools({ serviceId: "svc_plugin_mcp" });
+      const selected: any = catalog.items.find((tool: any) : any => tool._meta?.upstreamToolName === "read_selected");
+      const selectedId: string = selected._meta.dynamicCapability.capabilityId;
+      const requestBase: Record<string, any> = {
+        pluginId: "demo",
+        operationId: "tools/call",
+        serviceRef: "svc_plugin_mcp",
+        operationRef: "tools/call",
+        governance: {
+          authorizationContextDigest: "authorization-fixture",
+          riskDecisionRef: "risk-fixture",
+          policyRevision: "policy-fixture"
+        }
+      };
+      const subjectFor = (type: string, capabilityIds: string[]) : Record<string, any> => ({
+        type,
+        subjectId: "caller",
+        scopes: ["gateway:read"],
+        dynamicCapabilities: capabilityIds,
+        capabilities: capabilityIds
+      });
+      const listNames = async (subject: Record<string, any>) : Promise<string[]> => {
+        const listed: any = await registry.requestPluginExternalService({
+          ...requestBase,
+          input: { protocolMethod: "tools/list" }
+        }, { subject });
+        return listed.data.items.map((item: any) : string => item._meta.upstreamToolName);
+      };
+      const callTool = (subject: Record<string, any>, toolName: string) : Promise<any> => registry.requestPluginExternalService({
+        ...requestBase,
+        input: { protocolMethod: "tools/call", toolName, arguments: {} }
+      }, { subject });
+
+      for (const type of ["plugin-operation", "console-user"]) {
+        await expect(listNames(subjectFor(type, []))).resolves.toEqual([]);
+        await expect(callTool(subjectFor(type, []), "read_selected")).rejects.toMatchObject({
+          status: 403,
+          reasonCode: "missing_dynamic_upstream_capability"
+        });
+        await expect(listNames(subjectFor(type, [selectedId]))).resolves.toEqual(["read_selected"]);
+        await expect(callTool(subjectFor(type, [selectedId]), "read_selected")).resolves.toMatchObject({ ok: true });
+        await expect(callTool(subjectFor(type, [selectedId]), "read_sibling")).rejects.toMatchObject({
+          status: 403,
+          reasonCode: "missing_dynamic_upstream_capability"
+        });
+      }
+
+      const apiKeySubject: Record<string, any> = {
+        type: "scoped-api-key",
+        subjectId: "workload",
+        scopes: ["gateway:read"],
+        capabilities: ["cap:upstream:svc_plugin_mcp:tools-call", selectedId]
+      };
+      await expect(listNames(apiKeySubject)).resolves.toEqual(["read_selected"]);
+      await expect(callTool(apiKeySubject, "read_selected")).resolves.toMatchObject({ ok: true });
+      await expect(callTool(apiKeySubject, "read_sibling")).rejects.toMatchObject({
+        status: 403,
+        reasonCode: "missing_dynamic_upstream_capability"
+      });
+      expect(invoked).toEqual(["read_selected", "read_selected", "read_selected"]);
+    } finally {
+      await registry.close();
+    }
+  });
 });

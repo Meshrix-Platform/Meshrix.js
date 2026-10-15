@@ -1,0 +1,31 @@
+[package]
+name = "meshrix-entry-gui"
+description = "Meshrix Entry desktop GUI (egui) — native binary, no runtime."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "meshrix-entry-gui"
+path = "src/main.rs"
+
+[dependencies]
+meshrix-entry-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+futures-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+eframe.workspace = true
+egui_extras.workspace = true
+anyhow.workspace = true
+directories.workspace = true
+# Pre-validates system fonts before egui registration (egui panics on bad TTF).
+ab_glyph = "0.2"
+
+[build-dependencies]
+# Rasterizes assets/brand/logo.svg into the app tile PNG at build time.
+resvg = "0.45"
+tiny-skia = "0.11"

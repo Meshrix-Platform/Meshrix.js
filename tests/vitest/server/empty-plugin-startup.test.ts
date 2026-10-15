@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { startHttpServer } from "../../../apps/server/runtime/http-server.ts";
 import { createConsoleAuth } from "../../../packages/foundation/src/security/auth/console-auth.ts";
 import { createTagStoreAdapter } from "../../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
+import { provisionVerifierLocalSecretKey } from "../../../tools/server-scripts/lib/local-secret-verifier-key.ts";
 
 const resources: any[] = [];
 
@@ -25,6 +26,8 @@ describe("empty plugin startup", () : any => {
   it("starts Core with no installed plugin contributions and no implicit agent project", async () : Promise<any> => {
     const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-empty-plugin-startup-"));
     resources.push(() : any => fs.rm(userDataPath, { recursive: true, force: true }));
+    const keyCustody: any = await provisionVerifierLocalSecretKey();
+    resources.push(() : any => keyCustody.close());
 
     const tagManagementStore: any = createTagStoreAdapter({ userDataPath });
     const auth: any = createConsoleAuth({ userDataPath, tagManagementStore });

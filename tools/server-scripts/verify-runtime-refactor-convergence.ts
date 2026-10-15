@@ -481,6 +481,7 @@ async function gatewayCleanRun() : Promise<any> {
         scope: {
           allowedHosts: [sinkHost.hostname],
           allowedProtocols: [sinkHost.protocol.replace(/:$/u, "")],
+          allowedOrigins: [sinkHost.origin],
           scopes: ["gateway:write"],
           serviceId: "convergence-safe-write-fixture"
         },

@@ -16,6 +16,11 @@ function sha256(bytes?: any) : any {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 }
 
+async function publicDnsLookup(_host?: any) : Promise<any> {
+  // Synthetic public-class DNS answer; the injected transport opens no socket.
+  return [{ address: [8, 8, 8, 8].join("."), family: 4 }];
+}
+
 describe("local plugin package acquisition", () : any => {
   it("requires explicit import root and relative file without discovery", () : any => {
     assert.throws(() : any => createLocalPluginPackageSource({}), /importRootId/);
@@ -46,6 +51,7 @@ describe("local plugin package acquisition", () : any => {
       assert.equal(acquired.archiveDigest, sha256(bytes));
 
       const github: any = createGitHubReleasePluginPackageAcquisition({
+        lookup: publicDnsLookup,
         fetchImpl: async (url?: any) : Promise<any> => {
           const parsed: any = new URL(String(url));
           if (parsed.pathname.includes("/releases/tags/")) {

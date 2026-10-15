@@ -28,7 +28,7 @@ import {
   readJson
 } from "./device-discovery-registry.ts";
 import { assertSafeEnvName, readStdin, uniqueValues } from "./connector-process.ts";
-import { fetchJson } from "./http-json-client.ts";
+import { fetchJson, isLoopbackHost } from "./http-json-client.ts";
 
 export function explicitBaseUrl(options: Record<string, any> = {}) : any {
   const value: any = option(options, "url", process.env.MESHRIX_MCP_BASE_URL || "");
@@ -155,7 +155,7 @@ export async function fetchMeshrixDiscovery(baseUrl?: any) : Promise<any> {
   ) {
     throw new Error("not an Meshrix.js MCP discovery response");
   }
-  return payload;
+  return { payload, status: result.status };
 }
 
 export async function verifyMeshrixHandshake(baseUrl?: any, discovery?: any) : Promise<any> {
@@ -202,10 +202,11 @@ export async function discoverMeshrixHub(options: Record<string, any> = {}) : Pr
   const candidates: any = await candidateBaseUrls(options);
   for (const baseUrl of candidates) {
     try {
-      const discovery: any = await fetchMeshrixDiscovery(baseUrl);
-      const verified: any = await verifyMeshrixHandshake(baseUrl, discovery);
+      const fetchedDiscovery: any = await fetchMeshrixDiscovery(baseUrl);
+      const verified: any = await verifyMeshrixHandshake(baseUrl, fetchedDiscovery.payload);
       return {
         ...verified,
+        discoveryStatus: fetchedDiscovery.status,
         attempts: [
           ...attempts,
           { baseUrl, ok: true, verified: true }
@@ -296,11 +297,27 @@ export async function ensureService(baseUrl?: any) : Promise<any> {
   return discover;
 }
 
-export function authHeaders(token?: any, target: any = "") : any {
+function assertApiKeyTransport(baseUrl?: any) : any {
+  let destination: URL;
+  try {
+    destination = new URL(normalizeBaseUrl(baseUrl));
+  } catch {
+    throw new Error("API Key requests require a valid Meshrix.js destination.");
+  }
+  if (destination.username || destination.password) {
+    throw new Error("API Key requests cannot use credentials embedded in the destination URL.");
+  }
+  if (destination.protocol === "https:") return;
+  if (destination.protocol === "http:" && isLoopbackHost(destination.hostname)) return;
+  throw new Error("API Key requests require HTTPS unless the destination uses literal loopback HTTP.");
+}
+
+export function authHeaders(token?: any, target: any = "", baseUrl?: any) : any {
   const credential: any = String(token || "").trim();
   if (!MXAK1_CREDENTIAL_PATTERN.test(credential)) {
     throw new Error("Invalid API Key. A strict mxak1 credential is required.");
   }
+  assertApiKeyTransport(baseUrl);
   return {
     "Content-Type": "application/json",
     "X-Meshrix.js-Api-Key": credential,
@@ -318,8 +335,9 @@ export async function verifyMcpTools({ baseUrl, token, target = "" }: Record<str
   });
   const toolsList: any = await fetchJson(`${baseUrl}/mcp`, {
     method: "POST",
+    redirect: "error",
     headers: {
-      ...authHeaders(token, target),
+      ...authHeaders(token, target, baseUrl),
       ...mcpModernRequestHeaders(toolsListMessage)
     },
     body: JSON.stringify(toolsListMessage)
@@ -340,8 +358,9 @@ export async function verifyMcpTools({ baseUrl, token, target = "" }: Record<str
   });
   const health: any = await fetchJson(`${baseUrl}/mcp`, {
     method: "POST",
+    redirect: "error",
     headers: {
-      ...authHeaders(token, target),
+      ...authHeaders(token, target, baseUrl),
       ...mcpModernRequestHeaders(healthMessage)
     },
     body: JSON.stringify(healthMessage)

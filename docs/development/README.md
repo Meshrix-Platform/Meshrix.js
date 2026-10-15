@@ -9,7 +9,10 @@ npm ci
 npm run dev
 ```
 
-This starts the source API server. To build and serve the Web Console from the same origin:
+The server requires `MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE` to name a persistent,
+operator-custodied 32-byte hex key outside the data directory. Create and export
+it as described in [local startup](../RUNBOOK.md#local-startup) before starting
+the server. This starts the source API server. To build and serve the Web Console from the same origin:
 
 ```bash
 npm run build
@@ -32,7 +35,7 @@ The default local origin is `http://127.0.0.1:7228`. See [local startup](../RUNB
 
 The console uses Vue.js and the server uses Node.js. They are separate workspaces with a versioned HTTP boundary. Package dependencies and execution ownership are defined in [Architecture](../architecture/ARCHITECTURE.md).
 
-![Architecture overview](../architecture-overview.svg)
+![Architecture overview](../../assets/diagrams/architecture-overview.svg)
 
 ## Documentation conventions
 
@@ -124,6 +127,7 @@ Use the existing long-lived Better Plan workspace according to [AGENTS.md](../..
 | MCP native installer | [MCP native installer](../architecture/MCP-NATIVE-INSTALLER.md) |
 | State machines | [State machines](../architecture/STATE-MACHINES.md) |
 | Implemented decisions | [Decision records](../adrs/README.md) |
+| Frontend design and art assets | [Design index](../design/README.md) |
 | Release status and procedures | [Releases](../releases/README.md), [release contract](../RUNBOOK.md#release-definition-and-publication) |
 
 ### Protocols and capabilities

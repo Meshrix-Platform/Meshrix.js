@@ -102,7 +102,7 @@ async function withProvider(input?: any, handler?: any) : Promise<any> {
   try {
     return await handler(provider);
   } finally {
-    provider.close?.();
+    await provider.close?.();
   }
 }
 
@@ -111,7 +111,7 @@ async function withGuard(input?: any, handler?: any) : Promise<any> {
   try {
     return await handler(guard);
   } finally {
-    guard.close?.();
+    await guard.close?.();
   }
 }
 

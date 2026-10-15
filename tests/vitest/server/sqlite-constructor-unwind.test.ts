@@ -53,6 +53,7 @@ vi.mock("../../../packages/foundation/src/security/authorization/authorization-s
 
 import { createStorageKernel } from "../../../packages/foundation/src/storage/storage-kernel.ts";
 import { createOperationAuditWorkerStore } from "../../../packages/foundation/src/security/operation-audit-worker-store.ts";
+import { operationAuditProjectionKeyId } from "../../../packages/foundation/src/security/operation-audit-projection.ts";
 import { createConsoleAuth } from "../../../packages/foundation/src/security/auth/console-auth.ts";
 import { createAuthorizationStoreWorkerOwner } from "../../../packages/foundation/src/security/authorization/authorization-store-worker-owner.ts";
 import { createAuthorizationGovernanceStore } from "../../../packages/foundation/src/security/authorization/authorization-governance-store.ts";
@@ -60,6 +61,7 @@ import { createNoopTagStoreProvider } from "../../../packages/foundation/src/sec
 import { createClientRegistryService } from "../../../packages/server-runtime/src/state/client-registry-repository.ts";
 import { createAgentWorkspace } from "../../../packages/agents/src/agent-workspace/index.ts";
 import { createWorkspaceAssetRegistry } from "../../../packages/agents/src/workspace-asset-registry/index.ts";
+import { createOperationPermissionStore } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
 import { createOperationPermissionWorkerOwner } from "../../../packages/capabilities/src/operation-permission-core/store-worker-owner.ts";
 
 function failingDatabase(message?: any) : any {
@@ -179,9 +181,17 @@ describe("SQLite constructor unwind", () : any => {
   it("closes the operation-audit worker-owned database when schema initialization fails", () : any => {
     const database: any = failingDatabase("audit schema failed");
     databases.push(database);
+    const projectionKey = Buffer.alloc(32, 0x53);
 
-    expect(() : any => createOperationAuditWorkerStore({ userDataPath: tempUserDataPath() }))
-      .toThrow("audit schema failed");
+    try {
+      expect(() : any => createOperationAuditWorkerStore({
+        userDataPath: tempUserDataPath(),
+        projectionKey,
+        projectionKeyId: operationAuditProjectionKeyId(projectionKey)
+      })).toThrow("audit schema failed");
+    } finally {
+      projectionKey.fill(0);
+    }
     expect(database.close).toHaveBeenCalledOnce();
   });
 
@@ -194,18 +204,18 @@ describe("SQLite constructor unwind", () : any => {
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it("closes the operation-permission worker-owned database when schema initialization fails", () : any => {
+  it("closes the operation-permission worker-owned database when schema initialization fails", async () : Promise<any> => {
     const database: any = failingDatabase("operation permission schema failed");
     databases.push(database);
 
-    expect(() : any => createOperationPermissionWorkerOwner({
+    await expect(createOperationPermissionWorkerOwner({
       userDataPath: tempUserDataPath(),
       capabilityBindingGuard: false
-    })).toThrow("operation permission schema failed");
+    })).rejects.toThrow("operation permission schema failed");
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it("preserves borrowed operation-permission resources when schema initialization fails", () : any => {
+  it("preserves borrowed operation-permission resources when schema initialization fails", async () : Promise<any> => {
     const failure: any = new Error("operation permission statements failed");
     const capabilitySecurity: Record<string, any> = { close: vi.fn() };
     const database: Record<string, any> = {
@@ -219,44 +229,110 @@ describe("SQLite constructor unwind", () : any => {
     };
     databases.push(database);
 
-    const thrown: any = captureFailure(() : any => createOperationPermissionWorkerOwner({
+    const thrown: any = await createOperationPermissionWorkerOwner({
       userDataPath: tempUserDataPath(),
       capabilityKeyProvider: capabilitySecurity,
       capabilityBindingGuard: capabilitySecurity
-    }));
+    }).then(() => null, (error?: any) : any => error);
 
     expect(thrown).toBe(failure);
     expect(capabilitySecurity.close).not.toHaveBeenCalled();
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it.each(["borrowed", "owned"] as const)("unwinds only owned security resources after late construction failure (%s)", (ownership) => {
+  it.each(["borrowed", "owned"] as const)("unwinds only owned security resources after late construction failure (%s)", async (ownership) => {
     const database = databaseFixture({ migrationVersion: Number.MAX_SAFE_INTEGER });
     const borrowed = { close: vi.fn() };
     databases.push(database);
+    let releaseClose: (() => void) | null = null;
+    let closeStarted: (() => void) | null = null;
+    const closeStartedPromise = new Promise<void>((resolve) => { closeStarted = resolve; });
+    const closeGate = new Promise<void>((resolve) => { releaseClose = resolve; });
+    if (ownership === "owned") {
+      ownedCapabilitySecurity.close.mockImplementationOnce(async () => {
+        closeStarted?.();
+        await closeGate;
+      });
+    }
     permissionConstruction.failure = new Error("synthetic late permission construction failure");
-    expect(() => createOperationPermissionWorkerOwner({
+    const construction = createOperationPermissionWorkerOwner({
       userDataPath: tempUserDataPath(),
       ...(ownership === "borrowed" ? { capabilityKeyProvider: borrowed, capabilityBindingGuard: borrowed } : {})
-    })).toThrow(permissionConstruction.failure);
+    });
+    if (ownership === "owned") {
+      await closeStartedPromise;
+      expect(database.close).not.toHaveBeenCalled();
+      releaseClose?.();
+    }
+    await expect(construction).rejects.toBe(permissionConstruction.failure);
     expect(borrowed.close).not.toHaveBeenCalled();
     expect(ownedCapabilitySecurity.close).toHaveBeenCalledTimes(ownership === "owned" ? 1 : 0);
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it.each(["borrowed", "owned"] as const)("closes only owned security resources once during normal shutdown (%s)", (ownership) => {
+  it.each(["borrowed", "owned"] as const)("closes only owned security resources once during normal shutdown (%s)", async (ownership) => {
     const database = databaseFixture({ migrationVersion: Number.MAX_SAFE_INTEGER });
     const borrowed = { close: vi.fn() };
     databases.push(database);
-    const store = createOperationPermissionWorkerOwner({
+    const store = await createOperationPermissionWorkerOwner({
       userDataPath: tempUserDataPath(),
       ...(ownership === "borrowed" ? { capabilityKeyProvider: borrowed, capabilityBindingGuard: borrowed } : {})
     });
-    store.close();
-    store.close();
+    let releaseClose: (() => void) | null = null;
+    let closeStarted: (() => void) | null = null;
+    const closeStartedPromise = new Promise<void>((resolve) => { closeStarted = resolve; });
+    const closeGate = new Promise<void>((resolve) => { releaseClose = resolve; });
+    if (ownership === "owned") {
+      ownedCapabilitySecurity.close.mockImplementationOnce(async () => {
+        closeStarted?.();
+        await closeGate;
+      });
+    }
+    const firstClose = store.close();
+    expect(store.close()).toBe(firstClose);
+    if (ownership === "owned") {
+      await closeStartedPromise;
+      expect(database.close).not.toHaveBeenCalled();
+      releaseClose?.();
+    }
+    await firstClose;
     expect(borrowed.close).not.toHaveBeenCalled();
     expect(ownedCapabilitySecurity.close).toHaveBeenCalledTimes(ownership === "owned" ? 1 : 0);
     expect(database.close).toHaveBeenCalledOnce();
+  });
+
+  it("retains the operation-permission owner until constructor cleanup closes async providers", async () => {
+    const userDataPath = tempUserDataPath();
+    const failure = new Error("synthetic catalog construction failure");
+    let startClose!: () => void;
+    let releaseClose!: () => void;
+    const closeStarted = new Promise<void>((resolve) => { startClose = resolve; });
+    const closeGate = new Promise<void>((resolve) => { releaseClose = resolve; });
+    const provider = {
+      close: vi.fn(async () => {
+        startClose();
+        await closeGate;
+      })
+    };
+
+    expect(() => createOperationPermissionStore({
+      userDataPath,
+      registry: { getCatalog() { throw failure; } },
+      capabilityKeyProvider: provider,
+      capabilityBindingGuard: false
+    })).toThrow(failure);
+    await closeStarted;
+
+    expect(() => createOperationPermissionStore({
+      userDataPath,
+      capabilityBindingGuard: false
+    })).toThrow(expect.objectContaining({ code: "operation_permission_owner_active" }));
+
+    releaseClose();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const reopened = createOperationPermissionStore({ userDataPath, capabilityBindingGuard: false });
+    await reopened.close();
+    expect(provider.close).toHaveBeenCalledOnce();
   });
 
   it("closes the agent-workspace database when construction fails after schema initialization", () : any => {

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createManualQueueTimeSource,
@@ -15,6 +15,16 @@ import {
 } from "../../../packages/foundation/src/workflow/state-machine/work-queue/state-machine.ts";
 
 const roots: any[] = [];
+
+function deferred() : any {
+  let resolve!: (value?: unknown) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 async function makeStore(policy: Record<string, any> = {}) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "runtime-capacity-execution-fence-"));
@@ -67,6 +77,7 @@ async function setupFixture(store: any) : Promise<any> {
 }
 
 afterEach(async () : Promise<any> => {
+  vi.useRealTimers();
   await Promise.all(roots.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
 });
 
@@ -290,46 +301,101 @@ describe("runtime capacity execution fence conformance", () : any => {
     expect(none.count).toBe(0);
   });
 
-  it("isolates non-terminable handler timeouts into in_doubt while terminable handlers retry immediately", async () : Promise<any> => {
+  it("keeps explicit handler cancellation pending until work settles before retry or in_doubt", async () : Promise<any> => {
+    vi.useFakeTimers();
     const { store } = await makeStore();
     const fixture: any = await setupFixture(store);
 
     fixture.enqueue("runtime-1");
     const first: any = fixture.claim("worker-1").claimed[0];
+    const nonTerminableGate: any = deferred();
+    let nonTerminableSignal: AbortSignal | null = null;
     const nonTerminable: any = createQueueWorkerRuntime({
       store,
       workerId: "worker-1",
       maxHandlerDurationMs: 5
     });
-    const timedOut: any = await nonTerminable.runLeased({
+    let nonTerminableSettled = false;
+    const timedOut: any = nonTerminable.runLeased({
       workItem: first.workItem,
       lease: first.lease,
-      handler: async () : Promise<any> => new Promise(() : any => {})
+      handler: async (_input?: any, context?: any) : Promise<any> => {
+        nonTerminableSignal = context.signal;
+        await nonTerminableGate.promise;
+        throw context.signal.reason;
+      }
+    }).then((result?: any) : any => {
+      nonTerminableSettled = true;
+      return result;
     });
-    expect(timedOut.interrupted).toBe(true);
-    expect(timedOut.inDoubt).toBe(true);
-    expect(timedOut.error?.code).toBe("queue_handler_timeout");
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(5);
+    expect(nonTerminableSignal?.aborted).toBe(true);
+    expect(nonTerminableSettled).toBe(false);
+    expect(store.inspect({ workItemId: "runtime-1" }).workItem.state).toBe(WORK_QUEUE_STATES.RUNNING);
+    nonTerminableGate.resolve();
+    const inDoubtResult: any = await timedOut;
+    expect(inDoubtResult.interrupted).toBe(true);
+    expect(inDoubtResult.inDoubt).toBe(true);
+    expect(inDoubtResult.error?.code).toBe("queue_handler_timeout");
     const fenced: any = store.inspect({ workItemId: "runtime-1" });
     expect(fenced.workItem.state).toBe(WORK_QUEUE_STATES.IN_DOUBT);
 
     fixture.enqueue("runtime-2");
     const second: any = fixture.claim("worker-1").claimed[0];
-    const terminableHandler: any = async () : Promise<any> => new Promise(() : any => {});
+    const terminableHandler: any = async (_input?: any, context?: any) : Promise<any> => await new Promise((_resolve?: any, reject?: any) : any => {
+      context.signal.addEventListener("abort", () : any => reject(context.signal.reason), { once: true });
+    });
     terminableHandler.terminable = true;
     const terminableRuntime: any = createQueueWorkerRuntime({
       store,
       workerId: "worker-1",
       maxHandlerDurationMs: 5
     });
-    const retried: any = await terminableRuntime.runLeased({
+    const retriedPromise: any = terminableRuntime.runLeased({
       workItem: second.workItem,
       lease: second.lease,
       handler: terminableHandler
     });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(5);
+    const retried: any = await retriedPromise;
     expect(retried.interrupted).toBe(true);
     expect(retried.inDoubt).toBeUndefined();
     const requeued: any = store.inspect({ workItemId: "runtime-2" });
     expect(requeued.workItem.state).toBe(WORK_QUEUE_STATES.QUEUED);
+  });
+
+  it("joins the original handler promise after it writes a terminal result", async () : Promise<any> => {
+    const { store } = await makeStore();
+    const fixture: any = await setupFixture(store);
+    fixture.enqueue("runtime-terminal-handler");
+    const claimed: any = fixture.claim("worker-1").claimed[0];
+    const gate: any = deferred();
+    let markTerminal: any;
+    const terminalWritten: any = new Promise<void>((resolve?: any) : any => { markTerminal = resolve; });
+    const runtime: any = createQueueWorkerRuntime({ store, workerId: "worker-1" });
+    let runSettled = false;
+    const running: any = runtime.runLeased({
+      workItem: claimed.workItem,
+      lease: claimed.lease,
+      handler: async (_input?: any, context?: any) : Promise<any> => {
+        await context.complete();
+        markTerminal();
+        await gate.promise;
+        return { action: "completed" };
+      }
+    }).then((result?: any) : any => {
+      runSettled = true;
+      return result;
+    });
+    await terminalWritten;
+    expect(runSettled).toBe(false);
+    expect(store.inspect({ workItemId: "runtime-terminal-handler" }).workItem.state)
+      .toBe(WORK_QUEUE_STATES.COMPLETED);
+    gate.resolve();
+    await expect(running).resolves.toMatchObject({ settled: true, workItemId: "runtime-terminal-handler" });
+    expect(runSettled).toBe(true);
   });
 
   it("verifies the state machine proof admits in_doubt transitions", async () : Promise<any> => {

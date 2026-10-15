@@ -1,11 +1,7 @@
 import { PRIVATE_RELAY_PEER_SCHEMA_VERSION } from "@meshrix/contracts/private-relay";
-import type {
-  PeerClientTransport,
-  PeerDeviceDirectory,
-  StoredGapTombstone,
-  StoredInboxEntry,
-  StoredOutboxEntry
-} from "@meshrix/peer-client";
+import { peerIdForRouteDevice } from "@meshrix/contracts/private-relay/peer";
+import type { PeerDeliveryAck, PeerForwarded } from "@meshrix/contracts/private-relay";
+import type { PeerClientTransport, StoredInboxEntry, StoredOutboxEntry } from "@meshrix/peer-client";
 
 /**
  * Peer-messaging channel plumbing shared by the entry product and the
@@ -31,50 +27,11 @@ import type {
  */
 
 /** Relay route identity the peer id derivation is bound to. */
-export interface PeerRouteScope {
-  readonly tenantId: string;
-  readonly routeId: string;
-  readonly deviceId: string;
-}
+export type { PeerRouteIdentityTuple as PeerRouteScope } from "@meshrix/contracts/private-relay/peer";
+export { peerIdForRouteDevice };
 
 /**
- * Deterministic crypto peer id for one relay device:
- * `peer:<tenantId>:<routeId>:<deviceId>`.
- *
- * The components are relay-admission opaque ids already; they are re-checked
- * against the peer-id charset so a malformed admission can never smuggle a
- * delimiter or overflow the bound. Returns null instead of throwing so the
- * caller maps the failure onto its own typed error surface.
- */
-export function peerIdForRouteDevice(scope: PeerRouteScope): string | null {
-  // Every segment must be a non-empty opaque id WITHOUT ':' — a colon inside
-  // one component would make the joined derivation ambiguous (two distinct
-  // routeId/deviceId pairs could collide onto one peer id), so peer
-  // derivation refuses such relay identities instead of guessing.
-  for (const segment of [scope.tenantId, scope.routeId, scope.deviceId]) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(segment)) return null;
-  }
-  const peerId = `peer:${scope.tenantId}:${scope.routeId}:${scope.deviceId}`;
-  // Assembled peer ids must satisfy the crypto layer's bound (<=128 chars).
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(peerId)) return null;
-  return peerId;
-}
-
-/**
- * Pairing-layer directory over the shared derivation. The peer client
- * consults it before initiating a session, so a resumed store re-binds to
- * the same peer id without a bundle fetch.
- */
-export function routePeerDirectory(route: Pick<PeerRouteScope, "tenantId" | "routeId">): PeerDeviceDirectory {
-  return Object.freeze({
-    resolvePeerId(peerDeviceId: string): string | null {
-      return peerIdForRouteDevice({ tenantId: route.tenantId, routeId: route.routeId, deviceId: peerDeviceId });
-    }
-  });
-}
-
-/**
- * Demux predicate: true only for objects stamped with the peer mailbox
+ * Demux predicate: true only for objects stamped with the Peer
  * schema. Session drivers ignore these kinds; this is how the product routes
  * them to the peer client without the session layer ever interpreting them.
  */
@@ -123,9 +80,10 @@ export interface PeerOutboxView {
   readonly peerDeviceId: string;
   readonly peerId: string;
   readonly state: string;
-  readonly position: number | null;
+  readonly sequence: number;
   readonly attempts: number;
-  readonly receipts: readonly unknown[];
+  readonly lastForwarded: PeerForwarded | null;
+  readonly deliveryAck: PeerDeliveryAck | null;
   readonly lastError: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -134,12 +92,13 @@ export interface PeerOutboxView {
 export function peerOutboxView(entry: StoredOutboxEntry): PeerOutboxView {
   return Object.freeze({
     messageId: entry.messageId,
-    peerDeviceId: entry.peerDeviceId,
+    peerDeviceId: entry.recipientDeviceId,
     peerId: entry.peerId,
     state: entry.state,
-    position: entry.position,
+    sequence: entry.sequence,
     attempts: entry.attempts,
-    receipts: entry.receipts,
+    lastForwarded: entry.lastForwarded,
+    deliveryAck: entry.deliveryAck,
     lastError: entry.lastError,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt
@@ -148,39 +107,16 @@ export function peerOutboxView(entry: StoredOutboxEntry): PeerOutboxView {
 
 /** Inbox row — UTF-8-clean plaintext is surfaced as `text`, binary stays base64url. */
 export interface PeerInboxView {
-  readonly position: number;
+  readonly sequence: number;
   readonly senderDeviceId: string;
   readonly senderPeerId: string | null;
   readonly messageId: string;
   readonly dispatch: string;
+  readonly transportReceived: boolean;
   readonly decryptError: string | null;
-  readonly reports: readonly string[];
   readonly receivedAt: string;
   readonly text: string | null;
   readonly plaintextBase64url: string | null;
-}
-
-/**
- * Retention-gap tombstone projection — a mailbox range the deployment lost
- * (expired / capacity-truncated). It is surfaced verbatim on operator
- * surfaces: a gap is evidence, never a silent skip.
- */
-export interface PeerGapView {
-  readonly fromSeq: number;
-  readonly toSeq: number;
-  readonly cause: "expired" | "capacity_truncated";
-  readonly messageIds: readonly string[] | null;
-  readonly observedAt: string;
-}
-
-export function peerGapView(tombstone: StoredGapTombstone): PeerGapView {
-  return Object.freeze({
-    fromSeq: tombstone.fromSeq,
-    toSeq: tombstone.toSeq,
-    cause: tombstone.cause,
-    messageIds: tombstone.messageIds,
-    observedAt: tombstone.observedAt
-  });
 }
 
 export function peerInboxView(entry: StoredInboxEntry): PeerInboxView {
@@ -193,13 +129,13 @@ export function peerInboxView(entry: StoredInboxEntry): PeerInboxView {
     } catch { /* binary payload — text stays null */ }
   }
   return Object.freeze({
-    position: entry.position,
+    sequence: entry.sequence,
     senderDeviceId: entry.senderDeviceId,
     senderPeerId: entry.senderPeerId,
     messageId: entry.messageId,
     dispatch: entry.dispatch,
+    transportReceived: entry.deliveryAck !== null,
     decryptError: entry.decryptError,
-    reports: entry.reports,
     receivedAt: entry.receivedAt,
     text,
     plaintextBase64url: entry.plaintext

@@ -104,11 +104,21 @@ function visibleToContext(descriptor: CatalogDescriptor, context: AuthenticatedC
 }
 
 export class CatalogStore implements CatalogPort {
-  readonly #schemaValidator = createSchemaValidator();
+  readonly #schemaValidator;
   readonly #isolated?: IsolatedSchemaValidator;
   #snapshot: CatalogSnapshot = Object.freeze({ revision: "r0", descriptors: Object.freeze([]), routes: readOnlyMap(new Map()), schemas: readOnlyMap(new Map()), byRoute: readOnlyMap(new Map()), byPublicName: readOnlyMap(new Map()), byPublicUri: readOnlyMap(new Map()) });
 
-  constructor(options: { readonly isolated?: boolean } = {}) {
+  constructor(options: {
+    readonly isolated?: boolean;
+    /**
+     * Runtime compiler override for environments where Ajv codegen is
+     * unavailable (workerd forbids `new Function`). The injected compiler must
+     * return the same CompiledExternalSchema contract; Node deployments keep
+     * the default Ajv path.
+     */
+    readonly compiler?: { compile(schema: unknown, label?: string): CompiledExternalSchema };
+  } = {}) {
+    this.#schemaValidator = options.compiler ?? createSchemaValidator();
     this.#isolated = options.isolated ? createIsolatedSchemaValidator() : undefined;
   }
 

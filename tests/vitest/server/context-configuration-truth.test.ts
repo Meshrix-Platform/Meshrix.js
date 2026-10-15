@@ -113,6 +113,23 @@ function explicitContextProfile(profileId: any = "explicit-context-profile") : a
 }
 
 describe("context configuration truth", () : any => {
+  it("reads recent valid memory rows from a torn JSONL tail without rewriting it", async () : Promise<any> => {
+    const root: any = await temporaryRoot("meshrix-context-memory-tail-read-");
+    const agentMemory: any = createAgentMemory({ userDataPath: root, maxScanBytes: 2 * 1024 * 1024 });
+    await fs.mkdir(path.dirname(agentMemory.sessionMemoryPath), { recursive: true });
+    const persisted = `${Array.from({ length: 4000 }, (_?: any, index?: any) : any => JSON.stringify({
+      sessionId: `session-${index}`,
+      createdAt: new Date(index * 1000).toISOString(),
+      summary: `memory-${index}`
+    })).join("\n")}\n{"sessionId":"torn-tail"`;
+    await fs.writeFile(agentMemory.sessionMemoryPath, persisted, "utf8");
+
+    const listed: any = await agentMemory.listSessionMemory({ limit: 3 });
+    expect(listed.records.map(({ sessionId }: any) : any => sessionId))
+      .toEqual(["session-3999", "session-3998", "session-3997"]);
+    expect(await fs.readFile(agentMemory.sessionMemoryPath, "utf8")).toBe(persisted);
+  });
+
   it("keeps session memory bounded while preserving the newest valuable records", async () : Promise<any> => {
     const root: any = await temporaryRoot("meshrix-context-memory-retention-");
     const agentMemory: any = createAgentMemory({

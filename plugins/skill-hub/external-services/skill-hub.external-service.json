@@ -6,6 +6,7 @@
   "description": "Closed contract for the independently deployed Skill Hub HTTP service.",
   "serviceSelection": {
     "configurationPath": "service.serviceRef",
+    "timeoutConfigurationPath": "service.timeoutMs",
     "operatorSupplied": true,
     "required": true
   },
@@ -25,7 +26,6 @@
       "custody": "secretRef",
       "authType": "bearer"
     },
-    "timeoutConfigurationPath": "service.timeoutMs",
     "eventStream": {
       "transport": "sse",
       "method": "GET",

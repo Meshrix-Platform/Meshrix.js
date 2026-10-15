@@ -9,11 +9,11 @@ deployment or extend an earlier candidate's acceptance to later source.
 | Dimension | Current status |
 | --- | --- |
 | **Published products** | `meshrix.js@0.1.0` and `@meshrix/gateway@0.1.0` are published. GitHub release `v0.1.0` is available. See [release history](releases/README.md) for the public references. |
-| **Implementation** | The Node.js platform includes the Server, Web Console, storage, jobs, governed operation dispatch, standard MCP ingress and the plugin contract. Optional plugins, independent services and external clients keep their own lifecycles. |
+| **Implementation** | The published Node.js platform includes the Server, Web Console, storage, jobs, governed operation dispatch, standard MCP ingress and the plugin contract. The current unreleased source candidate implements encrypted online-only Peer forwarding, device-local delivery custody, recoverable application events and an SQLite-backed Skill Hub registry. Relay messages are not persisted as business data; offline work remains pending on the sender until the paired device reconnects. Independent source review and scoped engineering verification are complete; all discovered failures and omitted coverage were repaired. The original failed runs remain preserved. |
 | **Current source** | Post-release source changes require their own affected verification. Published `0.1.0` artifacts, prior source checks and earlier deployed instances do not establish the present candidate's runtime or cloud readiness. |
 | **Deployment** | The maintained Node.js and container paths remain the current implementation. The hosted account authority, private relay and public gateway deployment is operated privately in a separate operations repository and is not part of this repository's published artifacts; no public hosted endpoint is currently offered. The private-relay wire contract in `packages/contracts/src/private-relay/` and the account contract in `packages/contracts/src/account/` define the public boundary that a hosted runtime or a self-hosted deployment implements. Native SQLite, filesystem and process assumptions for the broader Node.js platform still require deliberate runtime adapters. |
-| **Privacy and enterprise operation** | The existing semantic gateway interprets invocation data. Transport TLS, a private network and encrypted secret storage do not establish forwarding that hides content from the operator. Authenticated personal endpoint pairing, operator-blind content forwarding and independently selectable enterprise recording categories are planned capabilities, not current release claims. |
-| **Verification** | Use the repository-owned verification workflow and the smallest affected engineering closure. The product-level functional gate is `npm run verify:acceptance`; benchmarks require current same-candidate backend, Console, standard MCP and normal-shutdown evidence. |
+| **Privacy and enterprise operation** | The published `0.1.0` release retains its documented operator trust boundary. The current source candidate keeps Peer payloads end-to-end encrypted between paired devices and does not persist business messages or signed delivery receipts in the relay. This is not a hosted-service or privacy acceptance claim; no hosted relay service is publicly offered. |
+| **Verification** | Engineering closure completed on 2026-10-12. The unique whole run remains 11 passed / 11 failed, and the affected run remains 7 passed / 2 failed. Later targeted repairs passed; the Reviewer also fixed a name-filter merge bug and completed 20 omitted files (176 current tests), repairing all three newly exposed failures and two unhandled readiness rejections. The final lifecycle tests and node/test typechecks pass. Existing valid results are reused; no second full regression ran. Raw failures, scoped successes and session-only evidence remain in the private programme records. Comparative performance, native Windows/power-loss behavior, real Agent/browser/provider acceptance and deployment remain unqualified. The product-level functional gate remains `npm run verify:acceptance`. |
 
 ## Publication and support boundary
 
@@ -51,12 +51,17 @@ contracts with its implementation. The current
 continues to describe the existing implementation boundary; planned changes are
 not already implemented behavior.
 
-Reliable autonomous Peer communication and useful gateway discovery, CLI and
-result-consumption improvements remain in the current programme. Receiving a
-message does not authorize execution or remote control. Exact cryptographic,
-storage and host-integration choices remain open until their owning design work
-establishes them. The private repository-local planning entry is
-`docs/plans/Programme.json`; no future milestone is activated by reading it.
+The unreleased source candidate develops Peer communication around device-local
+durable inbox/outbox state, paired-device authorization, online encrypted
+forwarding, signed receipt replay with the pairing-pinned Signal identity and
+locally journaled application events. Logical events can be fragmented and
+reassembled locally without adding a fixed catalog-size limit. Receiving a
+message does not authorize execution or remote control; only the explicit host
+integration may dispatch an authorized operation. These changes have current-candidate deterministic engineering evidence;
+live acceptance remains separately assigned.
+The maintainer-designated private project Programme owns delivery planning;
+repository-local predecessor plans remain inactive evidence. Reading a plan
+does not activate a future milestone.
 
 ## Evidence and remaining qualification
 
@@ -67,7 +72,7 @@ original source and configuration. Historical failed attempts remain failed;
 publication does not rewrite those attempts or prove every future environment.
 
 The current source needs its own affected verification and functional evidence
-before performance work, as defined in
+before performance claims, as defined in
 [the repository rules](../AGENTS.md#functional-availability-before-benchmarking-and-optimization).
 There is no current evidence here for comparative industry-leading performance,
 absence of all security vulnerabilities, a complete operator-blind Workers

@@ -28,16 +28,30 @@ import {
   parseEntryRecoveryBundle,
   type EntryRecoveryBundle
 } from "./bundle.ts";
-import { snapshotCiphertextDigest } from "../transcripts.ts";
+import { sha256Hex } from "../keys.ts";
+import { vaultSnapshotDigest } from "../transcripts.ts";
+import type { VaultProtectedSnapshot } from "../transcripts.ts";
 import type {
   RecoveryVaultClient,
+  VaultSigningMaterial,
   VaultSnapshotView
 } from "./vault-client.ts";
 
 export const ENTRY_SNAPSHOT_FORMAT_VERSION = 1;
 
+/** Exact encrypted operation retained until its result is durable. No plaintext or keys. */
+export interface PendingSnapshotWrite {
+  readonly vaultId: string;
+  readonly writerKeyId: string;
+  readonly generation: number;
+  readonly expectedRevision: number;
+  readonly inputDigest: string;
+  readonly snapshot: Record<string, unknown>;
+}
+
 /** Durable high-water + last-committed bookkeeping. */
 export interface SnapshotJournal {
+  readonly pendingWrite?: PendingSnapshotWrite | null;
   readonly lastCommitted: {
     readonly revision: number;
     readonly generation: number;
@@ -53,7 +67,7 @@ export interface SnapshotJournal {
 
 export interface SnapshotJournalPort {
   load(): SnapshotJournal | null;
-  save(journal: SnapshotJournal): void;
+  save(journal: SnapshotJournal): void | Promise<void>;
 }
 
 export class InMemorySnapshotJournal implements SnapshotJournalPort {
@@ -71,11 +85,11 @@ export type PublishOutcome =
   | { readonly outcome: "conflict_unresolved"; readonly currentRevision: number }
   | { readonly outcome: "conflict_undecryptable"; readonly currentRevision: number }
   | { readonly outcome: "superseded"; readonly generation: number }
-  | { readonly outcome: "refused" }
+  | { readonly outcome: "refused"; readonly retryable?: boolean }
   | { readonly outcome: "invalid_response" };
 
 export type FetchOutcome =
-  | { readonly outcome: "snapshot"; readonly bundle: EntryRecoveryBundle; readonly revision: number; readonly generation: number }
+  | { readonly outcome: "snapshot"; readonly bundle: EntryRecoveryBundle; readonly revision: number; readonly generation: number; readonly publicVerifier: VaultSnapshotView["publicVerifier"] }
   | { readonly outcome: "stale"; readonly revision: number; readonly generation: number }
   | { readonly outcome: "refused"; readonly refusal: string; readonly retryable: boolean }
   | { readonly outcome: "decrypt_failed" }
@@ -114,16 +128,6 @@ export class SnapshotSynchronizer {
   readonly #vault: RecoveryVaultClient;
   readonly #journal: SnapshotJournalPort;
   readonly #now: () => number;
-  /**
-   * The exact last attempted write for idempotent retransmission: a retry
-   * must reuse the committed ciphertext+nonce pair rather than allocating a
-   * fresh nonce for identical work.
-   */
-  #lastAttempt: {
-    expectedRevision: number;
-    digest: string;
-    snapshot: Record<string, unknown>;
-  } | null = null;
 
   constructor(options: {
     vault: RecoveryVaultClient;
@@ -144,8 +148,8 @@ export class SnapshotSynchronizer {
     };
   }
 
-  #saveJournal(patch: Partial<SnapshotJournal>): void {
-    this.#journal.save({ ...this.#loadJournal(), ...patch });
+  async #saveJournal(patch: Partial<SnapshotJournal>): Promise<void> {
+    await this.#journal.save({ ...this.#loadJournal(), ...patch });
   }
 
   /** Current committed revision (0 when nothing committed yet). */
@@ -163,6 +167,13 @@ export class SnapshotSynchronizer {
     readonly vaultId: string;
     readonly bundle: EntryRecoveryBundle;
     readonly material: RecoveryMaterial;
+    /** Existing remote base already fetched and decrypted with retained local
+     * material. The next CAS write merges it and starts from its exact
+     * revision, preventing an equal cached revision from replacing ciphertext. */
+    readonly baseSnapshot?: Pick<Extract<FetchOutcome, { outcome: "snapshot" }>, "bundle" | "revision" | "generation">;
+    /** Retained local materials used if a concurrent CAS writer changed the
+     * committed head after baseSnapshot was fetched. */
+    readonly decryptWith?: readonly RecoveryMaterial[];
     /**
      * The current recovery-authority generation this snapshot claims —
      * supplied by the caller from the connection's authority record. A stale
@@ -171,20 +182,35 @@ export class SnapshotSynchronizer {
     readonly generation: number;
   }): Promise<PublishOutcome> {
     const journal = this.#loadJournal();
-    const expected = journal.lastCommitted?.revision ?? 0;
+    const generation = Math.max(input.generation, input.baseSnapshot?.generation ?? 0, journal.highestSeen?.generation ?? 0, 1);
+    const pending = journal.pendingWrite;
+    const retained = pending && pending.vaultId === input.vaultId
+      && pending.writerKeyId === input.material.writer.keyId && pending.generation === generation
+      ? pending : null;
+    const expected = retained?.expectedRevision ?? input.baseSnapshot?.revision ?? journal.lastCommitted?.revision ?? 0;
     // The effective generation is the caller's authority view raised by any
     // higher generation already observed; it can only move forward.
-    const generation = Math.max(input.generation, journal.highestSeen?.generation ?? 0, 1);
+    const bundle = input.baseSnapshot
+      ? mergeRecoveryBundles(input.bundle, input.baseSnapshot.bundle, { now: this.#now })
+      : input.bundle;
 
-    const digestOf = (snapshot: Record<string, unknown>): string =>
-      snapshotCiphertextDigest(
-        String((snapshot.snapshot as { ciphertext?: unknown }).ciphertext ?? "")
-      );
+    // Journal/last-attempt bookkeeping keys the same canonical
+    // full-protected-snapshot digest the vault verifies. Envelopes produced
+    // by snapshotEnvelope always satisfy the wire schema; a foreign record
+    // falls back to hashing its canonical JSON so bookkeeping stays unique
+    // without inventing a second protected-snapshot digest.
+    const digestOf = (snapshot: Record<string, unknown>): string => {
+      const parsed = parseEncryptedRecoverySnapshot(snapshot);
+      return parsed
+        ? vaultSnapshotDigest(parsed as VaultProtectedSnapshot)
+        : `sha256:${sha256Hex(canonicalJson(snapshot))}`;
+    };
 
-    let snapshot = this.#lastAttempt && this.#lastAttempt.expectedRevision === expected
-      ? this.#lastAttempt.snapshot
+    const inputDigest = sha256Hex(canonicalJson({ ...input.bundle, createdAt: undefined }));
+    const snapshot = retained
+      ? retained.snapshot
       : snapshotEnvelope({
-          bundle: input.bundle,
+          bundle,
           backupKey: input.material.backupKey,
           vaultId: input.vaultId,
           generation,
@@ -195,7 +221,10 @@ export class SnapshotSynchronizer {
             publicKey: input.material.signing.publicKey
           }
         });
-    this.#lastAttempt = { expectedRevision: expected, digest: digestOf(snapshot), snapshot };
+    await this.#saveJournal({ pendingWrite: retained ?? {
+      vaultId: input.vaultId, writerKeyId: input.material.writer.keyId,
+      generation, expectedRevision: expected, inputDigest, snapshot
+    } });
 
     const attempt = await this.#vault.writeSnapshot({
       vaultId: input.vaultId,
@@ -205,32 +234,51 @@ export class SnapshotSynchronizer {
     });
 
     if (attempt.outcome === "committed") {
-      this.#lastAttempt = null;
-      this.#saveJournal({
+      await this.#saveJournal({
+        pendingWrite: null,
         lastCommitted: { revision: attempt.committedRevision, generation, digest: digestOf(snapshot) },
         highestSeen: { revision: attempt.committedRevision, generation },
         lastSuccessAt: new Date(this.#now()).toISOString(),
         lastError: null
       });
+      // Finish a retained operation first; a changed configuration then gets
+      // its own revision. This is finite, explicit work, never background retry.
+      if (retained && retained.inputDigest !== inputDigest) {
+        const envelope = parseEncryptedRecoverySnapshot(snapshot)!;
+        const retainedBundle = parseEntryRecoveryBundle(JSON.parse(new TextDecoder().decode(openRecoverySnapshot({
+          envelope: envelope.snapshot, backupKey: input.material.backupKey,
+          vaultId: input.vaultId, formatVersion: envelope.formatVersion,
+          generation: envelope.generation, revision: envelope.revision
+        }))));
+        if (!retainedBundle) return { outcome: "invalid_response" };
+        return this.publish({ ...input,
+          bundle: mergeRecoveryBundles(bundle, retainedBundle, { now: this.#now }),
+          baseSnapshot: undefined });
+      }
       return { outcome: "committed", revision: attempt.committedRevision, digest: digestOf(snapshot) };
     }
     if (attempt.outcome === "refused") {
+      if (attempt.retryable) {
+        await this.#saveJournal({ lastError: "vault_write_capacity" });
+        return { outcome: "refused", retryable: true };
+      }
       // A refused write may mean this writer's generation was superseded —
       // probe the committed snapshot once to report that honestly instead of
       // a bare refusal (e.g. after rotation, the old generation is refused).
       const probe = await this.fetchSnapshot({
         vaultId: input.vaultId,
         material: input.material,
+        decryptWith: input.decryptWith,
         checkVerifier: false
       });
       if (probe.outcome === "snapshot" && probe.generation > generation) {
         return { outcome: "superseded", generation: probe.generation };
       }
-      this.#saveJournal({ lastError: "vault_write_refused" });
+      await this.#saveJournal({ lastError: "vault_write_refused" });
       return { outcome: "refused" };
     }
     if (attempt.outcome === "invalid_response") {
-      this.#saveJournal({ lastError: "vault_write_invalid_response" });
+      await this.#saveJournal({ lastError: "vault_write_invalid_response" });
       return { outcome: "invalid_response" };
     }
 
@@ -240,10 +288,11 @@ export class SnapshotSynchronizer {
     const remote = await this.fetchSnapshot({
       vaultId: input.vaultId,
       material: input.material,
+      decryptWith: input.decryptWith,
       checkVerifier: false
     });
     if (remote.outcome === "refused") {
-      this.#saveJournal({ lastError: `vault_fetch_refused:${remote.refusal}` });
+      await this.#saveJournal({ lastError: `vault_fetch_refused:${remote.refusal}` });
       return { outcome: "conflict_unresolved", currentRevision: attempt.currentRevision };
     }
     if (remote.outcome !== "snapshot" && remote.outcome !== "stale") {
@@ -255,8 +304,8 @@ export class SnapshotSynchronizer {
       return { outcome: "superseded", generation: remote.generation };
     }
     const merged = remote.outcome === "snapshot"
-      ? mergeRecoveryBundles(input.bundle, remote.bundle, { now: this.#now })
-      : input.bundle;
+      ? mergeRecoveryBundles(bundle, remote.bundle, { now: this.#now })
+      : bundle;
     const reconciled = snapshotEnvelope({
       bundle: merged,
       backupKey: input.material.backupKey,
@@ -269,6 +318,11 @@ export class SnapshotSynchronizer {
         publicKey: input.material.signing.publicKey
       }
     });
+    await this.#saveJournal({ pendingWrite: {
+      vaultId: input.vaultId, writerKeyId: input.material.writer.keyId,
+      generation, expectedRevision: attempt.currentRevision, inputDigest,
+      snapshot: reconciled
+    } });
     const retry = await this.#vault.writeSnapshot({
       vaultId: input.vaultId,
       expectedRevision: attempt.currentRevision,
@@ -276,8 +330,8 @@ export class SnapshotSynchronizer {
       writerKey: input.material.writer
     });
     if (retry.outcome === "committed") {
-      this.#lastAttempt = null;
-      this.#saveJournal({
+      await this.#saveJournal({
+        pendingWrite: null,
         lastCommitted: { revision: retry.committedRevision, generation, digest: digestOf(reconciled) },
         highestSeen: { revision: retry.committedRevision, generation },
         lastSuccessAt: new Date(this.#now()).toISOString(),
@@ -285,9 +339,11 @@ export class SnapshotSynchronizer {
       });
       return { outcome: "committed", revision: retry.committedRevision, digest: digestOf(reconciled) };
     }
+    await this.#saveJournal({ lastError: retry.outcome === "refused" && retry.retryable
+      ? "vault_write_capacity" : `vault_write_${retry.outcome}` });
     return retry.outcome === "conflict"
       ? { outcome: "conflict_unresolved", currentRevision: retry.currentRevision }
-      : { outcome: "refused" };
+      : { outcome: "refused", ...(retry.outcome === "refused" && retry.retryable ? { retryable: true } : {}) };
   }
 
   /**
@@ -297,26 +353,43 @@ export class SnapshotSynchronizer {
    */
   async fetchSnapshot(input: {
     readonly vaultId: string;
+    /** Material used to decrypt the stored envelope and check its public verifier. */
     readonly material: RecoveryMaterial;
+    /** Optional current authority key used to authenticate fetch after writer
+     * registration changed the vault verifier while ciphertext is still under
+     * a retained older local key. */
+    readonly fetchKey?: VaultSigningMaterial;
+    /** Additional retained local materials tried against the fetched
+     * snapshot's own verifier/ciphertext without repeating the network read. */
+    readonly decryptWith?: readonly RecoveryMaterial[];
     /** Assert the vault verifier matches the derived recovery signing key. */
     readonly checkVerifier?: boolean;
   }): Promise<FetchOutcome> {
     const fetched = await this.#vault.fetchSnapshot({
       vaultId: input.vaultId,
-      recoveryKey: input.material.signing
+      recoveryKey: input.fetchKey ?? input.material.signing
     });
     if (fetched.outcome === "refused") {
       return { outcome: "refused", refusal: fetched.refusal, retryable: fetched.retryable };
     }
     if (fetched.outcome !== "snapshot") return { outcome: "invalid_response" };
     const view = fetched.snapshot;
-    return this.#decryptView(input, view);
+    let last: FetchOutcome = { outcome: "invalid_response" };
+    const materials = [input.material, ...(input.decryptWith ?? [])];
+    const tried = new Set<string>();
+    for (const material of materials) {
+      if (tried.has(material.signing.keyId)) continue;
+      tried.add(material.signing.keyId);
+      last = await this.#decryptView({ ...input, material }, view);
+      if (last.outcome !== "authority_mismatch" && last.outcome !== "decrypt_failed") return last;
+    }
+    return last;
   }
 
-  #decryptView(
+  async #decryptView(
     input: { vaultId: string; material: RecoveryMaterial; checkVerifier?: boolean },
     view: VaultSnapshotView
-  ): FetchOutcome {
+  ): Promise<FetchOutcome> {
     if (input.checkVerifier !== false) {
       const verifier = view.publicVerifier;
       if (
@@ -358,12 +431,13 @@ export class SnapshotSynchronizer {
       return { outcome: "invalid_response" };
     }
     if (!bundle) return { outcome: "invalid_response" };
-    this.#saveJournal({ highestSeen: { revision: view.revision, generation: view.generation } });
+    await this.#saveJournal({ highestSeen: { revision: view.revision, generation: view.generation } });
     return {
       outcome: "snapshot",
       bundle,
       revision: view.revision,
-      generation: view.generation
+      generation: view.generation,
+      publicVerifier: view.publicVerifier
     };
   }
 }

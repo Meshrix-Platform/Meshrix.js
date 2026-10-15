@@ -3,8 +3,12 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateStateMachineDefinition } from "./engine/state-machine-core.ts";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFINITIONS_DIR = resolve(__dirname, "definitions");
+// `import.meta.url` is undefined inside bundled non-Node runtimes (workerd);
+// the definitions directory is only ever read by Node-side filesystem loads.
+const __dirname = typeof import.meta.url === "string" && import.meta.url
+  ? dirname(fileURLToPath(import.meta.url))
+  : "";
+const DEFINITIONS_DIR = resolve(__dirname || ".", "definitions");
 
 export type StateMachineDefinition = Record<string, unknown>;
 

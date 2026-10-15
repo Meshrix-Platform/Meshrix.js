@@ -93,6 +93,10 @@ export function createWssRelayTransport(options: WssRelayTransportOptions): WssR
     readyResolve = resolve;
     readyReject = reject;
   });
+  // Ready is a stored wait primitive: a later awaiter still observes its
+  // settlement, but a close with no waiter must not surface as an unhandled
+  // rejection.
+  void ready.catch(() => undefined);
 
   function handleMessageEvent(data: unknown): void {
     if (typeof data !== "string") {

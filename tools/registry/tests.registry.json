@@ -40,6 +40,7 @@
         "architecture.import-graph",
         "architecture.protocol-boundary",
         "foundation.checkpoint-tree",
+        "foundation.private-file-atomic",
         "foundation.state-machine",
         "release.acceptance-ledger-anchor",
         "gateway.external"
@@ -130,7 +131,8 @@
                   "backend-build"
                 ],
                 "suites": [
-                  "regression.backend-unit"
+                  "regression.backend-unit",
+                  "foundation.private-file-atomic"
                 ]
               },
               {
@@ -416,6 +418,7 @@
       },
       "suites": [
         "container.deployment-flow",
+        "foundation.private-file-atomic",
         "storage.backup-restore",
         "storage.production-restore-drill",
         "jobs.work-queue",
@@ -608,6 +611,140 @@
     }
   },
   "suites": [
+    {
+      "id": "security.skill-hub-carrier",
+      "label": "Core authenticated Skill Hub subject injection and SSE catalog refresh after reconnect",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "security",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/upstream-gateway-ssrf.test.ts",
+        "-t",
+        "injects only the Core-bound Skill Hub subject into the trusted service request|refreshes the Skill Hub catalog on SSE connect and reconnect without replaying committed requests",
+        "--maxWorkers=1"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/server-runtime/src",
+        "packages/protocols/http",
+        "packages/agents/src/upstream-gateway",
+        "services/skill-hub",
+        "tests/vitest/server/upstream-gateway-ssrf.test.ts"
+      ]
+    },
+    {
+      "id": "model-gateway.port-contract",
+      "label": "Model Gateway Core public port schema and service contract",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/contracts/model-gateway-port.test.ts",
+        "--maxWorkers=1"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "services/model-gateway",
+        "plugins/model-gateway",
+        "packages/contracts",
+        "tests/vitest/contracts/model-gateway-port.test.ts"
+      ]
+    },
+    {
+      "id": "skill-hub.service-adapter",
+      "label": "Skill Hub production HTTP admission, durable ownership and Host adapter contracts",
+      "owner": "platform",
+      "package": "repo",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "--conditions=source",
+        "--test",
+        "services/skill-hub/test/http-service.test.mjs",
+        "tests/plugins/skill-hub.test.mjs"
+      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "services/skill-hub",
+        "plugins/skill-hub",
+        "tests/plugins/skill-hub.test.mjs",
+        "packages/server-runtime/src",
+        "packages/protocols/http"
+      ]
+    },
+    {
+      "id": "model-gateway.service-adapter",
+      "label": "Model Gateway synthetic providers, persistent paid effects and plugin contracts",
+      "owner": "platform",
+      "package": "repo",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "--conditions=source",
+        "--test",
+        "services/model-gateway/test/admission.test.mjs",
+        "services/model-gateway/test/auth.test.mjs",
+        "services/model-gateway/test/data-root-ownership.test.mjs",
+        "services/model-gateway/test/data-root-startup.test.mjs",
+        "services/model-gateway/test/fixed-point.test.mjs",
+        "services/model-gateway/test/http-service.test.mjs",
+        "services/model-gateway/test/ledger-settled-order.test.mjs",
+        "services/model-gateway/test/persistence.test.mjs",
+        "services/model-gateway/test/providers.test.mjs",
+        "plugins/model-gateway/test/runtime.test.mjs"
+      ],
+      "sideEffects": "network-service",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "services/model-gateway",
+        "plugins/model-gateway"
+      ]
+    },
+    {
+      "id": "file-parser.sandbox-contract",
+      "label": "File Parser sandbox, conversion and archive engineering tests",
+      "owner": "platform",
+      "package": "repo",
+      "level": "security",
+      "command": "make",
+      "args": [
+        "-C",
+        "services/file-parser/format-convert",
+        "test"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "services/file-parser/format-convert",
+        "docker-compose.yml"
+      ]
+    },
     {
       "id": "gateway.benchmark-node",
       "label": "Installed independent Node package correctness",
@@ -1022,7 +1159,12 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/contracts/src/private-relay",
+        "packages/contracts/src/fixtures/private-relay-wire-corpus.json",
+        "tests/vitest/contracts/private-relay-contract.test.ts"
+      ]
     },
     {
       "id": "contracts.enterprise-recording",
@@ -1064,7 +1206,7 @@
     },
     {
       "id": "gateway.private-endpoint-profile",
-      "label": "Private-endpoint installer profile: config validation, WSS relay transport lifecycle, honest reachability/revocation surface, inner-channel dispatch and signal drain",
+      "label": "Private-endpoint installer profile: config validation, WSS lifecycle, capacity-close reconnect, honest reachability/revocation, inner-channel dispatch and signal drain",
       "owner": "platform",
       "package": "repo",
       "level": "integration",
@@ -1073,7 +1215,10 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/gateway/private-endpoint/endpoint-profile.test.ts"
+        "tests/vitest/gateway/private-endpoint/endpoint-profile.test.ts",
+        "tests/vitest/gateway/private-endpoint/endpoint-peer-pairing-trust.test.ts",
+        "tests/vitest/gateway/account-endpoint.test.ts",
+        "tests/vitest/gateway/private-endpoint-claim-cli.test.ts"
       ],
       "sideEffects": "network-service",
       "requiredServices": [],
@@ -1085,6 +1230,9 @@
         "apps/mcp-gateway-installer/src/cli.ts",
         "packages/gateway/src/private-endpoint",
         "packages/contracts/src/private-relay",
+        "tests/vitest/gateway/account-endpoint.test.ts",
+        "tests/vitest/gateway/private-endpoint-claim-cli.test.ts",
+        "tests/vitest/gateway/private-endpoint/endpoint-peer-pairing-trust.test.ts",
         "tests/vitest/gateway/private-endpoint"
       ]
     },
@@ -1306,7 +1454,9 @@
         "tests/vitest/server/unified-test-runner-execution.test.ts",
         "tests/vitest/server/changed-suite-selection.test.ts",
         "tests/vitest/server/test-runner-dry-run.test.ts",
-        "tests/vitest/server/local-ci.test.ts"
+        "tests/vitest/server/local-ci.test.ts",
+        "tests/vitest/server/engineering-source-privacy.test.ts",
+        "tests/vitest/server/config-scanner-redaction.test.ts"
       ],
       "sideEffects": "none",
       "requiredServices": [],
@@ -1318,10 +1468,16 @@
         "tools/scripts/local-ci.ts",
         "tools/scripts/lib",
         "tools/registry",
+        "vitest.config.ts",
+        "tests/support/worker-test-env.txt",
         "tests/vitest/server/unified-test-runner-execution.test.ts",
         "tests/vitest/server/changed-suite-selection.test.ts",
         "tests/vitest/server/test-runner-dry-run.test.ts",
-        "tests/vitest/server/local-ci.test.ts"
+        "tests/vitest/server/local-ci.test.ts",
+        "tests/vitest/server/engineering-source-privacy.test.ts",
+        "tests/vitest/server/config-scanner-redaction.test.ts",
+        "tools/config-scanner.ts",
+        "tests/verify-secret-hygiene.ts"
       ]
     },
     {
@@ -1398,6 +1554,32 @@
       "triggerPaths": [
         "packages/foundation/src",
         "tests/unit/foundation/checkpoint-tree.test.ts"
+      ]
+    },
+    {
+      "id": "foundation.private-file-atomic",
+      "label": "Private atomic file security and failure propagation plus filesystem capacity admission",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/foundation/private-file-atomic.test.ts",
+        "tests/vitest/foundation/private-storage-capacity.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/foundation/src/storage/private-file-atomic.ts",
+        "packages/foundation/src/storage/private-storage-capacity.ts",
+        "tests/vitest/foundation/private-file-atomic.test.ts",
+        "tests/vitest/foundation/private-storage-capacity.test.ts"
       ]
     },
     {
@@ -1574,6 +1756,39 @@
       ]
     },
     {
+      "id": "server-runtime.system-observation",
+      "label": "Relay traffic observation: bounded exposition ingestion, history persistence truth, ops monitor controller and panel",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/relay-traffic-operation.test.ts",
+        "tests/vitest/console/console-ops-monitor-controller.test.ts",
+        "tests/vitest/console/console-ops-monitor-view-controller.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/server-runtime/src/composition/console-domain/operation-executors/system-observation-executors.ts",
+        "apps/console/components/admin/ops-monitor/RelayTrafficPanel.vue",
+        "apps/console/composables/console-ops-monitor-controller.ts",
+        "apps/console/composables/console-ops-monitor-view-controller.ts",
+        "apps/console/composables/opsMonitorViewContext.ts",
+        "apps/console/lib/relay-traffic-client.ts",
+        "apps/console/lib/types/ops.ts",
+        "tests/vitest/server/relay-traffic-operation.test.ts",
+        "tests/vitest/console/console-ops-monitor-controller.test.ts",
+        "tests/vitest/console/console-ops-monitor-view-controller.test.ts"
+      ]
+    },
+    {
       "id": "security.authorization-hardening",
       "label": "Authorization concurrency delegation replay and crash-safety regressions",
       "owner": "platform",
@@ -1621,13 +1836,25 @@
         "tests/vitest/server/http-request-body-admission.test.ts",
         "tests/vitest/server/http-server-middleware-rate-limit.test.ts",
         "tests/vitest/server/production-ingress-contract.test.ts",
-        "tests/vitest/server/client-registry-conformance-recovery.test.ts"
+        "tests/vitest/server/client-registry-conformance-recovery.test.ts",
+        "tests/vitest/server/console-auth.test.ts",
+        "tests/vitest/server/console-domain-operation-executor-auth.test.ts",
+        "tests/vitest/server/api-key-distribution.test.ts",
+        "tests/vitest/server/operation-permission-grant-security.test.ts",
+        "tests/vitest/server/http-server-routes-mcp-contract.test.ts"
       ],
       "sideEffects": "temp-files",
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": [
+        "packages/server-runtime/src",
+        "packages/protocols/http",
+        "packages/contracts/src",
+        "tests/vitest/server",
+        "docs/functionality/CORE-INGRESS-ADMISSION.md"
+      ]
     },
     {
       "id": "foundation.state-machine",
@@ -3461,7 +3688,8 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/entry-transport/entry-transport.test.ts"
+        "tests/vitest/entry-transport/entry-transport.test.ts",
+        "tests/vitest/entry-transport/pairing-relay-channel.test.ts"
       ],
       "sideEffects": "none",
       "requiredServices": [],
@@ -3477,7 +3705,7 @@
     },
     {
       "id": "entry.gui",
-      "label": "Installed entry GUI: redacted state model, loopback API contract/allowlist + bearer-token auth, product service, real-loop recovery, rotation and pinned mTLS rebind",
+      "label": "Installed entry GUI: redacted state and local history, exact paired-peer reachability, durable event/result routing, pairing and recovery, and pinned transport lifecycle",
       "owner": "platform",
       "package": "repo",
       "level": "integration",
@@ -3488,7 +3716,16 @@
         "--",
         "tests/vitest/entry-gui/entry-gui-model.test.ts",
         "tests/vitest/entry-gui/entry-gui-ipc.test.ts",
-        "tests/vitest/entry-gui/entry-gui-integration.test.ts"
+        "tests/vitest/entry-gui/entry-gui-integration.test.ts",
+        "tests/vitest/entry-gui/account-client.test.ts",
+        "tests/vitest/entry-gui/pairing-bootstrap-retry.test.ts",
+        "tests/vitest/entry-gui/pairing-completion-replay.test.ts",
+        "tests/vitest/entry-gui/account-vault-writer.test.ts",
+        "tests/vitest/entry-gui/personal-mcp-structured-content.test.ts",
+        "tests/vitest/entry-gui/agent-registry.test.ts",
+        "tests/vitest/entry-gui/agent-runtime.test.ts",
+        "tests/vitest/entry-gui/personal-endpoint-runtime.test.ts",
+        "tests/vitest/entry-gui/application-peer-router.test.ts"
       ],
       "sideEffects": "temp-files",
       "requiredServices": [],
@@ -3502,6 +3739,59 @@
         "packages/gateway/src/private-endpoint",
         "packages/contracts/src/private-relay",
         "tests/vitest/entry-gui"
+      ]
+    },
+    {
+      "id": "entry.gui.service-owner",
+      "label": "Entry GUI canonical service ownership and native attach lifecycle: single writer, parent-crash reattachment, no premature shutdown and authenticated MCP attachment",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/entry-gui/service-owner.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/entry-gui/src/main/service-owner.ts",
+        "apps/entry-gui/src/main/service-entry.ts",
+        "apps/entry-gui/src-tauri/src/main.rs",
+        "tests/vitest/entry-gui/service-owner.test.ts"
+      ]
+    },
+    {
+      "id": "entry.gui.service-build",
+      "label": "Compile the Entry GUI production Node service bundle from the current peer and storage sources",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "apps/entry-gui",
+        "run",
+        "build:service"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/entry-gui/src/main",
+        "apps/entry-gui/package.json",
+        "packages/contracts/src/private-relay",
+        "packages/entry-transport",
+        "packages/foundation/src/storage",
+        "packages/peer-client",
+        "packages/peer-crypto"
       ]
     },
     {
@@ -3529,7 +3819,7 @@
     },
     {
       "id": "peer.client",
-      "label": "Peer client: durable outbox lifecycle (lost-reply reconcile, duplicate retry, conflict honesty), deduplicated inbox with cursor resume and gap tombstones, real X3DH+ratchet round trip over the session channel, identity-change re-pair gating and file-store restart",
+      "label": "Peer client: durable exact-ciphertext outbox/inbox, signed delivery receipts, paged local history, safe restart recovery, identity-pin enforcement, and no repeat application dispatch",
       "owner": "platform",
       "package": "repo",
       "level": "integration",
@@ -3538,7 +3828,9 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/peer-client/peer-client.test.ts"
+        "tests/vitest/peer-client/peer-client.test.ts",
+        "tests/vitest/peer-client/peer-application-engine.test.ts",
+        "tests/vitest/peer-client/file-store-migration.test.ts"
       ],
       "sideEffects": "temp-files",
       "requiredServices": [],
@@ -3554,7 +3846,7 @@
     },
     {
       "id": "peer.product-wiring",
-      "label": "Peer product wiring: endpoint+entry runtimes over the shared admitted session channel (admission gating, disabled blocks, Signal request/progress/result with honest receipts, disconnect/resume dedup, revocation refusal and per-connection store purge)",
+      "label": "Peer product wiring: actual Account + Relay clients, bidirectional encrypted requests/results, Entry stale-revision and capacity-close recovery, durable pending same-ciphertext replay, paired-peer authorization, and no duplicate dispatch",
       "owner": "platform",
       "package": "repo",
       "level": "integration",
@@ -3580,6 +3872,60 @@
         "packages/contracts/src/private-relay",
         "tests/vitest/peer-client",
         "tests/vitest/peer-integration"
+      ]
+    },
+    {
+      "id": "account.namespace-consumers",
+      "label": "Public personal namespace consumers: Endpoint claim and Entry GUI bootstrap",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/gateway/private-endpoint-claim.test.ts",
+        "tests/vitest/entry-gui/account-client.test.ts",
+        "tests/vitest/entry-gui/pairing-bootstrap-retry.test.ts",
+        "--maxWorkers=1"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/mcp-gateway-installer/src/private-endpoint/claim.ts",
+        "apps/mcp-gateway-installer/src/private-endpoint/config.ts",
+        "apps/entry-gui/src/main/account-client.ts",
+        "apps/entry-gui/src/main/product-service.ts",
+        "tests/vitest/gateway/private-endpoint-claim.test.ts",
+        "tests/vitest/entry-gui/account-client.test.ts",
+        "tests/vitest/entry-gui/pairing-bootstrap-retry.test.ts"
+      ]
+    },
+    {
+      "id": "account.consumer-typecheck",
+      "label": "Entry GUI authentication consumer static contracts",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "apps/entry-gui",
+        "run",
+        "typecheck"
+      ],
+      "sideEffects": "none",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/entry-gui",
+        "packages/contracts/src/account"
       ]
     }
   ]

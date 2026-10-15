@@ -1097,4 +1097,45 @@ describe("scoped API Key distribution", () : any => {
       await current.close();
     }
   });
+
+  it("derives unclaimed expiry past the claim window and claims keys on first authentication", async () : Promise<any> => {
+    const current: any = harness();
+    try {
+      const mint = (workloadDisplayName: string) : Promise<any> => current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName,
+        organizationNodeId: "issuer",
+        expiresAt: "2027-01-01T00:00:00.000Z",
+        policy: policy("catalog-1")
+      });
+      const recordOf = async (keyId: string) : Promise<any> =>
+        ((await current.provider.list({ subjectId: "admin" })).items || [])
+          .find((record: any) : any => record.keyId === keyId);
+
+      const orphan: any = await mint("Never delivered key");
+      current.advance(73 * 60 * 60 * 1000);
+      expect((await recordOf(orphan.record.keyId)).status).toBe("unclaimed");
+      await expect(current.provider.authenticateRuntime({
+        credential: orphan.apiKey,
+        serverAudience: "https://meshrix.invalid"
+      })).rejects.toMatchObject({ code: "api_key_unclaimed_expired" });
+      // The failed touch settled the record to stored "expired"; the audit
+      // event keeps the api_key_unclaimed reason.
+      expect((await recordOf(orphan.record.keyId)).status).toBe("expired");
+
+      const live: any = await mint("Claimed key");
+      await expect(current.provider.authenticateRuntime({
+        credential: live.apiKey,
+        serverAudience: "https://meshrix.invalid"
+      })).resolves.toMatchObject({ keyId: live.record.keyId });
+      expect((await recordOf(live.record.keyId)).claimedAt).toBeTruthy();
+      current.advance(73 * 60 * 60 * 1000);
+      await expect(current.provider.authenticateRuntime({
+        credential: live.apiKey,
+        serverAudience: "https://meshrix.invalid"
+      })).resolves.toMatchObject({ keyId: live.record.keyId });
+    } finally {
+      await current.close();
+    }
+  });
 });

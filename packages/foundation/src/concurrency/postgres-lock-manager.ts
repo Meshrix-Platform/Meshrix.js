@@ -173,6 +173,8 @@ interface CreditNode extends IntrusiveWaitNode<CreditNode> {
 }
 interface Entry {
   closing: Promise<void> | null;
+  expiryController: AbortController;
+  expiryTask: Promise<void> | null;
   finalized: boolean;
   handle: LockHandle;
   heartbeatTask: Promise<void> | null;
@@ -194,6 +196,7 @@ interface OperationOptions {
   ignoreDestroy?: boolean;
   signal?: AbortSignal;
   lockKey?: string;
+  waitForQueryCompletion?: boolean;
 }
 interface ExtendedMetrics extends LockManagerMetrics {
   queueKeys: number;
@@ -225,6 +228,7 @@ export class PostgresLockManager extends LockManager {
   _entries: Map<string, Entry>;
   _ownsPool: boolean;
   _pendingAcquires: Set<Promise<LockHandle>>;
+  _pendingLeaseExpirations: Set<Promise<void>>;
   _poolErrorListener: (error: Error) => void;
   _poolErrorListenerAttached: boolean;
   _localQueues: Map<string, IntrusiveWaitQueue<LocalNode>>;
@@ -234,6 +238,7 @@ export class PostgresLockManager extends LockManager {
   namespace: string;
   pool: PgPool;
   queryTimeoutMs: number;
+  queryTimeoutExplicit: boolean;
   maxPoolCredits: number;
   retryIntervalMs: number;
   /**
@@ -260,6 +265,7 @@ export class PostgresLockManager extends LockManager {
       5000,
       "queryTimeoutMs",
     );
+    this.queryTimeoutExplicit = config.queryTimeoutMs !== undefined && config.queryTimeoutMs !== null;
     this.maxPoolCredits = positiveInteger(
       config.maxPoolCredits,
       Number(config.pool?.options?.max) || 16,
@@ -267,6 +273,7 @@ export class PostgresLockManager extends LockManager {
     );
     this._entries = new Map();
     this._pendingAcquires = new Set();
+    this._pendingLeaseExpirations = new Set();
     this._localQueues = new Map();
     this._poolCreditQueue = new IntrusiveWaitQueue();
     this._activePoolCredits = 0;
@@ -419,33 +426,57 @@ export class PostgresLockManager extends LockManager {
 
         let row: AcquireRow | undefined;
         try {
-          const result = await this._queryBefore<AcquireRow>(
-            client,
-            ACQUIRE_SQL,
-            [this.namespace, lockKey, ownerId, ttlMs],
-            attemptDeadline,
-            { signal: options.signal, lockKey },
-          );
+          const acquireValues = [this.namespace, lockKey, ownerId, ttlMs];
+          // Once ACQUIRE is sent, a client-side race can discard a successful
+          // fenced result after PostgreSQL has committed it. Keep the default
+          // query timeout for connection/schema admission, but let this one
+          // mutation settle before deciding whether it acquired the lease.
+          // An explicitly configured query timeout remains an operator budget;
+          // if it fires, its outcome is reported as backend-uncertain below.
+          const result = this.queryTimeoutExplicit
+            ? await this._queryBefore<AcquireRow>(
+                client,
+                ACQUIRE_SQL,
+                acquireValues,
+                attemptDeadline,
+                { ignoreDestroy: true, lockKey },
+              )
+            : await client.query<AcquireRow>(ACQUIRE_SQL, acquireValues);
           row = result.rows[0];
         } catch (error) {
           destroyClient = true;
-          if (error instanceof LockManagerDestroyedError) throw error;
-          if (error instanceof LockAcquireAbortedError) throw error;
           if (error instanceof BackendQueryTimeoutError) {
-            this._metrics.totalTimedOut++;
-            throw new LockTimeoutError(lockKey, waitMs);
+            this._metrics.totalBackendErrors++;
+            throw new PostgresLockBackendError("acquire");
           }
           this._metrics.totalBackendErrors++;
           throw new PostgresLockBackendError("acquire");
         }
 
-        if (this._destroyed) {
-          destroyClient = true;
-          throw new LockManagerDestroyedError(this.config.backend);
-        }
-        if (options.signal?.aborted) {
-          destroyClient = true;
-          throw new LockAcquireAbortedError(lockKey);
+        const callerWaitExpired = waitMs > 0 && Date.now() >= deadline;
+        if (this._destroyed || options.signal?.aborted || callerWaitExpired) {
+          if (row?.fencing_token) {
+            try {
+              await client.query(RELEASE_SQL, [
+                this.namespace,
+                lockKey,
+                ownerId,
+                String(row.fencing_token),
+              ]);
+            } catch {
+              destroyClient = true;
+              this._metrics.totalBackendErrors++;
+              throw new PostgresLockBackendError("acquire");
+            }
+          }
+          if (this._destroyed) {
+            throw new LockManagerDestroyedError(this.config.backend);
+          }
+          if (options.signal?.aborted) {
+            throw new LockAcquireAbortedError(lockKey);
+          }
+          this._metrics.totalTimedOut++;
+          throw new LockTimeoutError(lockKey, waitMs);
         }
 
         if (row?.fencing_token) {
@@ -635,6 +666,9 @@ export class PostgresLockManager extends LockManager {
     if (this._destroyPromise) return this._destroyPromise;
     this._destroyed = true;
     this._destroyController.abort();
+    for (const entry of this._entries.values()) {
+      entry.expiryController.abort();
+    }
     const destroyedError = new LockManagerDestroyedError(this.config.backend);
     for (const [lockKey, queue] of this._localQueues) {
       let node = queue.head;
@@ -674,6 +708,7 @@ export class PostgresLockManager extends LockManager {
         return entry.closing;
       }),
     );
+    await Promise.allSettled([...this._pendingLeaseExpirations]);
     if (this._ownsPool) {
       try {
         await this._poolEndBefore();
@@ -718,6 +753,8 @@ export class PostgresLockManager extends LockManager {
     };
     const entry: Entry = {
       closing: null,
+      expiryController: new AbortController(),
+      expiryTask: null,
       finalized: false,
       handle,
       heartbeatTask: null,
@@ -764,7 +801,11 @@ export class PostgresLockManager extends LockManager {
             entry.pendingHeartbeatTtlMs,
           ],
           Date.now() + this.queryTimeoutMs,
-          { ignoreDestroy: true },
+          {
+            ignoreDestroy: true,
+            signal: entry.expiryController.signal,
+            waitForQueryCompletion: !this.queryTimeoutExplicit,
+          },
         );
         const row = result.rows?.[0];
         if (!row) {
@@ -780,6 +821,9 @@ export class PostgresLockManager extends LockManager {
         this._resetExpiryTimer(entry, leaseMs);
       } catch {
         if (entry.finalized) throw new LockReleasedError(handle.lockKey);
+        if (this._destroyed) {
+          throw new LockManagerDestroyedError(this.config.backend);
+        }
         this._metrics.totalBackendErrors++;
         this._finalizeEntry(entry, "expired");
         throw new PostgresLockBackendError("heartbeat");
@@ -801,11 +845,33 @@ export class PostgresLockManager extends LockManager {
   _resetExpiryTimer(entry: Entry, ttlMs: number): void {
     if (entry.timer) clearTimeout(entry.timer);
     entry.timer = setTimeout(() => {
-      if (!entry.closing)
-        entry.closing = this._beginEntryClose(entry, "expired", false);
-      void entry.closing;
+      if (entry.finalized || entry.expiryTask) return;
+      const expiryTask: Promise<void> = this._expireEntry(entry);
+      entry.expiryTask = expiryTask;
+      this._pendingLeaseExpirations.add(expiryTask);
+      void expiryTask.then(
+        () => this._pendingLeaseExpirations.delete(expiryTask),
+        () => this._pendingLeaseExpirations.delete(expiryTask),
+      );
     }, ttlMs);
     if (entry.timer.unref) entry.timer.unref();
+  }
+
+  async _expireEntry(entry: Entry): Promise<void> {
+    if (entry.finalized) return;
+    entry.expiryController.abort();
+    this._finalizeEntry(entry, "expired");
+    await entry.heartbeatTask?.catch(() => {});
+    try {
+      await this._leaseQuery<FenceRow>(
+        EXPIRE_SQL,
+        [this.namespace, entry.handle.lockKey, entry.ownerId, entry.rawFence],
+        Date.now() + this.queryTimeoutMs,
+        { ignoreDestroy: true },
+      );
+    } catch {
+      this._metrics.totalBackendErrors++;
+    }
   }
 
   async _beginEntryClose(
@@ -884,7 +950,12 @@ export class PostgresLockManager extends LockManager {
     text: string,
     values: QueryValue[],
     deadline = Date.now() + this.queryTimeoutMs,
-    { ignoreDestroy = false, signal, lockKey = "" }: OperationOptions = {},
+    {
+      ignoreDestroy = false,
+      signal,
+      lockKey = "",
+      waitForQueryCompletion = false,
+    }: OperationOptions = {},
   ): Promise<QueryResult<Row>> {
     let client: PgClient | null = null;
     let destroyClient = false;
@@ -897,6 +968,7 @@ export class PostgresLockManager extends LockManager {
         ignoreDestroy,
         signal,
         lockKey,
+        waitForQueryCompletion,
       });
     } catch (error) {
       destroyClient = Boolean(client);
@@ -1035,7 +1107,12 @@ export class PostgresLockManager extends LockManager {
     text: string,
     values: QueryValue[],
     deadline: number,
-    { ignoreDestroy = false, signal, lockKey = "" }: OperationOptions = {},
+    {
+      ignoreDestroy = false,
+      signal,
+      lockKey = "",
+      waitForQueryCompletion = false,
+    }: OperationOptions = {},
   ): Promise<QueryResult<Row>> {
     if (this._destroyed && !ignoreDestroy) {
       throw new LockManagerDestroyedError(this.config.backend);
@@ -1046,12 +1123,14 @@ export class PostgresLockManager extends LockManager {
     );
     const remaining = Math.max(0, deadline - Date.now());
     let timeout: NodeJS.Timeout | undefined;
-    const timeoutPromise = new Promise<never>((_resolve, reject) => {
-      timeout = setTimeout(
-        () => reject(new BackendQueryTimeoutError()),
-        remaining,
-      );
-    });
+    const timeoutPromise = waitForQueryCompletion
+      ? null
+      : new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => reject(new BackendQueryTimeoutError()),
+            remaining,
+          );
+        });
     const destroyRace = ignoreDestroy
       ? null
       : createSignalRace(
@@ -1060,12 +1139,11 @@ export class PostgresLockManager extends LockManager {
         );
     const abortRace = createAbortRace(signal, lockKey);
     try {
-      return await Promise.race([
-        pending,
-        timeoutPromise,
-        ...(destroyRace ? [destroyRace.promise] : []),
-        ...(abortRace ? [abortRace.promise] : []),
-      ]);
+      const races: Promise<unknown>[] = [pending];
+      if (timeoutPromise) races.push(timeoutPromise);
+      if (destroyRace) races.push(destroyRace.promise);
+      if (abortRace) races.push(abortRace.promise);
+      return await Promise.race(races) as QueryResult<Row>;
     } catch (error) {
       if (
         error instanceof BackendQueryTimeoutError ||

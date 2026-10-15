@@ -7,6 +7,7 @@ import {
   activatePlugin,
   validateSkillHubConfiguration
 } from "../runtime.mjs";
+import { createSkillHubExternalServiceClient } from "../runtime/external-service-client.mjs";
 import { SKILL_HUB_OPERATION_DEFINITIONS } from "../src/operation-definitions.mjs";
 
 const pluginRoot = new URL("../", import.meta.url);
@@ -55,8 +56,12 @@ assert.equal(configurationSchema.additionalProperties, false);
 assert.deepEqual(validateSkillHubConfiguration({}), { enabled: false });
 assert.deepEqual(validateSkillHubConfiguration({
   enabled: true,
-  service: { serviceRef: "operator-skill-hub-service", timeoutMs: 30000 }
-}), { enabled: true, serviceRef: "operator-skill-hub-service", timeoutMs: 30000 });
+  service: { serviceRef: "operator-skill-hub-service" }
+}), { enabled: true, serviceRef: "operator-skill-hub-service" });
+assert.throws(() => validateSkillHubConfiguration({
+  enabled: true,
+  service: { serviceRef: "operator-skill-hub-service", unexpected: true }
+}));
 assert.match(consoleSource, /export function mountPluginConsole/u);
 
 const disabled = await activatePlugin({ manifest, context: { configuration: {} } });
@@ -68,7 +73,7 @@ const enabled = await activatePlugin({
   context: {
     configuration: {
       enabled: true,
-      service: { serviceRef: "operator-skill-hub-service", timeoutMs: 30000 }
+      service: { serviceRef: "operator-skill-hub-service" }
     }
   }
 });
@@ -91,6 +96,121 @@ assert.ok(Object.values(enabled.contributions.operations).every((operation) =>
   !operation.requiredHostPorts.includes("operationPermissionPlatform")
 ));
 await enabled.close();
+
+const invocationPlugin = await activatePlugin({
+  manifest,
+  context: {
+    configuration: {
+      enabled: true,
+      service: { serviceRef: "operator-skill-hub-service" }
+    }
+  }
+});
+const invocationRequests = [];
+const invocationCall = {
+  auth: { authenticated: true },
+  governance: { authorized: true, current: true }
+};
+const invocationHost = {
+  externalService: { request: async (request) => {
+    invocationRequests.push(request);
+    return { ok: true, status: 200, data: { statusCode: 200, body: { ok: true } } };
+  } }
+};
+for (let index = 0; index < 2; index += 1) {
+  await invocationPlugin.contributions.operations["skill_hub.list"].execute({
+    input: { filter: "same-content" },
+    call: invocationCall,
+    host: invocationHost
+  });
+}
+assert.notEqual(
+  invocationRequests[0].idempotencyKey,
+  invocationRequests[1].idempotencyKey,
+  "separate same-content executions receive separate logical invocation keys"
+);
+await invocationPlugin.close();
+
+const forwarded = [];
+const requestSignal = new AbortController().signal;
+const remote = createSkillHubExternalServiceClient({ serviceRef: "operator-skill-hub-service" });
+await remote.request({
+  operation: { id: "skill_hub.list" },
+  input: {},
+  signal: requestSignal,
+  host: {
+    externalService: { request: async (request, options) => {
+      forwarded.push({ request, options });
+      return { ok: true, status: 200, data: { statusCode: 200, body: { ok: true } } };
+    } }
+  }
+});
+assert.equal(forwarded.length, 1);
+assert.deepEqual(Object.keys(forwarded[0].request).sort(), ["idempotencyKey", "input", "operationRef", "serviceRef"]);
+assert.equal(forwarded[0].options.signal, requestSignal);
+const firstGeneratedKey = forwarded[0].request.idempotencyKey;
+await remote.request({
+  operation: { id: "skill_hub.list" },
+  input: {},
+  host: { externalService: { request: async (request) => {
+    forwarded.push({ request, options: {} });
+    return { ok: true, status: 200, data: { statusCode: 200, body: { ok: true } } };
+  } } }
+});
+assert.notEqual(forwarded.at(-1).request.idempotencyKey, firstGeneratedKey,
+  "standalone requests without caller identity receive fresh invocation keys");
+
+const logicalInvocationId = "synthetic-logical-invocation";
+for (const phase of ["prepare", "commit"]) {
+  await remote.request({
+    operation: { id: "skill_hub.execute" },
+    input: {},
+    invocationId: logicalInvocationId,
+    phase,
+    host: { externalService: { request: async (request) => {
+      forwarded.push({ request, options: {} });
+      return { ok: true, status: 200, data: { statusCode: 200, body: { ok: true } } };
+    } } }
+  });
+}
+for (const phase of ["prepare", "commit"]) {
+  const expected = `skill-hub:${crypto.createHash("sha256").update(JSON.stringify({
+    invocationId: logicalInvocationId,
+    operationId: "skill_hub.execute",
+    phase
+  })).digest("hex")}`;
+  assert.equal(forwarded.findLast((entry) => entry.request.operationRef === "skill_hub.execute" &&
+    entry.request.idempotencyKey === expected)?.request.idempotencyKey, expected,
+  "phase-specific keys retain the same logical invocation identity");
+}
+
+const explicitKey = "stable-sandbox-run-key";
+await remote.request({
+  operation: { id: "skill_hub.execute" },
+  input: { idempotencyKey: explicitKey, args: ["first"] },
+  host: { externalService: { request: async (request) => {
+    forwarded.push({ request, options: {} });
+    return { ok: true, status: 200, data: { statusCode: 200, body: { ok: true } } };
+  } } }
+});
+const explicitKeyRequest = forwarded.at(-1).request;
+const expectedKey = `skill-hub:${crypto.createHash("sha256").update(JSON.stringify({
+  callerKey: explicitKey,
+  operationId: "skill_hub.execute",
+  phase: "execute"
+})).digest("hex")}`;
+assert.equal(explicitKeyRequest.idempotencyKey, expectedKey);
+await remote.request({
+  operation: { id: "skill_hub.execute" },
+  input: { idempotencyKey: explicitKey, args: ["changed"] },
+  host: { externalService: { request: async (request) => {
+    forwarded.push({ request, options: {} });
+    return { ok: true, status: 200, data: { statusCode: 200, body: { ok: true } } };
+  } } }
+});
+assert.equal(forwarded.at(-1).request.idempotencyKey, expectedKey,
+  "caller-owned idempotency identity is stable when non-key request fields change");
+await remote.close();
 
 const inventory = await relativeInventory();
 assert.ok(inventory.includes("runtime.mjs"));

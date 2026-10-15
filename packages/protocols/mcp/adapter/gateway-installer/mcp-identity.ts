@@ -54,7 +54,7 @@ export function signMcpHandshake({ identity, payload }: Record<string, any>) : a
   return {
     algorithm: "Ed25519",
     payloadEncoding: "v0.0.1:platform:stable-json-1",
-    value: sign(null, Buffer.from(stableStringify(payload)), privateKey).toString("base64url")
+    value: Buffer.from(sign(null, Buffer.from(stableStringify(payload)), privateKey)).toString("base64url")
   };
 }
 

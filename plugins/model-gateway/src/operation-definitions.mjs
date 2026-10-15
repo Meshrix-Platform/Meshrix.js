@@ -64,7 +64,7 @@ export const MODEL_GATEWAY_OPERATION_DEFINITIONS = Object.freeze([
         providerRef: { type: "string", minLength: 1, maxLength: 256 },
         inputRefs: { type: "array", maxItems: 64, items: { type: "string", minLength: 1, maxLength: 1024 } },
         idempotencyKey: { type: "string", minLength: 1, maxLength: 256 },
-        deadlineMs: { type: "integer", minimum: 1 },
+        deadlineMs: { type: "integer", minimum: 1, maximum: 2_147_483_647 },
         stream: { type: "boolean" }
       }
     }

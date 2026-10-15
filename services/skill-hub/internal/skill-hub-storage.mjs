@@ -1,4 +1,5 @@
 import path from "node:path";
+import crypto from "node:crypto";
 import {
   PRIVATE_DIRECTORY_MODE,
   PRIVATE_FILE_MODE
@@ -16,19 +17,23 @@ export function isSkillHubStorageRelativePath(value = "") {
     normalized.startsWith(`${SKILL_HUB_STORAGE_ROOT_DIR}/`);
 }
 
-export function skillHubAssetRelativePath({ workspaceId, contributionId, relation = "canonical", safePathSegment } = {}) {
-  const skillId = safePathSegment(contributionId || "asset");
-  const relationSegment = safePathSegment(relation || "canonical");
+export function skillHubAssetRelativePath({ workspaceId, contributionId, relation = "canonical", registryScope } = {}) {
+  if (!/^[a-f0-9]{64}$/u.test(registryScope) || !["canonical", "adoption"].includes(relation)) {
+    throw new TypeError("Skill Hub asset requires its owning registry partition.");
+  }
+  const skillId = crypto.createHash("sha256").update(String(contributionId)).digest("hex");
+  const relationSegment = relation;
   if (relationSegment === "adoption") {
     return path.posix.join(
       SKILL_HUB_SKILL_STORAGE_DIR,
+      registryScope,
       skillId,
       "adoptions",
-      safePathSegment(requiredWorkspaceId(workspaceId, "targetWorkspaceId")),
+      crypto.createHash("sha256").update(requiredWorkspaceId(workspaceId, "targetWorkspaceId")).digest("hex"),
       "asset.json"
     );
   }
-  return path.posix.join(SKILL_HUB_SKILL_STORAGE_DIR, skillId, relationSegment, "asset.json");
+  return path.posix.join(SKILL_HUB_SKILL_STORAGE_DIR, registryScope, skillId, relationSegment, "asset.json");
 }
 
 export function skillHubSandboxPolicy() {

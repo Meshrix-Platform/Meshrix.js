@@ -7,11 +7,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.ts";
 import {
   canonicalizeTypedReferenceManifest,
+  normalizeManifestResourceBudget,
   SERVICE_MANIFEST_SCHEMA_VERSION,
   sha256ManifestBytes,
   stableManifestJson
 } from "../../../packages/foundation/src/storage/storage-ports.ts";
 import {
+  createManifestTransactionContext,
   SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS,
   serviceManifestSetDigest
 } from "../../../packages/foundation/src/storage/service-manifest-transaction.ts";
@@ -119,6 +121,18 @@ afterEach(async () : Promise<any> => {
 });
 
 describe("durable service manifest authority", () : any => {
+  it("keeps bounded manifest size/count controls without injecting an elapsed deadline", () : any => {
+    const budget = normalizeManifestResourceBudget();
+    expect(budget.maxOperationMs).toBeUndefined();
+    expect(budget.maxManifestBytes).toBeGreaterThan(0);
+    const unrestrictedElapsedBudget = createManifestTransactionContext({ budget, startedAt: 0 });
+    expect(() => unrestrictedElapsedBudget.check()).not.toThrow();
+
+    const explicitBudget = normalizeManifestResourceBudget({ maxOperationMs: 100 });
+    const explicitlyTimed = createManifestTransactionContext({ budget: explicitBudget, startedAt: 0 });
+    expect(() => explicitlyTimed.check()).toThrow(expect.objectContaining({ code: "storage_manifest_timeout" }));
+  });
+
   it("keeps an absent authority root absent during a reader-only snapshot", async () : Promise<any> => {
     const storageRoot: any = await tempRoot();
     const store: any = createServiceManifestStore({ storageRoot });

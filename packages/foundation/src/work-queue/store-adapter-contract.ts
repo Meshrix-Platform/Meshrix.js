@@ -19,7 +19,6 @@ export const WORK_QUEUE_STORE_ADAPTER_METHODS = Object.freeze([
 ] as const);
 
 export const WORK_QUEUE_BACKGROUND_WRITE_METHODS = Object.freeze([
-  "writeFallbackCoordinatorState",
   "writeSnapshotState",
   "writeCompactionState",
   "writeInternalHealthState"

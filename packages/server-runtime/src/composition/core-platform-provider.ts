@@ -341,6 +341,16 @@ export function createCorePlatformProvider({
         ...selection,
       });
     },
+    // Resolve the declared route template for a request path so metrics and
+    // rate-limit telemetry carry bounded templates rather than raw segments.
+    findHttpRouteTemplate(input: Record<string, any> = {}) : any {
+      const selection: any = effectiveOperationSelection(input);
+      const match: any = selection.routeIndex.findHttpOperation(
+        String(input.method || "").toUpperCase(),
+        input.pathname
+      );
+      return String(match?.operation?.http?.path || "");
+    },
     dispatchRegisteredHttpOperation(input: Record<string, any> = {}) : any {
       const selection: any = effectiveOperationSelection(input);
       return dispatchRegisteredHttpOperationThroughDispatcher({

@@ -39,9 +39,10 @@ async function copy(): Promise<void> {
   <section class="card">
     <h2>MCP client setup</h2>
     <p>
-      Standard MCP clients launch the entry's stdio face per session — no port,
-      listener or token. Paste the snippet into your client's
-      <code class="mono">mcpServers</code> config.
+      Standard MCP clients launch Meshrix's stdio face, which attaches to this
+      installation's authenticated local service. Keep Meshrix open or minimized
+      while your Agent is working. Paste the generated snippet into your client's
+      <code class="mono">mcpServers</code> configuration.
     </p>
     <div class="row">
       <button class="primary" @click="generate">Generate snippet</button>
@@ -51,9 +52,9 @@ async function copy(): Promise<void> {
     <pre v-if="snippet" class="mono snippet">{{ snippet }}</pre>
     <p v-if="managedPath" class="mono">{{ managedPath }}</p>
     <p class="hint">
-      The snippet launches <code class="mono">meshrix-entry --mcp-stdio</code>. Loopback-HTTP
-      facing is available in the CLI for tools that cannot spawn stdio, but stdio is the
-      recommended face: it binds no socket at all.
+      The snippet launches <code class="mono">meshrix-entry --mcp-stdio</code>. It
+      attaches to the one running profile owner; it never starts a second service,
+      selects a device implicitly, or stores a private token in your MCP config.
     </p>
   </section>
 </template>

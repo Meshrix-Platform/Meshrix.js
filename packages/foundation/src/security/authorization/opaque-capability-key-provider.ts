@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { spawn } from "node:child_process";
+import { createCommandJsonProcessOwner } from "./capability-security-helper-client.ts";
 import { resolveAutoCapabilityKernelBackend } from "./opaque-capability-key-backends.ts";
 import {
   type CapabilityKeyRecord,
@@ -14,7 +14,6 @@ import {
   createCapabilityKey,
   createKeyRecord,
   helperScriptPath,
-  isClosedPipeError,
   nowIso,
   rejectUnknownOpaqueCapabilities,
   text,
@@ -32,13 +31,6 @@ import {
 } from "./opaque-capability-key-store.ts";
 import { stringsFrom } from "./authorization-engine-common.ts";
 
-interface CommandRequestOptions {
-  command: string;
-  args?: string[];
-  env?: NodeJS.ProcessEnv;
-  input?: UnknownRecord;
-  timeoutMs?: number;
-}
 interface LookupSourceOptions {
   alias?: string;
   backend?: string;
@@ -72,62 +64,6 @@ interface VerifyOptions {
 interface InvalidateOptions { capabilityKey?: string; key?: string; reason?: string }
 interface InvalidateCredentialOptions { credentialId?: string; reason?: string }
 interface RotateOptions extends IssueOptions { reason?: string }
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function runCommandJson({ command, args = [], env = {}, input = {}, timeoutMs = 15000 }: CommandRequestOptions): Promise<UnknownRecord> {
-  return new Promise<UnknownRecord>((resolve, reject) => {
-    const child = spawn(command, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, ...env }
-    });
-    let stdout = "";
-    let stderr = "";
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error(`Opaque capability key helper timed out: ${command}`));
-    }, timeoutMs);
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.stdin.on("error", (error) => {
-      if (isClosedPipeError(error)) {
-        return;
-      }
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      if (code !== 0) {
-        reject(new Error(stderr.trim() || `Opaque capability key helper failed with exit code ${code}.`));
-        return;
-      }
-      try {
-        resolve(asObject(JSON.parse(stdout.trim() || "{}")));
-      } catch (error) {
-        reject(new Error(`Opaque capability key helper returned invalid JSON: ${errorMessage(error)}`));
-      }
-    });
-    try {
-      child.stdin.end(`${JSON.stringify(input)}\n`);
-    } catch (error) {
-      if (!isClosedPipeError(error)) {
-        clearTimeout(timeout);
-        reject(error);
-      }
-    }
-  });
-}
 
 function createMemoryLookupKeySource() {
   let generation = 1;
@@ -170,14 +106,16 @@ function createCommandLookupKeySource({
   command = process.execPath,
   args = [helperScriptPath()],
   env = {},
-  timeoutMs = 15000
-}: LookupSourceOptions = {}): LookupKeySource {
+  timeoutMs
+}: LookupSourceOptions = {}): LookupKeySource & { close?: () => Promise<void> } {
+  const owner = createCommandJsonProcessOwner();
   async function request(action = "", input: UnknownRecord = {}) {
-    return runCommandJson({
+    return asObject(await owner.run({
       command,
       args,
       env,
       timeoutMs,
+      label: "Opaque capability key helper",
       input: {
         protocolVersion: OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION,
         action,
@@ -186,12 +124,13 @@ function createCommandLookupKeySource({
         dataDir,
         ...input
       }
-    });
+    }));
   }
   return {
     loadRuntimeLookupKey: () => request("loadRuntimeLookupKey"),
     rotateRuntimeLookupKey: () => request("rotateRuntimeLookupKey"),
-    describe: () => request("describe")
+    describe: () => request("describe"),
+    close: () => owner.close()
   };
 }
 
@@ -203,7 +142,8 @@ export function createOpaqueCapabilityKeyProvider({
   lookupKeySource = null,
   command = "",
   args = [],
-  env = {}
+  env = {},
+  timeoutMs
 }: ProviderOptions = {}) {
   const resolvedBackend = resolveAutoCapabilityKernelBackend(backend);
   const storageBackend = backend === "auto" ? "auto" : resolvedBackend;
@@ -213,7 +153,7 @@ export function createOpaqueCapabilityKeyProvider({
   const store: CapabilityKeyBindingStore = bindingStore ||
     sealedKernel ||
     createMemoryCapabilityKeyBindingStore();
-  const keySource: LookupKeySource = lookupKeySource ||
+  const keySource: LookupKeySource & { close?: () => void | Promise<void> } = lookupKeySource ||
     sealedKernel?.keySource ||
     (resolvedBackend === "memory"
       ? createMemoryLookupKeySource()
@@ -227,15 +167,23 @@ export function createOpaqueCapabilityKeyProvider({
             : command || process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_COMMAND
             ? String(process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_ARGS || "").split(/\s+/).filter(Boolean)
             : [helperScriptPath()],
-          env
+          env,
+          timeoutMs
         }));
+  const ownsKeySource = !lookupKeySource;
   let runtimeLookupKey: Buffer | null = null;
   let runtimeLookupGeneration = 0;
   let runtimeLookupLoadCount = 0;
   let providerMutationQueue = Promise.resolve();
+  let providerClosing = false;
+  let providerClosePromise: Promise<void> | null = null;
 
   function enqueueProviderMutation<T>(action: () => T | Promise<T>): Promise<T> {
-    const run = providerMutationQueue.catch(() => {}).then(action);
+    if (providerClosing) return Promise.reject(new Error("Opaque capability key provider is closing."));
+    const run = providerMutationQueue.catch(() => {}).then(() => {
+      if (providerClosing) throw new Error("Opaque capability key provider is closing.");
+      return action();
+    });
     providerMutationQueue = run.then(() => undefined, () => undefined);
     return run;
   }
@@ -244,17 +192,20 @@ export function createOpaqueCapabilityKeyProvider({
     await providerMutationQueue.catch(() => {});
   }
 
-  async function getRuntimeLookupKey() {
-    if (!runtimeLookupKey) {
-      const loaded = await keySource.loadRuntimeLookupKey();
-      runtimeLookupKey = Buffer.from(String(loaded.runtimeLookupKeyBase64 || ""), "base64");
-      runtimeLookupGeneration = Number(loaded.generation || 0);
-      runtimeLookupLoadCount += 1;
-      if (runtimeLookupKey.length < 32) {
-        throw new Error("Runtime lookup key helper returned an invalid key.");
-      }
+  async function getRuntimeLookupKey(): Promise<Buffer> {
+    const existing = runtimeLookupKey;
+    if (existing) {
+      return existing;
     }
-    return runtimeLookupKey;
+    const loaded = await keySource.loadRuntimeLookupKey();
+    const key: Buffer = Buffer.from(String(loaded.runtimeLookupKeyBase64 || ""), "base64");
+    runtimeLookupGeneration = Number(loaded.generation || 0);
+    runtimeLookupLoadCount += 1;
+    if (key.length < 32) {
+      throw new Error("Runtime lookup key helper returned an invalid key.");
+    }
+    runtimeLookupKey = key;
+    return key;
   }
 
   async function issue({
@@ -515,8 +466,27 @@ export function createOpaqueCapabilityKeyProvider({
     importRecoveryPackage,
     describe,
     store,
-    close() {
-      store.close?.();
+    close(): Promise<void> {
+      if (providerClosePromise) return providerClosePromise;
+      providerClosing = true;
+      providerClosePromise = (async () => {
+        let closeError: unknown;
+        if (ownsKeySource) {
+          try {
+            await keySource.close?.();
+          } catch (error) {
+            closeError = error;
+          }
+        }
+        await waitForProviderMutations();
+        try {
+          await store.close?.();
+        } catch (error) {
+          closeError = closeError || error;
+        }
+        if (closeError) throw new Error("Opaque capability key provider did not close cleanly.");
+      })();
+      return providerClosePromise;
     }
   });
 }

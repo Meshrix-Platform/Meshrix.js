@@ -47,4 +47,44 @@ describe("effective subject authority attenuation", () : any => {
       capabilityId: CAPABILITY_ID
     });
   });
+
+  it("denies a plugin or console subject that does not hold the upstream tool capability", () : any => {
+    const operation: Record<string, any> = {
+      dynamicCapability: {
+        capabilityId: "cap:upstream:fixture:tools-call-echo",
+        upstreamToolName: "echo",
+        serviceId: "fixture"
+      }
+    };
+    for (const type of ["plugin-operation", "console-user"]) {
+      expect(evaluateDynamicOperationAuthorization({
+        type,
+        dynamicCapabilities: [],
+        capabilities: []
+      }, operation)).toMatchObject({
+        allowed: false,
+        reasonCode: "missing_dynamic_upstream_capability",
+        capabilityId: "cap:upstream:fixture:tools-call-echo"
+      });
+    }
+  });
+
+  it("allows a plugin or console subject that holds the upstream tool capability", () : any => {
+    const operation: Record<string, any> = {
+      dynamicCapability: {
+        capabilityId: "cap:upstream:fixture:tools-call-echo",
+        serviceId: "fixture"
+      }
+    };
+    for (const type of ["plugin-operation", "console-user"]) {
+      expect(evaluateDynamicOperationAuthorization({
+        type,
+        dynamicCapabilities: ["cap:upstream:fixture:tools-call-echo"]
+      }, operation)).toMatchObject({
+        allowed: true,
+        reasonCode: "dynamic_upstream_capability_allowed",
+        capabilityId: "cap:upstream:fixture:tools-call-echo"
+      });
+    }
+  });
 });

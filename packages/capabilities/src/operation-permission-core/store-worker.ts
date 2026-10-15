@@ -11,10 +11,7 @@ import {
   OPERATION_PERMISSION_API_KEY_COMMANDS,
   OPERATION_PERMISSION_STORE_COMMANDS
 } from "./store.ts";
-import {
-  callOperationPermissionHost,
-  setOperationPermissionCommandDeadline
-} from "./store-worker-bridge.ts";
+import { callOperationPermissionHost } from "./store-worker-bridge.ts";
 
 let commandContext: Record<string, any> = {
   catalogSnapshot: workerData.catalogSnapshot || null,
@@ -126,7 +123,7 @@ function apiKeyRandomBytes(size?: any) : Buffer {
   }
   return crypto.randomBytes(Number(size));
 }
-const store: any = createOperationPermissionWorkerOwner({
+const store: any = await createOperationPermissionWorkerOwner({
   userDataPath: workerData.userDataPath,
   registry,
   capabilityResolver: workerData.hasCapabilityResolver
@@ -178,10 +175,9 @@ async function handle(message?: any) : Promise<void> {
     if (!(isApiKey ? apiKeyCommands : storeCommands).has(method)) {
       throw Object.assign(new Error("Operation Permission SQLite command is not allowed."), { code: "sqlite_lane_command_rejected" });
     }
-    if (Date.now() > Number(message?.deadlineAtMs || 0)) {
+    if (Number(message?.deadlineAtMs || 0) > 0 && Date.now() > Number(message?.deadlineAtMs)) {
       throw Object.assign(new Error("Operation Permission SQLite command deadline elapsed."), { code: "sqlite_lane_deadline_exceeded" });
     }
-    setOperationPermissionCommandDeadline(message.deadlineAtMs);
     commandContext = {
       ...commandContext,
       ...(message.payload?.context || {}),

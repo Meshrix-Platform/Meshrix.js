@@ -17,8 +17,8 @@ import {
  * This is the crypto layer's own serialization, deliberately decoupled from
  * the wire schema a sibling contract owns: the wire node SHOULD adopt these
  * fields verbatim inside its outer envelope so crypto-side session routing
- * needs no translation. Exact-key JSON; the relay/mailbox only ever stores
- * this object — never plaintext or keys.
+ * needs no translation. Exact-key JSON; the online relay forwards this
+ * object — never plaintext or keys.
  *
  *   format          "meshrix-peer-envelope"   (discriminator)
  *   version         1                          (bump on shape change)
@@ -98,7 +98,7 @@ export function parsePeerEnvelope(value: unknown): ParsedPeerEnvelope | null {
   if (!isPlainObject(value)) return null;
   if (!hasExactKeys(value, ["format", "version", "senderPeerId", "senderDeviceId", "messageType", "body"])) return null;
   if (value.format !== PEER_ENVELOPE_FORMAT || value.version !== PEER_ENVELOPE_VERSION) return null;
-  if (typeof value.senderPeerId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(value.senderPeerId)) return null;
+  if (typeof value.senderPeerId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:~-]{0,127}$/u.test(value.senderPeerId)) return null;
   if (!Number.isSafeInteger(value.senderDeviceId) || (value.senderDeviceId as number) < 1 || (value.senderDeviceId as number) > 127) return null;
   if (value.messageType !== "prekey" && value.messageType !== "signal") return null;
   const body = base64urlDecode(value.body, PEER_MAX_CIPHERTEXT_BYTES);

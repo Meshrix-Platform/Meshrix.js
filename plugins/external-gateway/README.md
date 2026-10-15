@@ -41,5 +41,18 @@ contain endpoint addresses or credentials.
 }
 ```
 
+`timeoutMs` is an optional operator-selected channel budget; omission adds no
+channel timeout. The per-envelope `deadlineMs` is an explicit request budget and
+also bounds time in the local queue; it must be a positive safe-integer number
+of milliseconds. Non-integer or non-finite budgets are rejected before transport.
+The smaller configured/channel or request
+budget aborts active transport and returns a timeout result, while the channel
+retains its active slot until the transport actually settles. Explicit caller
+cancellation also reaches the transport and keeps the slot occupied until
+settlement. `runtime.close()` is awaitable: it stops new admission, signals
+cancellation to queued and active requests, and resolves only after every active
+transport has settled. The Host lifecycle awaits this result before releasing
+the plugin runtime.
+
 Run `npm run verify:local-runtime-plugins` from the Meshrix.js repository root
 to validate, build, package, and smoke-test the runtime plugin catalog.

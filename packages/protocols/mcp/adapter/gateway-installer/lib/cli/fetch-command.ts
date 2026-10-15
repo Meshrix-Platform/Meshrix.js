@@ -9,7 +9,7 @@ import { containsMxak1Credential, normalizeBaseUrl, option } from "./basic-utils
 import { packageInfo } from "./constants.ts";
 import { authHeaders, optionsWithDiscoveredBaseUrl } from "./discovery.ts";
 import { CALLER_OWNED_HTTP_LIFETIME, fetchResponse } from "./http-json-client.ts";
-import { resolveProxyCredentials } from "./proxy-command.ts";
+import { assertCredentialDestinationBinding, resolveProxyCredentials } from "./proxy-command.ts";
 
 // Mirrors the 2 GiB artifact limit enforced by the gateway artifact download
 // route (see docs/functionality/GATEWAY.md).
@@ -96,16 +96,6 @@ function digestHeaderSha256(headers?: any) : any {
   return decoded.length === 32 ? decoded.toString("hex") : "";
 }
 
-async function responseErrorReason(response?: any) : Promise<any> {
-  const detail: any = (await response.text().catch(() : any => "")).slice(0, 512);
-  try {
-    const payload: any = JSON.parse(detail);
-    return String(payload?.error?.message || payload?.error || `HTTP ${response.status}`);
-  } catch {
-    return `HTTP ${response.status}`;
-  }
-}
-
 async function commitTemporaryFile(temporaryPath?: any, outputPath?: any) : Promise<any> {
   try {
     await fsp.link(temporaryPath, outputPath);
@@ -164,10 +154,12 @@ export async function fetchCommand(options: Record<string, any> = {}) : Promise<
 
   try {
     if (controller.signal.aborted) throw controller.signal.reason;
-    const { target, token } = await resolveProxyCredentials(options);
+    const credentials: any = await resolveProxyCredentials(options);
+    const { target, token } = credentials;
     if (controller.signal.aborted) throw controller.signal.reason;
     const resolvedOptions: any = await optionsWithDiscoveredBaseUrl(options);
     if (controller.signal.aborted) throw controller.signal.reason;
+    assertCredentialDestinationBinding(credentials, option(resolvedOptions, "resolved-url", option(resolvedOptions, "url", "")));
     const { url, artifactId } = resolveArtifactUrl(resolvedOptions);
     const outputPath: any = requiredOutputPath(resolvedOptions);
     const request: any = await fetchResponse(url, {
@@ -178,14 +170,14 @@ export async function fetchCommand(options: Record<string, any> = {}) : Promise<
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
       ...(options.dispatcherFactory ? { dispatcherFactory: options.dispatcherFactory } : {}),
-      headers: authHeaders(token, target)
+      headers: authHeaders(token, target, option(resolvedOptions, "resolved-url", option(resolvedOptions, "url", "")))
     });
     let completed: any = false;
     try {
       const response: any = request.response;
       if (!response.ok) {
-        const reason: any = await responseErrorReason(response);
-        throw new Error(`Meshrix.js artifact fetch failed: ${reason}`);
+        await response.body?.cancel().catch(() : any => {});
+        throw new Error(`Meshrix.js artifact fetch failed: HTTP ${response.status}`);
       }
       const contentLength: any = Number(response.headers.get("content-length") || "");
       if (Number.isSafeInteger(contentLength) && contentLength > MCP_FETCH_MAX_ARTIFACT_BYTES) {

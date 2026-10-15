@@ -163,7 +163,10 @@ async function sleep(ms?: any) : Promise<any> {
   await new Promise((resolve?: any) : any => setTimeout(resolve, ms));
 }
 
-async function recoverSystemInspectionIfNeeded(reason: any = "interval") : Promise<any> {
+async function recoverSystemInspectionIfNeeded(
+  reason: any = "interval",
+  importWorkerDemand: Record<string, any> | null = null
+) : Promise<any> {
   if (closing) {
     return {
       ok: false,
@@ -172,7 +175,10 @@ async function recoverSystemInspectionIfNeeded(reason: any = "interval") : Promi
       checkedAt: nowIso()
     };
   }
-  const backgroundStatus: any = await getBackgroundProcessStatus(userDataPath);
+  const backgroundStatus: any = await getBackgroundProcessStatus(
+    userDataPath,
+    importWorkerDemand ? { demandSnapshot: { importWorker: importWorkerDemand } } : {}
+  );
   const inspectionProcess: any = (backgroundStatus.processes || []).find((item?: any) : any => item.role === "system-inspection");
   if (inspectionProcess?.alive && inspectionProcess.status === "running") {
     return {
@@ -398,14 +404,14 @@ function spawnRole(role?: any) : any {
   });
 }
 
-async function reconcileRole(role?: any) : Promise<any> {
+async function reconcileRole(role?: any, demandSnapshot: Record<string, any> | null = null) : Promise<any> {
   if (!isOnDemandRole(role)) {
     if (!children.has(role)) {
       spawnRole(role);
     }
     return;
   }
-  const demand: any = await inspectRoleDemand(role);
+  const demand: any = demandSnapshot || await inspectRoleDemand(role);
   if (demand.active) {
     updateRoleDemand(role, demand);
     if (!children.has(role)) {
@@ -445,10 +451,17 @@ async function reconcileRoles(reason: any = "interval") : Promise<any> {
     reason,
     roles
   });
+  let importWorkerDemand: Record<string, any> | null = null;
   for (const role of roles) {
-    await reconcileRole(role);
+    if (isOnDemandRole(role)) {
+      const demand: any = await inspectRoleDemand(role);
+      if (role === "import-worker") importWorkerDemand = demand;
+      await reconcileRole(role, demand);
+    } else {
+      await reconcileRole(role);
+    }
   }
-  await recoverSystemInspectionIfNeeded(reason);
+  await recoverSystemInspectionIfNeeded(reason, importWorkerDemand);
   await persistState();
 }
 

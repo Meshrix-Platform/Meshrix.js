@@ -354,6 +354,20 @@ export function createSystemController({
       return authorization;
     }
     const grant: any = authorization.grant || {};
+    const apiKeyAuthorization: any = authorization.apiKeyAuthorization || {};
+    const admission: any = await request?.__meshrixPrincipalAdmission?.({
+      credentialKind: authorization.credentialKind === "scoped_api_key" ? "api-key" : "grant",
+      subjectId: String(apiKeyAuthorization.workloadPrincipalId || grant.subjectId || grant.id || ""),
+      tenantId: String(apiKeyAuthorization.organizationNodeId || grant.tenantId || "")
+    });
+    if (admission?.allowed === false) {
+      return {
+        ok: false,
+        status: 429,
+        reasonCode: "rate_limited",
+        error: "External authorization rate is limited."
+      };
+    }
     const actor: Record<string, any> = {
       type: "tool-grant",
       userId: grant.id || "",

@@ -21,7 +21,20 @@ export const PRIVATE_RELAY_MODES = Object.freeze([
 ]);
 export const PRIVATE_RELAY_SESSION_PURPOSES = Object.freeze([
   "forward",
-  "recover_device"
+  "recover_device",
+  "pair_device"
+]);
+/** Client-to-relay message kinds accepted on a pair-only bootstrap session.
+ * Application pairing bytes remain opaque frames and are protected by the
+ * endpoint-pinned inner TLS channel. */
+export const PRIVATE_RELAY_PAIRING_CLIENT_KINDS = Object.freeze([
+  "frame",
+  "frame-ack",
+  "session-close"
+]);
+/** Relay-to-endpoint hint required before a pair_device inner-TLS handshake. */
+export const PRIVATE_RELAY_PAIRING_RELAY_KINDS = Object.freeze([
+  "pairing-bootstrap"
 ]);
 export const PRIVATE_RELAY_KINDS = Object.freeze([
   "session-open",
@@ -36,7 +49,8 @@ export const PRIVATE_RELAY_KINDS = Object.freeze([
   "flow-credit",
   "session-close",
   "session-reconnect",
-  "session-restored"
+  "session-restored",
+  "pairing-bootstrap"
 ]);
 export const PRIVATE_RELAY_REJECT_REASONS = Object.freeze([
   "identity_unknown",
@@ -156,7 +170,7 @@ interface FrameAccounting {
   outstandingFrames: number;
 }
 
-const KIND_PARSERS: Record<string, RelayParser> = {};
+const KIND_PARSERS: Record<string, RelayParser> = Object.create(null);
 
 function isPlainObject(value?: unknown): value is UnknownRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -337,6 +351,16 @@ export function parseSessionOpen(value?: unknown) {
   }));
 }
 
+/** Pairing bootstrap has no route, mailbox, vault, or forwarding authority.
+ * Only its opaque TLS frame carrier, delivery acknowledgement, and close are
+ * accepted from the client. The relay-originated `flow-credit` remains an
+ * outbound control message and is not included in this client allowlist. */
+export function pairingChannelAdmitsOnlyPairing(kind?: unknown, sessionPurpose?: unknown): boolean {
+  if (typeof sessionPurpose !== "string" || !PRIVATE_RELAY_SESSION_PURPOSES.includes(sessionPurpose as never)) return false;
+  if (sessionPurpose !== "pair_device") return true;
+  return typeof kind === "string" && PRIVATE_RELAY_PAIRING_CLIENT_KINDS.includes(kind as never);
+}
+
 export function parseSessionAdmitted(value?: unknown) {
   return parseObject(value, commonRemote("session-admitted", {
     sessionId: (entry) => opaqueId(entry),
@@ -443,6 +467,14 @@ export function parseSessionRestored(value?: unknown) {
   }));
 }
 
+/** Opaque pre-TLS routing hint. It carries no key, pin, grant, or authority. */
+export function parsePairingBootstrap(value?: unknown) {
+  return parseObject(value, commonRemote("pairing-bootstrap", {
+    bootstrapId: (entry) => opaqueId(entry),
+    entrySessionId: (entry) => opaqueId(entry)
+  }));
+}
+
 KIND_PARSERS["session-open"] = parseSessionOpen;
 KIND_PARSERS["session-admitted"] = parseSessionAdmitted;
 KIND_PARSERS["session-rejected"] = parseSessionRejected;
@@ -456,6 +488,7 @@ KIND_PARSERS["flow-credit"] = parseFlowCredit;
 KIND_PARSERS["session-close"] = parseSessionClose;
 KIND_PARSERS["session-reconnect"] = parseSessionReconnect;
 KIND_PARSERS["session-restored"] = parseSessionRestored;
+KIND_PARSERS["pairing-bootstrap"] = parsePairingBootstrap;
 
 export function parsePrivateRelayMessage(value?: unknown) {
   if (!isPlainObject(value) || containsForbiddenRelayKeys(value)) return null;
@@ -483,14 +516,14 @@ export function assertRouteBindIsEndpoint(value?: unknown) {
 }
 
 const SESSION_TRANSITIONS: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.freeze({
-  initiated: Object.freeze({ open: "open_sent" }),
-  open_sent: Object.freeze({ admit: "admitted", reject: "rejected", close: "closed" }),
-  admitted: Object.freeze({ frame: "streaming", close: "closing", reconnect: "reconnecting" }),
+  initiated: Object.freeze({ open: "open_sent", transport_lost: "closed" }),
+  open_sent: Object.freeze({ admit: "admitted", reject: "rejected", close: "closed", transport_lost: "closed" }),
+  admitted: Object.freeze({ frame: "streaming", close: "closing", reconnect: "reconnecting", transport_lost: "closed" }),
   rejected: Object.freeze({}),
-  streaming: Object.freeze({ frame: "streaming", close: "closing", reconnect: "reconnecting" }),
-  closing: Object.freeze({ close_complete: "closed" }),
+  streaming: Object.freeze({ frame: "streaming", close: "closing", reconnect: "reconnecting", transport_lost: "closed" }),
+  closing: Object.freeze({ close_complete: "closed", transport_lost: "closed" }),
   closed: Object.freeze({ reconnect: "reconnecting" }),
-  reconnecting: Object.freeze({ restore: "admitted", reject: "rejected" })
+  reconnecting: Object.freeze({ restore: "admitted", reject: "rejected", transport_lost: "closed" })
 });
 
 export function relaySessionTransition(state: unknown, event: unknown): string | null {
@@ -668,6 +701,13 @@ export function createSessionRestored(value: Record<string, unknown> = {}) {
     limits: value.limits,
     cursors: value.cursors
   }), "Private relay session-restored does not satisfy the wire contract.");
+}
+
+export function createPairingBootstrap(value: Record<string, unknown> = {}) {
+  return created(parsePairingBootstrap, envelope("pairing-bootstrap", {
+    bootstrapId: value.bootstrapId,
+    entrySessionId: value.entrySessionId
+  }), "Private relay pairing-bootstrap does not satisfy the wire contract.");
 }
 
 export function encodePrivateRelayMessage(value?: unknown) {

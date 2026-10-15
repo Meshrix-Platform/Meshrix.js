@@ -1,5 +1,5 @@
 import { fork, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { once } from "node:events";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
@@ -15,6 +15,7 @@ import { stableId } from "../../../packages/agents/src/agent-workspace/agent-wor
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { canonicalJson } from "../../../packages/contracts/src/serialization/canonical-json.ts";
 import { MemoryLockManager } from "../../../packages/foundation/src/concurrency/lock-manager.ts";
+import { createFileLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
 import {
   CONSOLE_CSRF_COOKIE,
   CONSOLE_SESSION_COOKIE
@@ -258,6 +259,19 @@ const crashChildPath: any = fileURLToPath(new URL(
 ));
 const cleanupTasks: any[] = [];
 const retainedCrashChildren: any[] = [];
+
+async function ensureLocalSecretMasterKey(root: string): Promise<string> {
+  const keyFile = `${root}.local-secret-master-key`;
+  try {
+    await fs.access(keyFile);
+  } catch {
+    await fs.writeFile(keyFile, `${randomBytes(32).toString("hex")}\n`, {
+      flag: "wx",
+      mode: 0o600
+    });
+  }
+  return keyFile;
+}
 
 function sha256(value?: any) : any {
   return createHash("sha256").update(value).digest("hex");
@@ -605,6 +619,10 @@ async function createFixture() : Promise<any> {
     });
     fixture.compositionRoot = await createServerCompositionRoot({
       runtimeLogger,
+      secretKeyProvider: createFileLocalSecretKeyProvider({
+        dataDir: root,
+        keyFile: await ensureLocalSecretMasterKey(root)
+      }),
       runtimeOptions: {
         enabledPlugins: [],
         pluginConfigurations: {},
@@ -1101,6 +1119,7 @@ async function createFixture() : Promise<any> {
     await closePersistentResources();
     lockManager.destroy();
     await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(`${root}.local-secret-master-key`, { force: true });
   };
 
   await openPersistentResources({ initialize: true });
@@ -1440,7 +1459,8 @@ async function spawnCrashChild(
     child = fork(crashChildPath, [], {
       detached: POSIX,
       env: {
-        LANG: "C"
+        LANG: "C",
+        MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE: await ensureLocalSecretMasterKey(root)
       },
       execArgv: ["--no-warnings", "--conditions=source"],
       serialization: "advanced",

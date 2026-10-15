@@ -322,7 +322,7 @@ Options:
   --edition                 功能 edition：core|standard|integrations
   --feature-profile         自定义功能 profile JSON 路径
   ${ENABLED_PLUGINS_CONFIG_PATH}  仅在 runtime-config JSON 中使用的插件 ID 数组；缺省或空数组均不加载插件
-  runtime.recording         企业自托管录制配置（root/sinkId/budgets/reservationTtlMs/policy 标识）；由组合根统一校验
+  runtime.recording         企业自托管录制配置（root/sinkId/budgets/reservationTtlMs/retentionSweepMs/policy 标识）；由组合根统一校验
   --server-id               服务实例 ID
   --server-label            服务实例标签
   --bootstrap-url           客户端引导地址

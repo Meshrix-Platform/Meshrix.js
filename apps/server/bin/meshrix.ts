@@ -5,6 +5,7 @@ import { runSecretCommand } from "./lib/meshrix-cli-secrets.ts";
 import { runSecurityCommand } from "./lib/meshrix-cli-security.ts";
 import { runUpload } from "./lib/meshrix-cli-upload.ts";
 import { runGatewayCommand } from "./lib/meshrix-cli-gateway.ts";
+import { runUpstreamCommand } from "./lib/meshrix-cli-upstream.ts";
 import { runStorageCommand } from "./lib/meshrix-cli-storage.ts";
 
 function parseArgs(argv?: any) : any {
@@ -76,6 +77,7 @@ function usage() : any {
     "  meshrix security recovery export --output recovery.json --passphrase-stdin",
     "  meshrix security recovery import --input recovery.json --passphrase-stdin",
     "  meshrix storage restore --data-dir PATH --backup-id ID [--apply --confirm]",
+    "  meshrix upstream import-openapi --file openapi.json [--service-key NAME] [--base-url URL] [--output draft.json]",
     "  meshrix tools catalog|toolsets|toolsets resolve|execute|dry-run|audit|metrics ...",
     "  meshrix tools metrics [--tool-id ID] [--grant-id ID] [--profile-id ID] [--route PATH] [--transport mcp|http|operation-permission] [--bucket-seconds N]",
     "  meshrix tools metrics export [--kind all|tool|request] [--grant-id ID] [--profile-id ID] [--output metrics.json]",
@@ -90,6 +92,7 @@ function usage() : any {
     "Global options:",
     "  --data-dir PATH         Directory for offline data resolution",
     `  --server-url URL        Defaults to MESHRIX_SERVER_URL or http://127.0.0.1:${DEFAULT_SERVER_PORT}`,
+    "                          Remote hosts require HTTPS; HTTP is limited to literal loopback",
     "  --body JSON_OR_FILE     JSON string or path to a JSON file",
     "  --body-file FILE        JSON request body file",
     "  --params JSON_OR_FILE   JSON-RPC params string or path to a JSON file",
@@ -136,6 +139,10 @@ async function main() : Promise<any> {
   }
 
   if (await runGatewayCommand(args)) {
+    return;
+  }
+
+  if (await runUpstreamCommand(args)) {
     return;
   }
 

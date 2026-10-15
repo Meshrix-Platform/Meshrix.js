@@ -42,6 +42,11 @@
       "types": "./dist/routing/index.d.ts",
       "default": "./dist/routing/index.js"
     },
+    "./operation-route-index": {
+      "source": "./src/operation-route-index/index.ts",
+      "types": "./dist/operation-route-index/index.d.ts",
+      "default": "./dist/operation-route-index/index.js"
+    },
     "./continuations": {
       "source": "./src/continuations/index.ts",
       "types": "./dist/continuations/index.d.ts",

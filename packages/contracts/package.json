@@ -91,6 +91,11 @@
       "types": "./dist/operations/operation-registry.d.ts",
       "default": "./dist/operations/operation-registry.js"
     },
+    "./generated/operations": {
+      "source": "./src/generated/operations.generated.ts",
+      "types": "./dist/generated/operations.generated.d.ts",
+      "default": "./dist/generated/operations.generated.js"
+    },
     "./operations/protocol-operation-definitions": {
       "source": "./src/operations/protocol-operation-definitions.ts",
       "types": "./dist/operations/protocol-operation-definitions.d.ts",
@@ -155,6 +160,12 @@
       "source": "./src/private-relay/private-relay-peer.ts",
       "types": "./dist/private-relay/private-relay-peer.d.ts",
       "default": "./dist/private-relay/private-relay-peer.js"
+    },
+    "./account": {
+      "source": "./src/account/index.ts",
+      "workerd": "./src/account/index.ts",
+      "types": "./dist/account/index.d.ts",
+      "default": "./dist/account/index.js"
     },
     "./recording": {
       "source": "./src/recording/index.ts",

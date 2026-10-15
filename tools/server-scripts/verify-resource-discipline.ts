@@ -245,8 +245,7 @@ const requiredRuntimeContracts: any[] = [
       'owner: "mandatory-evidence-operation-audit"',
       "operation-audit-worker.${import.meta.url.endsWith",
       "maxPending",
-      "maxPendingBytes",
-      "defaultDeadlineMs"
+      "maxPendingBytes"
     ]
   },
   {

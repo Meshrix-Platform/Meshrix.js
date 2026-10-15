@@ -19,6 +19,13 @@ operations independent of the Service.
 }
 ```
 
+`timeoutMs` is an optional operator-selected request budget from 100 to
+120000 milliseconds. If omitted, `models.list` and `models.get` add no adapter
+timeout. Each `model_gateway.call` supplies its own `deadlineMs` duration from 1
+through 2,147,483,647 milliseconds; the smaller of that per-call budget and the
+configured adapter budget is forwarded as a Host cancellation budget, never as
+provider request data.
+
 Endpoint addresses and credentials remain behind the Host-owned service
 reference and are not plugin configuration. Run
 `npm run verify:local-runtime-plugins` from the Meshrix.js repository root to

@@ -9,11 +9,13 @@ RUN groupadd --gid 10001 modelgw \
     && chown -R modelgw:modelgw /app /var/lib/model-gateway
 
 WORKDIR /app
-COPY --chown=modelgw:modelgw package.json ./
+COPY --chown=modelgw:modelgw package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 COPY --chown=modelgw:modelgw src ./src
 COPY --chown=modelgw:modelgw internal ./internal
 
 ENV HOST=0.0.0.0 \
+    MODEL_GATEWAY_ALLOW_PUBLIC_BIND=1 \
     PORT=8080 \
     MODEL_GATEWAY_DATA_ROOT=/var/lib/model-gateway \
     MAX_REQUEST_BYTES=2097152

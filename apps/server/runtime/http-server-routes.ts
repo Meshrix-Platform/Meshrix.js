@@ -49,6 +49,7 @@ import {
   metricTransportForRoute,
   normalizeClientIp,
   numericHeader,
+  requestRouteTemplate,
   resolveRequestSubjectKey,
   resolveRequestTenantKey,
   routeFromRequestUrl,
@@ -482,15 +483,8 @@ function isRoutineProbeNoise({ method, route, statusCode, completionStatus }: Re
   return (method === "GET" || method === "HEAD") &&
     route === "/api/healthz" &&
     statusCode >= 200 &&
-    statusCode < 500 &&
+    statusCode < 400 &&
     completionStatus === "completed";
-}
-
-function completionLogLevel(statusCode?: any, durationMs?: any) : any {
-  if (statusCode >= 500) return "error";
-  if (statusCode >= 400) return "warn";
-  if (durationMs >= 1000) return "info";
-  return "debug";
 }
 
 export function createHttpServerRequestHandler({
@@ -504,7 +498,6 @@ export function createHttpServerRequestHandler({
   getOperationPermissionPlatform,
   ingressContract = null,
   lifecycle,
-  loginRateLimiter,
   operationAuditStore,
   operationConcurrencyScope,
   operationLockManager,
@@ -523,9 +516,20 @@ export function createHttpServerRequestHandler({
   ipRateLimiter,
   requestBodyAdmissionController = null
 }: Record<string, any>) : any {
+  if (rateLimits?.login && typeof consoleAuth?.configureLoginAdmission === "function") {
+    consoleAuth.configureLoginAdmission({ limit: rateLimits.login.limit, windowMs: rateLimits.windowMs });
+  }
   const requestBodyAdmission: any = requestBodyAdmissionController ||
     createRequestBodyAdmissionController();
   const rateLimitLogState: any = new Map<any, any>();
+  const credentialAdmissionSources = new Map<string, number>();
+  let credentialAdmissions = 0;
+  let metricFailureWarnedAt = -Infinity;
+  const reportMetricFailure = (error: any) => {
+    if (Date.now() - metricFailureWarnedAt < 60_000) return;
+    metricFailureWarnedAt = Date.now();
+    runtimeLogger.warn("http.request_metric.failed", { error: summarizeError(error) });
+  };
   const rateLimitLogWindowMs: any = Math.max(10_000, Number(rateLimits?.windowMs || 0) || 60_000);
   const logRateLimit: any = (details?: any) : any => {
     const key: any = `${details.reason || "unknown"}\u0000${details.route || "/"}`;
@@ -597,13 +601,29 @@ export function createHttpServerRequestHandler({
     request.__meshrixRequestId = requestId;
     let finished: any = false;
     let requestMetricRecorded: any = false;
+    let metricRouteCached: any = "";
+    const metricRoute: any = () : any => {
+      if (!metricRouteCached) {
+        const pathname: any = routeFromRequestUrl(request.url || "/");
+        metricRouteCached = requestRouteTemplate({
+          method: request.method || "GET",
+          pathname,
+          registryTemplate: registeredCoreProvider?.findHttpRouteTemplate?.({
+            operations: requestOperations,
+            method: request.method || "GET",
+            pathname
+          }) || ""
+        });
+      }
+      return metricRouteCached;
+    };
     const recordRequestMetric: any = (completionStatus: any = "completed") : any => {
       if (requestMetricRecorded) {
         return;
       }
       requestMetricRecorded = true;
       try {
-        const route: any = routeFromRequestUrl(request.url || "/");
+        const route: any = metricRoute();
         const statusCode: any = response.statusCode || 0;
         if (isRoutineProbeNoise({
           method: request.method || "GET",
@@ -613,7 +633,7 @@ export function createHttpServerRequestHandler({
         })) {
           return;
         }
-        getOperationPermissionPlatform()?.store?.appendHttpRequestMetric?.({
+        const metricWrite = getOperationPermissionPlatform()?.store?.appendHttpRequestMetric?.({
           traceId: traceContext.traceId,
           requestId,
           transport: metricTransportForRoute(route),
@@ -630,37 +650,14 @@ export function createHttpServerRequestHandler({
               })
             : ""
         });
+        if (metricWrite && typeof metricWrite.then === "function") void metricWrite.catch(reportMetricFailure);
       } catch (error: any) {
-        runtimeLogger.warn("http.request_metric.failed", {
-          traceId: traceContext.traceId,
-          requestId,
-          error: summarizeError(error)
-        });
+        reportMetricFailure(error);
       }
     };
     response.once("finish", () : any => {
       finished = true;
-      const responseBytes: any = getResponseBytes();
-      const method: any = request.method || "GET";
-      const route: any = routeFromRequestUrl(request.url || "/");
-      const statusCode: any = response.statusCode || 0;
-      const durationMs: any = Date.now() - startedAt;
-      const completionStatus: any = "completed";
-      if (!isRoutineProbeNoise({ method, route, statusCode, completionStatus })) {
-        const level: any = completionLogLevel(statusCode, durationMs);
-        runtimeLogger[level]?.("http.request.completed", {
-        traceId: traceContext.traceId,
-        requestId,
-        method,
-        route,
-        statusCode,
-        requestBytes: requestBodyBytes,
-        responseBytes,
-        contentLength: response.getHeader("content-length") || "",
-        durationMs
-        });
-      }
-      recordRequestMetric(completionStatus);
+      recordRequestMetric("completed");
     });
     response.once("close", () : any => {
       if (finished) {
@@ -673,7 +670,7 @@ export function createHttpServerRequestHandler({
         traceId: traceContext.traceId,
         requestId,
         method: request.method || "GET",
-        route: routeFromRequestUrl(request.url || "/"),
+        route: metricRoute(),
         statusCode: response.statusCode,
         requestBytes: requestBodyBytes,
         responseBytes: getResponseBytes(),
@@ -689,42 +686,84 @@ export function createHttpServerRequestHandler({
           applySecurityHeaders(response, { isHttps, scriptNonce });
           const method: any = request.method || "GET";
           const url: any = new URL(request.url || "/", "http://127.0.0.1");
-          const isLoginRequest: any = method === "POST" && url.pathname === "/api/auth/login";
-          if (url.pathname !== "/api/healthz") runtimeLogger.debug?.("http.request.started", {
-            traceId: traceContext.traceId,
-            requestId,
-            method,
-            route: url.pathname,
-            query: {
-              type: "query",
-              count: url.searchParams.size,
-              hash: irreversibleSecurityDigest([...url.searchParams.entries()], {
-                namespace: "http-request:query"
-              })
-            },
-            remoteAddress: request.socket?.remoteAddress
-              ? irreversibleSecurityDigest(request.socket.remoteAddress, {
-                  namespace: "http-request:remote-address"
-                })
-              : "",
-            userAgent: request.headers["user-agent"]
-              ? irreversibleSecurityDigest(request.headers["user-agent"], {
-                  namespace: "http-request:user-agent"
-                })
-              : "",
-            contentType: request.headers["content-type"] || "",
-            contentLength: request.headers["content-length"] || ""
-          });
           let requestBody: any = Buffer.alloc(0);
 
           const clientIp: any = normalizeClientIp(request);
-          const ipRateLimit: any = ipRateLimiter.shouldAllow(`ip:${clientIp}`);
+          const principalCharges: any = new Set<any>();
+          // Downstream authorization points (API-key uploads, tool grants, MCP
+          // gateway) call this when their full authorization identifies a principal.
+          // API keys already identified before body admission are deduplicated;
+          // grant-based principals are charged here after authorization.
+          request.__meshrixPrincipalAdmission = ({ credentialKind = "principal", subjectId = "", tenantId = "" }: Record<string, any> = {}) : any => {
+            const principalId: any = String(subjectId || "").trim();
+            if (!principalId) {
+              return { allowed: true };
+            }
+            const kind: any = String(credentialKind || "principal")
+              .replace(/[^a-z0-9_-]+/giu, "-")
+              .slice(0, 32) || "principal";
+            const chargeKey: any = `${kind}:${principalId}`;
+            if (principalCharges.has(chargeKey)) {
+              return { allowed: true, deduplicated: true };
+            }
+            const principalSubjectLimit: any = subjectRateLimiter.shouldAllow(`subject:${chargeKey}`);
+            if (!principalSubjectLimit.allowed) {
+              return {
+                allowed: false,
+                reason: "subject",
+                limit: principalSubjectLimit.limit,
+                resetAt: principalSubjectLimit.resetAt,
+                retryAfterSec: principalSubjectLimit.retryAfterSec
+              };
+            }
+            const resolvedTenantId: any = String(tenantId || "").trim();
+            const principalTenantLimit: any = tenantRateLimiter.shouldAllow(
+              resolvedTenantId ? `tenant:${resolvedTenantId}` : `tenant-subject:${chargeKey}`
+            );
+            if (!principalTenantLimit.allowed) {
+              return {
+                allowed: false,
+                reason: "tenant",
+                limit: principalTenantLimit.limit,
+                resetAt: principalTenantLimit.resetAt,
+                retryAfterSec: principalTenantLimit.retryAfterSec
+              };
+            }
+            principalCharges.add(chargeKey);
+            return { allowed: true };
+          };
+          // Recognize bearer possession before retaining the body. This narrow
+          // identity is not installed as an authorization and cannot consume a
+          // process-identity nonce; downstream owners authenticate again.
+          let bearerAdmission: any = null;
+          if (request.headers["x-meshrix.js-api-key"] && typeof toolSkillManagementProvider?.authenticateAdmission === "function") {
+            const sourceActive = credentialAdmissionSources.get(clientIp) || 0;
+            if (credentialAdmissions >= 64 || sourceActive >= 16) {
+              sendRateLimitResponse(response, { reason: "认证请求繁忙，请稍后重试。", retryAfterSec: 1 });
+              return;
+            }
+            credentialAdmissions += 1;
+            credentialAdmissionSources.set(clientIp, sourceActive + 1);
+            try {
+              bearerAdmission = await toolSkillManagementProvider.authenticateAdmission({ request });
+            } finally {
+              credentialAdmissions -= 1;
+              const remaining = (credentialAdmissionSources.get(clientIp) || 1) - 1;
+              if (remaining) credentialAdmissionSources.set(clientIp, remaining);
+              else credentialAdmissionSources.delete(clientIp);
+            }
+          }
+          const cookieSession = consoleAuth?.getSessionFromRequest?.(request);
+          const authenticatedAdmission = bearerAdmission?.ok === true || Boolean(cookieSession?.user);
+          const ipRateLimit: any = authenticatedAdmission
+            ? { allowed: true }
+            : ipRateLimiter.shouldAllow(`ip:${clientIp}`);
           if (!ipRateLimit.allowed) {
             logRateLimit({
               reason: "ip",
               requestId,
               actor: "anonymous",
-              route: url.pathname,
+              route: metricRoute(),
               limit: ipRateLimit.limit,
               retryAfterSec: ipRateLimit.retryAfterSec
             });
@@ -738,34 +777,27 @@ export function createHttpServerRequestHandler({
             return;
           }
 
-          if (isLoginRequest) {
-            const loginRateLimit: any = loginRateLimiter.shouldAllow(`login-ip:${clientIp}`);
-            if (!loginRateLimit.allowed) {
-              logRateLimit({
-                reason: "login",
-                requestId,
-                route: url.pathname,
-                limit: loginRateLimit.limit,
-                retryAfterSec: loginRateLimit.retryAfterSec
-              });
-              sendRateLimitResponse(response, {
-                reason: "登录尝试过于频繁（登录限流）。",
-                limit: loginRateLimit.limit,
-                resetAt: loginRateLimit.resetAt,
-                retryAfterSec: loginRateLimit.retryAfterSec,
-                windowMs: rateLimits.windowMs
-              });
-              return;
-            }
+          if (url.pathname === "/mcp" && !isAllowedPlatformMcpOrigin(request)) {
+            sendJson(response, 403, {
+              jsonrpc: "2.0",
+              id: null,
+              error: {
+                code: -32003,
+                message: "MCP request origin is not allowed."
+              }
+            });
+            return;
           }
 
-          const subjectKey: any = resolveRequestSubjectKey(request, consoleAuth);
+          const subjectKey: any = bearerAdmission?.ok === true
+            ? `subject:api-key:${bearerAdmission.subjectId}`
+            : resolveRequestSubjectKey(request, consoleAuth, clientIp);
           const subjectRateLimit: any = subjectRateLimiter.shouldAllow(subjectKey);
           if (!subjectRateLimit.allowed) {
             logRateLimit({
               reason: "subject",
               requestId,
-              route: url.pathname,
+              route: metricRoute(),
               limit: subjectRateLimit.limit,
               retryAfterSec: subjectRateLimit.retryAfterSec
             });
@@ -779,13 +811,15 @@ export function createHttpServerRequestHandler({
             return;
           }
 
-          const tenantKey: any = resolveRequestTenantKey(request, consoleAuth);
+          const tenantKey: any = bearerAdmission?.ok === true
+            ? `tenant:${bearerAdmission.tenantId}`
+            : resolveRequestTenantKey(request, consoleAuth, clientIp);
           const tenantRateLimit: any = tenantRateLimiter.shouldAllow(tenantKey);
           if (!tenantRateLimit.allowed) {
             logRateLimit({
               reason: "tenant",
               requestId,
-              route: url.pathname,
+              route: metricRoute(),
               limit: tenantRateLimit.limit,
               retryAfterSec: tenantRateLimit.retryAfterSec
             });
@@ -797,6 +831,10 @@ export function createHttpServerRequestHandler({
               windowMs: rateLimits.windowMs
             });
             return;
+          }
+
+          if (bearerAdmission?.ok === true) {
+            principalCharges.add(`api-key:${bearerAdmission.subjectId}`);
           }
 
           if (isUpstreamPayloadTransitRoute(method, url.pathname) && await handleUpstreamPayloadTransitRequest({
@@ -863,6 +901,30 @@ export function createHttpServerRequestHandler({
               }
             });
             return;
+          }
+          if (apiKeyUploadAuthorization?.ok === true) {
+            const principalAdmission: any = request.__meshrixPrincipalAdmission?.({
+              credentialKind: "api-key",
+              subjectId: apiKeyUploadAuthorization.apiKeyAuthorization?.workloadPrincipalId || "",
+              tenantId: apiKeyUploadAuthorization.apiKeyAuthorization?.organizationNodeId || ""
+            });
+            if (principalAdmission?.allowed === false) {
+              logRateLimit({
+                reason: `api-key-${principalAdmission.reason || "subject"}`,
+                requestId,
+                route: metricRoute(),
+                limit: principalAdmission.limit,
+                retryAfterSec: principalAdmission.retryAfterSec
+              });
+              sendRateLimitResponse(response, {
+                reason: "访问频率过高（主体限流）。",
+                limit: principalAdmission.limit,
+                resetAt: principalAdmission.resetAt,
+                retryAfterSec: principalAdmission.retryAfterSec,
+                windowMs: rateLimits.windowMs
+              });
+              return;
+            }
           }
 
           if (await handlePluginConsoleRequest({
@@ -932,17 +994,6 @@ export function createHttpServerRequestHandler({
                 error: {
                   code: -32004,
                   message: "MCP gateway adapter is unavailable."
-                }
-              });
-              return;
-            }
-            if (!isAllowedPlatformMcpOrigin(request)) {
-              sendJson(response, 403, {
-                jsonrpc: "2.0",
-                id: null,
-                error: {
-                  code: -32003,
-                  message: "MCP request origin is not allowed."
                 }
               });
               return;
@@ -1085,13 +1136,7 @@ export function createHttpServerRequestHandler({
             traceId: traceContext.traceId,
             requestId,
             method: request.method || "GET",
-            route: (() : any => {
-              try {
-                return new URL(request.url || "/", "http://127.0.0.1").pathname;
-              } catch {
-                return request.url || "/";
-              }
-            })(),
+            route: metricRoute(),
             statusCode,
             durationMs: Date.now() - startedAt,
             error: {

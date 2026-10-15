@@ -222,7 +222,6 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       limit: Math.max(0, limit)
     });
     for (const candidate of rows) {
-      statements.deleteFallbackTasksByWorkItem.run(candidate.work_item_id);
       statements.deleteJournalByWorkItem.run(candidate.work_item_id);
       statements.deleteWorkItem.run(candidate.work_item_id);
     }
@@ -320,7 +319,6 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
       limit: Math.min(retention.cleanupBatchSize, failedCount - capacity.maxFailed + 1)
     });
     for (const candidate of candidates) {
-      statements.deleteFallbackTasksByWorkItem.run(candidate.work_item_id);
       statements.deleteJournalByWorkItem.run(candidate.work_item_id);
       statements.deleteWorkItem.run(candidate.work_item_id);
     }

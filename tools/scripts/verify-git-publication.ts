@@ -10,7 +10,32 @@ const ZERO_OID: any = "0".repeat(40);
 const MAX_TEXT_BYTES: any = 5 * 1024 * 1024;
 const REPOSITORY_ROOT: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PACTIUM_ARCHIVE_PATH: any = "vendor/pactium-0.8.0.tgz";
-const PACTIUM_ARCHIVE_INTEGRITY: any = "sha512-/Qs9JJ8ElyGcqEx1nf9+YH9to4rECAKkfXGu4RgR4tg5Z+JMgAFgOw7lXC5l/KGp69ZHf+Qro3L1sXjlKNKvNg==";
+const AUTHORIZED_BINARIES: any = new Map<string, string>([
+  [
+    PACTIUM_ARCHIVE_PATH,
+    "sha512-/Qs9JJ8ElyGcqEx1nf9+YH9to4rECAKkfXGu4RgR4tg5Z+JMgAFgOw7lXC5l/KGp69ZHf+Qro3L1sXjlKNKvNg=="
+  ],
+  [
+    "apps/entry-gui/src-tauri/icons/128x128.png",
+    "sha512-Iuar12QsFJ8KuGllUOF5xy4hLOl9kq+E8dJN+vUy+0TcOSBN7XvxSNZCCVQAm6rV7jSDkf6kAnr5SSJm6Swe5w=="
+  ],
+  [
+    "apps/entry-gui/src-tauri/icons/128x128@2x.png",
+    "sha512-IHFJgruitWK9OqxSVwu+AliN0Vtvm4ndLldq9EcZMK/V9Atss+KEsaLY8Qq3IdXExBP2nbtQFkZkynMIcnPJBA=="
+  ],
+  [
+    "apps/entry-gui/src-tauri/icons/32x32.png",
+    "sha512-Zh4q6Up6qWjs3QDqsZelKlbZDj3j09yIit5Wi+TVryLg2eauXibwGO+yE6j1GChM9F9QqwX5wy0lxSrc2DLV2w=="
+  ],
+  [
+    "apps/entry-gui/src-tauri/icons/icon.icns",
+    "sha512-UtpJT4oVUq7SuWgpWSjFidyKLJZ3x0LvFUxz0Owwg8TC9oWb/HL/1ILZunYNnrQSMJJOYupB+1GsRS/iHk3zcw=="
+  ],
+  [
+    "apps/entry-gui/src-tauri/icons/icon.ico",
+    "sha512-mvplhI/Trd0HHySW6I3mCcwoM0o5T4aAs90YSf15hAP4TBfIK07nrOBnbjn4lyQxnYhHwg0s9ebbYVq0m2dSIQ=="
+  ]
+]);
 const PRIVATE_PATH_PREFIXES: readonly any[] = Object.freeze([
   "build/",
   "cache/",
@@ -109,8 +134,9 @@ function integrityMatches(bytes?: any, integrity?: any) : any {
 }
 
 function isAuthorizedVendoredBinary(candidatePath?: any, bytes?: any) : any {
-  if (candidatePath !== PACTIUM_ARCHIVE_PATH) return false;
-  return integrityMatches(bytes, PACTIUM_ARCHIVE_INTEGRITY);
+  const integrity: any = AUTHORIZED_BINARIES.get(candidatePath);
+  if (!integrity) return false;
+  return integrityMatches(bytes, integrity);
 }
 
 function scanBytes(candidatePath?: any, bytes?: any) : any {

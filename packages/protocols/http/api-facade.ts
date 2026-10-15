@@ -62,7 +62,8 @@ const CONSOLE_DISCOVERY_FIELDS: readonly any[] = Object.freeze([
   "configVersion",
   "refreshIntervalSeconds",
   "checkInIntervalSeconds",
-  "offlineAfterSeconds"
+  "offlineAfterSeconds",
+  "checkInPolicy"
 ]);
 
 function projectOwnedFields(value?: any, fields?: any) : any {

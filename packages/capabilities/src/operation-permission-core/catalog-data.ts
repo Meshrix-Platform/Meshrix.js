@@ -1,32 +1,11 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { ENTITY_CONFIG } from "./catalog-data-entities.ts";
 
 export const OPERATION_PERMISSION_API_PREFIX: any = "/api/operation-permission/v1";
 
-const MODULE_DIR: any = path.dirname(fileURLToPath(import.meta.url));
-const ENTITY_CONFIG_ROOT: any = path.resolve(MODULE_DIR, "../../../foundation/config/entity-config/tools");
-
 function loadEntityConfigList(kind?: any) : any {
-  const directory: any = path.join(ENTITY_CONFIG_ROOT, kind);
-  const entries: any = fs.readdirSync(directory, { withFileTypes: true });
-  const items: any[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".json") || entry.name === "manifest.json") {
-      continue;
-    }
-    const filePath: any = path.join(directory, entry.name);
-    try {
-      const parsed: any = JSON.parse(fs.readFileSync(filePath, "utf8"));
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        items.push(parsed);
-      }
-    } catch (error: any) {
-      throw new Error(`Invalid tool entity config ${filePath}: ${error.message}`);
-    }
-  }
+  const items: any[] = [...((ENTITY_CONFIG as Record<string, readonly Record<string, unknown>[]>)[String(kind)] ?? [])];
   if (!items.length) {
-    throw new Error(`Operation Permission entity config ${directory} must contain current JSON entries`);
+    throw new Error(`Operation Permission entity config ${String(kind)} must contain current JSON entries`);
   }
   return items.sort((left?: any, right?: any) : any => String(left.id || "").localeCompare(String(right.id || "")));
 }

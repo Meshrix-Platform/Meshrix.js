@@ -130,7 +130,8 @@ export async function writeVerifierLocalUpstreamSecret({
         serviceId,
         scopes,
         allowedHosts: bindNetworkTarget ? [endpoint.hostname] : [],
-        allowedProtocols: bindNetworkTarget ? [endpoint.protocol.replace(/:$/, "")] : []
+        allowedProtocols: bindNetworkTarget ? [endpoint.protocol.replace(/:$/, "")] : [],
+        ...(bindNetworkTarget ? { allowedOrigins: [endpoint.origin] } : {})
       }
     },
     payload: secretPayload

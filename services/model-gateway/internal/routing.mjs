@@ -1,4 +1,4 @@
-import { amountToMicros, validateCurrency } from "./fixed-point.mjs";
+import { amountToNanos, validateCurrency } from "./fixed-point.mjs";
 
 const PROTOCOLS = new Set(["openai", "anthropic", "http"]);
 
@@ -59,9 +59,12 @@ export function validatePricingRevision(existing, body) {
   }
   for (const field of ["inputTokenRate", "outputTokenRate"]) {
     try {
-      amountToMicros(body[field]);
+      amountToNanos(body[field]);
     } catch {
-      return `${field} must be a fixed-point amount at scale 10^6.`;
+      return `${field} must be a non-negative fixed-point amount with nanounit precision.`;
+    }
+    if (body[field].currency !== body.currency) {
+      return `${field}.currency must match the pricing revision currency.`;
     }
   }
   if (existing) {

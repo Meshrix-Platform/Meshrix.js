@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
@@ -26,8 +27,8 @@ export async function startService(options = {}) {
     await writeFile(
       path.join(dataRoot, "provider-egress.json"),
       JSON.stringify({
-        prov1: { baseUrl: fixture.baseUrl, timeoutMs: 5000 },
-        prov2: { baseUrl: fixture.baseUrl, timeoutMs: 5000 }
+        prov1: { baseUrl: fixture.baseUrl },
+        prov2: { baseUrl: fixture.baseUrl }
       })
     );
     await writeFile(
@@ -42,8 +43,8 @@ export async function startService(options = {}) {
     dataRoot,
     clients: options.clients || ADMIN_CLIENTS,
     bounds: options.bounds,
-    maxAttempts: options.maxAttempts,
-    maxRequestBytes: options.maxRequestBytes
+    maxRequestBytes: options.maxRequestBytes,
+    fetchImpl: options.fetchImpl
   });
   const server = createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -54,7 +55,10 @@ export async function startService(options = {}) {
     baseUrl,
     handler,
     server,
-    clientSecret: ADMIN_CLIENTS["service-admin"].secret,
+    clientSecret: (options.clients || ADMIN_CLIENTS)["service-admin"]?.secret || Object.values(options.clients || ADMIN_CLIENTS)[0]?.secret,
+    clientSecretFor(clientId) {
+      return (options.clients || ADMIN_CLIENTS)[clientId]?.secret;
+    },
     async close({ keepDataRoot = false } = {}) {
       await handler.close();
       await new Promise((resolve) => server.close(resolve));
@@ -64,7 +68,47 @@ export async function startService(options = {}) {
   };
 }
 
-export async function provision(service, { modelId = "model-1" } = {}) {
+export async function provisionModel(service, {
+  modelId,
+  revisionRef,
+  providerId = "prov1",
+  protocol = "openai",
+  prices = DEFAULT_PRICES
+}) {
+  const headers = {
+    authorization: `Bearer ${service.clientSecret}`,
+    "content-type": "application/json"
+  };
+  const provider = await fetch(`${service.baseUrl}/v1/model-gateway/providers`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ providerId, protocol, enabled: true })
+  });
+  const pricing = await fetch(`${service.baseUrl}/v1/model-gateway/pricing-revisions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      revisionRef,
+      modelRef: modelId,
+      currency: "USD",
+      ...prices,
+      immutable: true
+    })
+  });
+  const model = await fetch(`${service.baseUrl}/v1/model-gateway/models`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      modelId,
+      providerRef: providerId,
+      pricingRevisionRef: revisionRef,
+      enabled: true
+    })
+  });
+  return { provider, pricing, model };
+}
+
+export async function provision(service, { modelId = "model-1", prices = DEFAULT_PRICES } = {}) {
   const headers = {
     authorization: `Bearer ${service.clientSecret}`,
     "content-type": "application/json"
@@ -81,7 +125,7 @@ export async function provision(service, { modelId = "model-1" } = {}) {
       revisionRef: "price-1",
       modelRef: modelId,
       currency: "USD",
-      ...DEFAULT_PRICES,
+      ...prices,
       immutable: true
     })
   });
@@ -96,4 +140,14 @@ export async function provision(service, { modelId = "model-1" } = {}) {
     })
   });
   return { provider, pricing, model };
+}
+
+// Synthetic test fixtures only: inspect the production durable ledger, including
+// records whose response copy has left the hot cache.
+export function readLedgerState(dataRoot) {
+  const db = new DatabaseSync(path.join(dataRoot, "ledger.sqlite"), { readOnly: true });
+  try {
+    return { ledger: Object.fromEntries(db.prepare("SELECT call_id,facts,response FROM calls ORDER BY rowid").all().map((row) =>
+      [row.call_id, { ...JSON.parse(row.facts), response: row.response ? JSON.parse(row.response) : null }])) };
+  } finally { db.close(); }
 }

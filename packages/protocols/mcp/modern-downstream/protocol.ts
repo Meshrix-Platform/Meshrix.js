@@ -130,7 +130,7 @@ function decodeBase64Utf8Strict(encoded?: any) : any {
     return { ok: false, reason: "malformed" };
   }
   try {
-    const decoder: any = new TextDecoder("utf-8", { fatal: true });
+    const decoder: any = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false });
     return { ok: true, value: decoder.decode(bytes) };
   } catch {
     return { ok: false, reason: "malformed" };

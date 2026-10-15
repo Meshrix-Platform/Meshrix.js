@@ -1,0 +1,67 @@
+[workspace]
+resolver = "2"
+members = ["crates/entry-core", "crates/entry-cli", "crates/entry-gui"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.85"
+
+[workspace.dependencies]
+meshrix-entry-core = { path = "crates/entry-core" }
+
+# Official Signal implementation — the same sources the TS
+# @signalapp/libsignal-client@0.104.0 npm bridge wraps (PQXDH + SPQR).
+# Not published to crates.io; pinned to the matching release tag.
+libsignal-protocol = { git = "https://github.com/signalapp/libsignal.git", tag = "v0.104.0" }
+async-trait = "0.1"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "io-util", "io-std", "sync", "signal"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Crypto — pure Rust, no OpenSSL anywhere (cross-compile friendliness).
+ed25519-dalek = "2.2"
+hkdf = "0.12"
+sha2 = "0.10"
+aes-gcm = "0.10"
+rand = "0.9"
+base64 = "0.22"
+zeroize = "1"
+
+# TLS / transport — rustls + ring provider keeps the whole stack pure Rust.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = "1"
+rustls-native-certs = "0.8"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+x509-parser = "0.17"
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
+url = "2"
+urlencoding = "2"
+http = "1"
+futures-util = "0.3"
+tokio-util = "0.7"
+webpki-roots = "0.26"
+
+# CLI / TUI / GUI
+clap = { version = "4", features = ["derive", "cargo", "env"] }
+ratatui = "0.29"
+crossterm = "0.28"
+eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+egui_extras = { version = "0.32", features = ["image"] }
+
+directories = "6"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "alloc"] }
+libc = "0.2"
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+strip = true

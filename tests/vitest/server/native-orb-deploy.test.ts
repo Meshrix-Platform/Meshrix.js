@@ -297,40 +297,27 @@ describe("native OrbStack deployment", () : any => {
   });
 
   it("reuses a candidate archive only after proving exact Git-object bytes", () : any => {
-    const root: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-native-candidate-"));
-    const cacheRoot: any = path.join(root, "cache");
-    const gitEnvironment: any = {
-      ...process.env,
-      GIT_AUTHOR_NAME: "Meshrix Test",
-      GIT_AUTHOR_EMAIL: "meshrix-test@example.invalid",
-      GIT_COMMITTER_NAME: "Meshrix Test",
-      GIT_COMMITTER_EMAIL: "meshrix-test@example.invalid",
-    };
-    const git = (args: string[]) : any => spawnSync("git", args, {
-      cwd: root,
+    const repoRoot: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+    const cacheRoot: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-native-candidate-cache-"));
+    const head: any = spawnSync("git", ["rev-parse", "HEAD"], {
+      cwd: repoRoot,
       encoding: "utf8",
-      env: gitEnvironment,
-      timeout: 15_000,
     });
+    expect(head.status).toBe(0);
+    const revision: any = String(head.stdout || "").trim();
     try {
-      expect(git(["init", "-q"]).status).toBe(0);
-      fs.writeFileSync(path.join(root, "package.json"), "{\"name\":\"meshrix.js\"}\n", "utf8");
-      expect(git(["add", "package.json"]).status).toBe(0);
-      expect(git(["commit", "-q", "-m", "fixture"]).status).toBe(0);
-      const revision: any = String(git(["rev-parse", "HEAD"]).stdout || "").trim();
-
-      const first: any = candidateArchive(root, revision, { cacheRoot });
+      const first: any = candidateArchive(repoRoot, revision, { cacheRoot });
       const expectedDigest: any = createHash("sha256").update(fs.readFileSync(first.archivePath)).digest("hex");
       expect(first.resumed).toBe(false);
-      expect(candidateArchive(root, revision, { cacheRoot }).resumed).toBe(true);
+      expect(candidateArchive(repoRoot, revision, { cacheRoot }).resumed).toBe(true);
 
       fs.appendFileSync(first.archivePath, "tampered-cache", "utf8");
-      const repaired: any = candidateArchive(root, revision, { cacheRoot });
+      const repaired: any = candidateArchive(repoRoot, revision, { cacheRoot });
       expect(repaired.resumed).toBe(false);
       expect(createHash("sha256").update(fs.readFileSync(repaired.archivePath)).digest("hex"))
         .toBe(expectedDigest);
     } finally {
-      fs.rmSync(root, { recursive: true, force: true });
+      fs.rmSync(cacheRoot, { recursive: true, force: true });
     }
   });
 

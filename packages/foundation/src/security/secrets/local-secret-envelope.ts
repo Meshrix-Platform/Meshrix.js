@@ -152,8 +152,9 @@ export async function decryptLocalSecretPayload({
     });
     decipher.setAAD(aad);
     decipher.setAuthTag(authTag);
-    plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-    const payload = record(JSON.parse(plaintext.toString("utf8")));
+    const decrypted: Buffer = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    plaintext = decrypted;
+    const payload = record(JSON.parse(decrypted.toString("utf8")));
     if (!payload || Object.keys(payload).length === 0) {
       throw encryptionError();
     }

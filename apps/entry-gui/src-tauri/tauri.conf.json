@@ -27,7 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg", "nsis", "msi"],
+    "targets": ["app", "dmg", "nsis", "msi", "deb", "rpm", "appimage"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -39,13 +39,21 @@
       "resources/service": "service/"
     },
     "externalBin": ["binaries/node"],
-    "category": "public.app-category.utilities",
+    "category": "Utility",
     "macOS": {
       "hardenedRuntime": true
     },
     "windows": {
       "nsis": {
         "installMode": "currentUser"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": ["xdg-utils"]
+      },
+      "rpm": {
+        "depends": ["webkit2gtk4.1", "gtk3", "xdg-utils"]
       }
     }
   },

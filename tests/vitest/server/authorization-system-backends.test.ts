@@ -332,7 +332,10 @@ describe("authorization system backend coverage", () : any => {
       command: "helper-fails"
     });
     await expect(failing.issue({ capabilities: [apiCapabilityId("jobs.create")] }))
-      .rejects.toThrow(/helper failed hard/);
+      .rejects.toThrow("Opaque capability key helper failed.");
+    await provider.close();
+    await badJson.close();
+    await failing.close();
   });
 
   it("propagates explicit system backend failures without falling back silently", async () : Promise<any> => {
@@ -409,7 +412,7 @@ describe("authorization system backend coverage", () : any => {
       securityMode: "degraded_file_fallback",
       keySource: expect.objectContaining({ securityMode: "degraded_file_fallback" })
     });
-    provider.close();
+    await provider.close();
 
     const guard: any = createCapabilityBindingGuard({
       backend: "auto",
@@ -689,8 +692,8 @@ describe("authorization system backend coverage", () : any => {
       provider: "local-file",
       keySource: expect.objectContaining({ provider: "local-file" })
     });
-    provider.close();
-    importedProvider.close();
+    await provider.close();
+    await importedProvider.close();
   });
 
   it("covers binding guard context mismatch, expiry, recovery, and invalidation decisions", async () : Promise<any> => {

@@ -4,24 +4,26 @@
   "title": "Model Gateway Service wire contract",
   "description": "Versioned language-neutral HTTP and JSON contract for the standalone Model Gateway Service.",
   "type": "object",
-  "required": ["contractVersion", "nativeCompatibility", "ownedPaths", "admissionBounds", "ledgerStates", "terminalLedgerStates", "stableErrors", "fixedPointScale"],
+  "required": ["contractVersion", "nativeCompatibility", "ownedPaths", "admissionBounds", "ledgerStates", "terminalLedgerStates", "stableErrors", "fixedPointScale", "tokenRateScale", "inputTokenEstimate", "requestSubset"],
   "properties": {
-    "contractVersion": {
-      "const": "v0.0.1:model-gateway:service-1"
-    },
+    "contractVersion": { "const": "v0.0.1:model-gateway:service-1" },
     "nativeCompatibility": {
       "type": "object",
       "required": ["openai", "anthropic"],
       "properties": {
         "openai": {
           "type": "array",
-          "items": { "enum": ["/v1/chat/completions", "/v1/models"] }
+          "items": {
+            "enum": ["/v1/chat/completions", "/v1/models"]
+          }
         },
         "anthropic": {
           "type": "array",
           "items": { "const": "/v1/messages" }
         }
-      }
+      },
+      "description": "Endpoint-path compatibility only for the priced text and client-executed-tool subset; the service rejects multimodal content, provider-managed tools, unpriced selectors, and unknown fields.",
+      "additionalProperties": false
     },
     "ownedPaths": {
       "type": "array",
@@ -35,7 +37,9 @@
     },
     "ledgerStates": {
       "type": "array",
-      "items": { "enum": ["released", "settled", "in_doubt"] }
+      "items": {
+        "enum": ["released", "settled", "in_doubt"]
+      }
     },
     "terminalLedgerStates": {
       "type": "array",
@@ -44,12 +48,19 @@
     "stableErrors": {
       "type": "array",
       "items": {
-        "enum": ["unauthorized", "rate_limited", "quota_exceeded", "budget_exceeded", "invalid_request", "model_not_found", "provider_unavailable", "cancelled", "settlement_uncertain", "internal_error"]
+        "enum": ["unauthorized", "rate_limited", "quota_exceeded", "budget_exceeded", "invalid_request", "model_not_found", "provider_unavailable", "cancelled", "settlement_uncertain", "completed_response_unavailable", "internal_error"]
       }
     },
     "fixedPointScale": {
-      "const": 1000000
-    }
+      "const": 1000000,
+      "description": "Settled ledger charges and cost reservations use microcurrency units; aggregate token costs are rounded up once."
+    },
+    "tokenRateScale": { "const": 1000000000, "description": "Token rates preserve exact currency nanounits. Operator-supplied input/output rates are ceilings for local quota and ledger estimates, not verified provider prices or a guarantee of invoice totals. Review all applicable model/account/endpoint price categories before traffic and bind a new immutable revision if a stored ceiling is insufficient; stored rates are not rewritten automatically." },
+    "inputTokenEstimate": {
+      "const": "utf8-json-bytes-plus-anthropic-client-tool-overhead",
+      "description": "Preflight input usage counts the complete UTF-8 JSON request byte length; Anthropic requests with client tools add 804 tokens, the highest model/choice overhead in Anthropic's published tool-use table as of 2026-10-08. Operators must review other configured aliases against that table because no per-model adjustment is available. Provider-reported usage is used for settlement."
+    },
+    "requestSubset": { "const": "text-and-client-executed-tools-only" }
   },
   "additionalProperties": false
 }

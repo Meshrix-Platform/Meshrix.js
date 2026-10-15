@@ -13,6 +13,7 @@
 import {
   createVaultFetch,
   createVaultWrite,
+  parseEncryptedRecoverySnapshot,
   parseVaultFetchRefused,
   parseVaultSnapshot,
   parseVaultWriteResult,
@@ -22,10 +23,11 @@ import { entryError } from "../errors.ts";
 import { freshNonceToken, signEd25519 } from "../keys.ts";
 import type { KeyObject } from "node:crypto";
 import {
-  snapshotCiphertextDigest,
   vaultFetchTranscript,
+  vaultSnapshotDigest,
   vaultWriteTranscript
 } from "../transcripts.ts";
+import type { VaultProtectedSnapshot } from "../transcripts.ts";
 
 export interface VaultSigningMaterial {
   readonly keyId: string;
@@ -65,7 +67,7 @@ export class FetchVaultTransport implements VaultTransport {
     } catch (error) {
       throw entryError(
         "vault_transport_error",
-        `Vault request failed: ${(error as Error).message}`,
+        "Vault request could not be completed.",
         { vaultId: input.vaultId }
       );
     }
@@ -107,7 +109,7 @@ export interface VaultSnapshotView {
 export type VaultWriteOutcome =
   | { readonly outcome: "committed"; readonly committedRevision: number }
   | { readonly outcome: "conflict"; readonly currentRevision: number }
-  | { readonly outcome: "refused" }
+  | { readonly outcome: "refused"; readonly retryable?: boolean }
   | { readonly outcome: "invalid_response" };
 
 export class RecoveryVaultClient {
@@ -144,6 +146,9 @@ export class RecoveryVaultClient {
       fetchProof: { ...proof, signature }
     });
     const response = await this.#transport.post({ vaultId: input.vaultId, message });
+    if (response.status === 429 || response.status === 503) {
+      return { outcome: "refused", refusal: "rate_limited", retryable: true };
+    }
     const snapshot = parseVaultSnapshot(response.body);
     if (snapshot && snapshot.vaultId === input.vaultId) {
       return { outcome: "snapshot", snapshot: snapshot as VaultSnapshotView };
@@ -166,12 +171,18 @@ export class RecoveryVaultClient {
     readonly snapshot: Record<string, unknown>;
     readonly writerKey: VaultSigningMaterial;
   }): Promise<VaultWriteOutcome> {
-    const envelope = input.snapshot.snapshot as { ciphertext?: unknown } | undefined;
-    const ciphertext = typeof envelope?.ciphertext === "string" ? envelope.ciphertext : "";
+    // Sign over the canonical digest of the FULL protected snapshot — the
+    // vault refuses the write when any covered field is substituted. A
+    // snapshot that cannot satisfy the wire schema is refused upstream
+    // before the digest is compared, so sign a fixed sentinel and let the
+    // vault return the honest refusal.
+    const parsedSnapshot = parseEncryptedRecoverySnapshot(input.snapshot);
     const auth = {
       writerKeyId: input.writerKey.keyId,
       nonce: this.#nonceFactory(),
-      snapshotDigest: snapshotCiphertextDigest(ciphertext)
+      snapshotDigest: parsedSnapshot
+        ? vaultSnapshotDigest(parsedSnapshot as VaultProtectedSnapshot)
+        : `sha256:${"0".repeat(64)}`
     };
     const signature = signEd25519(
       input.writerKey.privateKey,
@@ -184,6 +195,7 @@ export class RecoveryVaultClient {
       writeAuth: { ...auth, signature }
     });
     const response = await this.#transport.post({ vaultId: input.vaultId, message });
+    if (response.status === 429 || response.status === 503) return { outcome: "refused", retryable: true };
     const result = parseVaultWriteResult(response.body);
     if (!result || result.vaultId !== input.vaultId) return { outcome: "invalid_response" };
     if (result.outcome === "committed") {

@@ -63,6 +63,10 @@ export function createConsoleJobController(options: ConsoleJobControllerOptions)
     return true;
   }
 
+  function hasJobInState(jobId: string): boolean {
+    return Boolean(options.consoleState.value?.jobs.items?.some((job) => job.id === jobId));
+  }
+
   async function deleteJob(jobId: string) : Promise<any> {
     if (!(await options.confirmAction(`删除任务“${jobId}”？`, { tone: "danger" }))) {
       return;
@@ -72,11 +76,17 @@ export function createConsoleJobController(options: ConsoleJobControllerOptions)
     options.error.value = "";
 
     try {
-      await deleteJobRequest(jobId);
-      await options.refreshState();
+      const wasInState = hasJobInState(jobId);
+      const result = await deleteJobRequest(jobId);
+      if (!wasInState || result?.deletedJob?.id !== jobId) {
+        await options.refreshState();
+      } else {
+        removeJobFromEvent(jobId);
+      }
     } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "删除任务失败。";
+    } finally {
       options.clearBusy(`job:${jobId}`);
     }
   }
@@ -86,10 +96,16 @@ export function createConsoleJobController(options: ConsoleJobControllerOptions)
     options.setBusy(`job:${jobId}`);
     options.error.value = "";
     try {
-      await cancelJobRequest(jobId);
-      await options.refreshState();
+      const wasInState = hasJobInState(jobId);
+      const job = await cancelJobRequest(jobId);
+      if (!wasInState || job?.id !== jobId) {
+        await options.refreshState();
+      } else {
+        upsertJobFromEvent(job);
+      }
     } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "取消任务失败。";
+    } finally {
       options.clearBusy(`job:${jobId}`);
     }
   }

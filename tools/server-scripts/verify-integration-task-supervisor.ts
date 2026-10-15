@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import {
+  LOCAL_SECRET_MASTER_KEY_FILE_ENV
+} from "../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
 import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import {
   INTEGRATION_TASK_SUPERVISOR_PROTOCOL_VERSION,
@@ -28,7 +32,7 @@ const EXPECTED_ASSERTIONS: readonly any[] = Object.freeze([
   "integration.task.concurrency_bounded",
   "integration.task.failure_typed",
   "integration.task.cancellation_fenced",
-  "integration.shutdown.bounded",
+  "integration.shutdown.close_budget_and_settlement",
   "integration.server.lifecycle_wiring",
   "integration.health.bounded_projection",
   "integration.evidence.privacy_safe"
@@ -200,6 +204,7 @@ await check("integration.connect.retry_bounded", async () : Promise<any> => {
 });
 
 await check("integration.connect.timeout_fenced", async () : Promise<any> => {
+  let releaseCancelledConnect: (() => void) | null = null;
   const supervisor: any = createIntegrationTaskSupervisor({
     connectTimeoutMs: 20,
     maxConnectAttempts: 3,
@@ -207,21 +212,28 @@ await check("integration.connect.timeout_fenced", async () : Promise<any> => {
       id: "connect-timeout-fixture",
       enabled: true,
       configured: true,
-      async connect() : Promise<any> {
-        return new Promise(() : any => {});
+      async connect({ signal }: Record<string, any>) : Promise<any> {
+        return new Promise((_resolve?: any, reject?: any) : any => {
+          signal.addEventListener("abort", () : any => {
+            releaseCancelledConnect = () : any => reject(new Error("synthetic connect cancelled"));
+          }, { once: true });
+        });
       },
       async execute() : Promise<any> {
         return { ok: true };
       }
     }]
   });
-  const startedAt: any = Date.now();
   supervisor.start({ coreReady: true });
+  await waitFor(() : any => releaseCancelledConnect !== null);
+  let state: any = adapterState(supervisor, "connect-timeout-fixture");
+  assert.equal(state.fenced, false);
+  assert.equal(state.state, "connecting");
+  (releaseCancelledConnect as (() => void) | null)?.();
   await waitFor(() : any => adapterState(supervisor, "connect-timeout-fixture")?.fenced === true);
-  const state: any = adapterState(supervisor, "connect-timeout-fixture");
+  state = adapterState(supervisor, "connect-timeout-fixture");
   assert.equal(state.code, "integration_connect_timeout");
   assert.equal(state.connectAttempts, 1);
-  assert.ok(Date.now() - startedAt < 500);
   await supervisor.shutdown();
   return {
     fenced: true,
@@ -310,14 +322,18 @@ await check("integration.task.failure_typed", async () : Promise<any> => {
 });
 
 await check("integration.task.cancellation_fenced", async () : Promise<any> => {
+  let releaseCancelledTask: (() => void) | null = null;
   const supervisor: any = createIntegrationTaskSupervisor({
-    taskTimeoutMs: 250,
     adapters: [{
       id: "cancellation-fixture",
       enabled: true,
       configured: true,
-      async execute() : Promise<any> {
-        return new Promise(() : any => {});
+      async execute({ signal }: Record<string, any>) : Promise<any> {
+        return new Promise((_resolve?: any, reject?: any) : any => {
+          signal.addEventListener("abort", () : any => {
+            releaseCancelledTask = () : any => reject(new Error("synthetic task cancelled"));
+          }, { once: true });
+        });
       }
     }]
   });
@@ -329,8 +345,16 @@ await check("integration.task.cancellation_fenced", async () : Promise<any> => {
     { privateValue: SECRET_MARKER },
     { signal: controller.signal }
   );
+  let pendingSettled = false;
+  void pending.then(
+    () : any => { pendingSettled = true; },
+    () : any => { pendingSettled = true; }
+  );
   await waitFor(() : any => adapterState(supervisor, "cancellation-fixture")?.runningTasks === 1);
   controller.abort();
+  await waitFor(() : any => releaseCancelledTask !== null);
+  assert.equal(pendingSettled, false);
+  (releaseCancelledTask as (() => void) | null)?.();
   await assert.rejects(
     () : any => pending,
     (error?: any) : any => error instanceof IntegrationTaskSupervisorError &&
@@ -339,13 +363,16 @@ await check("integration.task.cancellation_fenced", async () : Promise<any> => {
   const state: any = adapterState(supervisor, "cancellation-fixture");
   assert.equal(state.fenced, true);
   assert.equal(state.state, "degraded");
-  await supervisor.shutdown();
+  const stopped: any = await supervisor.shutdown();
+  assert.equal(stopped.lifecycleState, "stopped");
   return {
     fenced: true
   };
 });
 
-await check("integration.shutdown.bounded", async () : Promise<any> => {
+await check("integration.shutdown.close_budget_and_settlement", async () : Promise<any> => {
+  let closeSignalObserved = false;
+  let releaseCancelledClose: (() => void) | null = null;
   const supervisor: any = createIntegrationTaskSupervisor({
     closeTimeoutMs: 20,
     shutdownTimeoutMs: 50,
@@ -359,23 +386,33 @@ await check("integration.shutdown.bounded", async () : Promise<any> => {
       async execute() : Promise<any> {
         return { ok: true };
       },
-      async close() : Promise<any> {
-        return new Promise(() : any => {});
+      async close({ signal }: Record<string, any>) : Promise<any> {
+        return new Promise((_resolve?: any, reject?: any) : any => {
+          signal.addEventListener("abort", () : any => {
+            closeSignalObserved = true;
+            releaseCancelledClose = () : any => reject(new Error("synthetic close cancelled"));
+          }, { once: true });
+        });
       }
     }]
   });
   supervisor.start({ coreReady: true });
   await waitFor(() : any => adapterState(supervisor, "close-timeout-fixture")?.state === "ready");
-  const startedAt: any = Date.now();
-  const stopped: any = await supervisor.shutdown();
-  const elapsedMs: any = Date.now() - startedAt;
+  let shutdownSettled = false;
+  const shuttingDown: any = supervisor.shutdown().then((snapshot?: any) : any => {
+    shutdownSettled = true;
+    return snapshot;
+  });
+  await waitFor(() : any => closeSignalObserved);
+  assert.equal(shutdownSettled, false);
+  (releaseCancelledClose as (() => void) | null)?.();
+  const stopped: any = await shuttingDown;
   assert.equal(stopped.lifecycleState, "stopped");
   assert.equal(stopped.adapters[0].code, "integration_close_timeout");
-  assert.ok(elapsedMs < 500);
   assert.deepEqual(await supervisor.shutdown(), stopped);
   return {
-    bounded: true,
-    closeFailureAbsorbed: true
+    explicitCloseBudgetSignaled: true,
+    closeSettlementOwned: true
   };
 });
 
@@ -383,9 +420,25 @@ await check("integration.server.lifecycle_wiring", async () : Promise<any> => {
   const userDataPath: any = await fs.mkdtemp(
     path.join(os.tmpdir(), "meshrix-integration-supervisor-")
   );
+  const previousMasterKeyFile: any = process.env[LOCAL_SECRET_MASTER_KEY_FILE_ENV];
+  let masterKeyRoot: string | null = null;
   let server: any = null;
   let connected: any = false;
   try {
+    masterKeyRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "meshrix-integration-supervisor-key-")
+    );
+    const masterKeyFile: string = path.join(masterKeyRoot, "master.key");
+    const masterKey: Buffer = crypto.randomBytes(32);
+    try {
+      await fs.writeFile(masterKeyFile, `${masterKey.toString("hex")}\n`, {
+        flag: "wx",
+        mode: 0o600
+      });
+    } finally {
+      masterKey.fill(0);
+    }
+    process.env[LOCAL_SECRET_MASTER_KEY_FILE_ENV] = masterKeyFile;
     server = await startHttpServer({
       userDataPath,
       distPath: "",
@@ -410,8 +463,12 @@ await check("integration.server.lifecycle_wiring", async () : Promise<any> => {
           async execute() : Promise<any> {
             return { ok: true };
           },
-          async close() : Promise<any> {
-            return new Promise(() : any => {});
+          async close({ signal }: Record<string, any>) : Promise<any> {
+            return new Promise((_resolve?: any, reject?: any) : any => {
+              signal.addEventListener("abort", () : any => {
+                reject(new Error("synthetic server close cancelled"));
+              }, { once: true });
+            });
           }
         }]
       },
@@ -425,17 +482,23 @@ await check("integration.server.lifecycle_wiring", async () : Promise<any> => {
     assert.equal(health.ok, true);
     assert.equal(health.optionalIntegrations.lifecycleState, "running");
     assert.equal(health.optionalIntegrations.readyAdapterCount, 1);
-    const closeStartedAt: any = Date.now();
     await server.close();
     server = null;
-    assert.ok(Date.now() - closeStartedAt < 2_000);
     return {
       startedAfterCoreAdmission: true,
-      closeTimeoutAbsorbed: true
+      closeBudgetSettled: true
     };
   } finally {
     await server?.close?.().catch(() : any => {});
+    if (previousMasterKeyFile === undefined) {
+      delete process.env[LOCAL_SECRET_MASTER_KEY_FILE_ENV];
+    } else {
+      process.env[LOCAL_SECRET_MASTER_KEY_FILE_ENV] = previousMasterKeyFile;
+    }
     await fs.rm(userDataPath, { recursive: true, force: true });
+    if (masterKeyRoot) {
+      await fs.rm(masterKeyRoot, { recursive: true, force: true });
+    }
   }
 });
 

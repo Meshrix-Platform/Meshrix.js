@@ -67,12 +67,27 @@ function operatorMcpRisk(service: Record<string, any> = {}) : any {
   return normalizeRisk(operatorMcpOperation(service).risk);
 }
 
-export function publicUpstreamMcpTool({ service = {}, tool = {}, schemaPort = null }: Record<string, any> = {}) : any {
+function mcpToolAlias(service: Record<string, any> = {}, upstreamToolName: any = "") : Record<string, any> {
+  const aliases: any = object(service.mcp?.aliases);
+  const record: any = object(aliases[upstreamToolName]);
+  return record;
+}
+
+export function publicUpstreamMcpTool({ service = {}, tool = {}, schemaPort = null, claimedNames = null }: Record<string, any> = {}) : any {
   if (!schemaPort || typeof schemaPort.assertSchemaBudget !== "function") {
     throw new TypeError("Upstream MCP tool projection requires the injected schema port.");
   }
   const prefix: any = service.mcp?.toolNamePrefix || safePublicToolSegment(service.serviceId);
   const upstreamToolName: any = text(tool.name);
+  const alias: any = mcpToolAlias(service, upstreamToolName);
+  const publicSegment: any = text(alias.name) || upstreamToolName;
+  const publicName: any = `upstream.${prefix}.${publicSegment}`;
+  // Public names are the addressable identity of a discovered tool; an alias or a
+  // sanitized upstream name that collides is unpublished rather than shadowed.
+  if (claimedNames instanceof Set) {
+    if (claimedNames.has(publicName)) return null;
+    claimedNames.add(publicName);
+  }
   const configuredOperation: any = operatorMcpOperation(service);
   const risk: any = operatorMcpRisk(service);
   const requiresApproval: any = configuredOperation.requiresApproval === true || risk === "repair_write" || risk === "destructive";
@@ -84,9 +99,9 @@ export function publicUpstreamMcpTool({ service = {}, tool = {}, schemaPort = nu
     requiresApproval
   }, { upstreamToolName });
   return {
-    name: `upstream.${prefix}.${upstreamToolName}`,
-    title: `${service.label || service.serviceId}: ${tool.title || upstreamToolName}`,
-    description: tool.description || `Upstream MCP tool ${upstreamToolName} from ${service.label || service.serviceId}.`,
+    name: publicName,
+    title: text(alias.title) || `${service.label || service.serviceId}: ${tool.title || upstreamToolName}`,
+    description: text(alias.description) || tool.description || `Upstream MCP tool ${upstreamToolName} from ${service.label || service.serviceId}.`,
     inputSchema: projectedMcpSchema(tool.inputSchema, schemaPort, "Upstream MCP tool input schema", {
       requireTopLevelObject: true,
       kind: "input"

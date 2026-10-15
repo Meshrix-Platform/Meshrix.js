@@ -134,7 +134,6 @@ export function useWorkspaceManagementController(
       );
       options.panel.value = "list";
       await options.load();
-      await options.loadChain(options.selectedId.value);
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {

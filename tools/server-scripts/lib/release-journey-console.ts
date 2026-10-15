@@ -5,7 +5,23 @@
 // authenticated control plane, and approves the connector device
 // authorization. All secrets stay in memory and are registered as redaction
 // needles; nothing in this module writes them to disk.
+import { createHash } from "node:crypto";
+
 import { runDocker } from "./release-journey-compose.ts";
+
+export function releaseJourneyServiceId(ownerSubjectId: unknown, serviceKey: unknown): string {
+  const owner = String(ownerSubjectId || "").trim();
+  const key = String(serviceKey || "").trim();
+  if (!owner || !key) throw new TypeError("Release journey service identity requires an owner and service key.");
+  const identity = createHash("sha256")
+    .update("upstream-service")
+    .update("\0")
+    .update(owner)
+    .update("\0")
+    .update(key)
+    .digest("base64url");
+  return `svc_${identity}`;
+}
 
 export async function rotateOwnerPassword({ containerName, env, redact = (value?: any) : any => value }: Record<string, any>) : Promise<any> {
   const result: any = runDocker(
@@ -79,6 +95,7 @@ export function createConsoleClient({ baseUrl, addNeedle = () : any => {}, fetch
       : [];
     return {
       username,
+      userId: String(result.payload?.session?.user?.userId || ""),
       roleId: String(result.payload?.session?.user?.roleId || ""),
       runtimeAdministrationAuthorized: scopes.includes("runtime:admin")
     };

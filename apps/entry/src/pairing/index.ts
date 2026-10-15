@@ -14,7 +14,11 @@ export {
   createPairingSession,
   pairingProofTranscript,
   type EnrolledDeviceRecord,
+  type PairingActionAuthorization,
+  type PairingCompletionReceipt,
+  type PairingCompletionRequest,
   type PairingEndpointPort,
+  type PairingPeerIdentity,
   type PairingSessionSnapshot,
   type PairingState
 } from "./pairing-session.ts";

@@ -11,13 +11,9 @@
           "type": "string",
           "pattern": "^[a-z][a-z0-9._:-]{2,127}$"
         },
-        "timeoutMs": {
-          "type": "integer",
-          "minimum": 100,
-          "maximum": 120000
-        }
+        "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 120000 }
       },
-      "required": ["serviceRef", "timeoutMs"],
+      "required": ["serviceRef"],
       "additionalProperties": false
     }
   },

@@ -11,6 +11,9 @@ import {
 import {
   PeerClient,
   createFilePeerClientStore,
+  peerIdentityPublicDescriptor,
+  type PeerDeviceDirectory,
+  type PeerPairedSignalIdentity,
   type PeerClientStore,
   type PeerDispatchHandler,
   type PeerRouteIdentity
@@ -18,38 +21,33 @@ import {
 import {
   isPeerSchemaMessage,
   peerChannelNotAdmittedError,
-  peerGapView,
   peerIdForRouteDevice,
   peerInboxView,
   peerOutboxView,
-  routePeerDirectory,
-  type PeerGapView,
   type PeerInboxView,
   type PeerOutboxView
 } from "@meshrix/entry-transport";
-import type { MailboxRetentionPolicy } from "@meshrix/contracts/private-relay";
 
 /**
  * Entry-side peer messaging runtime — one per enrolled connection.
  *
  * Identical composition to the endpoint runtime (`EndpointPeerRuntime`):
  * a durable `PeerClient` over file stores under `<dataDir>/peer/<connSlug>/`
- * (`crypto/` Signal state, `client/` outbox/inbox/cursor), bound to the
+ * (`crypto/` Signal state, `client/` outbox/inbox), bound to the
  * relay-authenticated route identity. The wire channel is the SAME admitted
  * forward session — `attachChannel` installs the live generation's `send`,
  * `onSessionAdmitted`/`onSessionClosed` open and close the gate, and the
  * product service demuxes inbound peer-schema messages before the session
  * driver sees them.
  *
- * The crypto peer id derives as `peer:<tenant>:<route>:<device>` — the same
+ * The crypto peer id derives from the canonical route tuple — the same
  * derivation the endpoint uses — so out-of-band safety-number verification
  * never depends on a wire-delivered peer id. A stored identity that
  * disagrees with the derivation is a hard failure, never a silent re-key.
  *
  * Dispatch is record-only by default: inbound entries persist as
- * `dispatch: "pending"` and a local agent/operator reports the application
- * outcome through `peer.ackOutcome`. No content is executed and no agent
- * receipt is ever fabricated from mailbox acknowledgements.
+ * `dispatch: "pending"`. Transport custody receipts confirm durable local
+ * receipt only; application outcomes remain encrypted Peer messages.
  */
 
 const PEER_EVENT_LOG_LIMIT = 32;
@@ -67,15 +65,20 @@ export interface EntryPeerStatus {
   /** True while the live session generation is admitted and can carry peer traffic. */
   readonly sessionLive: boolean;
   readonly localBundle: { readonly bundleId: string; readonly revision: number } | null;
-  readonly retentionPolicy: MailboxRetentionPolicy | null;
   /** Learned wire-device → crypto-peer bindings. */
   readonly peers: Readonly<Record<string, string>>;
-  readonly cursor: number;
+  /** Bounded outbox-history page; continue with outboxNextAfterSequence. */
   readonly outbox: readonly PeerOutboxView[];
-  readonly inboxCount: number;
-  /** Mailbox ranges the deployment lost — retention-gap evidence, verbatim. */
-  readonly gaps: readonly PeerGapView[];
-  /** Bounded tail of notable events (refusals, re-pair flags, tombstones). */
+  readonly outboxNextAfterSequence: number | null;
+  /** Bounded unsatisfied durable sends; runtime retries the original ciphertext. */
+  readonly pendingOutbox: readonly PeerOutboxView[];
+  readonly pendingOutboxNextAfterSequence: number | null;
+  /** Number of pending local application handoffs in the returned page. */
+  readonly pendingInboxPageCount: number;
+  readonly pendingInboxNextAfterSequence: number | null;
+  /** Continue local inbox history after this sequence through peer.inbox. */
+  readonly inboxNextAfterSequence: number | null;
+  /** Bounded tail of notable local events (refusals, re-pair flags, conflicts). */
   readonly events: readonly { readonly at: string; readonly kind: string; readonly detail: string }[];
 }
 
@@ -88,6 +91,7 @@ export class EntryPeerRuntime {
   /** Mutable channel cell shared with the client's transport closure. */
   readonly #channel: { send: ((message: Record<string, unknown>) => void) | null; live: boolean };
   readonly #events: { at: string; kind: string; detail: string }[] = [];
+  readonly #sessionWork = new Set<Promise<void>>();
   #closed = false;
   #liveGeneration = 0;
   #bundlePublished = false;
@@ -108,21 +112,20 @@ export class EntryPeerRuntime {
     this.#channel = input.channel;
     const client = input.client;
     client.on("requiresRePair", (event) => this.#recordEvent("requiresRePair", `${event.peerId} (${event.source}): ${event.detail}`));
-    client.on("ackRefused", (event) => this.#recordEvent("ackRefused", `${event.messageId}: ${event.refusal}`));
-    client.on("lostRange", (event) => this.#recordEvent("lostRange", `positions ${event.fromSeq}-${event.toSeq} lost (${event.cause})`));
     client.on("conflict", (event) => this.#recordEvent("conflict", `${event.messageId} → ${event.peerDeviceId}`));
-    client.on("unrecorded", (event) => this.#recordEvent("unrecorded", `${event.messageId} → ${event.peerDeviceId}`));
     client.on("bundleRefused", (event) => this.#recordEvent("bundleRefused", event.refusal));
-    client.on("decryptFailure", (event) => this.#recordEvent("decryptFailure", `${event.messageId}@${event.position}: ${event.code}`));
+    client.on("peerPresence", (event) => this.#recordEvent("peerPresence", `${event.peerDeviceId}: ${event.state}`));
+    client.on("dispatchDeferred", (event) => this.#recordEvent("dispatchDeferred", `${event.messageId}@${event.senderDeviceId}`));
     client.on("error", (event) => this.#recordEvent("error", `${event.code}: ${event.detail}`));
   }
 
   static async create(options: {
     readonly storeDir: string;
     readonly route: PeerRouteIdentity;
+    /** Pairing-authenticated remote Signal identity; null fails closed at first contact. */
+    readonly pairedPeerIdentity?: PeerPairedSignalIdentity | null;
+    readonly directory?: PeerDeviceDirectory;
     readonly dispatch?: PeerDispatchHandler;
-    readonly requestTimeoutMs?: number;
-    readonly maxSendAttempts?: number;
   }): Promise<EntryPeerRuntime> {
     const peerId = peerIdForRouteDevice(options.route);
     if (!peerId) {
@@ -137,6 +140,12 @@ export class EntryPeerRuntime {
     await mkdir(options.storeDir, { recursive: true, mode: 0o700 });
     let identity = await loadPeerIdentity(cryptoStore);
     if (identity === null) {
+      if (options.pairedPeerIdentity) {
+        throw entryError(
+          "peer_identity_unavailable",
+          "The local Signal identity from the completed pairing is unavailable; preserve task history and re-pair this device before sending Peer messages."
+        );
+      }
       identity = await createPeerIdentity({ localStore: cryptoStore, peerId });
     } else if (identity.peerId !== peerId) {
       throw entryError(
@@ -155,11 +164,18 @@ export class EntryPeerRuntime {
         }
       },
       route: options.route,
-      directory: routePeerDirectory(options.route),
-      ...(options.dispatch ? { dispatch: options.dispatch } : {}),
-      ...(options.requestTimeoutMs !== undefined ? { requestTimeoutMs: options.requestTimeoutMs } : {}),
-      ...(options.maxSendAttempts !== undefined ? { maxSendAttempts: options.maxSendAttempts } : {})
+      ...(options.directory ? { directory: options.directory } : {}),
+      ...(options.dispatch ? { dispatch: options.dispatch } : {})
     });
+    try {
+      // Local status and history must work while disconnected. Bind the route
+      // and recover any prepared local transaction without calling resume(),
+      // which also retries relay ACKs, outbox sends, and application dispatch.
+      await client.prepareLocalState();
+    } catch (error) {
+      await client.dispose();
+      throw error;
+    }
     return new EntryPeerRuntime({
       client,
       peerId,
@@ -168,6 +184,28 @@ export class EntryPeerRuntime {
       clientStore,
       channel
     });
+  }
+
+  /** Prepare the stable local Signal identity before it is signed into pairing. */
+  static async preparePairingIdentity(options: {
+    readonly storeDir: string;
+    readonly route: PeerRouteIdentity;
+    readonly requireExisting?: boolean;
+  }): Promise<PeerPairedSignalIdentity> {
+    const peerId = peerIdForRouteDevice(options.route);
+    if (!peerId) throw entryError("peer_identity_invalid", "The pairing route cannot derive a Peer identity.");
+    const storeDir = options.storeDir;
+    await mkdir(storeDir, { recursive: true, mode: 0o700 });
+    const cryptoStore = createFilePeerCryptoStore(join(storeDir, "crypto"));
+    let identity = await loadPeerIdentity(cryptoStore);
+    if (identity === null && options.requireExisting) {
+      throw entryError("peer_identity_unavailable", "The local Signal identity from the submitted pairing is unavailable; restore its protected state or explicitly pair again.");
+    }
+    if (identity === null) identity = await createPeerIdentity({ localStore: cryptoStore, peerId });
+    if (identity.peerId !== peerId) {
+      throw entryError("peer_identity_invalid", "The saved local Signal identity is bound to another pairing route.");
+    }
+    return peerIdentityPublicDescriptor(identity);
   }
 
   /** Install the live session generation's raw send. */
@@ -189,17 +227,14 @@ export class EntryPeerRuntime {
   }
 
   /**
-   * The forward session (re)gained admission: retry pending sends, reconcile
-   * receipts, flush reports and fetch from the durable cursor — all
-   * idempotent inside the client. First live admission also publishes the
-   * prekey bundle and pulls the retention-policy advertisement as a fallback
-   * for the admission-time push.
+   * The forward session regained admission: recover durable local receipt,
+   * dispatch, and outbox state, then publish the prekey bundle.
    */
   onSessionAdmitted(): void {
     if (this.#closed) return;
     this.#channel.live = true;
     const generation = ++this.#liveGeneration;
-    void (async () => {
+    const work = (async () => {
       try {
         await this.client.resume();
       } catch (error) {
@@ -214,35 +249,42 @@ export class EntryPeerRuntime {
           this.#recordEvent("bundle_publish_failed", error instanceof Error ? error.message : String(error));
         }
       }
-      try {
-        await this.client.fetchRetentionPolicy();
-      } catch (error) {
-        this.#recordEvent("retention_policy_failed", error instanceof Error ? error.message : String(error));
-      }
     })().catch((error) => {
       this.#recordEvent("peer_runtime_error", error instanceof Error ? error.message : String(error));
     });
+    this.#sessionWork.add(work);
+    void work.finally(() => this.#sessionWork.delete(work));
   }
 
   /** The live session generation ended — the gate closes with it. */
   onSessionClosed(): void {
     this.#channel.live = false;
     this.#liveGeneration += 1;
+    this.client.transportLost();
   }
 
   get sessionLive(): boolean {
     return this.#channel.live && this.#channel.send !== null && !this.#closed;
   }
 
+  isPeerReachable(peerDeviceId: string): boolean {
+    const presence = this.client.presence(peerDeviceId);
+    return this.sessionLive && presence !== null
+      && presence.tenantId === this.#route.tenantId
+      && presence.routeId === this.#route.routeId
+      && presence.deviceId === this.#route.deviceId
+      && presence.peerDeviceId === peerDeviceId
+      && presence.state === "reachable";
+  }
+
   async status(): Promise<EntryPeerStatus> {
-    const [localBundle, retentionPolicy, peers, outbox, inbox, cursor, gaps] = await Promise.all([
+    const [localBundle, peers, outboxHistory, outboxPending, inboxHistory, inboxPending] = await Promise.all([
       this.client.localBundle(),
-      this.client.retentionPolicy(),
       this.client.learnedPeers(),
-      this.client.outbox.list(),
-      this.client.inbox.list(),
-      this.client.inbox.cursor(),
-      this.client.inbox.gaps()
+      this.client.outbox.historyPage(0, 32),
+      this.client.outbox.pendingPage(0, 32),
+      this.client.inbox.historyPage(0, 32),
+      this.client.inbox.pendingDispatchPage(0, 32)
     ]);
     return Object.freeze({
       enabled: true,
@@ -250,12 +292,14 @@ export class EntryPeerRuntime {
       route: this.#route,
       sessionLive: this.sessionLive,
       localBundle,
-      retentionPolicy,
       peers,
-      cursor,
-      outbox: outbox.map(peerOutboxView),
-      inboxCount: inbox.length,
-      gaps: gaps.map(peerGapView),
+      outbox: outboxHistory.items.map(peerOutboxView),
+      outboxNextAfterSequence: outboxHistory.nextAfterSequence,
+      pendingOutbox: outboxPending.items.map(peerOutboxView),
+      pendingOutboxNextAfterSequence: outboxPending.nextAfterSequence,
+      pendingInboxPageCount: inboxPending.items.length,
+      pendingInboxNextAfterSequence: inboxPending.nextAfterSequence,
+      inboxNextAfterSequence: inboxHistory.nextAfterSequence,
       events: Object.freeze([...this.#events])
     });
   }
@@ -289,36 +333,26 @@ export class EntryPeerRuntime {
     return peerOutboxView(entry);
   }
 
-  /** Explicit mailbox pull from the durable cursor (the fetch op). */
-  async sync(): Promise<{ readonly cursor: number }> {
-    if (this.#closed) {
-      throw entryError("peer_unavailable", "The peer runtime is stopped.");
-    }
-    await this.client.sync();
-    return Object.freeze({ cursor: await this.client.inbox.cursor() });
-  }
-
-  /** Operator inbox listing — most recent first, bounded. */
-  async inbox(limit = 64): Promise<readonly PeerInboxView[]> {
-    const entries = await this.client.inbox.list();
-    return entries.slice(-Math.max(1, Math.min(limit, 512))).reverse().map(peerInboxView);
-  }
-
-  /** Explicit application receipt — recorded evidence, never derived from acks. */
-  async reportOutcome(input: {
-    readonly messageId: string;
-    readonly outcome: "accepted_by_agent" | "completed" | "rejected";
-    readonly detailBase64url?: string;
-  }): Promise<{ readonly messageId: string; readonly outcome: string; readonly recorded: true }> {
-    if (this.#closed) {
-      throw entryError("peer_unavailable", "The peer runtime is stopped.");
-    }
-    if (!["accepted_by_agent", "completed", "rejected"].includes(input.outcome)) {
-      throw entryError("peer_message_invalid", `Unknown application outcome "${String(input.outcome)}".`);
-    }
-    const detail = input.detailBase64url === undefined ? undefined : new Uint8Array(Buffer.from(input.detailBase64url, "base64url"));
-    await this.client.reportOutcome(input.messageId, input.outcome, detail);
-    return Object.freeze({ messageId: input.messageId, outcome: input.outcome, recorded: true });
+  /** Operator inbox listing — bounded local history and pending-handoff pages. */
+  async inbox(limit = 64, afterSequence = 0): Promise<{
+    readonly entries: readonly PeerInboxView[];
+    readonly pendingEntries: readonly PeerInboxView[];
+    readonly historyNextAfterSequence: number | null;
+    readonly pendingNextAfterSequence: number | null;
+  }> {
+    const pageSize = Math.max(1, Math.min(limit, 512));
+    const [history, pending] = await Promise.all([
+      this.client.inbox.historyPage(afterSequence, pageSize),
+      this.client.inbox.pendingDispatchPage(afterSequence, pageSize)
+    ]);
+    const entries = history.items.map(peerInboxView);
+    const pendingEntries = pending.items.map(peerInboxView);
+    return Object.freeze({
+      entries: Object.freeze(entries),
+      pendingEntries: Object.freeze(pendingEntries),
+      historyNextAfterSequence: history.nextAfterSequence,
+      pendingNextAfterSequence: pending.nextAfterSequence
+    });
   }
 
   /**
@@ -336,7 +370,11 @@ export class EntryPeerRuntime {
       throw entryError("peer_message_invalid", "peer.pairSafety requires the counterparty peerDeviceId.");
     }
     const peers = await this.client.learnedPeers();
-    const peerId = peers[peerDeviceId] ?? routePeerDirectory(this.#route).resolvePeerId(peerDeviceId);
+    const peerId = peers[peerDeviceId] ?? peerIdForRouteDevice({
+      tenantId: this.#route.tenantId,
+      routeId: this.#route.routeId,
+      deviceId: peerDeviceId
+    });
     if (peerId === null) {
       return Object.freeze({ peerDeviceId, peerId: null, safetyNumber: null });
     }
@@ -350,6 +388,8 @@ export class EntryPeerRuntime {
     this.#channel.send = null;
     this.#channel.live = false;
     this.#liveGeneration += 1;
+    await this.client.dispose();
+    await Promise.all([...this.#sessionWork]);
   }
 
   /** Remove the whole per-connection peer store (revocation/uninstall). */

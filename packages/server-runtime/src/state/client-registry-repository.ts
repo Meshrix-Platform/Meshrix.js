@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
@@ -6,6 +7,11 @@ import type Database from "better-sqlite3";
 export const MAX_MESHRIX_CLIENT_REGISTRATIONS = 2000;
 // Internal capacity safety policy; it does not populate user discovery configuration.
 export const DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS = 15 * 60;
+export const MAX_CLIENT_ENROLLMENT_TOKENS = 1024;
+export const DEFAULT_ENROLLMENT_TOKEN_TTL_SECONDS = 15 * 60;
+export const MAX_ENROLLMENT_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+const CLIENT_CREDENTIAL_PATTERN = /^mck_[A-Za-z0-9_-]{20,}$/u;
+const ENROLLMENT_TOKEN_PATTERN = /^met_[A-Za-z0-9_-]{20,}$/u;
 type AlignmentState =
   | "unknown"
   | "offline"
@@ -92,6 +98,10 @@ interface ClientRegistryService {
     clientId?: string;
     offlineAfterSeconds?: number;
   }): ClientItem | null;
+  issueEnrollmentToken(options?: { ttlSeconds?: number }): Record<string, unknown>;
+  consumeEnrollmentToken(presentedToken?: unknown): Record<string, unknown>;
+  issueClientCredential(options?: { clientId?: string }): Record<string, unknown>;
+  resolveClientCredential(presentedCredential?: unknown): Record<string, unknown>;
   close(): void;
 }
 interface ServiceOptions {
@@ -141,6 +151,22 @@ export function initializeClientRegistrySchema(db: Database.Database): void {
       ON client_registrations(last_seen_at DESC);
     CREATE INDEX IF NOT EXISTS idx_client_registrations_state
       ON client_registrations(alignment_state, last_seen_at DESC);
+
+    CREATE TABLE IF NOT EXISTS client_enrollment_tokens (
+      token_hash TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_client_enrollment_tokens_expiry
+      ON client_enrollment_tokens(expires_at);
+
+    CREATE TABLE IF NOT EXISTS client_credentials (
+      credential_hash TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      revoked_at TEXT NOT NULL DEFAULT ''
+    );
   `);
 }
 
@@ -261,7 +287,50 @@ function prepareClientRegistryStatements(database: Database.Database) {
       SELECT * FROM client_registrations
       ORDER BY last_seen_at DESC, client_id ASC
     `),
+    insertEnrollmentTokenStmt: database.prepare(`
+      INSERT INTO client_enrollment_tokens (token_hash, created_at, expires_at, consumed_at)
+      VALUES (?, ?, ?, '')
+    `),
+    selectEnrollmentTokenStmt: database.prepare(`
+      SELECT * FROM client_enrollment_tokens WHERE token_hash = ?
+    `),
+    consumeEnrollmentTokenStmt: database.prepare(`
+      UPDATE client_enrollment_tokens SET consumed_at = ?
+      WHERE token_hash = ? AND consumed_at = ''
+    `),
+    pruneEnrollmentTokensStmt: database.prepare(`
+      DELETE FROM client_enrollment_tokens WHERE expires_at < ? OR consumed_at != ''
+    `),
+    countEnrollmentTokensStmt: database.prepare<[], CountRow>(`
+      SELECT COUNT(*) AS count FROM client_enrollment_tokens
+    `),
+    deleteClientCredentialsByClientIdStmt: database.prepare(`
+      DELETE FROM client_credentials WHERE client_id = ?
+    `),
+    insertClientCredentialStmt: database.prepare(`
+      INSERT INTO client_credentials (credential_hash, client_id, created_at, revoked_at)
+      VALUES (?, ?, ?, '')
+    `),
+    selectClientCredentialStmt: database.prepare(`
+      SELECT client_id FROM client_credentials WHERE credential_hash = ? AND revoked_at = ''
+    `),
   };
+}
+
+function clientSecretDigest(value?: unknown): string {
+  return createHash("sha256").update(String(value || "")).digest("hex");
+}
+
+function mintClientSecret(prefix: "met_" | "mck_"): string {
+  return `${prefix}${randomBytes(32).toString("base64url")}`;
+}
+
+export function isClientEnrollmentToken(value?: unknown): boolean {
+  return ENROLLMENT_TOKEN_PATTERN.test(String(value || ""));
+}
+
+export function isClientCredential(value?: unknown): boolean {
+  return CLIENT_CREDENTIAL_PATTERN.test(String(value || ""));
 }
 
 export function createClientRegistryService({
@@ -312,6 +381,14 @@ export function createClientRegistryService({
     pruneExpiredClientRegistrationsStmt,
     upsertClientRegistrationStmt,
     listClientRegistrationsStmt,
+    insertEnrollmentTokenStmt,
+    selectEnrollmentTokenStmt,
+    consumeEnrollmentTokenStmt,
+    pruneEnrollmentTokensStmt,
+    countEnrollmentTokensStmt,
+    deleteClientCredentialsByClientIdStmt,
+    insertClientCredentialStmt,
+    selectClientCredentialStmt,
   } = statements;
 
   return {
@@ -498,6 +575,92 @@ export function createClientRegistryService({
           (item) => item.clientId === selectedClientId,
         ) || null
       );
+    },
+    issueEnrollmentToken({
+      ttlSeconds = DEFAULT_ENROLLMENT_TOKEN_TTL_SECONDS,
+    }: { ttlSeconds?: number } = {}): Record<string, unknown> {
+      const issuedAtMs = currentTimeMs();
+      const issuedAt = new Date(issuedAtMs).toISOString();
+      pruneEnrollmentTokensStmt.run(issuedAt);
+      const liveCount = Number(countEnrollmentTokensStmt.get()?.count || 0);
+      if (liveCount >= MAX_CLIENT_ENROLLMENT_TOKENS) {
+        return {
+          ok: false,
+          statusCode: 429,
+          code: "client_enrollment_token_capacity_exceeded",
+          error: "客户端登记令牌容量已满，请等待过期令牌回收后重试。",
+        };
+      }
+      const ttl = Math.min(
+        MAX_ENROLLMENT_TOKEN_TTL_SECONDS,
+        Math.max(
+          60,
+          Math.floor(
+            Number(ttlSeconds || DEFAULT_ENROLLMENT_TOKEN_TTL_SECONDS) ||
+              DEFAULT_ENROLLMENT_TOKEN_TTL_SECONDS,
+          ),
+        ),
+      );
+      const token = mintClientSecret("met_");
+      const expiresAt = new Date(issuedAtMs + ttl * 1000).toISOString();
+      insertEnrollmentTokenStmt.run(clientSecretDigest(token), issuedAt, expiresAt);
+      return { ok: true, token, expiresAt };
+    },
+    consumeEnrollmentToken(presentedToken?: unknown): Record<string, unknown> {
+      const presented = String(presentedToken || "");
+      if (!isClientEnrollmentToken(presented)) {
+        return { ok: false, code: "client_enrollment_token_invalid" };
+      }
+      const consumedAtMs = currentTimeMs();
+      const consumedAt = new Date(consumedAtMs).toISOString();
+      const tokenHash = clientSecretDigest(presented);
+      const row = selectEnrollmentTokenStmt.get(tokenHash) as
+        | { expires_at?: unknown; consumed_at?: unknown }
+        | undefined;
+      if (
+        !row ||
+        String(row.consumed_at || "") ||
+        String(row.expires_at || "") <= consumedAt
+      ) {
+        return { ok: false, code: "client_enrollment_token_invalid" };
+      }
+      const outcome = consumeEnrollmentTokenStmt.run(consumedAt, tokenHash);
+      if (Number(outcome?.changes || 0) !== 1) {
+        return { ok: false, code: "client_enrollment_token_invalid" };
+      }
+      return { ok: true };
+    },
+    issueClientCredential({
+      clientId = "",
+    }: { clientId?: string } = {}): Record<string, unknown> {
+      const boundClientId = String(clientId || "");
+      if (!boundClientId) {
+        return { ok: false, code: "client_credential_issue_failed" };
+      }
+      const credential = mintClientSecret("mck_");
+      const issuedAt = new Date(currentTimeMs()).toISOString();
+      deleteClientCredentialsByClientIdStmt.run(boundClientId);
+      insertClientCredentialStmt.run(
+        clientSecretDigest(credential),
+        boundClientId,
+        issuedAt,
+      );
+      return { ok: true, credential };
+    },
+    resolveClientCredential(
+      presentedCredential?: unknown,
+    ): Record<string, unknown> {
+      const presented = String(presentedCredential || "");
+      if (!isClientCredential(presented)) {
+        return { ok: false };
+      }
+      const row = selectClientCredentialStmt.get(
+        clientSecretDigest(presented),
+      ) as { client_id?: unknown } | undefined;
+      const resolvedClientId = String(row?.client_id || "");
+      return resolvedClientId
+        ? { ok: true, clientId: resolvedClientId }
+        : { ok: false };
     },
     close(): void {
       if (ownsDatabase) {

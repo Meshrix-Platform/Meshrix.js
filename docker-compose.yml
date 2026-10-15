@@ -49,6 +49,7 @@ services:
       MESHRIX_SERVER_HOST: 0.0.0.0
       MESHRIX_SERVER_PORT: 7228
       MESHRIX_SERVER_DATA_DIR: data
+      MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE: /run/secrets/meshrix-local-secret-master-key
       MESHRIX_SERVER_WITH_UI: "${MESHRIX_SERVER_WITH_UI:-0}"
       MESHRIX_RUNTIME_CONFIG: ${MESHRIX_RUNTIME_CONFIG:-}
       MESHRIX_BACKUP_ROOT: /app/backups
@@ -61,6 +62,9 @@ services:
       - meshrix-codex-home:/codex-home
       # Optional, read-only host Codex configuration:
       # - ${HOME}/.codex:/codex-home:ro
+    secrets:
+      - source: meshrix-local-secret-master-key
+        target: meshrix-local-secret-master-key
     networks:
       - meshrix-core
 
@@ -72,8 +76,29 @@ services:
     image: ${MESHRIX_FORMAT_CONVERT_IMAGE_NAME:-meshrix-js-format-convert:local}
     container_name: ${MESHRIX_FORMAT_CONVERT_CONTAINER_NAME:-meshrix-format-convert}
     restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./services/file-parser/format-convert/security/seccomp-office.json
+    cpus: 1
+    mem_limit: 2g
+    memswap_limit: 2g
+    pids_limit: 256
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=512m,mode=1777
     profiles:
       - format-convert
+    environment:
+      GOMAXPROCS: 1
+      MAX_CONCURRENCY: 1
+      QUEUE_CAPACITY: 1
+      FORMAT_CONVERT_AUTH_TOKEN_FILE: /run/secrets/format-convert-auth-token
+    secrets:
+      - source: format-convert-auth-token
+        target: format-convert-auth-token
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200'"]
       interval: 30s
@@ -122,6 +147,14 @@ volumes:
   meshrix-server-backups:
   meshrix-codex-home:
   meshrix-skill-hub-data:
+
+secrets:
+  meshrix-local-secret-master-key:
+    file: ${MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE:?MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE is required}
+  format-convert-auth-token:
+    # The optional profile fails closed if its protected token file is not set.
+    # Compose file-backed secrets use the mounted source file's access mode.
+    file: ${MESHRIX_FORMAT_CONVERT_AUTH_TOKEN_SOURCE:-/dev/null}
 
 networks:
   meshrix-core: {}

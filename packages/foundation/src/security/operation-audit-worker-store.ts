@@ -12,42 +12,21 @@ import {
 import { runMigrations } from "../storage/sqlite-migrations.ts";
 import { finalizeSensitiveReport } from "../observability/sensitive-report-scan.ts";
 import {
-  ABSOLUTE_PATH_PATTERN,
   MAX_JSON_BYTES,
   OperationAuditCapacityError,
   OperationAuditIdempotencyConflictError,
   OperationAuditIdRequiredError,
-  SENSITIVE_KEY_PATTERN,
-  redactOperationAuditValue,
-  truncateOperationAuditJson
+  redactOperationAuditValue
 } from "./operation-audit-common.ts";
+import {
+  inspectOperationAuditProjectionDatabase,
+  operationAuditProjectionKeyId,
+  projectOperationAuditRetentionPolicy,
+  projectLegacyOperationAuditRecord,
+  type OperationAuditRecord
+} from "./operation-audit-projection.ts";
 type DataRecord = Record<string, unknown>;
 type SqliteValue = string | number;
-
-interface OperationAuditRecord {
-  auditId: string;
-  traceId: string;
-  requestId: string;
-  tenantId: string;
-  decisionId: string;
-  proofId: string;
-  operationId: string;
-  transport: string;
-  actorJson: string;
-  risk: string;
-  readOnly: number;
-  status: string;
-  durationMs: number;
-  inputHash: string;
-  redactedInputJson: string;
-  redactedOutputSummaryJson: string;
-  error: string;
-  riskControlAnchorDigest: string;
-  riskControlLastRecordDigest: string;
-  riskControlGateCount: number;
-  riskControlEnvelopeJson: string;
-  createdAt: string;
-}
 
 interface OperationAuditRow {
   audit_id: string;
@@ -72,17 +51,7 @@ interface OperationAuditRow {
   risk_control_gate_count: number;
   risk_control_envelope_json: string;
   created_at: string;
-}
-
-interface OperationAuditActor extends DataRecord {
-  type: string;
-  userId: string;
-  username: string;
-  roleId: string;
-  tenantId: string;
-  orgId: string;
-  teamIds: unknown[];
-  departmentIds: unknown[];
+  idempotency_binding_hmac: string;
 }
 
 interface RiskControlSnapshot {
@@ -158,6 +127,7 @@ interface OperationAuditItem extends DataRecord {
 export interface OperationAuditWorkerStore {
   db: Database.Database;
   rootPath: string;
+  ready(): void;
   append(entry?: DataRecord): { auditId: string; maintenance: { deletedCount: number } };
   appendIdempotent(entry?: DataRecord): { auditId: string; replayed: boolean; maintenance: { deletedCount: number } };
   getById(auditId?: unknown): OperationAuditItem | null;
@@ -185,6 +155,24 @@ const MAX_MAINTENANCE_EVERY_APPENDS = 4096;
 const MIN_DATABASE_BYTES = 4 * 1024 * 1024;
 const WAL_JOURNAL_SIZE_LIMIT_BYTES = 16 * 1024 * 1024;
 const AUDIT_RECORD_FIXED_BYTES = 128;
+const AUDIT_PROJECTION_META_TABLE = "operation_audit_projection_meta";
+const AUDIT_PROJECTION_VERSION = "meshrix-operation-audit-projection-v1";
+const AUDIT_PROJECTION_BATCH_SIZE = 256;
+
+interface OperationAuditProjectionMeta {
+  schema_version: string;
+  projection_key_id: string;
+  state: string;
+  cursor_rowid: number;
+}
+
+type OperationAuditProjectionState =
+  | "projecting"
+  | "cleanup_checkpoint_before"
+  | "cleanup_vacuum_pending"
+  | "cleanup_checkpoint_after"
+  | "cleanup_retention_policy_pending"
+  | "ready";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -200,10 +188,6 @@ function sqliteErrorCode(error: unknown): string {
   return String(asRecord(error).code || "");
 }
 
-function hashValue(value?: unknown): string {
-  return crypto.createHash("sha256").update(stableJson(value)).digest("hex");
-}
-
 function asLimit(value?: unknown, fallback = 100, max = 500): number {
   return Math.max(1, Math.min(Number(value || fallback) || fallback, max));
 }
@@ -214,64 +198,6 @@ function boundedInteger(value: unknown, fallback: number, min: number, max: numb
     return fallback;
   }
   return Math.max(min, Math.min(number, max));
-}
-
-function firstString(...values: unknown[]): string {
-  for (const value of values) {
-    const text = String(value || "").trim();
-    if (text) {
-      return text;
-    }
-  }
-  return "";
-}
-
-function summarizeOutput(value?: unknown): unknown {
-  if (value === null || value === undefined) {
-    return {};
-  }
-  if (Buffer.isBuffer(value)) {
-    return { type: "buffer", byteLength: value.length };
-  }
-  if (typeof value !== "object") {
-    return { value: redactOperationAuditValue(value) };
-  }
-  if (Array.isArray(value)) {
-    return { type: "array", length: value.length };
-  }
-  const summary: DataRecord = {};
-  for (const [key, nested] of Object.entries(value).slice(0, 40)) {
-    if (SENSITIVE_KEY_PATTERN.test(key)) {
-      summary[key] = "<redacted>";
-    } else if (Array.isArray(nested)) {
-      summary[key] = { type: "array", length: nested.length };
-    } else if (nested && typeof nested === "object") {
-      if (["checkpoint", "stateCommit", "summary", "file", "workspaceFileRestore"].includes(key)) {
-        summary[key] = redactOperationAuditValue(nested);
-      } else {
-        summary[key] = { type: "object", keys: Object.keys(nested).slice(0, 20) };
-      }
-    } else {
-      summary[key] = redactOperationAuditValue(nested);
-    }
-  }
-  return truncateOperationAuditJson(summary);
-}
-
-function actorFrom(value: DataRecord = {}): OperationAuditActor {
-  const user = asRecord(value.user || value);
-  const teamIds = user.teamIds || value.teamIds;
-  const departmentIds = user.departmentIds || value.departmentIds;
-  return {
-    type: String(value.type || (user.userId ? "console-user" : "anonymous")),
-    userId: String(user.userId || ""),
-    username: String(user.username || ""),
-    roleId: String(user.roleId || ""),
-    tenantId: String(user.tenantId || value.tenantId || ""),
-    orgId: String(user.orgId || value.orgId || ""),
-    teamIds: Array.isArray(teamIds) ? [...teamIds] : [],
-    departmentIds: Array.isArray(departmentIds) ? [...departmentIds] : []
-  };
 }
 
 function ensureOperationAuditColumns(db: Database.Database): void {
@@ -305,6 +231,9 @@ function ensureOperationAuditColumns(db: Database.Database): void {
   }
   if (!cols.has("record_bytes")) {
     db.exec("ALTER TABLE operation_audit_log ADD COLUMN record_bytes INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!cols.has("idempotency_binding_hmac")) {
+    db.exec("ALTER TABLE operation_audit_log ADD COLUMN idempotency_binding_hmac TEXT NOT NULL DEFAULT ''");
   }
 }
 
@@ -406,7 +335,8 @@ function ensureSchema(db: Database.Database): void {
       risk_control_gate_count INTEGER NOT NULL DEFAULT 0,
       risk_control_envelope_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
-      record_bytes INTEGER NOT NULL DEFAULT 0 CHECK (record_bytes >= 0)
+      record_bytes INTEGER NOT NULL DEFAULT 0 CHECK (record_bytes >= 0),
+      idempotency_binding_hmac TEXT NOT NULL DEFAULT ''
     );
   `);
 
@@ -430,11 +360,22 @@ function ensureSchema(db: Database.Database): void {
       up: (d: Database.Database): void => {
         ensureOperationAuditColumns(d);
       }
+    },
+    {
+      version: 4,
+      up: (d: Database.Database): void => {
+        d.exec("DROP INDEX IF EXISTS idx_operation_audit_created");
+      }
+    },
+    {
+      version: 5,
+      up: (d: Database.Database): void => {
+        ensureOperationAuditColumns(d);
+      }
     }
   ]);
 
   db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_operation_audit_created ON operation_audit_log(created_at);
     CREATE INDEX IF NOT EXISTS idx_operation_audit_retention ON operation_audit_log(created_at, audit_id);
     CREATE INDEX IF NOT EXISTS idx_operation_audit_trace ON operation_audit_log(trace_id);
     CREATE INDEX IF NOT EXISTS idx_operation_audit_tenant ON operation_audit_log(tenant_id);
@@ -451,83 +392,74 @@ function parseJson<T>(value: unknown, fallback: T): T {
   }
 }
 
-function riskControlAuditSnapshot(value: unknown = null): RiskControlSnapshot {
-  const envelope = asRecord(value);
-  const records = Array.isArray(envelope.gateRecords)
-    ? envelope.gateRecords.map(asRecord)
-    : [];
-  const compactEnvelope: DataRecord = {
-    envelopeVersion: String(envelope.envelopeVersion || ""),
-    operationId: String(envelope.operationId || ""),
-    traceId: String(envelope.traceId || ""),
-    inputHash: String(envelope.inputHash || ""),
-    operationAnchorDigest: String(envelope.operationAnchorDigest || ""),
-    gateRecords: records.map((record) => ({
-      recordVersion: String(record.recordVersion || ""),
-      controlRef: record.controlRef || {},
-      gate: String(record.gate || ""),
-      decision: String(record.decision || ""),
-      reasonCode: String(record.reasonCode || ""),
-      subject: record.subject || {},
-      resource: record.resource || {},
-      environment: record.environment || {},
-      evidence: Array.isArray(record.evidence) ? record.evidence : [],
-      occurredAt: String(record.occurredAt || ""),
-      previousRecordDigest: String(record.previousRecordDigest || ""),
-      recordDigest: String(record.recordDigest || "")
-    }))
-  };
-  const redactedEnvelope = redactOperationAuditValue(compactEnvelope);
-  return {
-    anchorDigest: String(envelope.operationAnchorDigest || ""),
-    lastRecordDigest: String(records.at(-1)?.recordDigest || ""),
-    gateCount: records.length,
-    envelope: truncateOperationAuditJson(redactedEnvelope)
-  };
-}
+const PROJECTED_RECORD_VERSION = "meshrix-operation-audit-projection-v1";
+const PROJECTED_RECORD_KEYS: ReadonlySet<string> = new Set([
+  "projectionVersion",
+  "auditId",
+  "traceId",
+  "requestId",
+  "tenantId",
+  "decisionId",
+  "proofId",
+  "operationId",
+  "transport",
+  "actorJson",
+  "risk",
+  "readOnly",
+  "status",
+  "durationMs",
+  "inputHash",
+  "redactedInputJson",
+  "redactedOutputSummaryJson",
+  "error",
+  "riskControlAnchorDigest",
+  "riskControlLastRecordDigest",
+  "riskControlGateCount",
+  "riskControlEnvelopeJson",
+  "createdAt",
+  "idempotencyBindingHmac"
+]);
 
-function normalizeOperationAuditRecord(entry: DataRecord = {}, {
-  auditId,
-  fallbackCreatedAt = ""
-}: { auditId: string; fallbackCreatedAt?: string }): OperationAuditRecord {
-  const input = entry.input ?? {};
-  const inputRecord = asRecord(input);
-  const actor = actorFrom(asRecord(entry.actor));
-  const riskControl = riskControlAuditSnapshot(entry.riskControl || entry.riskControlEnvelope || null);
-  const decisionId = String(entry.decisionId || entry.authorizationDecisionId || "");
-  const proofId = String(entry.proofId || entry.ledgerEventId || "");
-  const canonicalReference = Boolean(decisionId || proofId);
+function projectedOperationAuditRecord(entry: DataRecord = {}): OperationAuditRecord {
+  if (
+    entry.projectionVersion !== PROJECTED_RECORD_VERSION ||
+    Object.keys(entry).some((key) => !PROJECTED_RECORD_KEYS.has(key)) ||
+    !/^hmac-sha256:v1:[a-f0-9]{64}$/u.test(String(entry.traceId || "")) && Boolean(entry.traceId) ||
+    !/^hmac-sha256:v1:[a-f0-9]{64}$/u.test(String(entry.requestId || "")) && Boolean(entry.requestId) ||
+    !/^hmac-sha256:v1:[a-f0-9]{64}$/u.test(String(entry.tenantId || "")) && Boolean(entry.tenantId) ||
+    !/^hmac-sha256:v1:[a-f0-9]{64}$/u.test(String(entry.decisionId || "")) && Boolean(entry.decisionId) ||
+    !/^hmac-sha256:v1:[a-f0-9]{64}$/u.test(String(entry.proofId || "")) && Boolean(entry.proofId) ||
+    !/^hmac-sha256:v1:[a-f0-9]{64}$/u.test(String(entry.inputHash || "")) ||
+    !/^hmac-sha256:v1:[a-f0-9]{64}$/u.test(String(entry.idempotencyBindingHmac || ""))
+  ) {
+    throw Object.assign(new Error("Operation audit entry is not privacy-projected."), {
+      code: "operation_audit_projection_required"
+    });
+  }
   return {
-    auditId,
+    auditId: String(entry.auditId || ""),
     traceId: String(entry.traceId || ""),
     requestId: String(entry.requestId || ""),
-    tenantId: firstString(
-      entry.tenantId,
-      asRecord(entry.tenant).tenantId,
-      actor.tenantId,
-      inputRecord.tenantId,
-      inputRecord["tenant-id"]
-    ),
-    decisionId,
-    proofId,
+    tenantId: String(entry.tenantId || ""),
+    decisionId: String(entry.decisionId || ""),
+    proofId: String(entry.proofId || ""),
     operationId: String(entry.operationId || ""),
     transport: String(entry.transport || "unknown"),
-    actorJson: JSON.stringify(actor),
+    actorJson: String(entry.actorJson || "{}"),
     risk: String(entry.risk || ""),
     readOnly: entry.readOnly ? 1 : 0,
     status: String(entry.status || ""),
     durationMs: Math.max(0, Number(entry.durationMs || 0)),
-    inputHash: hashValue(input),
-    redactedInputJson: JSON.stringify(redactOperationAuditValue(input)),
-    redactedOutputSummaryJson: JSON.stringify(summarizeOutput(entry.output)),
-    error: canonicalReference
-      ? ""
-      : String(entry.error || "").replace(ABSOLUTE_PATH_PATTERN, "<redacted-path>").slice(0, 2000),
-    riskControlAnchorDigest: riskControl.anchorDigest,
-    riskControlLastRecordDigest: riskControl.lastRecordDigest,
-    riskControlGateCount: riskControl.gateCount,
-    riskControlEnvelopeJson: JSON.stringify(riskControl.envelope),
-    createdAt: String(entry.createdAt || fallbackCreatedAt || nowIso())
+    inputHash: String(entry.inputHash),
+    redactedInputJson: String(entry.redactedInputJson || "{}"),
+    redactedOutputSummaryJson: String(entry.redactedOutputSummaryJson || "{}"),
+    error: String(entry.error || ""),
+    riskControlAnchorDigest: String(entry.riskControlAnchorDigest || ""),
+    riskControlLastRecordDigest: String(entry.riskControlLastRecordDigest || ""),
+    riskControlGateCount: Math.max(0, Number(entry.riskControlGateCount || 0)),
+    riskControlEnvelopeJson: String(entry.riskControlEnvelopeJson || "{}"),
+    createdAt: String(entry.createdAt || ""),
+    idempotencyBindingHmac: String(entry.idempotencyBindingHmac)
   };
 }
 
@@ -554,8 +486,16 @@ function operationAuditRecordValues(record: OperationAuditRecord): SqliteValue[]
     record.riskControlLastRecordDigest,
     record.riskControlGateCount,
     record.riskControlEnvelopeJson,
-    record.createdAt
+    record.createdAt,
+    record.idempotencyBindingHmac
   ];
+}
+
+function operationAuditRecordBytes(record: OperationAuditRecord): number {
+  return AUDIT_RECORD_FIXED_BYTES + operationAuditRecordValues(record).reduce<number>(
+    (total, value) => total + Buffer.byteLength(String(value ?? ""), "utf8"),
+    0
+  );
 }
 
 function canonicalStoredJson(value: unknown): string | null {
@@ -604,41 +544,9 @@ function normalizedOperationAuditRow(row: OperationAuditRow | null | undefined):
     riskControlLastRecordDigest: row.risk_control_last_record_digest,
     riskControlGateCount: Number(row.risk_control_gate_count),
     riskControlEnvelopeJson,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    idempotencyBindingHmac: String(row.idempotency_binding_hmac || "")
   };
-}
-
-function operationAuditRecordsEqual(row: OperationAuditRow, record: OperationAuditRecord): boolean {
-  const stored = normalizedOperationAuditRow(row);
-  const normalizedRecord = normalizedOperationAuditRow({
-    audit_id: record.auditId,
-    trace_id: record.traceId,
-    request_id: record.requestId,
-    tenant_id: record.tenantId,
-    decision_id: record.decisionId,
-    proof_id: record.proofId,
-    operation_id: record.operationId,
-    transport: record.transport,
-    actor_json: record.actorJson,
-    risk: record.risk,
-    read_only: record.readOnly,
-    status: record.status,
-    duration_ms: record.durationMs,
-    input_hash: record.inputHash,
-    redacted_input_json: record.redactedInputJson,
-    redacted_output_summary_json: record.redactedOutputSummaryJson,
-    error: record.error,
-    risk_control_anchor_digest: record.riskControlAnchorDigest,
-    risk_control_last_record_digest: record.riskControlLastRecordDigest,
-    risk_control_gate_count: record.riskControlGateCount,
-    risk_control_envelope_json: record.riskControlEnvelopeJson,
-    created_at: record.createdAt
-  });
-  return (
-    stored !== null &&
-    normalizedRecord !== null &&
-    stableJson(stored) === stableJson(normalizedRecord)
-  );
 }
 
 function projectOperationAuditRow(row: OperationAuditRow): OperationAuditItem {
@@ -670,26 +578,285 @@ function projectOperationAuditRow(row: OperationAuditRow): OperationAuditItem {
   };
 }
 
-function openOperationAuditDatabase(rootPath: string): {
+function projectionMeta(db: Database.Database): OperationAuditProjectionMeta | null {
+  const row = db.prepare<[], OperationAuditProjectionMeta>(`
+    SELECT schema_version, projection_key_id, state, cursor_rowid
+    FROM ${AUDIT_PROJECTION_META_TABLE}
+    WHERE singleton = 1
+  `).get();
+  return row || null;
+}
+
+function updateProjectionState(
+  db: Database.Database,
+  state: OperationAuditProjectionState,
+  cursorRowId: number
+): void {
+  db.prepare<[string, number]>(`
+    UPDATE ${AUDIT_PROJECTION_META_TABLE}
+    SET state = ?, cursor_rowid = ?
+    WHERE singleton = 1
+  `).run(state, cursorRowId);
+}
+
+function checkpointTruncate(db: Database.Database): void {
+  const result = db.pragma("wal_checkpoint(TRUNCATE)") as Array<Record<string, unknown>>;
+  const status = Array.isArray(result) ? asRecord(result[0]) : {};
+  if (Number(status.busy || 0) !== 0) {
+    throw Object.assign(new Error("Operation audit privacy cleanup could not truncate its WAL."), {
+      code: "operation_audit_projection_cleanup_busy"
+    });
+  }
+}
+
+function projectRetentionPolicyFile(rootPath: string, key: Uint8Array, keyId: string): void {
+  const policyPath = path.join(rootPath, "audit-retention.json");
+  let source: DataRecord;
+  try {
+    source = asRecord(JSON.parse(fs.readFileSync(policyPath, "utf8")));
+  } catch (error: unknown) {
+    if (asRecord(error).code === "ENOENT") return;
+    throw Object.assign(new Error("Operation audit retention policy could not be projected."), {
+      code: "operation_audit_projection_retention_invalid"
+    });
+  }
+  const existingVersion = String(source.operationAuditProjectionVersion || "");
+  const existingKeyId = String(source.operationAuditProjectionKeyId || "");
+  if (existingVersion === AUDIT_PROJECTION_VERSION) {
+    if (existingKeyId !== keyId) {
+      throw Object.assign(new Error("Operation audit retention policy key does not match stored records."), {
+        code: "operation_audit_projection_key_mismatch"
+      });
+    }
+    return;
+  }
+  if (existingVersion || existingKeyId) {
+    throw Object.assign(new Error("Operation audit retention policy projection metadata is invalid."), {
+      code: "operation_audit_projection_retention_invalid"
+    });
+  }
+  const projected = projectOperationAuditRetentionPolicy(source, key);
+  const serialized = `${JSON.stringify({
+    ...projected,
+    operationAuditProjectionVersion: AUDIT_PROJECTION_VERSION,
+    operationAuditProjectionKeyId: keyId
+  }, null, 2)}\n`;
+  const tempPath = path.join(rootPath, `.audit-retention.${process.pid}.${crypto.randomUUID()}.tmp`);
+  try {
+    fs.writeFileSync(tempPath, serialized, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    fs.chmodSync(tempPath, 0o600);
+    fs.renameSync(tempPath, policyPath);
+    fs.chmodSync(policyPath, 0o600);
+  } catch (error: unknown) {
+    fs.rmSync(tempPath, { force: true });
+    throw error;
+  }
+}
+
+function finishProjectionRemanenceCleanup(
+  db: Database.Database,
+  rootPath: string,
+  key: Uint8Array,
+  keyId: string
+): void {
+  for (;;) {
+    const meta = projectionMeta(db);
+    if (!meta) {
+      throw Object.assign(new Error("Operation audit projection metadata is missing."), {
+        code: "operation_audit_projection_state_invalid"
+      });
+    }
+    if (meta.state === "ready") return;
+    if (meta.state === "cleanup_checkpoint_before") {
+      checkpointTruncate(db);
+      updateProjectionState(db, "cleanup_vacuum_pending", 0);
+      continue;
+    }
+    if (meta.state === "cleanup_vacuum_pending") {
+      db.pragma("secure_delete = ON");
+      db.exec("VACUUM");
+      updateProjectionState(db, "cleanup_checkpoint_after", 0);
+      continue;
+    }
+    if (meta.state === "cleanup_checkpoint_after") {
+      checkpointTruncate(db);
+      updateProjectionState(db, "cleanup_retention_policy_pending", 0);
+      continue;
+    }
+    if (meta.state === "cleanup_retention_policy_pending") {
+      projectRetentionPolicyFile(rootPath, key, keyId);
+      db.pragma("secure_delete = OFF");
+      updateProjectionState(db, "ready", 0);
+      continue;
+    }
+    throw Object.assign(new Error("Operation audit projection migration is in an invalid state."), {
+      code: "operation_audit_projection_state_invalid"
+    });
+  }
+}
+
+function migrateOperationAuditProjection(
+  db: Database.Database,
+  rootPath: string,
+  key: Uint8Array,
+  keyId: string
+): void {
+  db.pragma("secure_delete = ON");
+  const selectBatch = db.prepare<[number, number], OperationAuditRow & { projection_rowid: number }>(`
+    SELECT rowid AS projection_rowid, *
+    FROM operation_audit_log
+    WHERE rowid > ?
+    ORDER BY rowid ASC
+    LIMIT ?
+  `);
+  const updateProjected = db.prepare<SqliteValue[]>(`
+    UPDATE operation_audit_log
+    SET trace_id = ?, request_id = ?, tenant_id = ?, decision_id = ?, proof_id = ?,
+        operation_id = ?, transport = ?, actor_json = ?, risk = ?, read_only = ?,
+        status = ?, duration_ms = ?, input_hash = ?, redacted_input_json = ?,
+        redacted_output_summary_json = ?, error = ?, risk_control_anchor_digest = ?,
+        risk_control_last_record_digest = ?, risk_control_gate_count = ?,
+        risk_control_envelope_json = ?, created_at = ?, record_bytes = ?,
+        idempotency_binding_hmac = ?
+    WHERE audit_id = ?
+  `);
+  const projectBatch = db.transaction((): "more" | "cleanup" => {
+    const meta = projectionMeta(db);
+    if (!meta || meta.state !== "projecting") {
+      throw Object.assign(new Error("Operation audit projection migration is in an invalid state."), {
+        code: "operation_audit_projection_state_invalid"
+      });
+    }
+    const rows = selectBatch.all(meta.cursor_rowid, AUDIT_PROJECTION_BATCH_SIZE);
+    if (rows.length === 0) {
+      db.exec(`
+        UPDATE operation_audit_meta
+        SET row_count = (SELECT COUNT(*) FROM operation_audit_log),
+            logical_bytes = (SELECT COALESCE(SUM(record_bytes), 0) FROM operation_audit_log)
+        WHERE singleton = 1
+      `);
+      updateProjectionState(db, "cleanup_checkpoint_before", 0);
+      return "cleanup";
+    }
+    for (const row of rows) {
+      const legacy = normalizedOperationAuditRow(row);
+      if (!legacy) {
+        throw Object.assign(new Error("Operation audit migration found an invalid legacy row."), {
+          code: "operation_audit_projection_legacy_row_invalid"
+        });
+      }
+      const projected = projectLegacyOperationAuditRecord(legacy, key);
+      const values = operationAuditRecordValues(projected);
+      const recordBytes = operationAuditRecordBytes(projected);
+      const [auditId, traceId, requestId, tenantId, decisionId, proofId, operationId, transport,
+        actorJson, risk, readOnly, status, durationMs, inputHash, redactedInputJson,
+        redactedOutputSummaryJson, error, riskControlAnchorDigest, riskControlLastRecordDigest,
+        riskControlGateCount, riskControlEnvelopeJson, createdAt, idempotencyBindingHmac] = values;
+      updateProjected.run(
+        traceId, requestId, tenantId, decisionId, proofId, operationId, transport, actorJson,
+        risk, readOnly, status, durationMs, inputHash, redactedInputJson, redactedOutputSummaryJson,
+        error, riskControlAnchorDigest, riskControlLastRecordDigest, riskControlGateCount,
+        riskControlEnvelopeJson, createdAt, recordBytes, idempotencyBindingHmac, auditId
+      );
+    }
+    updateProjectionState(db, "projecting", Number(rows.at(-1)?.projection_rowid || meta.cursor_rowid));
+    return "more";
+  });
+
+  for (;;) {
+    const state = projectBatch.immediate();
+    if (state === "cleanup") break;
+  }
+  finishProjectionRemanenceCleanup(db, rootPath, key, keyId);
+}
+
+function ensureOperationAuditProjection(
+  db: Database.Database,
+  rootPath: string,
+  key: Uint8Array,
+  keyId: string,
+  inspectionState: "empty" | "legacy_unprojected" | "projected"
+): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ${AUDIT_PROJECTION_META_TABLE} (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      schema_version TEXT NOT NULL,
+      projection_key_id TEXT NOT NULL,
+      state TEXT NOT NULL,
+      cursor_rowid INTEGER NOT NULL DEFAULT 0 CHECK (cursor_rowid >= 0)
+    )
+  `);
+  let meta = projectionMeta(db);
+  if (!meta) {
+    if (inspectionState === "projected") {
+      throw Object.assign(new Error("Operation audit projection metadata disappeared during startup."), {
+        code: "operation_audit_projection_state_invalid"
+      });
+    }
+    const initialState: OperationAuditProjectionState = inspectionState === "empty"
+      ? "cleanup_retention_policy_pending"
+      : "projecting";
+    db.prepare<[string, string, string]>(`
+      INSERT INTO ${AUDIT_PROJECTION_META_TABLE} (
+        singleton, schema_version, projection_key_id, state, cursor_rowid
+      ) VALUES (1, ?, ?, ?, 0)
+    `).run(AUDIT_PROJECTION_VERSION, keyId, initialState);
+    meta = projectionMeta(db);
+  }
+  if (
+    !meta ||
+    meta.schema_version !== AUDIT_PROJECTION_VERSION ||
+    meta.projection_key_id !== keyId ||
+    !["projecting", "cleanup_checkpoint_before", "cleanup_vacuum_pending", "cleanup_checkpoint_after", "cleanup_retention_policy_pending", "ready"].includes(meta.state)
+  ) {
+    throw Object.assign(new Error("Operation audit projection key or metadata does not match the stored records."), {
+      code: meta?.projection_key_id !== keyId
+        ? "operation_audit_projection_key_mismatch"
+        : "operation_audit_projection_state_invalid"
+    });
+  }
+  if (meta.state === "ready") {
+    return;
+  }
+  if (meta.state === "cleanup_retention_policy_pending") {
+    finishProjectionRemanenceCleanup(db, rootPath, key, keyId);
+    return;
+  }
+  migrateOperationAuditProjection(db, rootPath, key, keyId);
+}
+
+function openOperationAuditDatabase(
+  rootPath: string,
+  key: Uint8Array,
+  keyId: string
+): {
   db: Database.Database;
   insertStmt: Database.Statement<SqliteValue[]>;
   databasePath: string;
 } {
-  const databasePath = ensurePrivateSqliteLocation(path.join(rootPath, "operation-audit.sqlite"));
+  const rawDatabasePath = path.join(rootPath, "operation-audit.sqlite");
+  const inspection = inspectOperationAuditProjectionDatabase(rawDatabasePath);
+  if (inspection.state === "projected" && inspection.projectionKeyId !== keyId) {
+    throw Object.assign(new Error("Operation audit projection key does not match the stored records."), {
+      code: "operation_audit_projection_key_mismatch"
+    });
+  }
+  const databasePath = ensurePrivateSqliteLocation(rawDatabasePath);
   const state: { db: Database.Database | null } = { db: null };
   try {
     return withPrivateFileCreationMask(() => {
       const openedDatabase = openSqliteDatabase(databasePath) as Database.Database;
       state.db = openedDatabase;
       ensureSchema(openedDatabase);
+      ensureOperationAuditProjection(openedDatabase, rootPath, key, keyId, inspection.state);
       ensurePrivateSqliteLocation(databasePath);
       const insertStmt = openedDatabase.prepare<SqliteValue[]>(`
       INSERT INTO operation_audit_log (
         audit_id, trace_id, request_id, tenant_id, decision_id, proof_id, operation_id, transport, actor_json, risk, read_only, status, duration_ms,
         input_hash, redacted_input_json, redacted_output_summary_json, error,
         risk_control_anchor_digest, risk_control_last_record_digest, risk_control_gate_count, risk_control_envelope_json,
-        created_at, record_bytes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_at, idempotency_binding_hmac, record_bytes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       return { db: openedDatabase, insertStmt, databasePath };
     });
@@ -707,10 +874,33 @@ function openOperationAuditDatabase(rootPath: string): {
  * Worker-private synchronous owner. Runtime code must reach this store only
  * through the typed operation-audit SQLite execution lane.
  */
-export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath: string }): OperationAuditWorkerStore {
+export function createOperationAuditWorkerStore({
+  userDataPath,
+  projectionKey: suppliedProjectionKey,
+  projectionKeyId
+}: { userDataPath: string; projectionKey: Uint8Array; projectionKeyId: string }): OperationAuditWorkerStore {
+  const projectionKey = Buffer.from(suppliedProjectionKey);
+  if (
+    projectionKey.length !== 32 ||
+    operationAuditProjectionKeyId(projectionKey) !== projectionKeyId
+  ) {
+    projectionKey.fill(0);
+    throw Object.assign(new Error("Operation audit projection key is invalid."), {
+      code: "operation_audit_projection_key_invalid"
+    });
+  }
   const rootPath = path.join(userDataPath, "security");
-  ensurePrivateDir(rootPath);
-  const { db, insertStmt } = openOperationAuditDatabase(rootPath);
+  let opened: ReturnType<typeof openOperationAuditDatabase>;
+  try {
+    ensurePrivateDir(rootPath);
+    opened = openOperationAuditDatabase(rootPath, projectionKey, projectionKeyId);
+  } catch (error: unknown) {
+    projectionKey.fill(0);
+    throw error;
+  }
+  const { db, insertStmt } = opened;
+  try {
+  const databasePageSize = Number(db.pragma("page_size", { simple: true }) || 4096);
   const retentionPolicyPath = path.join(rootPath, "audit-retention.json");
   const deleteExpiredStmt = db.prepare<[string, number]>(`
     DELETE FROM operation_audit_log
@@ -777,18 +967,30 @@ export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath
   }
 
   function readRetentionPolicy(): RetentionPolicy {
+    let source: DataRecord;
     try {
-      return normalizeRetentionPolicy(asRecord(JSON.parse(fs.readFileSync(retentionPolicyPath, "utf8"))));
-    } catch {
-      return normalizeRetentionPolicy();
+      source = asRecord(JSON.parse(fs.readFileSync(retentionPolicyPath, "utf8")));
+    } catch (error: unknown) {
+      if (asRecord(error).code === "ENOENT") return normalizeRetentionPolicy();
+      throw Object.assign(new Error("Operation audit retention policy is unavailable."), {
+        code: "operation_audit_projection_retention_invalid"
+      });
     }
+    if (
+      source.operationAuditProjectionVersion !== AUDIT_PROJECTION_VERSION ||
+      source.operationAuditProjectionKeyId !== projectionKeyId
+    ) {
+      throw Object.assign(new Error("Operation audit retention policy projection does not match its database."), {
+        code: "operation_audit_projection_retention_invalid"
+      });
+    }
+    return normalizeRetentionPolicy(source);
   }
 
   let retentionPolicy = readRetentionPolicy();
 
   function configureDatabaseCapacity(policy: RetentionPolicy): void {
-    const pageSize = Number(db.pragma("page_size", { simple: true }) || 4096);
-    const maxPages = Math.max(1, Math.floor(policy.maxDatabaseBytes / pageSize));
+    const maxPages = Math.max(1, Math.floor(policy.maxDatabaseBytes / databasePageSize));
     db.pragma(`max_page_count = ${maxPages}`);
   }
 
@@ -802,10 +1004,9 @@ export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath
   }
 
   function activeDatabaseBytes(): number {
-    const pageSize = Number(db.pragma("page_size", { simple: true }) || 4096);
     const pageCount = Number(db.pragma("page_count", { simple: true }) || 0);
     const freePages = Number(db.pragma("freelist_count", { simple: true }) || 0);
-    return Math.max(0, pageCount - freePages) * pageSize;
+    return Math.max(0, pageCount - freePages) * databasePageSize;
   }
 
   function maintainStorageAfterDelete(deletedCount: number): void {
@@ -884,12 +1085,15 @@ export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath
     policy: RetentionPolicy
   ): IdempotentAppendOutcome => {
     const existing = selectByIdStmt.get(auditId);
-    const record = normalizeOperationAuditRecord(entry, {
-      auditId,
-      fallbackCreatedAt: existing?.created_at || ""
-    });
+    const record = projectedOperationAuditRecord(entry);
+    if (record.auditId !== auditId) {
+      throw new OperationAuditIdRequiredError();
+    }
     if (existing) {
-      if (!operationAuditRecordsEqual(existing, record)) {
+      if (
+        existing.idempotency_binding_hmac !== record.idempotencyBindingHmac ||
+        (record.createdAt && existing.created_at !== record.createdAt)
+      ) {
         throw new OperationAuditIdempotencyConflictError(auditId);
       }
       return {
@@ -900,6 +1104,7 @@ export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath
       };
     }
 
+    if (!record.createdAt) record.createdAt = nowIso();
     const values = operationAuditRecordValues(record);
     const bytes = recordBytes(values);
     if (bytes > policy.maxLogicalBytes) {
@@ -914,14 +1119,16 @@ export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath
   });
 
   function append(entry: DataRecord = {}): { auditId: string; maintenance: { deletedCount: number } } {
-    const auditId = String(entry.auditId || `op_audit_${crypto.randomUUID()}`);
-    const record = normalizeOperationAuditRecord(entry, { auditId });
+    const record = projectedOperationAuditRecord(entry);
+    const auditId = record.auditId;
+    if (!auditId) {
+      throw new Error("Operation audit append requires a projected audit identifier.");
+    }
     const values = operationAuditRecordValues(record);
     const bytes = recordBytes(values);
     if (bytes > retentionPolicy.maxLogicalBytes) {
       throw new OperationAuditCapacityError("record_bytes", retentionPolicy.maxLogicalBytes, bytes);
     }
-    configureDatabaseCapacity(retentionPolicy);
     let outcome: AppendOutcome;
     try {
       outcome = appendTransaction({ values, recordBytes: bytes }, retentionPolicy);
@@ -961,7 +1168,6 @@ export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath
       throw new OperationAuditIdRequiredError();
     }
     const auditId = entry.auditId;
-    configureDatabaseCapacity(retentionPolicy);
     let outcome: IdempotentAppendOutcome;
     try {
       outcome = appendIdempotentTransaction.immediate(entry, auditId, retentionPolicy);
@@ -1064,7 +1270,11 @@ export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath
       updatedAt: nowIso(),
       updatedBy: redactOperationAuditValue(input.updatedBy || {})
     });
-    fs.writeFileSync(retentionPolicyPath, `${JSON.stringify(policy, null, 2)}\n`, { mode: 0o600 });
+    fs.writeFileSync(retentionPolicyPath, `${JSON.stringify({
+      ...policy,
+      operationAuditProjectionVersion: AUDIT_PROJECTION_VERSION,
+      operationAuditProjectionKeyId: projectionKeyId
+    }, null, 2)}\n`, { mode: 0o600 });
     retentionPolicy = policy;
     configureDatabaseCapacity(retentionPolicy);
     return policy;
@@ -1175,6 +1385,14 @@ export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath
   return {
     db,
     rootPath,
+    ready(): void {
+      const meta = projectionMeta(db);
+      if (!meta || meta.state !== "ready" || meta.projection_key_id !== projectionKeyId) {
+        throw Object.assign(new Error("Operation audit privacy projection is not ready."), {
+          code: "operation_audit_projection_state_invalid"
+        });
+      }
+    },
     append,
     appendIdempotent,
     getById,
@@ -1185,9 +1403,22 @@ export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath
     exportRedacted,
     getTrace,
     close(): void {
-      db.close();
+      try {
+        db.close();
+      } finally {
+        projectionKey.fill(0);
+      }
     }
   };
+  } catch (error: unknown) {
+    try {
+      db.close();
+    } catch {
+      // Preserve the store initialization failure.
+    }
+    projectionKey.fill(0);
+    throw error;
+  }
 }
 
 export default createOperationAuditWorkerStore;

@@ -17,22 +17,22 @@
  *   - fresh-install recovery on a second custody/config context restores the
  *     connection using only the user-held recovery text, and the fresh
  *     device's pinned mutual-TLS channel establishes (mTLS rebind);
- *   - rotation-begin travels the recovery-purpose channel; per-endpoint
- *     acknowledgement completes only when every endpoint acknowledged;
+ *   - account-managed recovery-key rotation preserves the active snapshot
+ *     until the exact writer replacement receives fresh account approval;
  *   - endpoint silence/transport drop is reported honestly (unreachable /
  *     pending — never fabricated);
  *   - a device the endpoint never enrolled cannot establish the inner
  *     channel (normal calls stay unreachable before fresh enrollment);
  *   - vault write failures surface as backup_unreadable, never as success.
  */
-import { createHash, generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 
-import { createRotationState, parsePrivateRelayRecoveryMessage, parseRecoveryProof, parseRecoveryRequest, parseRotationBegin } from "@meshrix/contracts/private-relay";
+import { parsePrivateRelayRecoveryMessage, parseRecoveryProof, parseRecoveryRequest } from "@meshrix/contracts/private-relay";
 import type { EndpointDeviceRecord, EndpointIdentityStore, RelayFrameDuplex, InnerTlsChannel, RecoverySigner } from "@meshrix/gateway/private-endpoint";
 import {
   PrivateRelaySession,
@@ -49,11 +49,13 @@ import {
   encodePairingInvite,
   pairingProofTranscript,
   parseRecoveryText,
-  publicKeyFingerprint,
-  publicKeyFromRawBase64Url,
   rawPublicKeyBase64Url,
   signEd25519,
   verifyEd25519,
+  type CustodyAdapter,
+  type PairingCompletionRequest,
+  type PairingCompletionReceipt,
+  type PairingEndpointPort,
   type PairingInvite,
   type RecoveryMaterial,
   type VaultTransport
@@ -75,7 +77,12 @@ import {
   ROUTE,
   TENANT,
   VAULT_ID,
+  GUI_TEST_ACCOUNT,
   inviteFixture,
+  pairingAccountFetch,
+  serviceConfigFixture,
+  seedGuiTestAccount,
+  testOsCustody,
   waitFor,
   type WireMessage
 } from "./helpers.ts";
@@ -151,9 +158,6 @@ class EndpointHost {
   readonly innerFailures: unknown[] = [];
   /** Every wire kind the endpoint surface observed — diagnosable silence. */
   readonly received: string[] = [];
-  /** Whether rotation-begin answers with the endpoint route acknowledged. */
-  acknowledgeRotations = true;
-
   #endpointDevice: EndpointDeviceRecord | undefined;
   #pump: RelayFrameDuplex | null = null;
   #channel: InnerTlsChannel | null = null;
@@ -243,29 +247,6 @@ class EndpointHost {
         if (result) this.transport.send(result as Readonly<Record<string, unknown>>);
         return;
       }
-      case "rotation-begin": {
-        const begin = parseRotationBegin(message);
-        if (!begin) return;
-        const staged = this.identity.stageRecoveryRotation({
-          recoveryKeyId: String(begin.recoveryKeyId),
-          candidateKeyId: candidateKeyIdFor(String(begin.candidatePublicKey)),
-          candidatePublicKey: String(begin.candidatePublicKey),
-          principalRef: String(begin.principalRef),
-          currentGeneration: Number(begin.currentGeneration),
-          candidateGeneration: Number(begin.candidateGeneration)
-        });
-        const acknowledged = staged.accepted && this.acknowledgeRotations ? [ROUTE] : [];
-        const state = acknowledged.length > 0 ? "acknowledging" : "staged";
-        // Canonical constructor — the recovery parsers enforce exact keys.
-        this.transport.send(createRotationState({
-          rotationId: String(begin.rotationId),
-          state,
-          acknowledged,
-          pending: acknowledged.length === 0 ? [ROUTE] : [],
-          globalComplete: false
-        }) as WireMessage);
-        return;
-      }
       default:
         return;
     }
@@ -320,20 +301,13 @@ class EndpointHost {
   }
 }
 
-/** Candidate keyId is the app-derived `rckey.<sha256(rawPub)[0:16]>` form (see `deriveRecoveryMaterial`). */
-function candidateKeyIdFor(publicKeyB64Url: string): string {
-  const raw = Buffer.from(publicKeyB64Url, "base64url");
-  const fingerprint = createHash("sha256").update(raw).digest().subarray(0, 16);
-  return `rckey.${Buffer.from(fingerprint).toString("base64url")}`;
-}
-
 /* ------------------------------------------------------------------ */
 /* Store-backed pairing/admin surface — the endpoint admin truth.       */
 /* ------------------------------------------------------------------ */
 
-class StoreBackedPairingChannel implements PairingChannelLike {
+class StoreBackedPairingChannel implements PairingChannelLike, PairingEndpointPort {
   readonly #identity: EndpointIdentityStore;
-  readonly relayCredential = `rc.test.${randomBytes(6).toString("base64url")}`;
+  readonly relayCredential = `rc.test.${randomBytes(32).toString("base64url")}`;
   readonly seenDeviceIds: string[] = [];
   #challengeId: string | null = null;
   #enrolledDeviceId: string | null = null;
@@ -341,6 +315,13 @@ class StoreBackedPairingChannel implements PairingChannelLike {
 
   constructor(identity: EndpointIdentityStore) {
     this.#identity = identity;
+  }
+
+  async connect(): Promise<void> {}
+  close(): void {}
+
+  devicePublicKeyFor(deviceId: string): string | null {
+    return this.#identity.device(deviceId)?.pairedIdentityKey ?? null;
   }
 
   enrollmentExtras() {
@@ -352,7 +333,7 @@ class StoreBackedPairingChannel implements PairingChannelLike {
     };
   }
 
-  async beginPairing(input: { invite: PairingInvite; deviceId: string; devicePublicKey: string }) {
+  async beginPairing(input: Parameters<PairingEndpointPort["beginPairing"]>[0]): ReturnType<PairingEndpointPort["beginPairing"]> {
     if (this.failBegin === "unreachable") {
       const { entryError } = await import("@meshrix/entry");
       throw entryError("endpoint_unreachable", "pairing surface offline");
@@ -362,18 +343,20 @@ class StoreBackedPairingChannel implements PairingChannelLike {
       outcome: "challenge" as const,
       challengeId: this.#challengeId,
       nonce: `pn.${randomBytes(6).toString("base64url")}`,
-      expiresAt: "2099-01-01T00:00:00.000Z"
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      account: GUI_TEST_ACCOUNT,
+      target: {
+        tenantId: input.invite.tenantId,
+        routeId: input.invite.endpointRouteId,
+        deviceId: input.deviceId,
+        devicePublicKey: input.devicePublicKey,
+        grantRef: `grant.${input.deviceId}`,
+        scopes: ["mcp:invoke"]
+      }
     };
   }
 
-  async completePairing(input: {
-    invite: PairingInvite;
-    challengeId: string;
-    deviceId: string;
-    devicePublicKey: string;
-    capabilityGrantRef: string;
-    signature: string;
-  }) {
+  async completePairing(input: PairingCompletionRequest): Promise<PairingCompletionReceipt | { outcome: "refused"; refusal: string }> {
     if (input.challengeId !== this.#challengeId) {
       return { outcome: "refused" as const, refusal: "challenge_mismatch" };
     }
@@ -382,31 +365,32 @@ class StoreBackedPairingChannel implements PairingChannelLike {
       inviteId: input.invite.inviteId,
       endpointRouteId: input.invite.endpointRouteId,
       deviceId: input.deviceId,
-      devicePublicKey: input.devicePublicKey
+      devicePublicKey: input.devicePublicKey,
+      entryPeerIdentity: input.entryPeerIdentity
     });
     if (!verifyEd25519({ publicKey: input.devicePublicKey, signature: input.signature, transcript })) {
       return { outcome: "refused" as const, refusal: "proof_invalid" };
     }
-    this.#identity.enroll({
-      deviceId: input.deviceId,
-      routeId: input.invite.endpointRouteId,
-      tenantId: input.invite.tenantId,
-      trustBinding: {
-        schemaVersion: "v0.0.1:private-relay:recovery-1",
-        kind: "endpoint-trust-binding",
-        pairedIdentityKey: input.devicePublicKey,
-        pairedIdentityFingerprint: publicKeyFingerprint(publicKeyFromRawBase64Url(input.devicePublicKey)),
-        mode: input.invite.mode,
-        role: "entry",
-        trustGeneration: 1,
-        endpointPrincipalRef: input.invite.endpointPrincipalRef,
-        capabilityGrantRef: input.capabilityGrantRef,
-        boundRecoveryKeyId: input.invite.recoveryAuthority?.keyId ?? null
-      }
+    const record = this.#identity.enrollAccountDevice({
+      account: input.account,
+      target: input.target,
+      mode: input.invite.mode,
+      entryPeerIdentity: input.entryPeerIdentity
     });
     this.#enrolledDeviceId = input.deviceId;
     this.seenDeviceIds.push(input.deviceId);
-    return { outcome: "enrolled" as const, capabilityGrantRef: `grant.${input.deviceId}` };
+    return {
+      outcome: "enrolled",
+      capabilityGrantRef: input.target.grantRef,
+      admissionGeneration: record.admissionGeneration,
+      revocationRevision: this.#identity.revocationRevision(input.invite.tenantId),
+      endpointPeerIdentity: {
+        peerId: `peer:${input.invite.tenantId}:${input.invite.endpointRouteId}:${input.invite.endpointDeviceId}`,
+        signalDeviceId: 1,
+        registrationId: 1,
+        identityKey: Buffer.alloc(33, 2).toString("base64url")
+      }
+    };
   }
 
   async revokeDevice(input: { deviceId: string }) {
@@ -419,7 +403,7 @@ class StoreBackedPairingChannel implements PairingChannelLike {
     return {
       outcome: "issued" as const,
       deviceId: `dev.entry.fresh.${randomBytes(6).toString("base64url")}`,
-      relayCredential: `rc.fresh.${randomBytes(6).toString("base64url")}`,
+      relayCredential: `rc.fresh.${randomBytes(32).toString("base64url")}`,
       tenantId: TENANT,
       routeId: ROUTE,
       admissionGeneration: 1,
@@ -471,7 +455,7 @@ function makeEndpoint(): EndpointFixture {
 interface GuiFixture {
   service: EntryProductService;
   dir: string;
-  custody: FileCustodyAdapter;
+  custody: CustodyAdapter;
   vault: FakeVault;
   endpoint: EndpointFixture;
   emitted: GuiState[];
@@ -483,14 +467,31 @@ async function makeGuiService(endpoint: EndpointFixture, vault: FakeVault, optio
 } = {}): Promise<GuiFixture> {
   const dir = options.dataDir ?? await mkdtemp(path.join(tmpdir(), "entry-gui-e2e-"));
   dirs.push(dir);
-  const custody = new FileCustodyAdapter({ dataDir: dir, wrapSecret: options.wrapSecret ?? randomBytes(32) });
+  const fileCustody = new FileCustodyAdapter({ dataDir: dir, wrapSecret: options.wrapSecret ?? randomBytes(32) });
+  const custody: CustodyAdapter = testOsCustody(fileCustody);
+  await seedGuiTestAccount(dir, custody);
   const emitted: GuiState[] = [];
   const service = new EntryProductService({
     dataDir: dir,
     appVersion: "9.9.9",
     appExePath: "meshrix-entry-test",
     custody,
+    serviceConfig: serviceConfigFixture(),
+    accountFetch: pairingAccountFetch({
+      accountOrigin: "https://account.gui.invalid",
+      relayAdmission: endpoint.pairing.relayCredential,
+      resolveDevicePublicKey: (deviceId) => endpoint.pairing.devicePublicKeyFor(deviceId),
+      writerGeneration: () => vault.current ? vault.generation + 1 : vault.generation,
+      onVaultWriterRotationComplete: (target) => {
+        const rotation = target.vaultWriterRotation;
+        if (!rotation) return;
+        vault.recoveryVerifier = rotation.recoveryVerifier;
+        vault.writers = [...rotation.writers];
+        vault.generation = rotation.generation;
+      }
+    }),
     pairingChannelFactory: () => endpoint.pairing,
+    pairingRelayChannelFactory: () => endpoint.pairing,
     vaultTransportFactory: (): VaultTransport => vault,
     recoveryChannelFactory: (input) => new EntryRecoveryChannel({
       relaySessionUrl: input.relaySessionUrl,
@@ -525,17 +526,21 @@ function makeVault(material?: RecoveryMaterial): FakeVault {
   });
 }
 
-const INVITE = (spkiPin: string) => encodePairingInvite(inviteFixture({ endpointSpkiPin: spkiPin }));
+const INVITE = (spkiPin: string) => encodePairingInvite(inviteFixture({ endpointSpkiPin: spkiPin, endpointPinRef: spkiPin }));
 
 /** Start → submit invite → confirm → wait for the pinned channel. */
 async function pairAndConnect(fixture: GuiFixture): Promise<string> {
   await fixture.service.start();
   const submitted = await fixture.service.dispatch("pairing.submitInvite", { inviteText: INVITE(fixture.endpoint.tls.spkiPin) });
-  expect(submitted.ok).toBe(true);
-  const confirmed = await fixture.service.dispatch("pairing.confirm");
+  expect(submitted).toMatchObject({ ok: true });
+  const authorization = await fixture.service.dispatch("pairing.confirm");
+  expect(authorization.ok).toBe(true);
+  expect((authorization as { value: GuiState }).value.pairing.phase).toBe("authorization_required");
+  const confirmed = await fixture.service.dispatch("pairing.continue");
   expect(confirmed.ok).toBe(true);
   const state = (confirmed as { value: GuiState }).value;
   const connectionId = state.pairing.enrolledConnectionId as string;
+  expect(state.pairing.phase, state.pairing.refusal ?? "pairing did not finish").toBe("enrolled");
   expect(connectionId).toBeTruthy();
   await waitFor(() => fixture.service.snapshot().connections[0]?.channelEstablished === true, 8_000);
   return connectionId;
@@ -560,7 +565,9 @@ async function setupRecovery(fixture: GuiFixture): Promise<{ recoveryText: strin
   });
   const saved = await fixture.service.dispatch("recovery.confirmSaved");
   expect(saved.ok).toBe(true);
-  expect((saved as { value: GuiState }).value.recovery.state).toBe("ready");
+  const registered = await fixture.service.dispatch("account.checkTransaction");
+  expect(registered.ok).toBe(true);
+  expect((registered as { value: GuiState }).value.recovery.state).toBe("ready");
   return { recoveryText, material };
 }
 
@@ -609,10 +616,11 @@ describe("entry-gui integration — real relay, real vault, real endpoint", () =
 
     const recovered = await gui.service.publishSnapshot();
     expect(recovered.recovery.state).toBe("ready");
-    // Reconcile sees the uncertain write already landed (rev 2) and commits
-    // the fresh snapshot one revision beyond it.
-    expect(recovered.recovery.backup.lastCommittedRevision).toBe(3);
-    expect(vault.current?.revision).toBe(3);
+    // The retry reuses the exact pending ciphertext. The vault recognizes the
+    // already committed write and reports revision 2 without creating a
+    // duplicate snapshot revision.
+    expect(recovered.recovery.backup.lastCommittedRevision).toBe(2);
+    expect(vault.current?.revision).toBe(2);
     await gui.service.stop();
   });
 
@@ -711,90 +719,58 @@ describe("entry-gui integration — real relay, real vault, real endpoint", () =
     void connectionId;
   });
 
-  it("rotation: endpoint ack completes; endpoint silence stays pending — never complete while pending", async () => {
+  it("account-managed recovery rotation preserves the current snapshot until fresh approval", async () => {
     const endpoint = makeEndpoint();
     const vault = makeVault();
     const gui = await makeGuiService(endpoint, vault);
     await pairAndConnect(gui);
-    const { material } = await setupRecovery(gui);
+    const { material: incumbent } = await setupRecovery(gui);
+    const incumbentSnapshot = vault.current;
 
-    // --- Acknowledged path: candidate staged → saved → all endpoints ack → complete.
+    // The personal/account-managed flow creates a local candidate first. It
+    // is not published or active until the user saves it and approves the
+    // exact writer replacement in the account service.
     const begun = await gui.service.dispatch("recovery.beginRotation");
     expect(begun.ok).toBe(true);
     let state = (begun as { value: GuiState }).value;
-    expect(state.recovery.state).toBe("rotation_pending");
-    expect(state.recovery.rotation?.endpoints[0]?.endpointRouteId).toBe(ROUTE);
-
-    await waitFor(() => {
-      const r = gui.service.snapshot().recovery.rotation;
-      return r !== null && r.endpoints.every((e) => e.state === "acknowledged" || e.state === "staged");
-    }, 8_000);
+    expect(state.recovery.state).toBe("awaiting_save");
+    expect(state.recovery.generation).toBe(2);
+    expect(state.recovery.rotation).toBeNull();
 
     const revealed = await gui.service.dispatch("recovery.revealKey");
     expect(revealed.ok).toBe(true);
     const candidateText = (revealed as { value: { recoveryText: string } }).value.recoveryText;
     const candidateMaterial = deriveRecoveryMaterial(parseRecoveryText(candidateText).secret);
-    // The vault must know the candidate writer BEFORE the post-save publish.
-    vault.writers = [writerOf(material), writerOf(candidateMaterial)];
-    vault.recoveryVerifier = verifierOf(candidateMaterial);
+    expect(vault.current).toEqual(incumbentSnapshot);
+    expect(vault.generation).toBe(1);
+    expect(vault.writers.map((writer) => writer.keyId)).toContain(incumbent.writer.keyId);
 
     const confirmed = await gui.service.dispatch("recovery.confirmSaved");
     expect(confirmed.ok).toBe(true);
     state = (confirmed as { value: GuiState }).value;
-    await waitFor(() => {
-      const r = gui.service.snapshot().recovery.rotation;
-      return r === null || r.state === "completed" || r.state === "acknowledging" || r.state === "published";
-    }, 4_000);
-    state = gui.service.snapshot();
-    // After publish + all-ack: rotation completes; the candidate becomes active.
-    await waitFor(() => gui.service.snapshot().recovery.state !== "rotation_pending", 8_000);
-    state = gui.service.snapshot();
-    expect(state.recovery.state).toBe("ready");
-    expect(state.recovery.keyId).toBe(candidateMaterial.signing.keyId);
-    expect(state.recovery.generation).toBe(2);
-    expect(state.recovery.rotation?.state).toBe("completed");
-    // Endpoint store staged the candidate and superseded the incumbent.
-    const authorities = endpoint.identity.recoveryAuthorities();
-    const candidate = authorities.find((a) => a.recoveryKeyId === candidateMaterial.signing.keyId);
-    const incumbent = authorities.find((a) => a.recoveryKeyId === material.signing.keyId);
-    expect(candidate?.state).toBe("active");
-    expect(["rotating", "superseded"]).toContain(incumbent?.state);
+    expect(state.recovery.state).toBe("account_authorization_required");
+    expect(state.recovery.writerRegistration.state).toBe("authorization_required");
+    expect(state.recovery.writerRegistration.candidateGeneration).toBe(2);
+    expect(state.account.transactionPurpose).toBe("step_up");
+    expect(state.account.actionPurpose).toBe("grant_access");
+    expect(vault.current).toEqual(incumbentSnapshot);
+    expect(vault.generation).toBe(1);
+    expect(vault.writers.map((writer) => writer.keyId)).toContain(incumbent.writer.keyId);
+    expect(vault.writers.map((writer) => writer.keyId)).not.toContain(candidateMaterial.writer.keyId);
 
-    // --- Silent path: next rotation never completes while an endpoint is pending.
-    endpoint.host.acknowledgeRotations = false;
-    const second = await gui.service.dispatch("recovery.beginRotation");
-    expect(second.ok).toBe(true);
-    await waitFor(() => {
-      const r = gui.service.snapshot().recovery.rotation;
-      return r !== null && r.endpoints.every((e) => e.state === "staged" || e.state === "unreachable");
-    }, 8_000);
-    state = gui.service.snapshot();
-    expect(state.recovery.state).toBe("rotation_pending");
-    expect(state.recovery.rotation?.endpoints.every((e) => e.state !== "acknowledged")).toBe(true);
+    const blocked = await gui.service.dispatch("recovery.beginRotation");
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.error.code).toBe("account_transaction_pending");
 
-    // Redelivery: replays only the un-acknowledged endpoint — the persisted
-    // rotation-begin is idempotent on the endpoint, and the late ack lands.
-    endpoint.host.acknowledgeRotations = true;
-    const retried = await gui.service.dispatch("recovery.retryRotation");
-    expect(retried.ok).toBe(true);
-    await waitFor(() => {
-      const r = gui.service.snapshot().recovery.rotation;
-      return r !== null && r.endpoints.every((e) => e.state === "acknowledged");
-    }, 8_000);
-
-    // Save the second candidate → publish → all-acked → completes at gen 3.
-    const revealed2 = await gui.service.dispatch("recovery.revealKey");
-    expect(revealed2.ok).toBe(true);
-    const candidate2Text = (revealed2 as { value: { recoveryText: string } }).value.recoveryText;
-    const candidate2Material = deriveRecoveryMaterial(parseRecoveryText(candidate2Text).secret);
-    vault.writers = [writerOf(candidate2Material)];
-    vault.recoveryVerifier = verifierOf(candidate2Material);
-    const confirmed2 = await gui.service.dispatch("recovery.confirmSaved");
-    expect(confirmed2.ok).toBe(true);
-    await waitFor(() => gui.service.snapshot().recovery.rotation?.state === "completed", 8_000);
-    const done = gui.service.snapshot();
-    expect(done.recovery.keyId).toBe(candidate2Material.signing.keyId);
-    expect(done.recovery.generation).toBe(3);
+    const approved = await gui.service.dispatch("account.checkTransaction");
+    expect(approved.ok).toBe(true);
+    const done = (approved as { value: GuiState }).value;
+    expect(done.recovery.state).toBe("ready");
+    expect(done.recovery.keyId).toBe(candidateMaterial.signing.keyId);
+    expect(done.recovery.generation).toBe(2);
+    expect(done.recovery.writerRegistration.state).toBe("complete");
+    expect(vault.current?.generation).toBe(2);
+    expect(vault.current?.revision).toBe((incumbentSnapshot?.revision ?? 0) + 1);
     await gui.service.stop();
   });
 

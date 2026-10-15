@@ -32,9 +32,19 @@ export async function fetchRpc(
 ) {
   const init = { method: "POST", body: JSON.stringify(request), headers, redirect: "manual" as const, signal };
   const literalLoopback = ["127.0.0.1", "[::1]"].includes(new URL(endpoint).hostname);
-  const pinned = remote ? await fetchWithPinnedDns({ url: endpoint, init, maxRedirects: 0,
-    policies: remote.allowLoopbackUpstreams && literalLoopback ? { egress: { allowLocalForDevelopment: true } } : {}, label: "gateway.remote.upstream" }) : undefined;
-  const response = pinned?.response ?? await fetch(endpoint, init);
+  const pinned = await fetchWithPinnedDns({
+    url: endpoint,
+    init,
+    maxRedirects: 0,
+    responseTimeouts: { headersTimeout: 0, bodyTimeout: 0 },
+    ...(remote === undefined ? { policyPreset: "security.development-local" } : {
+      policies: remote.allowLoopbackUpstreams && literalLoopback
+        ? { egress: { allowLocalForDevelopment: true } }
+        : {}
+    }),
+    label: remote ? "gateway.remote.upstream" : "gateway.local.upstream"
+  });
+  const response = pinned.response;
   const chunks: Buffer[] = [];
   let size = 0;
   try { if (response.body) {
@@ -49,7 +59,7 @@ export async function fetchRpc(
         chunks.push(chunk);
       }
     } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-  } } finally { await pinned?.close(); }
+  } } finally { await pinned.close(); }
   const text = Buffer.concat(chunks).toString("utf8");
   return { status: response.status, headers: Object.fromEntries(response.headers), body: text ? JSON.parse(text) as unknown : null };
 }

@@ -1,15 +1,14 @@
+import { sendJson } from "@meshrix/ui-console/bridge-http";
+
 export const PLUGIN_CONSOLE_BRIDGE_VERSION: any = "v0.0.1:plugin:console-bridge-1";
 export const PLUGIN_CONSOLE_IFRAME_SANDBOX: any = "allow-scripts";
 export const PLUGIN_CONSOLE_MAX_REQUEST_BYTES: any = 1 * 1024 * 1024;
 export const PLUGIN_CONSOLE_MAX_RESPONSE_BYTES: any = 8 * 1024 * 1024;
 export const PLUGIN_CONSOLE_MAX_CONCURRENT_CALLS: any = 4;
-export const PLUGIN_CONSOLE_CALL_TIMEOUT_MS: any = 30_000;
 
 const DIGEST_PATTERN: any = /^sha256:[a-f0-9]{64}$/u;
 const TOOL_ID_PATTERN: any = /^[a-z][a-zA-Z0-9._-]*$/u;
 const INVOKE_ID_PATTERN: any = /^[A-Za-z0-9._-]{1,128}$/u;
-let pluginConsoleCsrfToken: any = "";
-let pluginConsoleCsrfPromise: Promise<void> | null = null;
 
 export type PluginConsoleIsolationEntry = {
   id: string;
@@ -160,33 +159,7 @@ export async function invokePluginConsoleTool({
   entry,
   context,
 }: Record<string, any> = {}) : Promise<any> {
-  if (!pluginConsoleCsrfToken) {
-    if (!pluginConsoleCsrfPromise) {
-      pluginConsoleCsrfPromise = fetch("/api/auth/session", {
-        method: "GET",
-        headers: { Accept: "application/json" },
-        credentials: "same-origin",
-      }).then(async (response?: any) : Promise<any> => {
-        if (!response.ok) throw new Error("plugin_console_session_unavailable");
-        const session: any = await response.json();
-        pluginConsoleCsrfToken = String(session?.csrfToken || session?.session?.csrfToken || "");
-        if (!pluginConsoleCsrfToken) throw new Error("plugin_console_session_unavailable");
-      }).finally(() : any => {
-        pluginConsoleCsrfPromise = null;
-      });
-    }
-    await pluginConsoleCsrfPromise;
-  }
-  const response: any = await fetch(entry.invokeUrl, {
-    method: "POST",
-    credentials: "same-origin",
-    signal,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-Meshrix-CSRF": pluginConsoleCsrfToken,
-    },
-    body: JSON.stringify({
+  return sendJson(entry.invokeUrl, "POST", {
     bridgeVersion: entry.bridgeVersion,
     pluginId: entry.pluginId,
     componentId: entry.componentId,
@@ -195,13 +168,7 @@ export async function invokePluginConsoleTool({
     route: context.route,
     toolId,
     payload: payload === undefined ? null : payload,
-    }),
-  });
-  if (!response.ok) throw new Error("plugin_console_tool_denied");
-  const result: any = await response.json();
-  const refreshedToken: any = String(result?.csrfToken || result?.session?.csrfToken || "");
-  if (refreshedToken) pluginConsoleCsrfToken = refreshedToken;
-  return result;
+  }, { signal });
 }
 
 export function connectPluginConsoleHostBridge({
@@ -215,8 +182,7 @@ export function connectPluginConsoleHostBridge({
   let hostPort: any = port;
   let revoked: any = false;
   let inFlight: any = 0;
-  const timers: any = new Set<any>();
-  const controllers: any[] = [];
+  const controllers: AbortController[] = [];
 
   function closePort() : any {
     try { hostPort?.close?.(); } catch {}
@@ -226,11 +192,7 @@ export function connectPluginConsoleHostBridge({
   function revoke(reason: any = "plugin_console_revoked") : any {
     if (revoked) return;
     revoked = true;
-    for (const timer of timers) clearTimeout(timer);
-    timers.clear();
-    for (const controller of controllers) {
-      try { controller.abort(String(reason || "plugin_console_revoked")); } catch {}
-    }
+    for (const controller of controllers) controller.abort(String(reason || "plugin_console_revoked"));
     controllers.length = 0;
     try {
       hostPort?.postMessage?.({
@@ -297,8 +259,6 @@ export function connectPluginConsoleHostBridge({
     inFlight += 1;
     const controller: any = new AbortController();
     controllers.push(controller);
-    const timer: any = setTimeout(() : any => controller.abort("plugin_console_timeout"), PLUGIN_CONSOLE_CALL_TIMEOUT_MS);
-    timers.add(timer);
     try {
       const result: any = await invokeTool({
         toolId,
@@ -313,18 +273,15 @@ export function connectPluginConsoleHostBridge({
       }
       reply({ type: "meshrix.plugin-console.result", ok: true, result });
     } catch {
-      const timedOut: any = controller.signal.aborted && controller.signal.reason === "plugin_console_timeout";
       reply({
         type: "meshrix.plugin-console.result",
         ok: false,
-        error: { code: timedOut ? "plugin_console_timeout" : "plugin_console_tool_denied" },
+        error: { code: "plugin_console_tool_denied" },
       });
     } finally {
-      clearTimeout(timer);
-      timers.delete(timer);
-      const index: any = controllers.indexOf(controller);
-      if (index >= 0) controllers.splice(index, 1);
       inFlight = Math.max(0, inFlight - 1);
+      const index: number = controllers.indexOf(controller);
+      if (index >= 0) controllers.splice(index, 1);
     }
   });
 

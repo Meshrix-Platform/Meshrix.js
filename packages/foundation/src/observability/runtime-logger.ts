@@ -43,7 +43,13 @@ const CLEANUP_BYTE_INTERVAL: any = 8 * 1024 * 1024;
 const MAX_ARRAY_ITEMS: any = 12;
 const MAX_OBJECT_KEYS: any = 60;
 const MAX_DEPTH: any = 5;
-const PROCESS_PROJECTION_KEY: any = crypto.randomBytes(32);
+// Generated lazily: workerd forbids crypto randomness in global scope, and
+// the per-process key is only needed when a log projection actually runs.
+let lazyProcessProjectionKey: any = null;
+function processProjectionKey(): any {
+  if (!lazyProcessProjectionKey) lazyProcessProjectionKey = crypto.randomBytes(32);
+  return lazyProcessProjectionKey;
+}
 const SENSITIVE_KEY_PATTERN: any =
   /(authorization|cookie|csrf|token|password|passwd|secret|api[-_]?key|client[-_]?secret|access[-_]?token|refresh[-_]?token|id[-_]?token|private[-_]?key|session)/i;
 const IDENTITY_KEY_PATTERN: any =
@@ -94,7 +100,7 @@ function digestSource(value?: any) : any {
 }
 
 function projectionHash(value?: any, options: Record<string, any> = {}) : any {
-  const projectionKey: any = options.projectionKey || PROCESS_PROJECTION_KEY;
+  const projectionKey: any = options.projectionKey || processProjectionKey();
   const namespace: any = String(options.namespace || "runtime-log");
   return crypto
     .createHmac("sha256", projectionKey)
@@ -464,7 +470,7 @@ function normalizeEventRecord({ component, level, event, details }: Record<strin
     requestId: mergedDetails.requestId || "",
     spanId: mergedDetails.spanId || "",
     parentSpanId: mergedDetails.parentSpanId || "",
-    details: summarizeForLog(mergedDetails, { projectionKey: PROCESS_PROJECTION_KEY })
+    details: summarizeForLog(mergedDetails, { projectionKey: processProjectionKey() })
   };
 }
 

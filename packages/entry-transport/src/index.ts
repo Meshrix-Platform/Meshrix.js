@@ -45,15 +45,19 @@ export {
   type EntryRecoveryRoundTripPort
 } from "./recovery-channel.ts";
 export {
+  EntryPairingRelayChannel,
+  EntryPairingCompletionRelayChannel,
+  type EntryPairingRelayChannelOptions,
+  type EntryPairingCompletionRelayChannelOptions,
+  type PairingRelayBootstrap
+} from "./pairing-relay-channel.ts";
+export {
   createPeerSessionChannel,
   isPeerSchemaMessage,
   peerChannelNotAdmittedError,
-  peerGapView,
   peerIdForRouteDevice,
   peerInboxView,
   peerOutboxView,
-  routePeerDirectory,
-  type PeerGapView,
   type PeerInboxView,
   type PeerOutboxView,
   type PeerRouteScope

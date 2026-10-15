@@ -5,6 +5,7 @@ import path from "node:path";
 import { DEFAULT_SERVER_URL, readJsonInput, requestJson, writeResponse } from "./meshrix-cli-common.ts";
 
 const DEFAULT_CHUNK_SIZE: any = 1024 * 1024;
+const JOB_STATUS_POLL_INTERVAL_MS = 2_000;
 
 async function walkInput(inputPath?: any, rootPath: any = inputPath) : Promise<any> {
   const stats: any = await fsp.stat(inputPath);
@@ -74,6 +75,7 @@ async function collectUploadFiles(args?: any) : Promise<any> {
 
 async function uploadFileChunks({ serverUrl, sessionId, file, fileIndex, chunkSize, receivedBytes }: Record<string, any>) : Promise<any> {
   let offset: any = Number(receivedBytes || 0);
+  let latestSession: any = null;
   const handle: any = await fsp.open(file.absolutePath, "r");
   try {
     while (offset < file.byteSize) {
@@ -86,10 +88,11 @@ async function uploadFileChunks({ serverUrl, sessionId, file, fileIndex, chunkSi
         apiPath: `/api/upload-sessions/${encodeURIComponent(sessionId)}/files/${fileIndex}?offset=${offset}`,
         body: buffer,
         okStatuses: [409],
-        headers: {
-          "content-type": "application/octet-stream"
-        }
+          headers: {
+            "content-type": "application/octet-stream"
+          }
       });
+      latestSession = session;
       if (session?.code) {
         if (
           session.code !== "offset_mismatch" &&
@@ -113,6 +116,7 @@ async function uploadFileChunks({ serverUrl, sessionId, file, fileIndex, chunkSi
   } finally {
     await handle.close();
   }
+  return latestSession;
 }
 
 async function waitForJob({ serverUrl, jobId }: Record<string, any>) : Promise<any> {
@@ -122,7 +126,7 @@ async function waitForJob({ serverUrl, jobId }: Record<string, any>) : Promise<a
     apiPath: `/api/jobs/${encodeURIComponent(jobId)}`
   });
   while (!["completed", "failed", "cancelled", "deleted"].includes(current.status)) {
-    await new Promise((resolve?: any) : any => setTimeout(resolve, 1500));
+    await new Promise((resolve?: any) : any => setTimeout(resolve, JOB_STATUS_POLL_INTERVAL_MS));
     current = await requestJson({
       serverUrl,
       method: "GET",
@@ -172,7 +176,7 @@ export async function runUpload(args?: any) : Promise<any> {
       throw new Error(`上传会话缺少文件：${file.relativePath}`);
     }
     if (!remote.completed) {
-      await uploadFileChunks({
+      const updatedSession: any = await uploadFileChunks({
         serverUrl,
         sessionId: session.sessionId,
         file,
@@ -180,7 +184,7 @@ export async function runUpload(args?: any) : Promise<any> {
         chunkSize,
         receivedBytes: remote.receivedBytes
       });
-      session = await requestJson({
+      session = updatedSession || await requestJson({
         serverUrl,
         method: "GET",
         apiPath: `/api/upload-sessions/${encodeURIComponent(session.sessionId)}`

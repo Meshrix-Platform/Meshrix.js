@@ -25,7 +25,7 @@ export interface GatewayChannelCapabilities {
   readonly maxRatePerSecond: number;
   readonly circuitBreaker: true;
   readonly overloadShedding: true;
-  readonly timeoutMs: number;
+  readonly timeoutMs?: number;
   readonly cancellation: true;
   readonly streaming: true;
   readonly backpressure: true;
@@ -164,7 +164,8 @@ export function assertGatewayChannelCapabilities(value: unknown): GatewayChannel
     throw new Error("gateway_channel_rate_out_of_bounds");
   }
   const timeoutMs = value.timeoutMs;
-  if (!Number.isSafeInteger(timeoutMs) || (timeoutMs as number) <= 0) {
+  if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || (timeoutMs as number) <= 0 ||
+      (timeoutMs as number) > 2_147_483_647)) {
     throw new Error("gateway_channel_timeout_out_of_bounds");
   }
   for (const field of ["circuitBreaker", "overloadShedding", "cancellation", "streaming", "backpressure"] as const) {
@@ -181,7 +182,7 @@ export function assertGatewayChannelCapabilities(value: unknown): GatewayChannel
     maxRatePerSecond: maxRatePerSecond as number,
     circuitBreaker: true,
     overloadShedding: true,
-    timeoutMs: timeoutMs as number,
+    ...(timeoutMs === undefined ? {} : { timeoutMs: timeoutMs as number }),
     cancellation: true,
     streaming: true,
     backpressure: true,

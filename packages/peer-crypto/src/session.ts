@@ -276,10 +276,10 @@ export interface InitiatePeerSessionInput {
 }
 
 /**
- * X3DH/PQXDH initiator: validates the remote bundle, enforces the pinned
- * identity binding (first contact pins; a differing key aborts with
- * `peer_identity_changed` — never silent re-trust), then processes the bundle
- * into a live session. The first `encrypt` emits a `prekey` ciphertext.
+ * X3DH/PQXDH initiator: validates the remote bundle and requires its identity
+ * to match a pin created by the authenticated pairing transaction. A bundle
+ * is never a trust source by itself; a missing or different pin aborts with
+ * `peer_identity_changed`. The first `encrypt` emits a `prekey` ciphertext.
  */
 export async function initiatePeerSession(input: InitiatePeerSessionInput): Promise<PeerCryptoSession> {
   const bundle = parsePeerPrekeyBundle(input.remoteBundle);
@@ -290,22 +290,11 @@ export async function initiatePeerSession(input: InitiatePeerSessionInput): Prom
     throw peerCryptoError("peer_state_invalid", "A device cannot initiate a peer session to its own identity.");
   }
   const existing = await input.localStore.loadPeerBinding(bundle.peerId);
-  if (existing) {
-    const matches = existing.state === "active"
-      && existing.deviceId === bundle.deviceId
-      && existing.identityKey === bundle.identityKey;
-    if (!matches) {
-      throw peerCryptoError("peer_identity_changed", `Remote identity for ${bundle.peerId} differs from the pinned record; explicit re-pair is required.`);
-    }
-  } else {
-    await input.localStore.savePeerBinding(Object.freeze({
-      peerId: bundle.peerId,
-      deviceId: bundle.deviceId,
-      identityKey: bundle.identityKey,
-      trustGeneration: 1,
-      pinnedAt: new Date().toISOString(),
-      state: "active" as const
-    }));
+  const matches = existing?.state === "active"
+    && existing.deviceId === bundle.deviceId
+    && existing.identityKey === bundle.identityKey;
+  if (!matches) {
+    throw peerCryptoError("peer_identity_changed", `Remote identity for ${bundle.peerId} does not match an authenticated pairing pin.`);
   }
   const session = new PeerCryptoSession({
     identity: input.identity,
@@ -418,6 +407,14 @@ export async function pinPeerIdentity(
 ): Promise<PeerIdentityBinding> {
   const peerId = assertPeerId(input.peerId);
   const deviceId = input.peerDeviceId ?? PEER_DEVICE_ID;
+  if (!(input.identityKey instanceof Uint8Array) || input.identityKey.length === 0 || input.identityKey.length > 512) {
+    throw peerCryptoError("peer_envelope_malformed", "The pairing identity key is not a valid public key encoding.");
+  }
+  try {
+    PublicKey.deserialize(toExactBytes(input.identityKey));
+  } catch (error: unknown) {
+    throw peerCryptoError("peer_envelope_malformed", "The pairing identity key is not a valid Signal public key.", { cause: error });
+  }
   const encoded = base64urlEncode(input.identityKey);
   const existing = await localStore.loadPeerBinding(peerId);
   if (existing) {

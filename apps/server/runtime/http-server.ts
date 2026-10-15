@@ -11,8 +11,7 @@ import {
 } from "#meshrix/runtime-logger";
 import { ServerConfig } from "#meshrix/server-config";
 import {
-  LOCAL_SECRET_MASTER_KEY_FILE_ENV,
-  assertLocalSecretKeyReady
+  LOCAL_SECRET_MASTER_KEY_FILE_ENV
 } from "#meshrix/foundation/security/secrets/local-secret-key-provider";
 import {
   OPERATION_PROOF_SIGNER_SECRET_FILE_ENV
@@ -174,9 +173,6 @@ export async function startHttpServer({
     const localSecretKeyFile: any = String(
       process.env[LOCAL_SECRET_MASTER_KEY_FILE_ENV] || ""
     ).trim();
-    if (localSecretKeyFile) {
-      await assertLocalSecretKeyReady({ dataDir: resolvedUserDataPath });
-    }
     assertProductionSecretCustodySeparated({
       encryptionKeyFile: localSecretKeyFile,
       proofSignerFile: process.env[OPERATION_PROOF_SIGNER_SECRET_FILE_ENV]
@@ -219,11 +215,6 @@ export async function startHttpServer({
       windowMs: rateLimits.windowMs,
       label: "tenant"
     });
-    const loginRateLimiter: any = createFixedWindowRateLimiter({
-      limit: rateLimits.login.limit,
-      windowMs: rateLimits.windowMs,
-      label: "login"
-    });
 
     const server: any = http.createServer();
     const transportLimits: any = resolveHttpTransportLimits(runtimeOptions);
@@ -236,7 +227,6 @@ export async function startHttpServer({
       handlerFactory: createHttpServerRequestHandler,
       ingressContract,
       lifecycle,
-      loginRateLimiter,
       rateLimits,
       subjectRateLimiter,
       tenantRateLimiter,

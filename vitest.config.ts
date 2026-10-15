@@ -108,6 +108,8 @@ function workspaceSourceAliases() : { find: any; replacement: string }[] {
 }
 
 export default defineConfig({
+  // Engineering fixtures supply their own variables; never discover private .env files.
+  envDir: false,
   plugins: [vue()],
   resolve: {
     conditions: ["source"],

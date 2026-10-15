@@ -4,10 +4,9 @@ import path from "node:path";
 import process from "node:process";
 
 import { REPO_ORGANIZATION_AUDIT_POLICY } from "../tools/registry/architecture-layout-facade.ts";
+import { repositorySourceFiles } from "../tools/scripts/lib/repository-source-files.ts";
 
 const root: any = process.cwd();
-
-const scanRoots: any[] = [""];
 
 // Repository-internal roots that are never production source. Generated output
 // and dependency trees are excluded by the registry-owned policy below.
@@ -100,41 +99,6 @@ function shouldScanFile(relativePath?: any) : any {
   return scannedExtensions.has(path.extname(relativePath));
 }
 
-async function collectFiles(directory?: any, relativePath: any = "") : Promise<any> {
-  if (shouldSkip(relativePath)) {
-    return [];
-  }
-
-  let entries: any;
-  try {
-    entries = await fs.readdir(directory, { withFileTypes: true });
-  } catch (error: any) {
-    if (error.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
-
-  const files: any[] = [];
-  for (const entry of entries) {
-    const childRelativePath: any = relativePath
-      ? path.join(relativePath, entry.name)
-      : entry.name;
-    if (shouldSkip(childRelativePath)) {
-      continue;
-    }
-    const childPath: any = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await collectFiles(childPath, childRelativePath));
-      continue;
-    }
-    if (entry.isFile() && shouldScanFile(childRelativePath)) {
-      files.push(childRelativePath);
-    }
-  }
-  return files;
-}
-
 function lineNumberForOffset(text?: any, offset?: any) : any {
   let line: any = 1;
   for (let index: any = 0; index < offset; index += 1) {
@@ -147,23 +111,23 @@ function lineNumberForOffset(text?: any, offset?: any) : any {
 
 const violations: any[] = [];
 
-for (const scanRoot of scanRoots) {
-  const files: any = await collectFiles(path.join(root, scanRoot), scanRoot);
-  for (const relativePath of files) {
-    const absolutePath: any = path.join(root, relativePath);
-    const text: any = await fs.readFile(absolutePath, "utf8").catch(() : any => "");
-    const filePatterns: any = [".eml", ".mbox"].includes(path.extname(relativePath))
-      ? [...secretPatterns, ...emailArtifactSecretPatterns]
-      : secretPatterns;
-    for (const { id, pattern } of filePatterns) {
-      const match: any = pattern.exec(text);
-      if (match) {
-        violations.push({
-          id,
-          path: toPosix(relativePath),
-          line: lineNumberForOffset(text, match.index)
-        });
-      }
+for (const relativePath of repositorySourceFiles(root)) {
+  if (shouldSkip(relativePath) || !shouldScanFile(relativePath)) continue;
+  const absolutePath: any = path.join(root, relativePath);
+  const stat = await fs.lstat(absolutePath).catch(() => null);
+  if (!stat?.isFile()) continue;
+  const text: any = await fs.readFile(absolutePath, "utf8").catch(() : any => "");
+  const filePatterns: any = [".eml", ".mbox"].includes(path.extname(relativePath))
+    ? [...secretPatterns, ...emailArtifactSecretPatterns]
+    : secretPatterns;
+  for (const { id, pattern } of filePatterns) {
+    const match: any = pattern.exec(text);
+    if (match) {
+      violations.push({
+        id,
+        path: toPosix(relativePath),
+        line: lineNumberForOffset(text, match.index)
+      });
     }
   }
 }

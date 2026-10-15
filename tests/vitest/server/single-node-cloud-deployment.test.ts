@@ -120,18 +120,28 @@ describe("single-node cloud deployment", () : any => {
     const encryptionSecretPath: any = path.join(root, "encryption");
     const proofSignerSecretPath: any = path.join(root, "proof-signer");
     try {
-      await fs.writeFile(encryptionSecretPath, "a".repeat(64), { mode: 0o600 });
-      await fs.writeFile(proofSignerSecretPath, "a".repeat(64), { mode: 0o600 });
+      await fs.writeFile(encryptionSecretPath, "a".repeat(64), { mode: 0o444 });
+      await fs.writeFile(proofSignerSecretPath, "a".repeat(64), { mode: 0o444 });
       await expect(validateSingleNodeSecretCustody({
         encryptionSecretPath,
         proofSignerSecretPath
       })).rejects.toThrow("cloud_deployment_secret_custody_separation_required");
 
-      await fs.writeFile(proofSignerSecretPath, "b".repeat(64), { mode: 0o600 });
+      await fs.chmod(proofSignerSecretPath, 0o600);
+      await fs.writeFile(proofSignerSecretPath, "b".repeat(64), { mode: 0o444 });
+      await fs.chmod(proofSignerSecretPath, 0o444);
       await expect(validateSingleNodeSecretCustody({
         encryptionSecretPath,
         proofSignerSecretPath
       })).resolves.toEqual({ ready: true, distinct: true, external: true });
+      if (process.platform !== "win32") {
+        await fs.chmod(root, 0o755);
+        await expect(validateSingleNodeSecretCustody({
+          encryptionSecretPath,
+          proofSignerSecretPath
+        })).rejects.toThrow("cloud_deployment_secret_key_source_invalid");
+        await fs.chmod(root, 0o700);
+      }
       await expect(validateSingleNodeSecretCustody({
         encryptionSecretPath,
         proofSignerSecretPath: encryptionSecretPath

@@ -152,7 +152,11 @@ export async function doctorCommand(options?: any) : Promise<any> {
   const target: any = normalizeTarget(option(resolvedOptions, "target", process.env.MESHRIX_MCP_TARGET || ""));
   const token: any = providedToken || await loadMcpApiKeyCredential({ target, baseUrl: settings.baseUrl });
   const deviceManifestPath: any = discoveryRegistryPath(resolvedOptions);
-  const discovery: any = await fetchJson(`${settings.baseUrl}/api/mcp/discovery`);
+  const discovery: any = {
+    ok: Boolean(discovered?.ok),
+    status: Number(discovered?.discoveryStatus || 0),
+    payload: discovered?.discovery || {}
+  };
   const discover: any = await ensureService(settings.baseUrl);
   const discoverResult: any = discover.payload?.result || {};
   const discoverMeta: any = discoverResult._meta || {};
@@ -278,13 +282,9 @@ export async function doctorCommand(options?: any) : Promise<any> {
 export async function discoverCommand(options?: any) : Promise<any> {
   discardConfiguredApiKeyEnvironment(options);
   const resolvedOptions: any = await optionsWithDiscoveredBaseUrl(options);
-  const baseUrl: any = installerOptions(resolvedOptions).baseUrl;
-  const discovery: any = await fetchJson(`${baseUrl}/api/mcp/discovery`);
-  if (!discovery.ok) {
-    throw new Error(`Meshrix.js MCP discovery failed: HTTP ${discovery.status}`);
-  }
+  const discovery: any = resolvedOptions.__meshrixDiscovery?.discovery || {};
   return {
-    ...discovery.payload,
+    ...discovery,
     signedHandshake: {
       ok: true,
       identityKeyId: resolvedOptions.__meshrixDiscovery?.handshake?.payload?.identity?.keyId || ""

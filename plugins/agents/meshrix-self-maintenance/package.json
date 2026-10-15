@@ -5,6 +5,9 @@
   "description": "Separately started, configuration-controlled Meshrix self-maintenance client peer.",
   "type": "module",
   "license": "Apache-2.0",
+  "dependencies": {
+    "undici": "^8.11.2"
+  },
   "engines": {
     "node": ">=24"
   },

@@ -1,122 +1,121 @@
-import type { PeerClientStore, StoredGapTombstone, StoredInboxEntry } from "./store.ts";
-import { emptyPeerClientMeta } from "./store.ts";
-import { PEER_CLIENT_STORE_RECORD_VERSION } from "./types.ts";
+import type { PeerDeliveryAck, PeerEnvelope, PeerMessageIdentity } from "@meshrix/contracts/private-relay";
+
+import { peerClientError } from "./errors.ts";
+import type { PeerClientPage, PeerClientRouteScope, PeerClientStore, StoredInboxEntry } from "./store.ts";
+import { assertPeerClientOpaqueId, PEER_CLIENT_DEFAULT_PAGE_SIZE, PEER_CLIENT_STORE_RECORD_VERSION } from "./types.ts";
 
 export type PeerInboxLookup =
   | { readonly status: "new" }
   | { readonly status: "duplicate"; readonly entry: StoredInboxEntry }
-  | { readonly status: "positionConflict"; readonly entry: StoredInboxEntry };
+  | { readonly status: "conflict"; readonly entry: StoredInboxEntry };
 
-/**
- * Durable deduplicated inbox.
- *
- * Dedup happens BEFORE work is exposed: a stored message whose
- * (messageId, position) pair is already recorded is acknowledged again but
- * never decrypted or dispatched a second time. The durable cursor
- * (`lastAckedSeq`) only advances after the page's entries are committed and
- * the peer-ack has been answered, so a restart re-fetches the uncommitted
- * tail and the idempotent dedup path makes that replay harmless.
- */
+/** Local durable inbox keyed by the complete sender/recipient/message tuple. */
 export class PeerInbox {
   readonly #store: PeerClientStore;
+  readonly #scope: PeerClientRouteScope;
+  readonly #recipientDeviceId: string;
 
-  constructor(store: PeerClientStore) {
+  constructor(store: PeerClientStore, route: { readonly tenantId: string; readonly routeId: string; readonly deviceId: string }) {
     this.#store = store;
+    this.#scope = Object.freeze({ tenantId: route.tenantId, routeId: route.routeId });
+    this.#recipientDeviceId = route.deviceId;
   }
 
-  /**
-   * Classify an incoming stored message against the dedup index.
-   * `duplicate` — same messageId at the same position: skip decrypt+dispatch.
-   * `positionConflict` — a different messageId already occupies the position:
-   * a mailbox-level anomaly surfaced to the caller, still acked, never stored.
-   */
-  async lookup(messageId: string, position: number): Promise<PeerInboxLookup> {
-    const atPosition = await this.#store.loadInboxEntry(position);
-    if (atPosition) {
-      return atPosition.messageId === messageId
-        ? Object.freeze({ status: "duplicate" as const, entry: atPosition })
-        : Object.freeze({ status: "positionConflict" as const, entry: atPosition });
-    }
-    const byId = await this.#store.loadInboxEntryByMessageId(messageId);
-    if (byId) {
-      // Same messageId at a different position — the mailbox never reassigns
-      // ids, so this is evidence of either store corruption or a contract
-      // violation; surface it as a position conflict rather than re-dispatch.
-      return Object.freeze({ status: "positionConflict" as const, entry: byId });
-    }
-    return Object.freeze({ status: "new" as const });
+  identity(messageId: string, senderDeviceId: string): PeerMessageIdentity {
+    return Object.freeze({
+      tenantId: this.#scope.tenantId,
+      routeId: this.#scope.routeId,
+      senderDeviceId: assertPeerClientOpaqueId(senderDeviceId, "senderDeviceId"),
+      recipientDeviceId: this.#recipientDeviceId,
+      messageId: assertPeerClientOpaqueId(messageId, "messageId")
+    });
   }
 
-  /** Commit one received entry — the store-commit before any ack/cursor move. */
+  async lookup(identity: PeerMessageIdentity, envelope: PeerEnvelope): Promise<PeerInboxLookup> {
+    const existing = await this.#store.loadInboxEntry(identity);
+    if (!existing) return Object.freeze({ status: "new" });
+    return JSON.stringify(existing.envelope) === JSON.stringify(envelope)
+      ? Object.freeze({ status: "duplicate", entry: existing })
+      : Object.freeze({ status: "conflict", entry: existing });
+  }
+
+  async entry(identity: PeerMessageIdentity): Promise<StoredInboxEntry | null> {
+    return this.#store.loadInboxEntry(identity);
+  }
+
   async record(entry: StoredInboxEntry): Promise<void> {
+    const existing = await this.#store.loadInboxEntry(entry);
+    if (existing) {
+      if (JSON.stringify(existing) === JSON.stringify(entry)) return;
+      throw peerClientError("peer_client_conflict", "A durable inbox tuple already contains different message data.");
+    }
     await this.#store.saveInboxEntry(entry);
   }
 
-  async entry(position: number): Promise<StoredInboxEntry | null> {
-    return this.#store.loadInboxEntry(position);
+  async saveEntry(entry: StoredInboxEntry): Promise<void> {
+    const existing = await this.#store.loadInboxEntry(entry);
+    if (existing && JSON.stringify(existing) === JSON.stringify(entry)) return;
+    await this.#store.saveInboxEntry(entry);
   }
 
-  async byMessageId(messageId: string): Promise<StoredInboxEntry | null> {
-    return this.#store.loadInboxEntryByMessageId(messageId);
+  async pendingDispatchPage(afterSequence = 0, limit = PEER_CLIENT_DEFAULT_PAGE_SIZE): Promise<PeerClientPage<StoredInboxEntry>> {
+    const page = await this.#store.listPendingInboxPage(this.#scope, { afterSequence, limit });
+    return Object.freeze({ ...page, items: Object.freeze(page.items.filter((entry) => entry.plaintext !== null)) });
   }
 
-  async list(): Promise<readonly StoredInboxEntry[]> {
-    return this.#store.listInboxEntries();
+  pendingDeliveryAckPage(afterSequence = 0, limit = PEER_CLIENT_DEFAULT_PAGE_SIZE): Promise<PeerClientPage<StoredInboxEntry>> {
+    return this.#store.listPendingDeliveryAckPage(this.#scope, { afterSequence, limit });
   }
 
-  /** Entries committed but not yet dispatched to the host handler. */
-  async pendingDispatch(): Promise<readonly StoredInboxEntry[]> {
-    return (await this.list()).filter((entry) => entry.dispatch === "pending" && entry.plaintext !== null);
+  async historyPage(afterSequence = 0, limit = PEER_CLIENT_DEFAULT_PAGE_SIZE): Promise<PeerClientPage<StoredInboxEntry>> {
+    return this.#store.listInboxHistoryPage(this.#scope, { afterSequence, limit });
   }
 
-  async markDispatch(messageId: string, dispatch: StoredInboxEntry["dispatch"]): Promise<StoredInboxEntry | null> {
-    const entry = await this.#store.loadInboxEntryByMessageId(messageId);
+  async markDispatch(identity: PeerMessageIdentity, dispatch: StoredInboxEntry["dispatch"]): Promise<StoredInboxEntry | null> {
+    const entry = await this.#store.loadInboxEntry(identity);
+    if (!entry || entry.dispatch === dispatch) return entry;
+    const next = Object.freeze({ ...entry, dispatch, updatedAt: new Date().toISOString() });
+    await this.#store.saveInboxEntry(next);
+    return next;
+  }
+
+  async markDeliveryAck(identity: PeerMessageIdentity, ack: PeerDeliveryAck): Promise<StoredInboxEntry | null> {
+    const entry = await this.#store.loadInboxEntry(identity);
     if (!entry) return null;
-    const next = Object.freeze({ ...entry, dispatch });
-    await this.#store.saveInboxEntry(next);
-    return next;
-  }
-
-  /** Record that an application receipt kind was durably recorded by the mailbox. */
-  async markReported(messageId: string, kind: string): Promise<StoredInboxEntry | null> {
-    const entry = await this.#store.loadInboxEntryByMessageId(messageId);
-    if (!entry || entry.reports.includes(kind)) return entry;
-    const next = Object.freeze({ ...entry, reports: Object.freeze([...entry.reports, kind]) });
-    await this.#store.saveInboxEntry(next);
-    return next;
-  }
-
-  async cursor(): Promise<number> {
-    return (await this.#store.loadMeta())?.cursor ?? 0;
-  }
-
-  /** Monotonic durable advance — never rewinds. */
-  async commitCursor(nextAfterSeq: number): Promise<number> {
-    const meta = await this.#store.loadMeta();
-    const base = meta ?? emptyPeerClientMeta();
-    const cursor = Math.max(base.cursor, nextAfterSeq);
-    await this.#store.saveMeta(Object.freeze({ ...base, cursor }));
-    return cursor;
-  }
-
-  async recordGap(gap: { readonly fromSeq: number; readonly toSeq: number; readonly cause: "expired" | "capacity_truncated"; readonly messageIds: readonly string[] | null }): Promise<{ readonly tombstone: StoredGapTombstone; readonly fresh: boolean }> {
-    const existing = await this.#store.findGapTombstone(gap.fromSeq, gap.toSeq);
-    if (existing && existing.cause === gap.cause) {
-      return Object.freeze({ tombstone: existing, fresh: false });
+    if (entry.deliveryAck !== null) {
+      if (JSON.stringify(entry.deliveryAck) !== JSON.stringify(ack)) {
+        throw peerClientError("peer_client_conflict", "A durable inbox tuple already has a different signed ACK.");
+      }
+      return entry;
     }
-    const tombstone: StoredGapTombstone = Object.freeze({
-      version: PEER_CLIENT_STORE_RECORD_VERSION,
-      fromSeq: gap.fromSeq,
-      toSeq: gap.toSeq,
-      cause: gap.cause,
-      messageIds: gap.messageIds === null ? null : Object.freeze([...gap.messageIds]),
-      observedAt: new Date().toISOString()
-    });
-    await this.#store.saveGapTombstone(tombstone);
-    return Object.freeze({ tombstone, fresh: true });
+    const next = Object.freeze({ ...entry, deliveryAck: ack, updatedAt: new Date().toISOString() });
+    await this.#store.saveInboxEntry(next);
+    return next;
   }
 
-  async gaps(): Promise<readonly StoredGapTombstone[]> {
-    return this.#store.listGapTombstones();
+  createEntry(input: {
+    readonly identity: PeerMessageIdentity;
+    readonly sequence: number;
+    readonly senderPeerId: string | null;
+    readonly envelope: PeerEnvelope;
+    readonly plaintext: string | null;
+    readonly decryptError: string | null;
+    readonly dispatch: StoredInboxEntry["dispatch"];
+    readonly deliveryAck: PeerDeliveryAck | null;
+  }): StoredInboxEntry {
+    const now = new Date().toISOString();
+    return Object.freeze({
+      ...input.identity,
+      version: PEER_CLIENT_STORE_RECORD_VERSION,
+      sequence: input.sequence,
+      senderPeerId: input.senderPeerId,
+      envelope: input.envelope,
+      plaintext: input.plaintext,
+      decryptError: input.decryptError,
+      dispatch: input.dispatch,
+      deliveryAck: input.deliveryAck,
+      receivedAt: now,
+      updatedAt: now
+    });
   }
 }

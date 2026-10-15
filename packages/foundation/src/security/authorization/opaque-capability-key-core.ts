@@ -104,7 +104,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 }
 
 export function repoRoot() {
-  return path.resolve(fileURLToPath(new URL("../../../../..", import.meta.url)));
+  return path.resolve(fileURLToPath(new URL("../../../../..", import.meta.url).href));
 }
 
 export function helperScriptPath() {

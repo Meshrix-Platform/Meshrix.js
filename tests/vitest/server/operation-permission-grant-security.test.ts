@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createOperationPermissionStore } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
+import { localMcpTargetBindingDecision } from "../../../packages/capabilities/src/operation-permission-core/store-utils.ts";
 import { createOperationPermissionWorkerOwner } from "../../../packages/capabilities/src/operation-permission-core/store-worker-owner.ts";
 import { createToolCatalogRegistry } from "../../../packages/capabilities/src/operation-permission-core/catalog.ts";
 
@@ -120,7 +121,7 @@ describe("Operation Permission grant security invariants", () : any => {
       for (let index: any = 0; index < 5; index += 1) {
         await store.appendHttpRequestMetric({
           method: "GET",
-          route: "/api/workspaces",
+          route: "/api/agent-workspaces",
           statusCode: 200,
           completionStatus: "completed",
           createdAt: `2030-01-01T00:00:0${index}.000Z`
@@ -136,13 +137,77 @@ describe("Operation Permission grant security invariants", () : any => {
       expect(exported.counts.httpRequestMetricEvents).toBe(3);
       expect(exported.counts.toolMetricEvents).toBe(3);
       expect(exported.httpRequestMetricEvents.map((row?: any) : any => row.route)).toEqual([
-        "/api/workspaces",
-        "/api/workspaces",
-        "/api/workspaces"
+        "/api/agent-workspaces",
+        "/api/agent-workspaces",
+        "/api/agent-workspaces"
       ]);
     } finally {
       await store.close();
     }
+  });
+
+  it("aggregates rejection floods with exact counts, bytes and bounded writes", async () => {
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-rejection-metrics-"));
+    roots.push(userDataPath);
+    const store = createOperationPermissionStore({ userDataPath, capabilityBindingGuard: false });
+    try {
+      for (let index = 0; index < 2000; index++) {
+        await store.appendHttpRequestMetric({ method: "GET", route: `/unknown/private-${index}?token=synthetic`, statusCode: 429,
+          completionStatus: "completed", requestBytes: 2, responseBytes: 3, durationMs: 5 });
+      }
+      const summary = await store.metricsSummary({ limit: 10000 });
+      expect(summary.requests).toMatchObject({ total: 2000, clientErrorTotal: 2000, requestBytesTotal: 4000,
+        responseBytesTotal: 6000, transferBytesTotal: 10000, averageDurationMs: 5, byRoute: { unmatched: 2000 }, byStatusCode: { "429": 2000 } });
+      const exported = await store.metricsExport({ limit: 10000, kind: "request" });
+      expect(exported.httpRequestMetricEvents).toHaveLength(1);
+      expect(exported.httpRequestMetricEvents[0]).toMatchObject({ route: "unmatched", eventCount: 2000 });
+      const health = await store.metricsHealth();
+      expect(health.requests.total).toBe(2000);
+      expect(JSON.stringify(exported)).not.toContain("synthetic");
+    } finally { await store.close(); }
+  });
+
+  it("retains rotating rejection keys and flushes exact facts before close", async () => {
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-rotating-metrics-"));
+    roots.push(userDataPath);
+    const store = createOperationPermissionStore({ userDataPath, capabilityBindingGuard: false });
+    const methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD", "TRACE", "CONNECT"];
+    await Promise.all(Array.from({ length: 6000 }, (_, index) => store.appendHttpRequestMetric({
+      method: methods[index % methods.length], route: `/unknown/rotating-${index}?key=fixture`,
+      statusCode: 400 + index % 200, completionStatus: "completed", requestBytes: 2, responseBytes: 3,
+      durationMs: index % 2 ? 10 : 5
+    })));
+    await store.appendHttpRequestMetric({ method: "GET", route: "/api/healthz", statusCode: 429, completionStatus: "completed", requestBytes: 0, responseBytes: 0, durationMs: 7.5 });
+    await store.close();
+    const reopened = createOperationPermissionStore({ userDataPath, capabilityBindingGuard: false });
+    try {
+      const exported = await reopened.metricsExport({ kind: "request", limit: 10000 });
+      expect(exported.httpRequestMetricEvents.length).toBeLessThanOrEqual(712);
+      expect(exported.httpRequestMetricEvents.some((row: any) => row.route === "overflow")).toBe(true);
+      expect(exported.httpRequestMetricEvents.reduce((total: number, row: any) => total + row.eventCount, 0)).toBe(6001);
+      const summary = await reopened.metricsSummary({ limit: 10000 });
+      expect(summary.requests).toMatchObject({ total: 6001, requestBytesTotal: 12000,
+        responseBytesTotal: 18000, transferBytesTotal: 30000, averageDurationMs: 7.5 });
+      expect(summary.requests.byStatusCode["429"]).toBe(31);
+      expect(JSON.stringify(exported)).not.toContain("rotating-");
+    } finally { await reopened.close(); }
+  });
+
+  it("reprojects historical raw routes without deleting request facts", async () => {
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-historical-metrics-"));
+    roots.push(userDataPath);
+    const owner = await createOperationPermissionWorkerOwner({ userDataPath, capabilityBindingGuard: false });
+    owner.db.prepare(`INSERT INTO http_request_metric_events (metric_id, route, method, status_code, request_bytes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)`).run("historical-fixture", "/unknown/secret-fixture?credential=fixture", "GET", 404, 17, new Date().toISOString());
+    owner.db.exec("PRAGMA user_version = 14");
+    await owner.close();
+    const store = createOperationPermissionStore({ userDataPath, capabilityBindingGuard: false });
+    try {
+      const exported = await store.metricsExport({ kind: "request" });
+      expect(exported.httpRequestMetricEvents).toHaveLength(1);
+      expect(exported.httpRequestMetricEvents[0]).toMatchObject({ metricId: "historical-fixture", route: "unmatched", requestBytes: 17, eventCount: 1 });
+      expect(JSON.stringify(exported)).not.toContain("secret-fixture");
+    } finally { await store.close(); }
   });
 
   it("binds catalog owners and durably revokes plugin grants and delegated descendants", async () : Promise<any> => {
@@ -415,7 +480,7 @@ describe("Operation Permission grant security invariants", () : any => {
       async invalidateCredential() : Promise<any> {},
       close() : any {}
     };
-    store = createOperationPermissionWorkerOwner({
+    store = await createOperationPermissionWorkerOwner({
       userDataPath,
       registry,
       capabilityKeyProvider,
@@ -449,7 +514,7 @@ describe("Operation Permission grant security invariants", () : any => {
       tool: pluginTool
     })).resolves.toMatchObject({ ok: false, reasonCode: "grant_changed_during_authorization" });
     expect(store.getRawGrant(issued.grant.id).useCount).toBe(0);
-    store.close();
+    await store.close();
   });
 
   it("rejects grant references outside the active operation catalog", async () : Promise<any> => {
@@ -552,7 +617,7 @@ describe("Operation Permission grant security invariants", () : any => {
   it("rejects malformed persisted ACL state and prevents new malformed JSON writes", async () : Promise<any> => {
     const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-malformed-grant-"));
     roots.push(userDataPath);
-    const store: any = createOperationPermissionWorkerOwner({
+    const store: any = await createOperationPermissionWorkerOwner({
       userDataPath,
       capabilityBindingGuard: false,
       capabilityResolver: () : any => ["cap:tool:*"]
@@ -579,7 +644,65 @@ describe("Operation Permission grant security invariants", () : any => {
         reasonCode: "grant_policy_corrupt"
       });
     } finally {
-      store.close();
+      await store.close();
+    }
+  });
+
+  it("treats a missing local MCP target header as admission and a presented mismatch as denial", async () : Promise<any> => {
+    expect(localMcpTargetBindingDecision({
+      type: "mcp-client",
+      metadata: { targets: ["codex"] }
+    }, { headers: {} })).toMatchObject({ ok: true });
+    expect(localMcpTargetBindingDecision({
+      type: "mcp-client",
+      metadata: { targets: ["codex"] }
+    }, { headers: { "x-meshrix.js-mcp-target": "other-client" } })).toMatchObject({
+      ok: false,
+      reasonCode: "mcp_target_binding_mismatch",
+      requestedTarget: "other-client"
+    });
+    expect(localMcpTargetBindingDecision({
+      type: "mcp-client",
+      metadata: { targets: ["codex"] }
+    }, { headers: { "x-meshrix.js-mcp-target": "codex" } })).toMatchObject({
+      ok: true,
+      requestedTarget: "codex"
+    });
+
+    const { store, request } = await fixture({
+      type: "mcp-client",
+      metadata: { targets: ["codex"] }
+    });
+    try {
+      const admitted: Record<string, any> = {
+        ...request,
+        __meshrixProcessIdentity: { ok: true }
+      };
+      await expect(store.authorizeRequest({ request: admitted })).resolves.toMatchObject({ ok: true });
+      await expect(store.authorizeRequest({
+        request: {
+          ...admitted,
+          headers: {
+            ...admitted.headers,
+            "x-meshrix.js-mcp-target": "other-client"
+          }
+        }
+      })).resolves.toMatchObject({
+        ok: false,
+        status: 403,
+        reasonCode: "mcp_target_binding_mismatch"
+      });
+      await expect(store.authorizeRequest({
+        request: {
+          ...admitted,
+          headers: {
+            ...admitted.headers,
+            "x-meshrix.js-mcp-target": "codex"
+          }
+        }
+      })).resolves.toMatchObject({ ok: true });
+    } finally {
+      await store.close();
     }
   });
 

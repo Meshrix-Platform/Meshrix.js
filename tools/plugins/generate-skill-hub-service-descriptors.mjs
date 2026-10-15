@@ -27,7 +27,6 @@ const operations = remoteOperations.map((operation) => ({
   path: `/v1/operations/${operation.id}`,
   risk: operation.risk,
   requiredScopes: operation.requiredScopes,
-  timeoutMs: 120000,
   inputSchema
 }));
 
@@ -39,6 +38,7 @@ const contract = {
   description: "Closed contract for the independently deployed Skill Hub HTTP service.",
   serviceSelection: {
     configurationPath: "service.serviceRef",
+    timeoutConfigurationPath: "service.timeoutMs",
     operatorSupplied: true,
     required: true
   },
@@ -46,7 +46,6 @@ const contract = {
     protocol: "http-json",
     endpoint: { operatorSupplied: true, required: true, allowedSchemes: ["http", "https"] },
     credential: { operatorSupplied: true, required: true, custody: "secretRef", authType: "bearer" },
-    timeoutConfigurationPath: "service.timeoutMs",
     eventStream: {
       transport: "sse",
       method: "GET",

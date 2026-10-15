@@ -75,25 +75,36 @@ export async function createSkillHubEventJournal({ serviceData }) {
     async publish(operationId) {
       if (closed || !MUTATING_OPERATIONS.has(String(operationId || ""))) return null;
       let published;
-      writeTail = writeTail.then(async () => {
-        revision += 1;
+      const operation = writeTail.then(async () => {
+        const nextRevision = revision + 1;
         published = Object.freeze({
           schemaVersion: EVENT_SCHEMA,
-          eventId: revision,
-          serviceRevision: revision,
+          eventId: nextRevision,
+          serviceRevision: nextRevision,
           eventType: "skill-hub.catalog.changed",
           operationId: String(operationId),
           occurredAt: new Date().toISOString()
         });
-        events = [...events, published].slice(-MAX_EVENTS);
-        await serviceData.writeFile(EVENT_RESOURCE, JSON.stringify({
-          schemaVersion: JOURNAL_SCHEMA,
-          revision,
-          events
-        }));
+        const nextEvents = [...events, published].slice(-MAX_EVENTS);
+        try {
+          await serviceData.writeFile(EVENT_RESOURCE, JSON.stringify({
+            schemaVersion: JOURNAL_SCHEMA,
+            revision: nextRevision,
+            events: nextEvents
+          }));
+        } catch (error) {
+          // Reconnection invalidates consumers' catalog views, including the
+          // already committed business change whose hint could not be stored.
+          for (const subscriber of [...subscribers]) remove(subscriber, true);
+          throw error;
+        }
+        revision = nextRevision;
+        events = nextEvents;
         for (const subscriber of [...subscribers]) deliver(subscriber, published);
       });
-      await writeTail;
+      // Preserve this caller's failure while allowing later publications to run.
+      writeTail = operation.catch(() => {});
+      await operation;
       return published;
     },
     subscribe({ request, response, cursor = 0 }) {

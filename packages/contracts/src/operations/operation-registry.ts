@@ -1,7 +1,8 @@
 import {
   decorateServerApiOperations,
-  serializableOperationSafety
 } from "./operation-decorators.ts";
+import { listInterfaceCatalog } from "./interface-catalog.ts";
+export { listInterfaceCatalog } from "./interface-catalog.ts";
 import { OPERATION_REGISTRY_GOVERNED_DEFINITIONS } from "./operation-registry-governed-definitions.ts";
 import { AGENT_SESSION_OPERATION_DEFINITIONS } from "./agent-session-operation-definitions.ts";
 import { CONTEXT_JOB_OPERATION_DEFINITIONS } from "./context-job-operation-definitions.ts";
@@ -69,47 +70,6 @@ export const SERVER_NON_OPERATION_API_CAPABILITIES: readonly any[] = Object.free
     description: "Local MCP process-identity request capability; not exposed as an HTTP/RPC operation."
   }
 ]);
-
-export function listInterfaceCatalog(operations: any = SERVER_API_OPERATIONS) : any {
-  return operations.map((operation?: any) : any => ({
-    id: operation.id,
-    feature: operation.feature,
-    label: operation.label,
-    description: operation.description || operation.label || operation.id,
-    target: `${operation.target.controller}.${operation.target.method}`,
-    targetBinding: operation.target,
-    http: `${operation.http.method} ${operation.http.path}`,
-    httpBinding: operation.http,
-    httpHeaderContract: operation.http?.headerContract || null,
-    httpResponseContract: operation.http?.responseContract || null,
-    rpc: operation.rpc?.method || "",
-    rpcBinding: operation.rpc || null,
-    cli: operation.cli?.usage || "",
-    cliBinding: operation.cli || null,
-    aliases: (operation.cli?.aliases || []).map((tokens?: any) : any => tokens.join(" ")),
-    localInForwardMode: Boolean(operation.http.localInForwardMode),
-    binary: Boolean(operation.binary),
-    aspects: operation.aspects || [],
-    safety: serializableOperationSafety(operation),
-    requiredScopes: operation.requiredScopes || [],
-    readOnly: operation.readOnly === true,
-    destructive: operation.destructive === true,
-    public: operation.public === true,
-    externalAuth: operation.externalAuth === true,
-    processIdentity: operation.processIdentity || null,
-    concurrency: operation.concurrency,
-    audit: operation.audit || {},
-    log: operation.log || {},
-    deprecated: operation.deprecated === true,
-    replacementService: operation.replacementService || "",
-    replacementOperationPrefix: operation.replacementOperationPrefix || "",
-    lifecycle: operation.lifecycle || {},
-    queueStatus: operation.queueStatus || "",
-    queueLabel: operation.queueLabel || "",
-    taskType: operation.taskType || "",
-    inputSchema: operation.inputSchema || {}
-  }));
-}
 
 function normalizeCliTokens(tokens?: any) : any {
   return (tokens || []).map((token?: any) : any => String(token || "").trim()).filter(Boolean);

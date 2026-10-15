@@ -111,7 +111,7 @@ function parseEnvelopeRefs(record: Readonly<Record<string, unknown>>): GatewayEn
       throw new Error(`agent_mcp_envelope_${key}_required`);
     }
   }
-  if (typeof record.deadlineMs !== "number" || record.deadlineMs <= 0) {
+  if (!Number.isSafeInteger(record.deadlineMs) || (record.deadlineMs as number) <= 0) {
     throw new Error("agent_mcp_envelope_deadline_out_of_bounds");
   }
   if (!["none", "text", "sse"].includes(record.streamingMode as string)) {

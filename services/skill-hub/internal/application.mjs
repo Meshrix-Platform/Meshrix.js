@@ -1,12 +1,17 @@
 import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 
 import {
   buildSkillHubStatsDashboard,
   createSkillHubContributionRegistry
 } from "./skill-hub-registry.mjs";
 import { createStateMutationQueue } from "./state-mutation-queue.mjs";
+import { unownedRegistryResource, relocateOwnedRegistries } from "./registry-ownership.mjs";
+import {
+  createSkillHubRegistryPersistence,
+  legacyRegistryArchiveResource,
+  registryDatabaseResource
+} from "./registry-persistence.mjs";
 import {
   callerIdClaim,
   callerKindClaim,
@@ -31,6 +36,41 @@ import {
 const MAX_PACKAGE_BYTES = 1024 * 1024;
 const SANDBOX_OPERATIONS = new Set(["skill_hub.scan", "skill_hub.build", "skill_hub.execute"]);
 const GLOBAL_REGISTRY_PARTITION = "default";
+// Operations this service can actually serve. Anything else is rejected
+// before a registry session or queue lane is initialized.
+const SERVICE_OPERATIONS = new Set([
+  "skill_hub.search",
+  "skill_hub.list",
+  "skill_hub.stats",
+  "skill_hub.leaderboard",
+  "skill_hub.get",
+  "skill_hub.submit",
+  "skill_hub.scan",
+  "skill_hub.build",
+  "skill_hub.execute",
+  "skill_hub.download",
+  "skill_hub.review",
+  "skill_hub.publish",
+  "skill_hub.install",
+  "skill_hub.usage.record",
+  "skill_hub.revoke",
+  "skill_hub.rollback.record",
+  "skill_hub.permission.request",
+  "skill_hub.permission.grant"
+]);
+// Registry sessions are a bounded cache: at most MAX_REGISTRY_SESSIONS live
+// sessions, evicting only partitions with no queued or running work. Active
+// partitions also consume the mutation queue's pending budget.
+const MAX_REGISTRY_SESSIONS = 64;
+const REGISTRY_PARTITION_MAX_LENGTH = 256;
+const READ_ONLY_REGISTRY_METHODS = new Set([
+  "assertCurrentGrant",
+  "getContribution",
+  "getAuditSummary",
+  "getLeaderboard",
+  "listAuditEvents",
+  "listContributions"
+]);
 const WORKSPACE_BINDING_FIELDS = Object.freeze({
   "skill_hub.submit": "workspaceId",
   "skill_hub.scan": "workspaceId",
@@ -196,49 +236,159 @@ function bindExplicitWorkspace(operationId, input) {
   return { ...input, [field]: requiredWorkspaceId(input[field], field) };
 }
 
-export async function createSkillHubApplication({ serviceData }) {
+export async function createSkillHubApplication({ serviceData, registryOwnership = [] }) {
   if (!serviceData) throw new TypeError("Skill Hub application requires service data.");
   await serviceData.initialize();
+  const ownershipConflicts = await relocateOwnedRegistries(serviceData, registryOwnership);
   const lifecycleDefinition = Object.freeze(JSON.parse(await readFile(
     new URL("../state-machines/contribution.lifecycle.json", import.meta.url),
     "utf8"
   )));
-  const mutationQueue = createStateMutationQueue();
   const registrySessions = new Map();
+  const retiringSessions = new Map();
+  const mutationQueue = createStateMutationQueue({
+    partitionCount: () => registrySessions.size + retiringSessions.size
+  });
   let closed = false;
+  let sessionClock = 0;
 
-  function registryDescriptor(input = {}) {
+  function partitionError() {
+    return Object.assign(new Error("Skill Hub registry partition is invalid."), {
+      code: "skill_hub_workspace_binding_invalid"
+    });
+  }
+
+  // The caller-selected partition only chooses within the authenticated
+  // principal's tenant namespace; tenants can never reach (or enumerate)
+  // each other's registry partitions.
+  function registryDescriptor(input = {}, principal = {}) {
     const requestedPartition = String(
       input.registryWorkspaceId || input.contributionRegistryWorkspaceId || ""
     ).trim();
+    if (requestedPartition &&
+        (requestedPartition.length > REGISTRY_PARTITION_MAX_LENGTH ||
+         /[\u0000-\u001f\u007f/\\]/u.test(requestedPartition))) {
+      throw partitionError();
+    }
     const workspaceId = requestedPartition || GLOBAL_REGISTRY_PARTITION;
-    const registryId = crypto.createHash("sha256").update(workspaceId).digest("hex");
+    const tenantRef = String(principal.tenantRef || "");
+    const registryId = crypto.createHash("sha256")
+      .update(`skill-hub-registry\0${tenantRef}\0${workspaceId}`)
+      .digest("hex");
     return Object.freeze({
       workspaceId,
-      registryRelativePath: path.posix.join("SkillHub", "registries", `${registryId}.json`),
+      registryRelativePath: `SkillHub/registries/${registryId}.json`,
       queueKey: `skill-hub-registry:${registryId}`
     });
   }
 
-  async function contributionRegistryFor(input = {}) {
-    const descriptor = registryDescriptor(input);
-    if (!registrySessions.has(descriptor.registryRelativePath)) {
-      registrySessions.set(descriptor.registryRelativePath, (async () => {
-        let initialPersistedState;
+  function retireSession(record) {
+    const path = record.descriptor.registryRelativePath;
+    registrySessions.delete(path);
+    const retiring = Promise.resolve(record.promise)
+      .then(() => (typeof record.drained === "function" ? record.drained() : null))
+      .catch(() => {});
+    retiringSessions.set(path, retiring);
+    void retiring.finally(() => {
+      if (retiringSessions.get(path) === retiring) retiringSessions.delete(path);
+    });
+  }
+
+  function evictIdleSessions() {
+    const idle = [...registrySessions.values()]
+      .filter((record) => mutationQueue.idle(record.descriptor.queueKey))
+      .sort((left, right) => left.lastUsedAt - right.lastUsedAt);
+    for (const record of idle) {
+      if (registrySessions.size < MAX_REGISTRY_SESSIONS) break;
+      retireSession(record);
+    }
+  }
+
+  async function contributionRegistryFor(input = {}, context = {}) {
+    const descriptor = registryDescriptor(input, context.principal);
+    if (ownershipConflicts.has(descriptor.registryRelativePath)) {
+      throw Object.assign(new Error("Historical and tenant-owned registry require ownership reconciliation."), {
+        code: "skill_hub_registry_ownership_conflict"
+      });
+    }
+    const existing = registrySessions.get(descriptor.registryRelativePath);
+    if (existing) {
+      existing.lastUsedAt = ++sessionClock;
+      return existing.promise;
+    }
+    if (registrySessions.size >= MAX_REGISTRY_SESSIONS) {
+      evictIdleSessions();
+      if (registrySessions.size >= MAX_REGISTRY_SESSIONS) {
+        throw Object.assign(new Error("Skill Hub registry partition capacity is exhausted."), {
+          code: "skill_hub_partition_capacity"
+        });
+      }
+    }
+    const record = {
+      descriptor,
+      lastUsedAt: ++sessionClock,
+      drained: null,
+      promise: null
+    };
+    record.promise = (async () => {
+      const retiring = retiringSessions.get(descriptor.registryRelativePath);
+      if (retiring) await retiring.catch(() => {});
+      let databaseExists = true;
+      try {
+        await serviceData.stat(registryDatabaseResource(descriptor.registryRelativePath));
+      } catch (error) {
+        if (error?.code !== "SERVICE_DATA_NOT_FOUND") throw error;
+        databaseExists = false;
+      }
+      if (!databaseExists) {
+        let currentRegistryExists = true;
         try {
-          initialPersistedState = JSON.parse(await serviceData.readFile(descriptor.registryRelativePath, "utf8"));
-        } catch (error) {
-          if (error?.code !== "SERVICE_DATA_NOT_FOUND") throw error;
+          await serviceData.stat(descriptor.registryRelativePath);
+        } catch (registryError) {
+          if (registryError?.code !== "SERVICE_DATA_NOT_FOUND") throw registryError;
+          currentRegistryExists = false;
         }
-        let persistenceTail = Promise.resolve();
-        const schedulePersistence = (operation) => {
-          persistenceTail = persistenceTail.then(operation);
-          return persistenceTail;
-        };
-        const registry = createSkillHubContributionRegistry({
+        if (!currentRegistryExists) {
+          let archivedRegistryExists = true;
+          try {
+            await serviceData.stat(legacyRegistryArchiveResource(descriptor.registryRelativePath));
+          } catch (archiveError) {
+            if (archiveError?.code !== "SERVICE_DATA_NOT_FOUND") throw archiveError;
+            archivedRegistryExists = false;
+          }
+          if (archivedRegistryExists) {
+            throw Object.assign(new Error("The imported Skill Hub registry database is missing; restore it from backup."), {
+              code: "skill_hub_registry_database_missing"
+            });
+          }
+          try {
+            await serviceData.stat(unownedRegistryResource(descriptor.workspaceId));
+            throw Object.assign(new Error("Historical registry requires an explicit ownership assignment."), {
+              code: "skill_hub_registry_ownership_required"
+            });
+          } catch (ownershipError) {
+            if (ownershipError?.code !== "SERVICE_DATA_NOT_FOUND") throw ownershipError;
+          }
+        }
+      }
+      let persistenceTail = Promise.resolve();
+      const schedulePersistence = (operation) => {
+        persistenceTail = persistenceTail.then(operation);
+        return persistenceTail;
+      };
+      const registryPersistence = await createSkillHubRegistryPersistence({
+        serviceData,
+        registryRelativePath: descriptor.registryRelativePath
+      });
+      let registry;
+      try {
+        registry = createSkillHubContributionRegistry({
           workspaceId: descriptor.workspaceId,
-          initialPersistedState,
+          initialPersistedState: registryPersistence.initialPersistedState,
           schedulePersistence,
+          commitMutation: (change) => schedulePersistence(() => registryPersistence.commitMutation(change)),
+          readAuditEvents: registryPersistence.listAuditEvents,
+          readAuditSummary: registryPersistence.getAuditSummary,
           serviceData: serviceData,
           registryRelativePath: descriptor.registryRelativePath,
           contributionNormalizer: normalizeSkillHubContribution,
@@ -248,27 +398,48 @@ export async function createSkillHubApplication({ serviceData }) {
           assetBuckets: SKILL_HUB_ASSET_BUCKETS,
           lifecycleDefinition
         });
-        const asynchronous = { protocolVersion: registry.protocolVersion };
-        for (const [name, method] of Object.entries(registry)) {
-          if (typeof method !== "function" || name.startsWith("_")) continue;
-          asynchronous[name] = async (...args) => {
+      } catch (error) {
+        registryPersistence.close();
+        throw error;
+      }
+      const asynchronous = { protocolVersion: registry.protocolVersion };
+      for (const [name, method] of Object.entries(registry)) {
+        if (typeof method !== "function" || name.startsWith("_")) continue;
+        asynchronous[name] = async (...args) => {
+          await persistenceTail;
+          if (READ_ONLY_REGISTRY_METHODS.has(name)) {
+            return Reflect.apply(method, registry, args);
+          }
+          registry._beginMutation(name, args);
+          try {
+            const output = await Reflect.apply(method, registry, args);
+            await registry._commitMutation();
             await persistenceTail;
-            const snapshot = registry._snapshotState();
-            try {
-              const output = await Reflect.apply(method, registry, args);
-              await persistenceTail;
-              return output;
-            } catch (error) {
-              registry._restoreState(snapshot);
-              persistenceTail = Promise.resolve();
-              throw error;
-            }
-          };
+            return output;
+          } catch (error) {
+            await persistenceTail.catch(() => {});
+            registry._rollbackMutation();
+            persistenceTail = Promise.resolve();
+            throw error;
+          }
+        };
+      }
+      record.drained = async () => {
+        try {
+          await persistenceTail;
+        } finally {
+          registryPersistence.close();
         }
-        return Object.freeze(asynchronous);
-      })());
-    }
-    return registrySessions.get(descriptor.registryRelativePath);
+      };
+      return Object.freeze(asynchronous);
+    })();
+    registrySessions.set(descriptor.registryRelativePath, record);
+    record.promise.catch(() => {
+      if (registrySessions.get(descriptor.registryRelativePath) === record) {
+        registrySessions.delete(descriptor.registryRelativePath);
+      }
+    });
+    return record.promise;
   }
 
   function filterContributionsForWorkspace(items = [], input = {}) {
@@ -319,8 +490,11 @@ export async function createSkillHubApplication({ serviceData }) {
     const byteCount = bytes.byteLength;
     const digest = crypto.createHash("sha256").update(bytes).digest("hex");
     const resource = serviceData.packageResource(digest);
-    await serviceData.writeFile(resource, bytes, null);
-    bytes.fill(0);
+    try {
+      await serviceData.writeFile(resource, bytes, null);
+    } finally {
+      bytes.fill(0);
+    }
     const prepared = { ...input };
     delete prepared.packageBundleBase64;
     const custodyRef = `service-package:${digest}`;
@@ -331,7 +505,7 @@ export async function createSkillHubApplication({ serviceData }) {
       envelopeDigest: crypto.createHash("sha256").update(`skill-hub-service\0${digest}`).digest("hex"),
       byteCount
     };
-    return { prepared, resource, custodyRef };
+    return { prepared, custodyRef };
   }
 
   async function packagePayload(prepared) {
@@ -382,6 +556,9 @@ export async function createSkillHubApplication({ serviceData }) {
   async function invoke(operationId, rawInput = {}) {
     if (closed) return { statusCode: 503, body: errorPayload({ code: "skill_hub_service_closed" }) };
     if (!plainObject(rawInput)) return { statusCode: 400, body: errorPayload({ code: "skill_hub_request_invalid" }) };
+    if (!SERVICE_OPERATIONS.has(operationId)) {
+      return { statusCode: 404, body: errorPayload({ code: "skill_hub_operation_not_found" }) };
+    }
     const receivedInput = { ...rawInput };
     let hostContext;
     try {
@@ -398,19 +575,24 @@ export async function createSkillHubApplication({ serviceData }) {
     }
     const { phase, sandboxOutcome: remoteReceipt, permissionGrantOutcome: hostReceipt } = hostContext;
     const context = callContext(input, hostContext);
-    const descriptor = registryDescriptor(input);
+    let descriptor;
+    try {
+      descriptor = registryDescriptor(input, hostContext.principal);
+    } catch (error) {
+      return { statusCode: 400, body: errorPayload(error) };
+    }
+    const requestBytes = Buffer.byteLength(JSON.stringify(rawInput), "utf8");
 
-    return mutationQueue.run(descriptor.queueKey, async () => {
+    let queued;
+    try {
+      queued = mutationQueue.run(descriptor.queueKey, async () => {
       try {
         context.contributionRegistry = await contributionRegistryFor(input, context);
         if (operationId === "skill_hub.submit") {
           const submission = await prepareSubmission(input);
-          context.packageCustody = Object.freeze({
-            async delete() {
-              await serviceData.deleteFile(submission.resource);
-              return Object.freeze({ ok: true });
-            }
-          });
+          // Content-addressed packages can be shared by committed contributions
+          // in other partitions. A failed submission must retain their bytes.
+          context.packageCustody = Object.freeze({ custodyRef: submission.custodyRef });
           const response = await executeOperation({ operationId, input: submission.prepared, context });
           return { statusCode: response.status, body: response.payload };
         }
@@ -468,18 +650,35 @@ export async function createSkillHubApplication({ serviceData }) {
         if (!response) return { statusCode: 404, body: errorPayload({ code: "skill_hub_operation_not_found" }) };
         return { statusCode: response.status, body: response.payload };
       } catch (error) {
-        return { statusCode: 400, body: errorPayload(error) };
+        const statusCode = [
+          "skill_hub_partition_capacity",
+          "skill_hub_registry_database_missing",
+          "skill_hub_registry_import_incomplete"
+        ].includes(error?.code) ? 503 :
+          ["skill_hub_registry_ownership_required", "skill_hub_registry_ownership_conflict"].includes(error?.code) ? 409 : 400;
+        return { statusCode, body: errorPayload(error) };
       }
-    });
+      }, { bytes: requestBytes });
+    } catch (error) {
+      const statusCode = error?.code === "skill_hub_queue_full" || error?.code === "skill_hub_runtime_closed" ? 503 : 400;
+      return { statusCode, body: errorPayload(error) };
+    }
+    return queued;
   }
 
   return Object.freeze({
     invoke,
+    sessionCount: () => registrySessions.size,
     async close() {
       if (closed) return Object.freeze({ ok: true, alreadyClosed: true });
       closed = true;
       await mutationQueue.close();
-      await Promise.allSettled([...registrySessions.values()]);
+      await Promise.allSettled([...registrySessions.values()].map(async (record) => {
+        await record.promise;
+        await record.drained?.();
+      }));
+      registrySessions.clear();
+      await Promise.allSettled([...retiringSessions.values()]);
       return Object.freeze({ ok: true, alreadyClosed: false });
     }
   });

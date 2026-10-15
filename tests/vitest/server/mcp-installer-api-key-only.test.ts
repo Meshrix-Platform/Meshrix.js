@@ -35,9 +35,14 @@ vi.mock("../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/devic
 }));
 
 import { parseArgs } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/basic-utils.ts";
+import {
+  deleteMcpApiKeyCredential,
+  loadMcpApiKeyCredential,
+  saveMcpApiKeyCredential
+} from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/credential-store.ts";
 import { authHeaders, ensureService, resolveApiKey } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/discovery.ts";
 import { installCommand, installTargets } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/install-command.ts";
-import { proxyCommand, resolveProxyCredentials, subscribeToMcpUpdates } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
+import { assertCredentialDestinationBinding, proxyCommand, resolveProxyCredentials, subscribeToMcpUpdates } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
 import { uninstallTargets } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/uninstall-command.ts";
 import {
   MCP_INTERFACE_VERSION,
@@ -90,6 +95,64 @@ describe("MCP installer API Key-only input", () : any => {
 
     await expect(proxyCommand({ target: "codex", url: "https://meshrix.invalid" })).rejects.toThrow(/Missing API Key/iu);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported credential targets before filesystem access", async () : Promise<any> => {
+    const binding = { target: "../../escaped", baseUrl: "https://meshrix.invalid" };
+    await expect(saveMcpApiKeyCredential({ ...binding, token: KEY })).rejects.toThrow(/target and Meshrix.js base URL/iu);
+    await expect(loadMcpApiKeyCredential(binding)).rejects.toThrow(/target and Meshrix.js base URL/iu);
+    await expect(deleteMcpApiKeyCredential(binding)).rejects.toThrow(/target and Meshrix.js base URL/iu);
+    expect(await fs.readdir(credentialDir)).toEqual([]);
+  });
+
+  it("reads a stored credential record once and binds it to its original server", async () : Promise<any> => {
+    delete process.env.MESHRIX_MCP_TOKEN;
+    await saveMcpApiKeyCredential({ target: "pi", baseUrl: "https://meshrix.invalid", token: KEY, autoUpdate: true });
+    const readFile = vi.spyOn(fs, "readFile");
+
+    const credentials: any = await resolveProxyCredentials({
+      target: "pi",
+      url: "https://meshrix.invalid",
+      "token-env": "MESHRIX_TEST_CONNECTOR_KEY"
+    });
+
+    expect(credentials).toMatchObject({
+      tokenSource: "credential-store",
+      credentialBaseUrl: "https://meshrix.invalid",
+      autoUpdate: true
+    });
+    expect(readFile).toHaveBeenCalledOnce();
+    expect(() : any => assertCredentialDestinationBinding(credentials, "https://different.invalid"))
+      .toThrow(/bound to a different server/iu);
+    expect(() : any => assertCredentialDestinationBinding(credentials, "https://meshrix.invalid")).not.toThrow();
+  });
+
+  it.skipIf(process.platform === "win32")("fails credential persistence when private directory permissions cannot be enforced", async () : Promise<any> => {
+    const chmod = vi.spyOn(fs, "chmod").mockRejectedValue(Object.assign(new Error("permission denied"), { code: "EPERM" }));
+    await expect(saveMcpApiKeyCredential({
+      target: "pi",
+      baseUrl: "https://meshrix.invalid",
+      token: KEY
+    })).rejects.toMatchObject({ code: "EPERM" });
+    expect(chmod).toHaveBeenCalledOnce();
+    expect((await fs.readdir(credentialDir)).filter((name?: any) : any => name.endsWith(".json"))).toEqual([]);
+  });
+
+  it.skipIf(process.platform === "win32")("does not publish a credential when its file mode cannot be enforced", async () : Promise<any> => {
+    const chmodFile = fs.chmod;
+    let calls = 0;
+    const chmod = vi.spyOn(fs, "chmod").mockImplementation(async (filePath?: any, mode?: any) : Promise<any> => {
+      calls += 1;
+      if (calls === 2) throw Object.assign(new Error("permission denied"), { code: "EPERM" });
+      return chmodFile(filePath, mode);
+    });
+    await expect(saveMcpApiKeyCredential({
+      target: "pi",
+      baseUrl: "https://meshrix.invalid",
+      token: KEY
+    })).rejects.toMatchObject({ code: "EPERM" });
+    expect(chmod).toHaveBeenCalledTimes(2);
+    expect((await fs.readdir(credentialDir)).filter((name?: any) : any => name.endsWith(".json") || name.endsWith(".tmp"))).toEqual([]);
   });
 
   it("accepts one strict environment or protected-stdin value and rejects ambiguity", async () : Promise<any> => {
@@ -224,7 +287,7 @@ describe("MCP installer API Key-only input", () : any => {
     const received: any[] = [];
     const dispatcher: any = { close: vi.fn(async () : Promise<any> => {}), destroy: vi.fn(async () : Promise<any> => {}) };
     const dispatcherFactory: any = vi.fn((options?: any) : any => {
-      expect(options).toEqual({ headersTimeout: 0, bodyTimeout: 0 });
+      expect(options).toEqual({ connectTimeout: 0, headersTimeout: 0, bodyTimeout: 0 });
       return dispatcher;
     });
     const fetchMock: any = vi.fn(async (_url?: any, init?: any) : Promise<any> => {
@@ -265,18 +328,21 @@ describe("MCP installer API Key-only input", () : any => {
     });
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls[0][1].dispatcher).toBe(dispatcher);
+    expect(fetchMock.mock.calls[0][1].redirect).toBe("error");
     expect(received).toHaveLength(1);
     expect(received[0].params).toEqual({ revision: 4, command: "must-not-run" });
     expect(dispatcher.destroy).toHaveBeenCalledOnce();
     expect(dispatcher.close).not.toHaveBeenCalled();
   });
 
-  it("uses only the API Key credential header", () : any => {
-    const headers: any = authHeaders(KEY, "codex");
+  it("uses only the API Key credential header over HTTPS or literal loopback HTTP", () : any => {
+    const headers: any = authHeaders(KEY, "codex", "https://meshrix.invalid");
     expect(headers["X-Meshrix.js-Api-Key"]).toBe(KEY);
     expect(headers).not.toHaveProperty("Authorization");
     expect(headers).not.toHaveProperty("x-meshrix-tool-token");
     expect(Object.keys(headers).some((name?: any) : any => /claim|signature|verification/iu.test(name))).toBe(false);
+    expect(() : any => authHeaders(KEY, "codex", "http://meshrix.invalid")).toThrow(/require HTTPS/iu);
+    expect(authHeaders(KEY, "codex", "http://127.0.0.1:7228")["X-Meshrix.js-Api-Key"]).toBe(KEY);
   });
 
   it("rejects unsupported options through the generic parser", () : any => {

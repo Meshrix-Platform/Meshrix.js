@@ -3,7 +3,7 @@
   "info": {
     "title": "Meshrix Model Gateway Service Contract",
     "version": "v1",
-    "description": "Language-neutral HTTP and JSON contract for the independently deployable Model Gateway Service with native OpenAI and Anthropic standard API compatibility."
+    "description": "Language-neutral HTTP and JSON contract for the independently deployable Model Gateway Service. The standard endpoint paths expose only a priced text and client-executed-tool subset; multimodal content, provider-managed tools, unpriced pricing/destination selectors, and unknown request fields are rejected."
   },
   "paths": {
     "/health": {
@@ -49,7 +49,23 @@
     "/v1/chat/completions": {
       "post": {
         "operationId": "modelGatewayOpenAiChatCompletions",
-        "description": "Native OpenAI-compatible chat completions call.",
+        "description": "OpenAI Chat Completions endpoint path for metered string-only messages and client-executed function tools. Unknown fields, multimodal content, provider-managed tools, unpriced options, and caller billing-target headers are rejected before egress. The service makes one provider POST; uncertain outcomes are not automatically retried.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "At most 256 printable characters; replays the durable complete result for an identical completed request by this subject, including after RAM cache eviction or restart; a record already missing its result fails closed with completed_response_unavailable and never reexecutes.",
+            "schema": { "type": "string", "maxLength": 256 }
+          },
+          {
+            "name": "x-client-request-id",
+            "in": "header",
+            "required": false,
+            "description": "Optional request-correlation identifier; printable ASCII, maximum 512 characters. Billing-target headers are rejected.",
+            "schema": { "type": "string", "maxLength": 512, "pattern": "^[\\x20-\\x7E]*$" }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -84,22 +100,26 @@
     "/v1/messages": {
       "post": {
         "operationId": "modelGatewayAnthropicMessages",
-        "description": "Native Anthropic-compatible messages call.",
+        "description": "Anthropic Messages endpoint path for metered string-only messages and client-executed custom tools. Unknown fields, multimodal content, provider-managed tools, prompt-cache controls, unpriced options, and beta headers are rejected before egress. The service makes one provider POST; uncertain outcomes are not automatically retried.",
         "security": [
-          { "anthropicApiKey": [] }
+          {
+            "anthropicApiKey": []
+          }
         ],
         "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "At most 256 printable characters; replays the durable complete result for an identical completed request by this subject, including after RAM cache eviction or restart; a record already missing its result fails closed with completed_response_unavailable and never reexecutes.",
+            "schema": { "type": "string", "maxLength": 256 }
+          },
           {
             "name": "anthropic-version",
             "in": "header",
             "required": true,
-            "schema": { "type": "string", "minLength": 1 }
-          },
-          {
-            "name": "anthropic-beta",
-            "in": "header",
-            "required": false,
-            "schema": { "type": "string", "minLength": 1 }
+            "schema": { "type": "string", "minLength": 1 },
+            "description": "Anthropic protocol version header. Beta feature headers are rejected."
           }
         ],
         "requestBody": {
@@ -175,7 +195,7 @@
     "/v1/model-gateway/models": {
       "get": {
         "operationId": "modelGatewayModelsList",
-        "description": "Service-owned model management list.",
+        "description": "Service-owned model management list; requires model:read or model:manage.",
         "responses": {
           "200": {
             "description": "Service-owned models.",
@@ -216,7 +236,7 @@
     "/v1/model-gateway/providers": {
       "get": {
         "operationId": "modelGatewayProvidersList",
-        "description": "Service-owned provider management list.",
+        "description": "Service-owned provider management list; requires model:read or model:manage.",
         "responses": {
           "200": {
             "description": "Service-owned providers.",
@@ -257,7 +277,7 @@
     "/v1/model-gateway/pricing-revisions": {
       "get": {
         "operationId": "modelGatewayPricingRevisionsList",
-        "description": "Immutable pricing revisions bound to model identity and currency.",
+        "description": "Immutable pricing revisions bound to model identity and currency. Configured rates are operator-supplied ceilings for quota and ledger estimates, not verified provider prices. Operators must review applicable model/account/endpoint input and output categories before traffic or configuration changes; insufficient existing revisions must be replaced with a new revision and model binding before traffic.",
         "responses": {
           "200": {
             "description": "Pricing revisions.",
@@ -274,7 +294,7 @@
       },
       "post": {
         "operationId": "modelGatewayPricingRevisionsCreate",
-        "description": "Create one immutable pricing revision.",
+        "description": "Create one immutable pricing revision. This endpoint does not import or update provider prices. Review applicable input/output categories for the chosen model and provider account; create a sufficient new revision and bind the model to it before traffic if existing operator-supplied ceilings are too low.",
         "requestBody": {
           "required": true,
           "content": {
@@ -346,11 +366,7 @@
   },
   "components": {
     "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "description": "Service-issued client authentication; never a Meshrix permit."
-      },
+      "bearerAuth": { "type": "http", "scheme": "bearer", "description": "Service-issued client authentication; never a Meshrix permit." },
       "anthropicApiKey": {
         "type": "apiKey",
         "in": "header",
@@ -371,7 +387,9 @@
         "type": "object",
         "required": ["status"],
         "properties": {
-          "status": { "enum": ["ready", "not_ready"] }
+          "status": {
+            "enum": ["ready", "not_ready"]
+          }
         },
         "additionalProperties": false
       },
@@ -383,11 +401,14 @@
             "type": "object",
             "required": ["type", "code", "message", "requestId"],
             "properties": {
-              "type": { "enum": ["authentication", "authorization", "admission", "quota", "model", "provider", "timeout", "cancelled", "overload", "internal"] },
+              "type": {
+                "enum": ["authentication", "authorization", "admission", "quota", "model", "provider", "timeout", "cancelled", "overload", "internal", "completed"]
+              },
               "code": { "type": "string", "minLength": 1 },
               "message": { "type": "string", "minLength": 1 },
               "requestId": { "type": "string", "minLength": 1 },
-              "retryable": { "type": "boolean" }
+              "retryable": { "type": "boolean" },
+              "service_call_id": { "type": "string", "description": "Original completed call identity when an existing record lacks its durable result." }
             },
             "additionalProperties": false
           }
@@ -404,8 +425,13 @@
             "properties": {
               "message": { "type": "string", "minLength": 1 },
               "type": { "type": "string", "minLength": 1 },
-              "param": { "type": ["string", "null"] },
-              "code": { "type": ["string", "null"] }
+              "param": {
+                "type": ["string", "null"]
+              },
+              "code": {
+                "type": ["string", "null"]
+              },
+              "service_call_id": { "type": "string", "description": "Original completed call identity when an existing record lacks its durable result." }
             },
             "additionalProperties": true
           }
@@ -426,20 +452,19 @@
             },
             "additionalProperties": true
           },
-          "request_id": { "type": "string", "minLength": 1 }
+          "request_id": { "type": "string", "minLength": 1 },
+          "service_call_id": { "type": "string", "description": "Original completed call identity when an existing record lacks its durable result." }
         },
         "additionalProperties": false
       },
-      "OpenAiChatCompletionStream": {
-        "type": "string",
-        "description": "Server-sent events containing chat.completion.chunk objects followed by [DONE]."
-      },
+      "OpenAiChatCompletionStream": { "type": "string", "description": "Server-sent events containing chat.completion.chunk objects followed by [DONE]." },
       "AnthropicMessageStream": {
         "type": "string",
         "description": "Server-sent events using Anthropic message_start, content_block_*, message_delta, and message_stop event types."
       },
       "FixedPointAmount": {
         "type": "object",
+        "description": "A non-negative amount represented as whole currency units plus a 0-to-999999999 nanounit remainder.",
         "required": ["currency", "units", "nanos"],
         "properties": {
           "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
@@ -462,8 +487,11 @@
           "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
           "reservationRef": { "type": "string", "minLength": 1 },
           "state": { "$ref": "#/components/schemas/CallLedgerState" },
-          "attempts": { "type": "integer", "minimum": 1, "maximum": 16 },
-          "amount": { "$ref": "#/components/schemas/FixedPointAmount" },
+          "attempts": { "type": "integer", "minimum": 1, "maximum": 1 },
+          "amount": {
+            "$ref": "#/components/schemas/FixedPointAmount",
+            "description": "Settled ledger charge rounded up once to the nearest microcurrency unit after aggregating exact token-rate nanounits."
+          },
           "inputTokens": { "type": "integer", "minimum": 0 },
           "outputTokens": { "type": "integer", "minimum": 0 }
         },
@@ -476,8 +504,8 @@
           "revisionRef": { "type": "string", "minLength": 1 },
           "modelRef": { "type": "string", "minLength": 1 },
           "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
-          "inputTokenRate": { "$ref": "#/components/schemas/FixedPointAmount" },
-          "outputTokenRate": { "$ref": "#/components/schemas/FixedPointAmount" },
+          "inputTokenRate": { "$ref": "#/components/schemas/FixedPointAmount", "description": "Exact nanounit operator-supplied ceiling for input-token quota and ledger estimates. Set it at least as high as every applicable input category for the selected model, provider account, and endpoint, including automatic prompt-cache writes, long-context thresholds, and regional rates. This value is not verified against provider pricing and does not guarantee invoice totals." },
+          "outputTokenRate": { "$ref": "#/components/schemas/FixedPointAmount", "description": "Exact nanounit operator-supplied ceiling for output-token quota and ledger estimates. Set it at least as high as every applicable output category for the selected model, provider account, and endpoint, including long-context thresholds and regional rates. This value is not verified against provider pricing and does not guarantee invoice totals." },
           "immutable": { "const": true }
         },
         "additionalProperties": false
@@ -488,7 +516,11 @@
         "properties": {
           "policyRevisionRef": { "type": "string", "minLength": 1 },
           "maxRatePerSecond": { "type": "integer", "minimum": 1 },
-          "maxInputTokenBudget": { "type": "integer", "minimum": 1 },
+          "maxInputTokenBudget": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Input preflight counts complete UTF-8 JSON request bytes; Anthropic client-tool requests add 804 tokens, the highest value in the current published model/choice table as of 2026-10-08. Review configured aliases against the published overhead table; no per-model adjustment is available."
+          },
           "maxRequestedOutputTokenBudget": { "type": "integer", "minimum": 1 },
           "maxTotalTokenQuota": { "type": "integer", "minimum": 1 },
           "maxConcurrentCalls": { "type": "integer", "minimum": 1 },
@@ -501,12 +533,15 @@
         "required": ["callId", "state"],
         "properties": {
           "callId": { "type": "string", "minLength": 1 },
-          "state": { "enum": ["requested", "cancelled", "terminal"] }
+          "state": {
+            "enum": ["requested", "cancelled", "terminal", "in_doubt"]
+          }
         },
         "additionalProperties": false
       },
       "OpenAiChatCompletionsRequest": {
         "type": "object",
+        "description": "Priced text-only Chat Completions subset. Client function calls may be returned to the caller and supplied with their text results in later requests; the full request body is included in input preflight.",
         "required": ["model", "messages"],
         "properties": {
           "model": { "type": "string", "minLength": 1 },
@@ -517,16 +552,227 @@
               "type": "object",
               "required": ["role", "content"],
               "properties": {
-                "role": { "type": "string" },
-                "content": { "type": "string" }
+                "role": {
+                  "enum": ["system", "developer", "user", "assistant", "tool", "function"]
+                },
+                "content": {
+                  "oneOf": [{ "type": "string" }, { "type": "null" }],
+                  "description": "Text content, or null only for an assistant message carrying a client function call."
+                },
+                "name": { "type": "string" },
+                "tool_call_id": { "type": "string" },
+                "tool_calls": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "type", "function"],
+                    "properties": {
+                      "id": { "type": "string", "minLength": 1 },
+                      "type": { "const": "function" },
+                      "function": {
+                        "type": "object",
+                        "required": ["name", "arguments"],
+                        "properties": {
+                          "name": { "type": "string", "minLength": 1 },
+                          "arguments": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "function_call": {
+                  "type": "object",
+                  "required": ["name", "arguments"],
+                  "properties": {
+                    "name": { "type": "string", "minLength": 1 },
+                    "arguments": { "type": "string" }
+                  },
+                  "additionalProperties": false
+                },
+                "refusal": { "type": "string" }
               },
-              "additionalProperties": true
+              "allOf": [{
+                "if": {
+                  "properties": { "content": { "type": "null" } },
+                  "required": ["content"]
+                },
+                "then": {
+                  "properties": { "role": { "const": "assistant" } },
+                  "anyOf": [
+                    { "required": ["function_call"] },
+                    { "required": ["tool_calls"], "properties": { "tool_calls": { "type": "array", "minItems": 1 } } }
+                  ]
+                }
+              }],
+              "additionalProperties": false
             }
           },
           "stream": { "type": "boolean" },
-          "max_tokens": { "type": "integer", "minimum": 1 }
+          "max_tokens": { "type": "integer", "minimum": 1, "deprecated": true },
+          "max_completion_tokens": { "type": "integer", "minimum": 1 },
+          "n": { "type": "integer", "minimum": 1, "maximum": 128 },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+          "top_p": { "type": "number", "minimum": 0, "maximum": 1 },
+          "stop": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "array",
+                "items": { "type": "string" },
+                "maxItems": 4
+              }
+            ]
+          },
+          "presence_penalty": { "type": "number", "minimum": -2, "maximum": 2 },
+          "frequency_penalty": { "type": "number", "minimum": -2, "maximum": 2 },
+          "logit_bias": {
+            "type": "object",
+            "additionalProperties": { "type": "number" }
+          },
+          "logprobs": { "type": "boolean" },
+          "top_logprobs": { "type": "integer", "minimum": 0, "maximum": 20 },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "function"],
+              "properties": {
+                "type": { "const": "function" },
+                "function": {
+                  "type": "object",
+                  "required": ["name"],
+                  "properties": {
+                    "name": { "type": "string", "minLength": 1 },
+                    "description": { "type": "string" },
+                    "parameters": { "type": "object", "additionalProperties": true },
+                    "strict": { "type": "boolean" }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "tool_choice": {
+            "oneOf": [
+              {
+                "enum": ["auto", "none", "required"]
+              },
+              {
+                "type": "object",
+                "required": ["type", "function"],
+                "properties": {
+                  "type": { "const": "function" },
+                  "function": {
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                      "name": { "type": "string", "minLength": 1 }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "parallel_tool_calls": {
+            "type": "boolean",
+            "description": "Controls parallel client-executed function calls."
+          },
+          "response_format": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "enum": ["text", "json_object"]
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": ["type", "json_schema"],
+                "properties": {
+                  "type": { "const": "json_schema" },
+                  "json_schema": {
+                    "type": "object",
+                    "required": ["name", "schema"],
+                    "properties": {
+                      "name": { "type": "string", "minLength": 1 },
+                      "description": { "type": "string" },
+                      "schema": { "type": "object", "additionalProperties": true },
+                      "strict": { "type": "boolean" }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "seed": { "type": "integer" },
+          "user": { "type": "string" },
+          "functions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "description": { "type": "string" },
+                "parameters": { "type": "object", "additionalProperties": true },
+                "strict": { "type": "boolean" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "function_call": {
+            "oneOf": [
+              {
+                "enum": ["auto", "none"]
+              },
+              {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "prediction": {
+            "type": "object",
+            "required": ["type", "content"],
+            "properties": {
+              "type": { "const": "content" },
+              "content": {
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["type", "text"],
+                      "properties": {
+                        "type": { "const": "text" },
+                        "text": { "type": "string" }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
         },
-        "additionalProperties": true
+        "additionalProperties": false
       },
       "OpenAiChatCompletionsResponse": {
         "type": "object",
@@ -547,9 +793,40 @@
                   "required": ["role", "content"],
                   "properties": {
                     "role": { "type": "string" },
-                    "content": { "type": "string" }
+                    "content": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+                    "tool_calls": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["id", "type", "function"],
+                        "properties": {
+                          "id": { "type": "string", "minLength": 1 },
+                          "type": { "const": "function" },
+                          "function": {
+                            "type": "object",
+                            "required": ["name", "arguments"],
+                            "properties": {
+                              "name": { "type": "string" },
+                              "arguments": { "type": "string" }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "function_call": {
+                      "type": "object",
+                      "required": ["name", "arguments"],
+                      "properties": {
+                        "name": { "type": "string" },
+                        "arguments": { "type": "string" }
+                      },
+                      "additionalProperties": false
+                    },
+                    "refusal": { "type": "string" }
                   },
-                  "additionalProperties": false
+                  "additionalProperties": true
                 }
               },
               "additionalProperties": true
@@ -570,6 +847,7 @@
       },
       "AnthropicMessagesRequest": {
         "type": "object",
+        "description": "Priced text-only Messages subset. Client tool-use and text tool-result blocks support caller-executed tool round-trips; multimodal and provider-managed blocks are rejected. Tool requests add 804 tokens, the highest model/choice overhead in Anthropic's published tool-use table as of 2026-10-08 (Opus 4.7 with any/tool). Review other configured model aliases against https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview#pricing; this service has no per-model overhead setting.",
         "required": ["model", "max_tokens", "messages"],
         "properties": {
           "model": { "type": "string", "minLength": 1 },
@@ -583,14 +861,203 @@
               "type": "object",
               "required": ["role", "content"],
               "properties": {
-                "role": { "enum": ["user", "assistant"] },
-                "content": { "type": "string" }
+                "role": {
+                  "enum": ["user", "assistant"]
+                },
+                "content": {
+                  "oneOf": [
+                    { "type": "string" },
+                    {
+                      "type": "array",
+                      "minItems": 1,
+                      "description": "For assistant messages: text, client tool_use, and supported thinking blocks. For user messages: text and client tool_result blocks with text-only results.",
+                      "items": {
+                        "oneOf": [
+                          { "$ref": "#/components/schemas/AnthropicTextBlock" },
+                          { "$ref": "#/components/schemas/AnthropicToolUseBlock" },
+                          { "$ref": "#/components/schemas/AnthropicToolResultBlock" },
+                          { "$ref": "#/components/schemas/AnthropicThinkingBlock" },
+                          { "$ref": "#/components/schemas/AnthropicRedactedThinkingBlock" }
+                        ]
+                      }
+                    }
+                  ]
+                }
               },
-              "additionalProperties": true
+              "allOf": [
+                {
+                  "if": { "properties": { "role": { "const": "assistant" } }, "required": ["role"] },
+                  "then": {
+                    "properties": {
+                      "content": {
+                        "oneOf": [
+                          { "type": "string" },
+                          {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "oneOf": [
+                                { "$ref": "#/components/schemas/AnthropicTextBlock" },
+                                { "$ref": "#/components/schemas/AnthropicToolUseBlock" },
+                                { "$ref": "#/components/schemas/AnthropicThinkingBlock" },
+                                { "$ref": "#/components/schemas/AnthropicRedactedThinkingBlock" }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": { "properties": { "role": { "const": "user" } }, "required": ["role"] },
+                  "then": {
+                    "properties": {
+                      "content": {
+                        "oneOf": [
+                          { "type": "string" },
+                          {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "oneOf": [
+                                { "$ref": "#/components/schemas/AnthropicTextBlock" },
+                                { "$ref": "#/components/schemas/AnthropicToolResultBlock" }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "additionalProperties": false
             }
+          },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 1 },
+          "top_p": { "type": "number", "minimum": 0, "maximum": 1 },
+          "top_k": { "type": "integer", "minimum": 0 },
+          "stop_sequences": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "input_schema"],
+              "properties": {
+                "type": { "const": "custom" },
+                "name": { "type": "string", "minLength": 1 },
+                "description": { "type": "string" },
+                "input_schema": { "type": "object", "additionalProperties": true }
+              },
+              "additionalProperties": false
+            }
+          },
+          "tool_choice": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "enum": ["auto", "any", "tool"]
+              },
+              "name": { "type": "string" },
+              "disable_parallel_tool_use": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          },
+          "thinking": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "enum": ["enabled", "adaptive", "disabled", "between_tools"]
+              },
+              "budget_tokens": { "type": "integer", "minimum": 1 },
+              "display": {
+                "enum": ["summarized", "omitted"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "output_config": {
+            "type": "object",
+            "properties": {
+              "effort": {
+                "enum": ["low", "medium", "high", "xhigh", "max"]
+              },
+              "format": {
+                "type": "object",
+                "required": ["type", "schema"],
+                "properties": {
+                  "type": { "const": "json_schema" },
+                  "schema": { "type": "object", "additionalProperties": true }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "user_id": { "type": "string", "maxLength": 512 }
+            },
+            "additionalProperties": false
           }
         },
-        "additionalProperties": true
+        "additionalProperties": false
+      },
+      "AnthropicTextBlock": {
+        "type": "object",
+        "required": ["type", "text"],
+        "properties": { "type": { "const": "text" }, "text": { "type": "string" } },
+        "additionalProperties": false
+      },
+      "AnthropicToolUseBlock": {
+        "type": "object",
+        "required": ["type", "id", "name", "input"],
+        "properties": {
+          "type": { "const": "tool_use" },
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "input": { "type": "object", "additionalProperties": true }
+        },
+        "additionalProperties": false
+      },
+      "AnthropicToolResultBlock": {
+        "type": "object",
+        "required": ["type", "tool_use_id", "content"],
+        "properties": {
+          "type": { "const": "tool_result" },
+          "tool_use_id": { "type": "string", "minLength": 1 },
+          "content": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "minItems": 1, "items": { "$ref": "#/components/schemas/AnthropicTextBlock" } }
+            ]
+          },
+          "is_error": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "AnthropicThinkingBlock": {
+        "type": "object",
+        "required": ["type", "thinking", "signature"],
+        "properties": {
+          "type": { "const": "thinking" },
+          "thinking": { "type": "string" },
+          "signature": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "AnthropicRedactedThinkingBlock": {
+        "type": "object",
+        "required": ["type", "data"],
+        "properties": { "type": { "const": "redacted_thinking" }, "data": { "type": "string" } },
+        "additionalProperties": false
       },
       "AnthropicMessagesResponse": {
         "type": "object",
@@ -602,13 +1069,12 @@
           "content": {
             "type": "array",
             "items": {
-              "type": "object",
-              "required": ["type", "text"],
-              "properties": {
-                "type": { "const": "text" },
-                "text": { "type": "string" }
-              },
-              "additionalProperties": false
+              "oneOf": [
+                { "$ref": "#/components/schemas/AnthropicTextBlock" },
+                { "$ref": "#/components/schemas/AnthropicToolUseBlock" },
+                { "$ref": "#/components/schemas/AnthropicThinkingBlock" },
+                { "$ref": "#/components/schemas/AnthropicRedactedThinkingBlock" }
+              ]
             }
           },
           "stop_reason": { "type": "string" },
@@ -662,7 +1128,9 @@
         "required": ["providerId", "protocol", "enabled"],
         "properties": {
           "providerId": { "type": "string", "minLength": 1 },
-          "protocol": { "enum": ["openai", "anthropic", "http"] },
+          "protocol": {
+            "enum": ["openai", "anthropic", "http"]
+          },
           "enabled": { "type": "boolean" }
         },
         "additionalProperties": false

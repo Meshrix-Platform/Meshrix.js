@@ -1,5 +1,6 @@
-const MICROS_PER_UNIT = 1_000_000;
-const NANOS_PER_MICRO = 1_000;
+const NANOS_PER_UNIT = 1_000_000_000n;
+const NANOS_PER_MICRO = 1_000n;
+const MAX_SAFE_MICROS = BigInt(Number.MAX_SAFE_INTEGER);
 const CURRENCY_PATTERN = /^[A-Z]{3}$/u;
 
 function assertSafeNonNegative(value, label) {
@@ -8,11 +9,17 @@ function assertSafeNonNegative(value, label) {
   }
 }
 
+function assertNonNegativeBigInt(value, label) {
+  if (typeof value !== "bigint" || value < 0n) {
+    throw new TypeError(`${label} must be a non-negative bigint.`);
+  }
+}
+
 export function validateCurrency(currency) {
   return typeof currency === "string" && CURRENCY_PATTERN.test(currency);
 }
 
-export function amountToMicros(amount) {
+export function amountToNanos(amount) {
   if (!amount || typeof amount !== "object" || Array.isArray(amount)) {
     throw new TypeError("amount must be a fixed-point object.");
   }
@@ -24,7 +31,14 @@ export function amountToMicros(amount) {
   if (amount.nanos > 999_999_999) {
     throw new TypeError("amount.nanos must be at most 999999999.");
   }
-  return amount.units * MICROS_PER_UNIT + Math.floor(amount.nanos / NANOS_PER_MICRO);
+  return BigInt(amount.units) * NANOS_PER_UNIT + BigInt(amount.nanos);
+}
+
+export function nanosToMicrosCeil(nanos) {
+  assertNonNegativeBigInt(nanos, "nanos");
+  const micros = (nanos + NANOS_PER_MICRO - 1n) / NANOS_PER_MICRO;
+  if (micros > MAX_SAFE_MICROS) throw new RangeError("Fixed-point charge exceeds the safe integer range.");
+  return Number(micros);
 }
 
 export function microsToAmount(currency, micros) {
@@ -34,28 +48,20 @@ export function microsToAmount(currency, micros) {
   assertSafeNonNegative(micros, "micros");
   return {
     currency,
-    units: Math.floor(micros / MICROS_PER_UNIT),
-    nanos: (micros % MICROS_PER_UNIT) * NANOS_PER_MICRO,
+    units: Math.floor(micros / 1_000_000),
+    nanos: (micros % 1_000_000) * 1_000,
   };
 }
 
-export function mulMicros(rateMicros, tokens) {
-  assertSafeNonNegative(rateMicros, "rateMicros");
+export function mulNanos(rateNanos, tokens) {
+  assertNonNegativeBigInt(rateNanos, "rateNanos");
   assertSafeNonNegative(tokens, "tokens");
-  const product = BigInt(rateMicros) * BigInt(tokens);
-  if (product > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new RangeError("Fixed-point product exceeds the safe integer range.");
-  }
-  return Number(product);
+  return rateNanos * BigInt(tokens);
 }
 
-export function addMicros(...values) {
-  const total = values.reduce((sum, value) => {
-    assertSafeNonNegative(value, "micros");
-    return sum + BigInt(value);
+export function addNanos(...values) {
+  return values.reduce((sum, value) => {
+    assertNonNegativeBigInt(value, "nanos");
+    return sum + value;
   }, 0n);
-  if (total > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new RangeError("Fixed-point sum exceeds the safe integer range.");
-  }
-  return Number(total);
 }

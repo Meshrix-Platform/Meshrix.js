@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createOperationAuditStore } from "../../packages/foundation/src/security/operation-audit.ts";
+import { operationAuditProjectionKeyId } from "../../packages/foundation/src/security/operation-audit-projection.ts";
 import {
   assertNoSensitiveReportLeak,
   assertReportProvenance,
@@ -44,7 +46,13 @@ function oldIso(daysAgo?: any) : any {
 
 async function main() : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-audit-retention-"));
-  const store: any = createOperationAuditStore({ userDataPath });
+  const projectionKey: Buffer = crypto.randomBytes(32);
+  const store: any = createOperationAuditStore({
+    userDataPath,
+    projectionKey,
+    projectionKeyId: operationAuditProjectionKeyId(projectionKey)
+  });
+  projectionKey.fill(0);
   const bearerFixture: any = ["Bearer", "raw", "token", "123"].join("-").replace("Bearer-", "Bearer ");
   const secretFixture: any = ["sk", "test", "secret"].join("-");
   const upstreamSecretFixture: any = ["upstream", "secret", "value"].join("-");

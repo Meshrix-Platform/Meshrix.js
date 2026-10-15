@@ -168,17 +168,22 @@ describe("upstream service publishing client contract", () : any => {
       const controller: AbortController = new AbortController();
       const settled: Promise<any> = observeUpstreamServicePublication(
         { serviceId: "svc/slow", serviceRevision: 1 },
-        { signal: controller.signal, intervalMs: 500 },
+        { signal: controller.signal },
       ).catch((error: unknown) : any => error);
       await vi.advanceTimersByTimeAsync(0);
       expect(bridge.getJson).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(bridge.getJson).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(bridge.getJson).toHaveBeenCalledTimes(2);
 
       controller.abort();
       const failure: any = await settled;
       expect(failure?.name).toBe("AbortError");
 
       await vi.advanceTimersByTimeAsync(5_000);
-      expect(bridge.getJson).toHaveBeenCalledTimes(1);
+      expect(bridge.getJson).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }

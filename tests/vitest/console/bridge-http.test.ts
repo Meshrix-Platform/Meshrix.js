@@ -87,9 +87,9 @@ describe("bridge-http JSON helpers", () : any => {
       credentials: "same-origin",
       headers: {
         Accept: "application/json",
-        "x-meshrix-csrf": "token-1",
       },
     });
+    expect(fetchMock().mock.calls[1][1].headers["x-meshrix-csrf"]).toBeUndefined();
 
     await deleteJson("/api/sessions/old", { safetyConfirm: true });
     expect(fetchMock().mock.calls[2][1].headers).toMatchObject({
@@ -124,41 +124,95 @@ describe("bridge-http JSON helpers", () : any => {
     }));
   });
 
-  it("reports HTTP and malformed JSON responses with useful messages", async () : Promise<any> => {
+  it("uses status-only errors and keeps malformed response details out of client errors", async () : Promise<any> => {
     const { deleteJson, getJson, putBinaryJson } = await loadBridgeHttp();
 
     fetchMock().mockResolvedValueOnce(jsonResponse({ error: "bad request" }, { status: 400 }));
-    await expect(getJson("/api/error")).rejects.toThrow("bad request");
+    await expect(getJson("/api/error")).rejects.toThrow("Request failed: 400");
 
     fetchMock().mockResolvedValueOnce(textResponse("plain failure", { status: 500 }));
-    await expect(getJson("/api/plain-error")).rejects.toThrow("plain failure");
+    await expect(getJson("/api/plain-error")).rejects.toThrow("Request failed: 500");
+
+    fetchMock().mockResolvedValueOnce(jsonResponse({ error: "Authentication required." }, { status: 401 }));
+    await expect(getJson("/api/plugin-bridge")).rejects.toThrow("Request failed: 401");
+
+    fetchMock().mockResolvedValueOnce(jsonResponse({ error: "provider-private-response" }, { status: 502 }));
+    const providerError: any = await getJson("/api/upstream").catch((error?: any) : any => error);
+    expect(providerError.message).toBe("Request failed: 502");
+    expect(providerError.message).not.toContain("provider-private-response");
+
+    fetchMock().mockResolvedValueOnce(textResponse("{malformed", {
+      status: 502,
+      headers: { "content-type": "application/json" },
+    }));
+    await expect(getJson("/api/malformed-error")).rejects.toThrow("Request failed: 502");
+
+    let bodyCancelled = false;
+    let bodyRead = false;
+    const unusedErrorBody = new ReadableStream<Uint8Array>({
+      pull() : void {
+        bodyRead = true;
+      },
+      cancel() : void {
+        bodyCancelled = true;
+      },
+    }, { highWaterMark: 0 });
+    fetchMock().mockResolvedValueOnce(new Response(unusedErrorBody, {
+      status: 500,
+      headers: { "content-type": "application/json" },
+    }));
+    await expect(getJson("/api/unused-error-body")).rejects.toThrow("Request failed: 500");
+    expect(bodyCancelled).toBe(true);
+    expect(bodyRead).toBe(false);
 
     fetchMock().mockResolvedValueOnce(textResponse("", {
       headers: { "content-type": "application/json" },
     }));
-    await expect(getJson("/api/empty")).rejects.toThrow("接口没有返回 JSON：/api/empty");
+    await expect(getJson("/api/private/path?token=secret")).rejects.toThrow("接口没有返回 JSON。");
 
-    fetchMock().mockResolvedValueOnce(textResponse("<html>login</html>", {
+    fetchMock().mockResolvedValueOnce(textResponse("<html>account-secret</html>", {
       headers: { "content-type": "text/html" },
     }));
-    await expect(getJson("/api/html")).rejects.toThrow("接口返回了 HTML 而不是 JSON：/api/html");
+    await expect(getJson("/api/html")).rejects.toThrow("接口返回了 HTML 页面");
 
-    fetchMock().mockResolvedValueOnce(textResponse("{not-json", {
+    fetchMock().mockResolvedValueOnce(textResponse('{"credential":"secret"', {
       headers: { "content-type": "application/json" },
     }));
-    await expect(getJson("/api/broken")).rejects.toThrow("接口返回的 JSON 无法解析：/api/broken");
+    const malformedError: any = await getJson("/api/broken").catch((error?: any) : any => error);
+    expect(malformedError.message).toBe("接口返回的 JSON 无法解析。");
+    expect(malformedError.message).not.toContain("secret");
 
     fetchMock()
       .mockResolvedValueOnce(jsonResponse({ csrfToken: "delete-csrf" }))
       .mockResolvedValueOnce(jsonResponse({ message: "delete blocked" }, { status: 403 }));
-    await expect(deleteJson("/api/delete-blocked")).rejects.toThrow("delete blocked");
+    await expect(deleteJson("/api/delete-blocked")).rejects.toThrow("Request failed: 403");
 
     fetchMock().mockResolvedValueOnce(textResponse("binary rejected", { status: 415 }));
-    await expect(putBinaryJson("/api/upload-bad", new Blob(["bad"]))).rejects.toThrow("binary rejected");
+    await expect(putBinaryJson("/api/upload-bad", new Blob(["bad"]))).rejects.toThrow("Request failed: 415");
   });
 });
 
 describe("bridge-http downloadFile", () : any => {
+  it("does not send a cached CSRF token on a read-only download", async () : Promise<any> => {
+    const { downloadFile, getJson } = await loadBridgeHttp();
+    fetchMock()
+      .mockResolvedValueOnce(jsonResponse({ csrfToken: "private-token" }))
+      .mockResolvedValueOnce(new Response("file", {
+        status: 200,
+        headers: { "content-type": "application/octet-stream" },
+      }));
+
+    await getJson("/api/auth/session");
+    await downloadFile("/api/files/export");
+
+    expect(fetchMock().mock.calls[1][1]).toMatchObject({
+      method: "GET",
+      credentials: "same-origin",
+      headers: { Accept: "*/*" },
+    });
+    expect(fetchMock().mock.calls[1][1].headers["x-meshrix-csrf"]).toBeUndefined();
+  });
+
   it("downloads blobs and derives sanitized filenames from content-disposition", async () : Promise<any> => {
     const { downloadFile } = await loadBridgeHttp();
     fetchMock().mockResolvedValueOnce(new Response("id,name\n1,Ada", {
@@ -240,7 +294,7 @@ describe("bridge-http downloadFile", () : any => {
     const { downloadFile } = await loadBridgeHttp();
 
     fetchMock().mockResolvedValueOnce(jsonResponse({ message: "not found" }, { status: 404 }));
-    await expect(downloadFile("/api/files/missing")).rejects.toThrow("not found");
+    await expect(downloadFile("/api/files/missing")).rejects.toThrow("下载失败：404");
 
     fetchMock().mockResolvedValueOnce(textResponse("<html>login</html>", {
       status: 200,

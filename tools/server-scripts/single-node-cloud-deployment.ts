@@ -218,13 +218,22 @@ async function validateExternalHexSecretSource({
     fs.lstat(source).catch(() : any => null),
     fs.realpath(source).catch(() : any => ""),
   ]);
+  const parentPath = realPath ? path.dirname(realPath) : "";
+  const parentStat = parentPath
+    ? await fs.lstat(parentPath).catch(() : any => null)
+    : null;
+  const composeReadable = Boolean(
+    stat?.mode && (stat.mode & 0o777) === 0o444 &&
+    parentStat?.isDirectory() && !parentStat.isSymbolicLink() &&
+    (parentStat.mode & 0o077) === 0
+  );
   requireCondition(
     stat?.isFile() &&
       !stat.isSymbolicLink() &&
       stat.size <= 256 &&
       realPath &&
       !pathIsWithin(repoRoot, realPath) &&
-      (process.platform === "win32" || (stat.mode & 0o077) === 0),
+      (process.platform === "win32" || composeReadable),
     invalidCode,
   );
   const bytes: any = await fs.readFile(realPath).catch(() : any => null);

@@ -19,9 +19,7 @@ function defaultSummary() : any {
       csrfToken: "",
       expiresAt: "",
       user: null
-    },
-    roles: [],
-    oidc: {}
+    }
   };
 }
 

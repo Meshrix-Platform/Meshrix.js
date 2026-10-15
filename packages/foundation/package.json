@@ -280,6 +280,11 @@
       "types": "./dist/proof/proof-substrate/register.d.ts",
       "default": "./dist/proof/proof-substrate/register.js"
     },
+    "./recording/content-capture": {
+      "source": "./src/recording/recording-content-capture.ts",
+      "types": "./dist/recording/recording-content-capture.d.ts",
+      "default": "./dist/recording/recording-content-capture.js"
+    },
     "./recording/producer": {
       "source": "./src/recording/recording-producer.ts",
       "types": "./dist/recording/recording-producer.d.ts",
@@ -329,6 +334,16 @@
       "source": "./src/security/authorization/opaque-capability-key.ts",
       "types": "./dist/security/authorization/opaque-capability-key.d.ts",
       "default": "./dist/security/authorization/opaque-capability-key.js"
+    },
+    "./security/authorization/opaque-capability-key-provider": {
+      "source": "./src/security/authorization/opaque-capability-key-provider.ts",
+      "types": "./dist/security/authorization/opaque-capability-key-provider.d.ts",
+      "default": "./dist/security/authorization/opaque-capability-key-provider.js"
+    },
+    "./security/authorization/capability-binding-guard-core": {
+      "source": "./src/security/authorization/capability-binding-guard-core.ts",
+      "types": "./dist/security/authorization/capability-binding-guard-core.d.ts",
+      "default": "./dist/security/authorization/capability-binding-guard-core.js"
     },
     "./security/authorization/organization-model": {
       "source": "./src/security/authorization/organization-model.ts",
@@ -400,6 +415,11 @@
       "types": "./dist/security/outbound-egress-policy.d.ts",
       "default": "./dist/security/outbound-egress-policy.js"
     },
+    "./security/outbound-host-classifier": {
+      "source": "./src/security/outbound-host-classifier.ts",
+      "types": "./dist/security/outbound-host-classifier.d.ts",
+      "default": "./dist/security/outbound-host-classifier.js"
+    },
     "./security/process-identity/index": {
       "source": "./src/security/process-identity/index.ts",
       "types": "./dist/security/process-identity/index.d.ts",
@@ -424,6 +444,11 @@
       "source": "./src/security/secrets/local-secret-key-provider.ts",
       "types": "./dist/security/secrets/local-secret-key-provider.d.ts",
       "default": "./dist/security/secrets/local-secret-key-provider.js"
+    },
+    "./security/secrets/local-secret-envelope": {
+      "source": "./src/security/secrets/local-secret-envelope.ts",
+      "types": "./dist/security/secrets/local-secret-envelope.d.ts",
+      "default": "./dist/security/secrets/local-secret-envelope.js"
     },
     "./security/secrets/local-secret-store": {
       "source": "./src/security/secrets/local-secret-store.ts",
@@ -479,6 +504,11 @@
       "source": "./src/storage/private-file-atomic.ts",
       "types": "./dist/storage/private-file-atomic.d.ts",
       "default": "./dist/storage/private-file-atomic.js"
+    },
+    "./storage/private-storage-capacity": {
+      "source": "./src/storage/private-storage-capacity.ts",
+      "types": "./dist/storage/private-storage-capacity.d.ts",
+      "default": "./dist/storage/private-storage-capacity.js"
     },
     "./storage/private-sqlite": {
       "source": "./src/storage/private-sqlite.ts",
@@ -583,7 +613,7 @@
     "better-sqlite3": "^12.9.0",
     "pactium": "0.8.1",
     "pg": "^8.22.0",
-    "smol-toml": "^1.7.1",
+    "smol-toml": "^1.9.1",
     "undici": "^8.11.2"
   },
   "dependencies": {

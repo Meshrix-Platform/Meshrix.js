@@ -67,6 +67,7 @@ describe("Gateway channel contract", () => {
 
   it("keeps channel capabilities bounded and stable", () => {
     expect(assertGatewayChannelCapabilities(capabilities).degradation).toBe("stable_transport");
+    expect(assertGatewayChannelCapabilities({ ...capabilities, timeoutMs: undefined })).not.toHaveProperty("timeoutMs");
     expect(() => assertGatewayChannelCapabilities({
       ...capabilities,
       loadDistribution: "unbounded"
@@ -75,6 +76,10 @@ describe("Gateway channel contract", () => {
       ...capabilities,
       maxConcurrency: 0
     })).toThrow("gateway_channel_concurrency_out_of_bounds");
+    expect(() => assertGatewayChannelCapabilities({
+      ...capabilities,
+      timeoutMs: 0
+    })).toThrow("gateway_channel_timeout_out_of_bounds");
   });
 
   it("freezes the gatewayChannels plugin contribution", () => {

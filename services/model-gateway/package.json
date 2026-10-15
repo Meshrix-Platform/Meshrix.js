@@ -2,7 +2,7 @@
   "name": "model-gateway-service",
   "version": "0.0.1",
   "private": true,
-  "description": "Independently deployable model-only HTTP gateway service with native OpenAI and Anthropic wire compatibility.",
+  "description": "Independently deployable model gateway with metered text and client-executed tool subsets on OpenAI and Anthropic endpoint paths.",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -11,6 +11,9 @@
     "start": "node src/main.mjs",
     "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "undici": "^8.11.2"
   },
   "license": "Apache-2.0"
 }

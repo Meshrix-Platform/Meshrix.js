@@ -188,7 +188,34 @@ const LAUNCHER_CATALOG: any = new Map<any, any>([
       authority: "core.protocols.mcp.client-installer",
       reason: "performs an explicit client installation or credential-custody control-plane action outside workload admission"
     })
-  ])
+  ]),
+  [
+    "apps/entry/src/identity/custody-types.ts",
+    Object.freeze({
+      approved: true,
+      classification: "fixed_security_credential_helper",
+      authority: "entry-app.identity.custody",
+      reason: "invokes bounded operating-system credential custody helpers outside workload admission"
+    })
+  ],
+  [
+    "apps/entry-gui/src/main/agent/acp-executor.ts",
+    Object.freeze({
+      approved: true,
+      classification: "registered_agent_stdio_session_launcher",
+      authority: "entry-app.agent.acp",
+      reason: "owns the bounded user-registered local ACP agent stdio session and kills its child during execution close"
+    })
+  ],
+  [
+    "apps/mcp-gateway-installer/src/cli.ts",
+    Object.freeze({
+      approved: true,
+      classification: "fixed_system_browser_authorization",
+      authority: "gateway-installer-app.account-claim",
+      reason: "opens the system browser for an explicit user authorization step outside workload admission"
+    })
+  ]
 ]);
 
 function normalizePath(value?: any) : any {

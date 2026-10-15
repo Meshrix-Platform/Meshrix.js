@@ -3,7 +3,7 @@
  "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
  "registryId": "meshrix.version-registry",
  "protocolVersion": "v0.0.1:version-governance:protocol-1",
- "updatedAt": "2026-10-10",
+ "updatedAt": "2026-10-12",
  "authority": {
   "mode": "source-controlled-singleton",
   "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -1282,11 +1282,47 @@
    "artifactId": "meshrix.entry-gui.state",
    "kind": "schema",
    "description": "Renderer-visible GUI state schema for the installed entry product (redacted snapshots over the meshrix-entry IPC contract).",
-   "activeVersion": "v0.0.1:entry-gui:state-1",
+   "activeVersion": "v0.0.1:entry-gui:state-3",
    "versions": [
     {
      "version": "v0.0.1:entry-gui:state-1",
      "ref": "meshrix.entry-gui.state@v0.0.1:entry-gui:state-1",
+     "lifecycle": "deprecated",
+     "compatibility": {
+      "newBindingsAllowed": false,
+      "historicalResolutionAllowed": true,
+      "notes": "Current scanned governed version."
+     },
+     "artifactRefs": [],
+     "evidenceRefs": [
+      {
+       "evidenceId": "v0-0-1-entry-gui-state-1-source",
+       "kind": "other",
+       "uri": "apps/entry-gui/src/shared/gui-state.ts"
+      }
+     ]
+    },
+    {
+     "version": "v0.0.1:entry-gui:state-2",
+     "ref": "meshrix.entry-gui.state@v0.0.1:entry-gui:state-2",
+     "lifecycle": "deprecated",
+     "compatibility": {
+      "newBindingsAllowed": false,
+      "historicalResolutionAllowed": true,
+      "notes": "Current scanned governed version."
+     },
+     "artifactRefs": [],
+     "evidenceRefs": [
+      {
+       "evidenceId": "v0-0-1-entry-gui-state-2-source",
+       "kind": "other",
+       "uri": "apps/entry-gui/src/shared/gui-state.ts"
+      }
+     ]
+    },
+    {
+     "version": "v0.0.1:entry-gui:state-3",
+     "ref": "meshrix.entry-gui.state@v0.0.1:entry-gui:state-3",
      "lifecycle": "active",
      "compatibility": {
       "newBindingsAllowed": true,
@@ -1296,7 +1332,7 @@
      "artifactRefs": [],
      "evidenceRefs": [
       {
-       "evidenceId": "v0-0-1-entry-gui-state-1-source",
+       "evidenceId": "v0-0-1-entry-gui-state-3-source",
        "kind": "other",
        "uri": "apps/entry-gui/src/shared/gui-state.ts"
       }
@@ -1360,14 +1396,14 @@
    "artifactId": "meshrix.entry.pairing-invite",
    "kind": "schema",
    "description": "Endpoint-issued pairing invite document consumed by the installed entry product.",
-   "activeVersion": "v0.0.1:entry:pairing-invite-1",
+   "activeVersion": "v0.0.1:entry:pairing-invite-2",
    "versions": [
     {
      "version": "v0.0.1:entry:pairing-invite-1",
      "ref": "meshrix.entry.pairing-invite@v0.0.1:entry:pairing-invite-1",
-     "lifecycle": "active",
+     "lifecycle": "deprecated",
      "compatibility": {
-      "newBindingsAllowed": true,
+      "newBindingsAllowed": false,
       "historicalResolutionAllowed": true,
       "notes": "Current scanned governed version."
      },
@@ -1377,6 +1413,24 @@
        "evidenceId": "v0-0-1-entry-pairing-invite-1-source",
        "kind": "other",
        "uri": "apps/entry/src/pairing/pairing-invite.ts"
+      }
+     ]
+    },
+    {
+     "version": "v0.0.1:entry:pairing-invite-2",
+     "ref": "meshrix.entry.pairing-invite@v0.0.1:entry:pairing-invite-2",
+     "lifecycle": "active",
+     "compatibility": {
+      "newBindingsAllowed": true,
+      "historicalResolutionAllowed": true,
+      "notes": "Pairing invite contract promoted to the shared account contract surface."
+     },
+     "artifactRefs": [],
+     "evidenceRefs": [
+      {
+       "evidenceId": "v0-0-1-entry-pairing-invite-2-source",
+       "kind": "other",
+       "uri": "packages/contracts/src/account/pairing.ts"
       }
      ]
     }
@@ -12059,6 +12113,32 @@
        "evidenceId": "v0-0-1-meshrix-gateway-config-1-source",
        "kind": "other",
        "uri": "apps/mcp-gateway-installer/src/config-migration.ts"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "artifactId": "meshrix.private-relay.peer",
+   "kind": "protocol",
+   "description": "Private relay peer pairing wire contract (pair_device admission, challenge, completion).",
+   "activeVersion": "v0.0.1:private-relay:peer-1",
+   "versions": [
+    {
+     "version": "v0.0.1:private-relay:peer-1",
+     "ref": "meshrix.private-relay.peer@v0.0.1:private-relay:peer-1",
+     "lifecycle": "active",
+     "compatibility": {
+      "newBindingsAllowed": true,
+      "historicalResolutionAllowed": true,
+      "notes": "Current scanned governed version."
+     },
+     "artifactRefs": [],
+     "evidenceRefs": [
+      {
+       "evidenceId": "v0-0-1-private-relay-peer-1-source",
+       "kind": "other",
+       "uri": "packages/contracts/src/private-relay/private-relay-peer.ts"
       }
      ]
     }

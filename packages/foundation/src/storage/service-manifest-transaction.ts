@@ -25,7 +25,7 @@ type ServiceManifestKind = "published" | "candidate";
 export interface ManifestTransactionContext {
   readonly budget: Readonly<ManifestResourceBudget>;
   readonly signal?: AbortSignal;
-  readonly deadline: number;
+  readonly deadline: number | null;
   check(): void;
   touchFile(): void;
   consumeRead(byteCount: number): void;
@@ -94,7 +94,7 @@ interface ManifestResourceBudget {
   maxWriteBytes: number;
   maxFiles: number;
   maxCleanupEntries: number;
-  maxOperationMs: number;
+  maxOperationMs?: number;
 }
 
 const DATABASE_SCHEMA_VERSION = 2;
@@ -138,7 +138,9 @@ export function createManifestTransactionContext({
   startedAt?: number;
 }): ManifestTransactionContext {
   const combinedSignal: AbortSignal | undefined = combineSignals([signal, laneSignal ?? undefined]);
-  const deadline = startedAt + budget.maxOperationMs;
+  const deadline = budget.maxOperationMs === undefined
+    ? null
+    : startedAt + budget.maxOperationMs;
   let readBytes = 0;
   let writeBytes = 0;
   let files = 0;
@@ -153,10 +155,10 @@ export function createManifestTransactionContext({
         "Service manifest operation was cancelled before publication."
       );
     }
-    if (Date.now() > deadline) {
+    if (deadline !== null && Date.now() > deadline) {
       throw serviceManifestError(
         "storage_manifest_timeout",
-        "Service manifest operation exceeded its elapsed-time budget."
+        "Service manifest operation exceeded its explicit elapsed-time budget."
       );
     }
   }

@@ -16,7 +16,15 @@ import { createOperationProofSubstrate } from "#meshrix/foundation/proof/proof-s
 import { registerOperationProofSubstratePlatformServices } from "#meshrix/foundation/proof/proof-substrate/register";
 import { CONSOLE_ROLES, createConsoleAuth } from "#meshrix/foundation/security/auth/console-auth";
 import { createOrganizationGovernanceService } from "@meshrix/foundation/security/authorization/organization-model";
-import { createOperationAuditStore } from "#meshrix/foundation/security/operation-audit";
+import {
+  createOperationAuditStore,
+  inspectOperationAuditProjection
+} from "#meshrix/foundation/security/operation-audit";
+import { ensureOperationAuditProjectionKey } from "@meshrix/foundation/security/secrets/local-secret-store";
+import {
+  createFileLocalSecretKeyProvider,
+  type LocalSecretKeyProvider
+} from "@meshrix/foundation/security/secrets/local-secret-key-provider";
 import { createProcessIdentityService } from "#meshrix/foundation/security/process-identity/index";
 import { registerSecurityPlatformServices } from "#meshrix/foundation/security/register";
 import { createSecurityPermissionsProvider } from "#meshrix/foundation/security/security-permissions-provider";
@@ -131,12 +139,47 @@ export async function createServerCompositionRoot({
   operationConcurrencyScope: requestedOperationConcurrencyScope = "",
   registerPluginRuntimeMeasurementSource = null,
   pluginHostPorts = {},
+  secretKeyProvider: injectedSecretKeyProvider = null,
   recordingSink = null,
   recordingAuthority: injectedRecordingAuthority = null
 }: Record<string, any>) : Promise<any> {
   if (typeof requestedOperationConcurrencyScope !== "string") {
     throw new TypeError("operationConcurrencyScope must be a string when provided.");
   }
+  const resourceClosers: any[] = [];
+  const localSecretKeyProvider: LocalSecretKeyProvider = injectedSecretKeyProvider ||
+    createFileLocalSecretKeyProvider({ dataDir: userDataPath });
+  resourceClosers.push(() : any => localSecretKeyProvider.close());
+  let operationAuditStore: any = null;
+  try {
+    const auditProjection = await inspectOperationAuditProjection({ userDataPath });
+    const projection = await ensureOperationAuditProjectionKey({
+      dataDir: userDataPath,
+      keyProvider: localSecretKeyProvider,
+      allowInitialize: auditProjection.state !== "projected"
+    });
+    try {
+      if (auditProjection.state === "projected" && auditProjection.projectionKeyId !== projection.keyId) {
+        throw Object.assign(new Error("Operation audit projection custody is unavailable."), {
+          code: "operation_audit_projection_key_mismatch"
+        });
+      }
+      operationAuditStore = createOperationAuditStore({
+        userDataPath,
+        projectionKey: projection.key,
+        projectionKeyId: projection.keyId
+      });
+    } finally {
+      projection.key.fill(0);
+    }
+    resourceClosers.push(() : any => operationAuditStore.close());
+    await operationAuditStore.ready();
+  } catch (error: unknown) {
+    await runResourceClosers(resourceClosers, { surfaceFailure: false });
+    throw error;
+  }
+
+  try {
   const workspaceMaterializationRootAuthority: any =
     createAgentWorkspaceMaterializationRootAuthority();
   let workspaceMaterializationPort: any = null;
@@ -300,31 +343,27 @@ export async function createServerCompositionRoot({
 
   assertMeshrixPactiumDataDir(userDataPath);
   let runtime: any;
-  try {
-    runtime = await createServerRuntime({
+  runtime = await createServerRuntime({
     userDataPath,
     runtimeOptions: runtimeOptionsWithFeatures,
     pluginDeployment,
     operationLockManager: injectedOperationLockManager,
     registerPluginRuntimeMeasurementSource,
       pluginHostPorts: effectivePluginHostPorts
-    });
-  } catch (error: any) {
-    if (!pluginHostPorts.pluginProtectedRecoveryAuthority) await pluginProtectedRecoveryAuthority.close();
-    throw error;
+  });
+  resourceClosers.push(() : any => runtime.close());
+  if (!pluginHostPorts.pluginInvocationAuthorizationAuthority) {
+    resourceClosers.push(() : any => pluginInvocationAuthorizationAuthority.close());
   }
-  const resourceClosers: any[] = [
-    () : any => runtime.close(),
-    ...(!pluginHostPorts.pluginInvocationAuthorizationAuthority ? [() : any => pluginInvocationAuthorizationAuthority.close()] : []),
-    ...(!pluginHostPorts.pluginProtectedRecoveryAuthority ? [() : any => pluginProtectedRecoveryAuthority.close()] : [])
-  ];
+  if (!pluginHostPorts.pluginProtectedRecoveryAuthority) {
+    resourceClosers.push(() : any => pluginProtectedRecoveryAuthority.close());
+  }
   const integrationTaskSupervisor: any = createIntegrationTaskSupervisor({
     ...(pluginHostPorts.integrationSupervisorOptions || {}),
     adapters: pluginHostPorts.integrationAdapters,
     logger: runtimeLogger
   });
   resourceClosers.push(() : any => integrationTaskSupervisor.shutdown());
-  try {
   const pluginContributions: any = createPluginContributionRegistry({
     manifests: pluginCatalog.listPlugins(),
     loadedPlugins: lifecycleEffectiveDeployment.loadedPlugins,
@@ -436,8 +475,6 @@ export async function createServerCompositionRoot({
     runtimeOptions: runtimeOptionsWithFeatures
   });
   resourceClosers.push(() : any => operationProofSubstrate.close());
-  const operationAuditStore: any = createOperationAuditStore({ userDataPath });
-  resourceClosers.push(() : any => operationAuditStore.close());
   const operationLockManager: any = runtime.operationLockManager;
   const operationConcurrencyScope: any =
     requestedOperationConcurrencyScope.trim() ||
@@ -698,6 +735,7 @@ export async function createServerCompositionRoot({
     processIdentity,
     pluginInvocationAuthorizationAuthority,
     operationAuditStore,
+    localSecretKeyProvider,
     operationLockManager,
     operationConcurrencyScope,
     protocolEventBus,

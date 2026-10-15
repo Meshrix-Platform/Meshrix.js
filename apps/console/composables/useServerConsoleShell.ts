@@ -1,4 +1,4 @@
-import { computed, nextTick, watch } from 'vue';
+import { computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useConsole } from "./useConsole";
 import { pickApprovalFlowShellContext } from "./console-shell-approval-flow-context";
@@ -149,43 +149,17 @@ export function useServerConsoleShell() {
   const runtimeValues = { serviceUrl, serviceStatusLabel };
 
 
-  let toolListRouteRefreshSequence = 0;
   const isToolListRoute = computed(() =>
     activeRouteView.value === "admin" && ["tools", "toolList"].includes(activeRouteAdminView.value),
   );
-  const operationPermissionCatalogLoaded = computed(() => {
-    const catalog = operationPermissionConsole.operationPermissionCatalogState.value;
-    return Boolean(
-      catalog?.fingerprint ||
-      catalog?.toolGroups?.length ||
-      catalog?.toolsets?.length ||
-      catalog?.tools?.length,
-    );
-  });
-
-  async function refreshToolListRouteOnEntry(sequence: number, routePath: string) {
-    await trackPageRefreshTask(refreshOperationPermission({ silent: true }));
-    if (sequence !== toolListRouteRefreshSequence || activeRouteFullPath.value !== routePath) {
-      return;
-    }
-    if (!operationPermissionCatalogLoaded.value) {
-      return;
-    }
-    await nextTick();
-    if (sequence !== toolListRouteRefreshSequence || activeRouteFullPath.value !== routePath) {
-      return;
-    }
-    await refreshCurrentPage();
-  }
 
   watch(
-    [isAuthenticated, isToolListRoute, activeRouteFullPath],
-    ([authenticated, shouldRefresh, routePath]) => {
+    [isAuthenticated, isToolListRoute],
+    ([authenticated, shouldRefresh]) => {
       if (!authenticated || !shouldRefresh) {
         return;
       }
-      const sequence = ++toolListRouteRefreshSequence;
-      void refreshToolListRouteOnEntry(sequence, routePath);
+      void trackPageRefreshTask(refreshOperationPermission({ silent: true }));
     },
     { immediate: true },
   );

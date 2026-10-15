@@ -572,6 +572,7 @@ export function createGatewayRuntime({
     recordMetric,
     persist,
     close,
-    getRefactorInstrumentation
+    getRefactorInstrumentation,
+    getShedMetricDimensions: () : number => shedMetricDimensions
   };
 }

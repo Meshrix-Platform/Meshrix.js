@@ -19,7 +19,7 @@
   "$defs": {
     "channel": {
       "type": "object",
-      "required": ["adapter", "endpointRefs", "maxConcurrency", "maxRatePerSecond", "maxQueueDepth", "timeoutMs", "circuitFailureThreshold", "circuitResetMs"],
+      "required": ["adapter", "endpointRefs", "maxConcurrency", "maxRatePerSecond", "maxQueueDepth", "circuitFailureThreshold", "circuitResetMs"],
       "properties": {
         "adapter": { "enum": ["caddy", "nginx", "direct"] },
         "endpointRefs": {

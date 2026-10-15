@@ -101,6 +101,13 @@
       "owner": "platform"
     },
     {
+      "alias": "#meshrix/contracts/account",
+      "targetPath": "./packages/contracts/src/account/index.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
       "alias": "#meshrix/contracts/mcp-catalog-delivery",
       "targetPath": "./packages/contracts/src/mcp-catalog-delivery.ts",
       "status": "active",
@@ -138,6 +145,13 @@
     {
       "alias": "#meshrix/contracts/operations/operation-registry",
       "targetPath": "./packages/contracts/src/operations/operation-registry.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/generated/operations",
+      "targetPath": "./packages/contracts/src/generated/operations.generated.ts",
       "status": "active",
       "domainPackage": "contracts",
       "owner": "platform"
@@ -740,6 +754,13 @@
     {
       "alias": "#meshrix/gateway/routing",
       "targetPath": "./packages/gateway/src/routing/index.ts",
+      "status": "active",
+      "domainPackage": "gateway",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/gateway/operation-route-index",
+      "targetPath": "./packages/gateway/src/operation-route-index/index.ts",
       "status": "active",
       "domainPackage": "gateway",
       "owner": "platform"

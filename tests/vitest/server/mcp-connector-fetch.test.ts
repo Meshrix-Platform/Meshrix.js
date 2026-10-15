@@ -11,11 +11,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Agent } from "undici";
 
-import { MCP_INTERFACE_VERSION, MCP_STABLE_TOOL_NAME } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts";
+import { MCP_INTERFACE_VERSION, MCP_STABLE_TOOL_NAME, MESHRIX_MCP_URL_ENV } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts";
+import { discoverCommand, doctorCommand } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts";
+import { deviceEnvironmentPort } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/device-environment.ts";
 import { loadMcpConnectorPreferences, saveMcpApiKeyCredential } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/credential-store.ts";
 import { fetchCommand, MCP_FETCH_MAX_ARTIFACT_BYTES } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/fetch-command.ts";
 import { proxyCommand, resolveProxyCredentials } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
 import { signMcpHandshake } from "../../../packages/protocols/mcp/adapter/gateway-installer/mcp-identity.ts";
+import { MCP_PROTOCOL_VERSION } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import { runWithOwnedProcessSignals } from "../../../packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts";
 
 const API_KEY: any = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
@@ -23,8 +26,14 @@ const TOKEN_ENV: any = "MESHRIX_MCP_CONNECTOR_LIFETIME_TEST_TOKEN";
 const CLI_ENTRY: any = fileURLToPath(new URL("../../../apps/server/bin/meshrix-mcp.ts", import.meta.url));
 let rootDir: any = "";
 let server: any = null;
+let redirectTargetServer: any = null;
 let baseUrl: any = "";
+let artifactRedirectTarget: any = "";
 let onMcpSubscription: any = null;
+let discoveryGetCount = 0;
+let apiKeyRequestCount = 0;
+let redirectTargetRequestCount = 0;
+let redirectTargetApiKeyCount = 0;
 
 function deferred() : any {
   let resolve: any;
@@ -77,7 +86,13 @@ async function startSignedHub() : Promise<any> {
     response.end(JSON.stringify(payload));
   };
   server = createServer(async (request?: any, response?: any) : Promise<any> => {
+    if (request.headers["x-meshrix.js-api-key"]) apiKeyRequestCount += 1;
     if (request.url === "/api/gateway/v1/artifacts/artifact-fixture" && request.method === "GET") {
+      if (artifactRedirectTarget) {
+        response.writeHead(302, { location: artifactRedirectTarget });
+        response.end();
+        return;
+      }
       const bytes: any = Buffer.from("artifact from the packaged Undici request owner");
       response.writeHead(200, {
         "content-type": "application/octet-stream",
@@ -86,16 +101,14 @@ async function startSignedHub() : Promise<any> {
       response.end(bytes);
       return;
     }
-    if (request.url === "/mcp" && request.method === "POST" && onMcpSubscription) {
-      for await (const _chunk of request) {}
-      onMcpSubscription(response, request);
-      return;
-    }
     if (request.url === "/api/mcp/discovery") {
+      if (request.method === "GET") discoveryGetCount += 1;
       respond(response, {
         name: "Meshrix.js",
         interfaceVersion: MCP_INTERFACE_VERSION,
         stableToolName: MCP_STABLE_TOOL_NAME,
+        installer: { packageName: "meshrix.js" },
+        mcpServers: { meshrix: { httpUrl: `${baseUrl}/mcp` } },
         identity: {
           algorithm: "Ed25519",
           keyId: identity.keyId,
@@ -103,6 +116,36 @@ async function startSignedHub() : Promise<any> {
         },
         handshake: { url: `${baseUrl}/api/mcp/handshake` }
       });
+      return;
+    }
+    if (request.url === "/mcp" && request.method === "POST") {
+      let body = "";
+      for await (const chunk of request) body += chunk.toString("utf8");
+      const input: any = JSON.parse(body);
+      if (input.method === "server/discover") {
+        respond(response, {
+          jsonrpc: "2.0",
+          id: input.id,
+          result: {
+            resultType: "complete",
+            supportedVersions: [MCP_PROTOCOL_VERSION],
+            _meta: {
+              "io.modelcontextprotocol/serverInfo": { name: "meshrix-platform", version: "0.1.0-alpha.1" },
+              interfaceVersion: MCP_INTERFACE_VERSION,
+              stableToolName: MCP_STABLE_TOOL_NAME,
+              sharedHub: { directHttp: true },
+              priorityTargets: [],
+              supportedTargets: []
+            }
+          }
+        });
+        return;
+      }
+      if (onMcpSubscription) {
+        onMcpSubscription(response, request);
+        return;
+      }
+      respond(response, { error: "not found" }, 404);
       return;
     }
     if (request.url === "/api/mcp/handshake" && request.method === "POST") {
@@ -145,7 +188,7 @@ function dispatcherFixture() : any {
   return {
     dispatchers,
     factory: vi.fn((options?: any) : any => {
-      expect(options).toEqual({ headersTimeout: 0, bodyTimeout: 0 });
+      expect(options).toEqual({ connectTimeout: 0, headersTimeout: 0, bodyTimeout: 0 });
       const dispatcher: any = {
         close: vi.fn(async () : Promise<any> => {}),
         destroy: vi.fn(async () : Promise<any> => {})
@@ -170,6 +213,11 @@ async function fetchOptions(outputPath: any, additions: Record<string, any> = {}
 beforeEach(async () : Promise<any> => {
   rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-fetch-lifetime-"));
   onMcpSubscription = null;
+  artifactRedirectTarget = "";
+  discoveryGetCount = 0;
+  apiKeyRequestCount = 0;
+  redirectTargetRequestCount = 0;
+  redirectTargetApiKeyCount = 0;
   vi.stubEnv(TOKEN_ENV, API_KEY);
   vi.stubEnv("MESHRIX_MCP_CREDENTIAL_DIR", path.join(rootDir, "credentials"));
   await fs.mkdir(path.join(rootDir, "credentials"), { recursive: true, mode: 0o700 });
@@ -184,13 +232,74 @@ afterEach(async () : Promise<any> => {
     server.closeAllConnections?.();
     await new Promise((resolve?: any) : any => server.close(resolve));
   }
+  if (redirectTargetServer) {
+    redirectTargetServer.closeAllConnections?.();
+    await new Promise((resolve?: any) : any => redirectTargetServer.close(resolve));
+  }
   server = null;
+  redirectTargetServer = null;
   baseUrl = "";
+  artifactRedirectTarget = "";
   onMcpSubscription = null;
+  discoveryGetCount = 0;
+  apiKeyRequestCount = 0;
+  redirectTargetRequestCount = 0;
+  redirectTargetApiKeyCount = 0;
   if (rootDir) await fs.rm(rootDir, { recursive: true, force: true });
 });
 
 describe("Meshrix connector caller-owned request lifetime", () : any => {
+  it("does not send a stored API Key when discovery resolves to another server", async () : Promise<any> => {
+    const credentialBaseUrl = "https://credential-bound.invalid";
+    const discoveryFile = path.join(rootDir, "credential-binding-discovery.json");
+    await saveMcpApiKeyCredential({ target: "codex", baseUrl: credentialBaseUrl, token: API_KEY });
+    await fs.writeFile(discoveryFile, JSON.stringify({
+      serverConfig: {
+        activeName: "credential-bound",
+        profiles: { "credential-bound": { baseUrl: credentialBaseUrl } }
+      }
+    }));
+    vi.stubEnv(MESHRIX_MCP_URL_ENV, baseUrl);
+    vi.stubEnv("MESHRIX_MCP_BASE_URL", "");
+    vi.stubEnv(TOKEN_ENV, "");
+    vi.spyOn(deviceEnvironmentPort, "read").mockResolvedValue({});
+    apiKeyRequestCount = 0;
+
+    await expect(fetchCommand({
+      target: "codex",
+      "resolved-url": credentialBaseUrl,
+      "discovery-file": discoveryFile,
+      "token-env": TOKEN_ENV,
+      artifact: "artifact-fixture",
+      out: path.join(rootDir, "must-not-be-created.bin")
+    })).rejects.toThrow(/bound to a different server/iu);
+
+    expect(apiKeyRequestCount).toBe(0);
+  });
+
+  it("reuses signed discovery data during doctor instead of issuing a second GET", async () : Promise<any> => {
+    vi.stubEnv(TOKEN_ENV, "");
+    discoveryGetCount = 0;
+
+    const result: any = await doctorCommand({
+      url: baseUrl,
+      target: "codex",
+      "token-env": TOKEN_ENV,
+      "discovery-file": path.join(rootDir, "doctor-discovery.json")
+    });
+
+    expect(result.checks.discovery).toMatchObject({ ok: true, status: 200 });
+    expect(discoveryGetCount).toBe(1);
+
+    discoveryGetCount = 0;
+    const discovered: any = await discoverCommand({
+      url: baseUrl,
+      "token-env": TOKEN_ENV
+    });
+    expect(discovered.mcpServers.meshrix.httpUrl).toBe(`${baseUrl}/mcp`);
+    expect(discoveryGetCount).toBe(1);
+  });
+
   it("executes version and help through the package-manager symlink and keeps imports inert", async () : Promise<any> => {
     const commandLink: any = path.join(rootDir, "meshrix-mcp");
     await fs.symlink(CLI_ENTRY, commandLink);
@@ -222,7 +331,7 @@ describe("Meshrix connector caller-owned request lifetime", () : any => {
     const outputPath: any = path.join(rootDir, "actual-undici-artifact.bin");
     const bytes: any = Buffer.from("artifact from the packaged Undici request owner");
     const dispatcherFactory: any = vi.fn((options?: any) : any => {
-      expect(options).toEqual({ headersTimeout: 0, bodyTimeout: 0 });
+      expect(options).toEqual({ connectTimeout: 0, headersTimeout: 0, bodyTimeout: 0 });
       return new Agent(options);
     });
 
@@ -270,6 +379,7 @@ describe("Meshrix connector caller-owned request lifetime", () : any => {
     });
     expect(await fs.readFile(outputPath)).toEqual(bytes);
     expect(dispatcherState.factory).toHaveBeenCalledOnce();
+    expect(requestOptions.redirect).toBe("error");
     expect(requestOptions.dispatcher).toBe(dispatcherState.dispatchers[0]);
     expect(dispatcherState.dispatchers[0].close).toHaveBeenCalledOnce();
     expect(dispatcherState.dispatchers[0].destroy).not.toHaveBeenCalled();
@@ -311,6 +421,28 @@ describe("Meshrix connector caller-owned request lifetime", () : any => {
     expect(await fs.readFile(outputPath)).toEqual(bytes);
     expect(dispatcherState.dispatchers[0].close).toHaveBeenCalledOnce();
     expect(dispatcherState.dispatchers[0].destroy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a cross-origin artifact redirect before the second peer receives the API Key", async () : Promise<any> => {
+    redirectTargetServer = createServer((request?: any, response?: any) : any => {
+      redirectTargetRequestCount += 1;
+      if (request.headers["x-meshrix.js-api-key"]) redirectTargetApiKeyCount += 1;
+      response.writeHead(200, { "content-type": "application/octet-stream" });
+      response.end("redirect target received the request");
+    });
+    await new Promise((resolve?: any, reject?: any) : any => {
+      redirectTargetServer.once("error", reject);
+      redirectTargetServer.listen(0, "127.0.0.1", resolve);
+    });
+    const redirectAddress: any = redirectTargetServer.address();
+    artifactRedirectTarget = `http://127.0.0.1:${redirectAddress.port}/captured`;
+
+    await expect(fetchCommand(await fetchOptions(path.join(rootDir, "redirected-artifact.bin"))))
+      .rejects.toThrow();
+
+    expect(apiKeyRequestCount).toBe(1);
+    expect(redirectTargetRequestCount).toBe(0);
+    expect(redirectTargetApiKeyCount).toBe(0);
   });
 
   it("aborts a held header wait and does not create a partial file", async () : Promise<any> => {
@@ -374,10 +506,24 @@ describe("Meshrix connector caller-owned request lifetime", () : any => {
   it("retains digest, size, and exclusive existing-output safeguards", async () : Promise<any> => {
     const dispatcherState: any = dispatcherFixture();
     const failedPath: any = path.join(rootDir, "http-failure.bin");
+    let errorBodyReads = 0;
+    let errorBodyCancelled = false;
+    const errorBody = new ReadableStream({
+      pull(controller) {
+        errorBodyReads += 1;
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ error: { message: "synthetic upstream failure" } })));
+        controller.close();
+      },
+      cancel() {
+        errorBodyCancelled = true;
+      }
+    }, { highWaterMark: 0 });
     await expect(fetchCommand(await fetchOptions(failedPath, {
       dispatcherFactory: dispatcherState.factory,
-      fetchImpl: async () : Promise<any> => new Response(JSON.stringify({ error: { message: "synthetic upstream failure" } }), { status: 502 })
-    }))).rejects.toThrow(/synthetic upstream failure/iu);
+      fetchImpl: async () : Promise<any> => new Response(errorBody, { status: 502 })
+    }))).rejects.toThrow(/HTTP 502/u);
+    expect(errorBodyCancelled).toBe(true);
+    expect(errorBodyReads).toBe(0);
     expect(await fs.readdir(rootDir)).not.toContain("http-failure.bin");
 
     const mismatchPath: any = path.join(rootDir, "digest-mismatch.bin");

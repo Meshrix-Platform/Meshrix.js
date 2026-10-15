@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { spawn } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createServer as createSecureServer } from "node:https";
 import { createSecureContext } from "node:tls";
@@ -10,7 +11,7 @@ import { pathToFileURL } from "node:url";
 import { createInterface } from "node:readline";
 import { createGateway } from "@meshrix/gateway";
 import { createIsolatedSchemaValidator } from "@meshrix/gateway/schema";
-import type { AuthenticatedContext, CatalogDescriptor, RouteSnapshot, UpstreamPort } from "@meshrix/contracts/gateway";
+import type { AuthenticatedContext, CatalogDescriptor, CurrentAuthorityPort, RouteSnapshot, UpstreamPort } from "@meshrix/contracts/gateway";
 import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
 import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
 import { createSqliteGatewayContinuationLedger } from "@meshrix/foundation/security/gateway-continuation-ledger";
@@ -20,6 +21,7 @@ import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-dow
 import { applyGatewayMigration, previewGatewayMigration, restoreGatewayMigration } from "./config-migration.ts";
 import { createModernUpstreamAdapter } from "@meshrix/protocols/mcp/modern-upstream";
 import { fetchRpc, MAX_UPSTREAM_MESSAGE_BYTES as MAX_REQUEST_BYTES, StdioPeerTransport } from "./upstream-transport.ts";
+import type { ClaimManagedEndpointOptions, ClaimManagedEndpointResult } from "./private-endpoint/claim.ts";
 
 const MAX_ALLOWED_ORIGINS = 64;
 const MAX_ORIGIN_BYTES = 2048;
@@ -213,7 +215,12 @@ function createDurablePermitAuthority(descriptors: readonly CatalogDescriptor[])
   });
 }
 
-export async function createRuntime(config: RuntimeConfig, serverVersion: string, signal?: AbortSignal) {
+export async function createRuntime(
+  config: RuntimeConfig,
+  serverVersion: string,
+  signal?: AbortSignal,
+  composition: { readonly currentAuthority?: CurrentAuthorityPort } = {}
+) {
   if (config.services.length === 0) throw configError("gateway_services_missing", "A serving gateway requires at least one configured upstream service.");
   const transports = new Map<string, UpstreamPort>();
   const descriptors: CatalogDescriptor[] = [];
@@ -266,6 +273,7 @@ export async function createRuntime(config: RuntimeConfig, serverVersion: string
     if (signal?.aborted) throw configError("gateway_start_cancelled", "Gateway startup was cancelled.");
     gateway = createGateway({
     policy: createGatewayPolicy(), permits: permitOwner.authority, descriptors,
+    ...(composition.currentAuthority ? { currentAuthority: composition.currentAuthority } : {}),
     credentialProvider: { async resolve({ binding }) { const authorization = credentials.get(binding); if (!authorization) throw configError("gateway_credential_missing", "Credential binding is unavailable."); return { Authorization: authorization }; } },
     continuationKey: randomBytes(32),
     upstream: { async invoke(input) { const adapter = transports.get(input.route.upstreamIdentity); if (!adapter) throw configError("gateway_target_missing", "Upstream target is unavailable."); return adapter.invoke(input); }, async close() { try { await Promise.all([...transports.values()].map((adapter) => adapter.close?.())); } finally { permitOwner.close(); } } },
@@ -519,6 +527,93 @@ export async function migrateGateway(command: "preview" | "apply" | "restore", i
   return restoreGatewayMigration(inputPath, { expectedRevision: options.expectedRevision, backupRevision: options.backupRevision, backupPath: options.backupPath });
 }
 
+export type PrivateEndpointClaimResult = ClaimManagedEndpointResult;
+
+export interface PrivateEndpointClaimCommandOptions {
+  readonly configPath?: string;
+  readonly authorityOrigin?: string;
+  readonly headless?: boolean;
+  readonly signal?: AbortSignal;
+}
+
+export interface PrivateEndpointClaimCommandDependencies {
+  readonly claim?: (input: {
+    readonly configPath: string;
+    readonly authorityOrigin?: string;
+    readonly openBrowser?: ClaimManagedEndpointOptions["openBrowser"];
+    readonly onProgress?: ClaimManagedEndpointOptions["onProgress"];
+    readonly signal?: AbortSignal;
+  }) => Promise<PrivateEndpointClaimResult>;
+  readonly openBrowser?: (url: string) => Promise<void>;
+  readonly writeLine?: (line: string) => void;
+}
+
+/** Run the managed endpoint ownership claim from the installed CLI. */
+export async function runPrivateEndpointClaimCommand(
+  options: PrivateEndpointClaimCommandOptions,
+  dependencies: PrivateEndpointClaimCommandDependencies = {}
+): Promise<PrivateEndpointClaimResult> {
+  if (!options.configPath) {
+    throw configError("private_endpoint_config_required", "Private endpoint claim requires --config.");
+  }
+  const writeLine = dependencies.writeLine ?? ((line: string) => { process.stdout.write(`${line}\n`); });
+  const claim = dependencies.claim ?? (await import("./private-endpoint/profile.ts")).claimManagedEndpoint;
+  const browser = options.headless ? undefined : dependencies.openBrowser ?? openSystemBrowser;
+  const result = await claim({
+    configPath: options.configPath,
+    ...(options.authorityOrigin ? { authorityOrigin: options.authorityOrigin } : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(browser ? { openBrowser: async (url: string) => {
+      try {
+        await browser(url);
+      } catch {
+        writeLine(`Open this account authorization link to continue: ${url}`);
+      }
+    } } : {}),
+    onProgress(progress) {
+      if (options.headless && progress.browserUrl) {
+        writeLine(`Open this account authorization link to continue: ${progress.browserUrl}`);
+      } else if (progress.stage === "claimed") {
+        writeLine("Endpoint account ownership is active.");
+      }
+    }
+  });
+  writeLine(JSON.stringify(result));
+  return result;
+}
+
+function openSystemBrowser(url: string): Promise<void> {
+  const command = process.platform === "darwin"
+    ? "open"
+    : process.platform === "win32"
+      ? "rundll32.exe"
+      : "xdg-open";
+  const args = process.platform === "win32" ? ["url.dll,FileProtocolHandler", url] : [url];
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(command, args, { stdio: "ignore" });
+    child.once("error", rejectPromise);
+    child.once("exit", (code) => {
+      if (code === 0) resolvePromise();
+      else rejectPromise(new Error("The system browser could not be opened."));
+    });
+  });
+}
+
+export async function claimPrivateEndpointFromCli(input: {
+  readonly configPath?: string;
+  readonly authorityOrigin?: string;
+  readonly headless?: boolean;
+}): Promise<PrivateEndpointClaimResult> {
+  const controller = new AbortController();
+  const stop = () => controller.abort();
+  process.once("SIGINT", stop);
+  try {
+    return await runPrivateEndpointClaimCommand({ ...input, signal: controller.signal });
+  } finally {
+    process.off("SIGINT", stop);
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const command = process.argv[2] ?? "check";
   const configIndex = process.argv.indexOf("--config");
@@ -533,6 +628,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
       ? import("./private-endpoint/profile.ts").then((profile) => profile.servePrivateEndpoint(config))
     : command === "private-endpoint" && process.argv[3] === "check"
       ? import("./private-endpoint/profile.ts").then((profile) => profile.checkPrivateEndpoint({ config })).then((value) => { process.stdout.write(`${JSON.stringify(value)}\n`); })
+    : command === "private-endpoint" && process.argv[3] === "claim"
+      ? claimPrivateEndpointFromCli({ configPath: config, authorityOrigin: option("--authority-origin"), headless: process.argv.includes("--headless") })
     : command === "migrate" && ["preview", "apply", "restore"].includes(process.argv[3] ?? "")
       ? migrateGateway(process.argv[3] as "preview" | "apply" | "restore", option("--input") ?? "", {
           expectedRevision: option("--expected-revision"), backupRevision: option("--backup-revision"), backupPath: option("--backup")

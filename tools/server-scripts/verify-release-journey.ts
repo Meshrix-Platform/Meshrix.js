@@ -16,7 +16,7 @@
 //   --port N                Pin the host port (must be free).
 //   --image-name NAME       operator-supplied format-convert image.
 //   --json                  Also print the final report JSON to stdout.
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -44,6 +44,7 @@ import {
   inspectPublishedUpstreamService,
   listOperationAudit,
   listPendingOperations,
+  releaseJourneyServiceId,
   rotateOwnerPassword
 } from "./lib/release-journey-console.ts";
 import {
@@ -106,6 +107,9 @@ const API_KEY_SCOPES: any = "gateway:read,gateway:write,storage:read,storage:wri
 const API_KEY_MAX_RISK: any = "safe_write";
 const APPROVAL_OPERATION_KEY: any = "convert-require-approval-debug";
 const IMMEDIATE_OPERATION_KEY: any = "convert-full-access-debug";
+const FILE_PARSER_SERVICE_KEY: any = "file-parser/format-convert";
+const FILE_PARSER_SECRET_REF: any = "secret://meshrix/file-parser/format-convert/request-auth";
+const FILE_PARSER_SECRET_TARGET_PATH: any = "/tmp/meshrix-release-format-convert-secret-target.json";
 
 function usage() : any {
   process.stdout.write(`Usage: node tools/server-scripts/verify-release-journey.ts [options]
@@ -166,6 +170,10 @@ async function main() : Promise<any> {
   const { addNeedle, redact, assertNoLeak } = redaction;
   const workDir: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-journey-"));
   const fetchOutputPath: any = path.join(workDir, "output.pdf");
+  const masterKeySource: any = path.join(workDir, "local-secret-master-key");
+  const converterTokenSource: any = path.join(workDir, "format-convert-auth-token");
+  const converterToken: any = randomBytes(32).toString("base64url");
+  addNeedle(converterToken);
   await fs.rm(htmlReportPath, { force: true });
   let visualRecorder: any = null;
 
@@ -193,6 +201,7 @@ async function main() : Promise<any> {
   async function cleanup() : Promise<any> {
     report.cleanup.startedAt = new Date().toISOString();
     const details: any = report.cleanup.details;
+    let retainCredentialSources = options.keepStack;
     for (const target of installedTargets) {
       const started: any = Date.now();
       try {
@@ -228,14 +237,17 @@ async function main() : Promise<any> {
     if (stackStarted && !options.keepStack) {
       const started: any = Date.now();
       try {
-        await runCompose(["--profile", "format-convert", "down", "-v"], {
+        const stopped: any = await runCompose(["--profile", "format-convert", "down", "-v"], {
           cwd: repoRoot,
-          env: composeEnv({ hostPort, converterImage: options.imageName }),
+          env: composeEnv({ hostPort, converterImage: options.imageName, masterKeySource, converterTokenSource }),
           redact,
           allowFailure: true
         });
-        details.push({ id: "compose-down", status: "passed", durationMs: Date.now() - started });
+        const downPassed: any = stopped.status === 0;
+        retainCredentialSources ||= !downPassed;
+        details.push({ id: "compose-down", status: downPassed ? "passed" : "failed", durationMs: Date.now() - started });
       } catch (error: any) {
+        retainCredentialSources = true;
         details.push({ id: "compose-down", status: "failed", durationMs: Date.now() - started, error: redact(error?.message || String(error)).slice(-300) });
       }
       const imageStarted: any = Date.now();
@@ -250,11 +262,19 @@ async function main() : Promise<any> {
       details.push({ id: "compose-down", status: "skipped", note: "--keep-stack requested" });
     }
     const tempStarted: any = Date.now();
-    try {
-      await fs.rm(workDir, { recursive: true, force: true });
-      details.push({ id: "temp-workdir", status: "passed", durationMs: Date.now() - tempStarted });
-    } catch (error: any) {
-      details.push({ id: "temp-workdir", status: "failed", durationMs: Date.now() - tempStarted, error: redact(error?.message || String(error)).slice(-300) });
+    if (retainCredentialSources) {
+      details.push({
+        id: "temp-workdir",
+        status: "skipped",
+        note: "Private secret source files retained because the Compose stack may still use them."
+      });
+    } else {
+      try {
+        await fs.rm(workDir, { recursive: true, force: true });
+        details.push({ id: "temp-workdir", status: "passed", durationMs: Date.now() - tempStarted });
+      } catch (error: any) {
+        details.push({ id: "temp-workdir", status: "failed", durationMs: Date.now() - tempStarted, error: redact(error?.message || String(error)).slice(-300) });
+      }
     }
     report.cleanup.performed = true;
     report.cleanup.finishedAt = new Date().toISOString();
@@ -282,6 +302,10 @@ async function main() : Promise<any> {
   try {
     await recordStep("preflight", async () : Promise<any> => {
       const engineVersion: any = await assertDockerAvailable();
+      await Promise.all([
+        fs.writeFile(masterKeySource, randomBytes(32).toString("hex"), { mode: 0o444 }),
+        fs.writeFile(converterTokenSource, converterToken, { mode: 0o444 })
+      ]);
       await fs.access(descriptorPath);
       await fs.access(connectorScript);
       await fs.access(binaryUploadChildScript);
@@ -354,7 +378,7 @@ async function main() : Promise<any> {
     });
 
     await recordStep("stack-build-up", async () : Promise<any> => {
-      const env: any = composeEnv({ hostPort, converterImage: options.imageName });
+      const env: any = composeEnv({ hostPort, converterImage: options.imageName, masterKeySource, converterTokenSource });
       if (!dockerImageExists(options.imageName)) {
         const error: Error & Record<string, any> = new Error(
           `Operator-supplied format-convert image ${options.imageName} is unavailable. Pass --image-name with a locally present image.`
@@ -363,8 +387,8 @@ async function main() : Promise<any> {
         throw error;
       }
       await runCompose(["--profile", "format-convert", "build", "meshrix-server"], { cwd: repoRoot, env, redact });
-      await runCompose(RELEASE_JOURNEY_STACK_UP_ARGS, { cwd: repoRoot, env, redact });
       stackStarted = true;
+      await runCompose(RELEASE_JOURNEY_STACK_UP_ARGS, { cwd: repoRoot, env, redact });
       const baseUrl: any = `http://127.0.0.1:${hostPort}`;
       await waitForHttpOk(`${baseUrl}/api/healthz`, { timeoutMs: 180000 });
       await waitForConverterReady({ containerName: RELEASE_JOURNEY_CONVERTER_CONTAINER, env });
@@ -377,15 +401,49 @@ async function main() : Promise<any> {
     await recordStep("admin-bootstrap", async () : Promise<any> => {
       const password: any = await rotateOwnerPassword({
         containerName: RELEASE_JOURNEY_SERVER_CONTAINER,
-        env: composeEnv({ hostPort, converterImage: options.imageName }),
+        env: composeEnv({ hostPort, converterImage: options.imageName, masterKeySource, converterTokenSource }),
         redact
       });
       addNeedle(password);
       const session: any = await consoleClient.login({ username: "owner", password });
+      const serviceId: any = releaseJourneyServiceId(session.userId, FILE_PARSER_SERVICE_KEY);
+      const secretTarget: any = {
+        provider: "meshrix",
+        family: "http-header",
+        authType: "bearer",
+        secretRef: FILE_PARSER_SECRET_REF,
+        scope: {
+          serviceId,
+          scopes: [],
+          allowedHosts: ["format-convert"],
+          allowedProtocols: ["http"]
+        }
+      };
+      runDocker([
+        "exec", "-i", RELEASE_JOURNEY_SERVER_CONTAINER,
+        "node", "-e",
+        "const fs = require('node:fs'); let body = ''; process.stdin.setEncoding('utf8').on('data', chunk => body += chunk).on('end', () => fs.writeFileSync('/tmp/meshrix-release-format-convert-secret-target.json', body, { mode: 0o600 }));"
+      ], {
+        env: composeEnv({ hostPort, converterImage: options.imageName, masterKeySource, converterTokenSource }),
+        input: JSON.stringify(secretTarget),
+        redact
+      });
+      runDocker([
+        "exec", "-i", RELEASE_JOURNEY_SERVER_CONTAINER,
+        "node", "dist/apps/server/bin/meshrix.js",
+        "--data-dir", "/app/data",
+        "secret", "init",
+        "--target-file", FILE_PARSER_SECRET_TARGET_PATH,
+        "--token-stdin"
+      ], {
+        env: composeEnv({ hostPort, converterImage: options.imageName, masterKeySource, converterTokenSource }),
+        input: converterToken,
+        redact
+      });
       await visualRecorder.login({ username: "owner", password });
       const organization: any = await visualRecorder.configureOrganizationGovernance();
       runDocker(["restart", RELEASE_JOURNEY_SERVER_CONTAINER], {
-        env: composeEnv({ hostPort, converterImage: options.imageName }),
+        env: composeEnv({ hostPort, converterImage: options.imageName, masterKeySource, converterTokenSource }),
         redact
       });
       await waitForHttpOk(`${baseUrl}/api/healthz`, { timeoutMs: 120_000 });

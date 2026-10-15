@@ -179,6 +179,6 @@ describe("operation resource mapping", () : any => {
     expect(gatewayForward?.timeoutMs).toBeNull();
     expect(gatewayTransit).toBeDefined();
     expect(gatewayTransit?.timeoutMs).toBeNull();
-    expect(gatewayMetrics?.timeoutMs).toBe(30_000);
+    expect(gatewayMetrics?.timeoutMs).toBeUndefined();
   });
 });

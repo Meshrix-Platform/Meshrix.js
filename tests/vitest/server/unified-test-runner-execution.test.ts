@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -44,6 +45,8 @@ function suite(id: string): TestSuiteEntry {
  */
 function createWorkspaceFixture(): string {
   const root = mkdtempSync(path.join(tmpdir(), "meshrix-suite-fingerprint-"));
+  execFileSync("git", ["init", "--quiet", root]);
+  writeFileSync(path.join(root, ".gitignore"), "private/\n.env\n.dev.vars\n");
   const manifests: Record<string, any> = {
     "packages/contracts": { name: "@meshrix/contracts" },
     "packages/foundation": { name: "@meshrix/foundation", dependencies: { "@meshrix/contracts": "0.0.1" } },
@@ -519,6 +522,23 @@ describe("unified test runner phase execution", () => {
 });
 
 describe("suite input fingerprints", () => {
+  it("excludes ignored private data and env files while observing new public source", () => {
+    const root = createWorkspaceFixture();
+    try {
+      const entry = { ...suite("repo.root-hygiene"), package: "repo" };
+      const before = computeSuiteInputFingerprint(entry, { rootDir: root, cache: createSuiteInputScopeCache() });
+      mkdirSync(path.join(root, "private"));
+      writeFileSync(path.join(root, "private", "state.json"), "synthetic private state");
+      writeFileSync(path.join(root, ".dev.vars"), "SYNTHETIC_SECRET=fixture-only");
+      writeFileSync(path.join(root, ".env"), "SYNTHETIC_SECRET=fixture-only");
+      expect(computeSuiteInputFingerprint(entry, { rootDir: root, cache: createSuiteInputScopeCache() })).toBe(before);
+      writeFileSync(path.join(root, "packages", "foundation", "new.ts"), "export const value = 1;");
+      expect(computeSuiteInputFingerprint(entry, { rootDir: root, cache: createSuiteInputScopeCache() })).not.toBe(before);
+      expect(() => computeSuiteInputFingerprint({ ...entry, args: [".dev.vars"] }, {
+        rootDir: root, cache: createSuiteInputScopeCache(),
+      })).toThrow("suite_private_runtime_input_forbidden");
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
   it("scopes a suite to its package and that package's workspace dependencies", () => {
     const root = createWorkspaceFixture();
     try {

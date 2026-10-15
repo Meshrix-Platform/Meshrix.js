@@ -54,14 +54,14 @@ function assertActiveCatalogGrantReferences(registry?: any, input: Record<string
   }
 }
 
-function closeDistinctResources(resources: any = []) : any {
+async function closeDistinctResources(resources: any = []) : Promise<any[]> {
   const failures: any[] = [];
   const closed: any = new Set<any>();
   for (const resource of resources) {
     if (!resource || closed.has(resource) || typeof resource.close !== "function") continue;
     closed.add(resource);
     try {
-      resource.close();
+      await resource.close();
     } catch {
       failures.push(true);
     }
@@ -69,7 +69,7 @@ function closeDistinctResources(resources: any = []) : any {
   return failures;
 }
 
-export function createOperationPermissionWorkerOwner({
+export async function createOperationPermissionWorkerOwner({
   userDataPath,
   registry = null,
   capabilityResolver = null,
@@ -81,14 +81,14 @@ export function createOperationPermissionWorkerOwner({
   proofSubstrate = null,
   metricRetention = null,
   recoverStaleApiKeyEffectReservations = false
-}: Record<string, any>) : any {
+}: Record<string, any>) : Promise<any> {
   const rootPath: any = path.join(userDataPath, "operation-permission");
   fs.mkdirSync(rootPath, { recursive: true });
   let db: any = null;
   let securityHelperClient: any = null;
   let resolvedCapabilityKeyProvider: any = null;
   let resolvedCapabilityBindingGuard: any = null;
-  const ownedSecurityResources: Array<{ close?: () => void }> = [];
+  const ownedSecurityResources: Array<{ close?: () => unknown }> = [];
   try {
     db = openSqliteDatabase(getOperationPermissionDatabasePath(userDataPath));
     ensureSchema(db, { recoverStaleApiKeyEffectReservations });
@@ -152,7 +152,7 @@ export function createOperationPermissionWorkerOwner({
       metricRetention
     });
   } catch (error: any) {
-    closeDistinctResources([
+    await closeDistinctResources([
       ...ownedSecurityResources.slice().reverse(),
       db
     ]);
@@ -160,7 +160,7 @@ export function createOperationPermissionWorkerOwner({
   }
 }
 
-function createOperationPermissionStoreFromResources({
+export function createOperationPermissionStoreFromResources({
   db,
   ownedSecurityResources,
   rootPath,
@@ -178,6 +178,7 @@ function createOperationPermissionStoreFromResources({
   const pendingChangeNotifications: any = new Set<any>();
   let securityAlertStore: any = null;
   let closed: any = false;
+  let closePromise: Promise<void> | null = null;
 
   const ctx: Record<string, any> = {
     db,
@@ -292,6 +293,7 @@ function createOperationPermissionStoreFromResources({
     provePermissionAuditInclusion: ctx.provePermissionAuditInclusion,
     appendMetric: ctx.appendMetric,
     appendHttpRequestMetric: ctx.appendHttpRequestMetric,
+    appendHttpRequestMetricBatch: ctx.appendHttpRequestMetricBatch,
     saveCatalogSnapshot: ctx.saveCatalogSnapshot,
     flushChangeNotifications: ctx.flushChangeNotifications,
     listAudit: ctx.listAudit,
@@ -312,21 +314,25 @@ function createOperationPermissionStoreFromResources({
       return closed || db.open === false;
     },
     close() : any {
-      if (closed || db.open === false) return;
-      try {
-        db.pragma("wal_checkpoint(TRUNCATE)");
-      } catch {
-        // Closing must remain best-effort; verification cleanup should not depend on WAL support.
-      }
-      const failures: any = closeDistinctResources([
-        securityAlertStore,
-        ...ownedSecurityResources.slice().reverse(),
-        db
-      ]);
-      if (failures.length > 0) {
-        throw new Error("Operation Permission store did not close cleanly.");
-      }
+      if (closePromise) return closePromise;
+      if (closed || db.open === false) return Promise.resolve();
       closed = true;
+      closePromise = (async () => {
+        try {
+          db.pragma("wal_checkpoint(TRUNCATE)");
+        } catch {
+          // Closing must remain best-effort; verification cleanup should not depend on WAL support.
+        }
+        const failures: any[] = await closeDistinctResources([
+          securityAlertStore,
+          ...ownedSecurityResources.slice().reverse(),
+          db
+        ]);
+        if (failures.length > 0) {
+          throw new Error("Operation Permission store did not close cleanly.");
+        }
+      })();
+      return closePromise;
     }
   };
 }

@@ -154,10 +154,21 @@ Operation Permission v1 is the current external execution boundary. External age
 
 For projected upstream operations, the internal catalog marks an omitted
 execution budget explicitly so shared execution defaults cannot add an
-unselected deadline. A configured positive operation timeout or MCP service
-`mcp.timeoutMs` remains effective; operations without this upstream marker
-retain their existing Operation Permission timeout behavior. The marker is
-execution metadata, not a nullable public configuration value.
+unselected deadline. The catalog does not invent a timeout when an operation
+has no explicit budget. A configured positive operation timeout, MCP service
+`mcp.timeoutMs`, or per-call timeout remains effective as a cooperative abort
+request. Explicit budgets are whole milliseconds from 1 through 2,147,483,647;
+out-of-range values fail before dispatch, and an explicit `null` operation
+timeout means no deadline. The dispatcher waits for actual settlement before
+releasing its execution slot. If an explicit deadline or caller cancellation
+fires after dispatch starts, the caller still receives the selected timeout or
+cancellation outcome after the dispatcher settles. The execution record retains
+only the settlement class and bounded response status, completion flag, and byte count;
+it does not expose a late response as caller success or retain its contents.
+The operation-level audit or receipt remains the evidence of the protected
+operation's actual outcome. A timeout response alone is not proof of rollback
+or authorization to retry. The marker is execution metadata, not a nullable
+public configuration value.
 
 This is an authorization and operation-mediation boundary, not operating-system execution isolation. A governed executable workload additionally requires the target [Execution Sandbox](../architecture/EXECUTION-SANDBOX.md), which enforces the effective filesystem, process, network, secret, resource, output, and tenant restrictions. Missing sandbox enablement, backend configuration, an enforceable policy, or a current per-run grant keeps that workload denied; Operation Permission does not authorize a host-process fallback.
 

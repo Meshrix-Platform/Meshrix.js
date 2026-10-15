@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   RECORDING_CATEGORIES,
@@ -137,11 +137,13 @@ function usageRecord(recordId: string, operationRef: string, revision = 1, occur
 }
 
 function openStore(rootPath: string, policy: any, options: Record<string, any> = {}): any {
+  const { sink, budgets, now, ...rest } = options;
   return createRecordingSinkStore({
     rootPath,
-    sink: options.sink || sinkDescriptor(options.budgets),
+    sink: sink || sinkDescriptor(budgets),
     policy,
-    ...(options.now ? { now: options.now } : {})
+    ...(now ? { now } : {}),
+    ...rest
   });
 }
 
@@ -357,6 +359,58 @@ describe("enterprise recording sink store", () => {
     const retention = store.enforceRetention();
     expect(retention.prunedRecords).toBe(0);
     expect(store.verifyIntegrity().intact).toBe(true);
+    store.close();
+  });
+
+  it("prunes expired rows at open even when the category went idle while closed", () => {
+    const root = tempRoot();
+    let clock = 1_000_000_000;
+    const now = () => clock;
+    const policy = makePolicy({
+      usage: categorySelection({
+        fieldAllow: ["ops.completed"],
+        retention: { maxAgeSeconds: 60, maxRecords: 32, maxContentBytes: 0, maxIndexBytes: 32_768 }
+      })
+    });
+    let store = openStore(root, policy, { now });
+    const at = () => new Date(clock).toISOString();
+    store.writeRecord(usageRecord("rec.idle.1", "op.idle.1", 1, at()));
+    store.writeRecord(usageRecord("rec.idle.2", "op.idle.2", 1, at()));
+    store.close();
+
+    // The category saw no writes while closed; the reopen sweep still
+    // enforces the retention contract before the first read.
+    clock += 120_000;
+    store = openStore(root, policy, { now });
+    expect(store.listRecords({ category: "usage", role: "role.rec.auditor" })).toEqual([]);
+    expect(store.verifyIntegrity().intact).toBe(true);
+    store.close();
+  });
+
+  it("runs the periodic sweep for idle categories and hides expired rows before it fires", () => {
+    const root = tempRoot();
+    let clock = 1_000_000_000;
+    const now = () => clock;
+    const policy = makePolicy({
+      usage: categorySelection({
+        fieldAllow: ["ops.completed"],
+        retention: { maxAgeSeconds: 60, maxRecords: 32, maxContentBytes: 0, maxIndexBytes: 32_768 }
+      })
+    });
+    vi.useFakeTimers();
+    const store = openStore(root, policy, { now, retentionSweepMs: 1_000 });
+    store.writeRecord(usageRecord("rec.sweep.1", "op.sweep.1", 1, new Date(clock).toISOString()));
+
+    // Past maxAge but before the next sweep tick: the row is physically
+    // held yet contractually retired — reads must not surface it.
+    clock += 61_000;
+    expect(store.listRecords({ category: "usage", role: "role.rec.auditor" })).toEqual([]);
+
+    vi.advanceTimersByTime(1_500);
+    const retention = store.enforceRetention();
+    expect(retention.prunedRecords).toBe(0); // the timer already pruned it
+    expect(store.db.prepare("SELECT COUNT(*) AS total FROM recording_records").get().total).toBe(0);
+    vi.useRealTimers();
     store.close();
   });
 

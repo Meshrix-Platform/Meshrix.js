@@ -141,14 +141,55 @@ function governedSubjectAllowedSecretBindings(subject: Record<string, any> = {})
   ]);
 }
 
+function explicitToolCapability(descriptor: Record<string, any> = {}, capabilityId: string = "") : boolean {
+  if (text(descriptor.upstreamToolName)) return true;
+  return /:tools-call-[^:]+$/u.test(capabilityId);
+}
+
+/**
+ * Audience facts for discovery filtering. Declared subject arrays stay authoritative
+ * and are not widened from a nested grant.
+ */
+export function audienceGrantForSubject(subject: Record<string, any> = {}) : Record<string, any> {
+  const grant: any = object(subject.grant);
+  const metadata: any = object(grant.metadata);
+  const restriction: any = object(subject.restriction);
+  const capabilities: any = [...governedSubjectCapabilitySet(subject)];
+  const allowedServiceIds: any = subjectDeclaredAuthority(subject, ["allowedServiceIds"])
+    ? asArray(subject.allowedServiceIds)
+    : [...asArray(grant.allowedServiceIds), ...asArray(metadata.allowedServiceIds), ...asArray(restriction.allowedServiceIds)];
+  const allowedSecretBindings: any = subjectDeclaredAuthority(subject, ["allowedSecretBindings"])
+    ? asArray(subject.allowedSecretBindings)
+    : [...asArray(grant.allowedSecretBindings), ...asArray(metadata.allowedSecretBindings), ...asArray(restriction.allowedSecretBindings)];
+  const scopes: any = subjectDeclaredAuthority(subject, ["scopes"])
+    ? asArray(subject.scopes)
+    : [...asArray(grant.scopes), ...asArray(restriction.scopes)];
+  const toolsets: any = subjectDeclaredAuthority(subject, ["toolsets"])
+    ? asArray(subject.toolsets)
+    : [...asArray(grant.toolsets), ...asArray(restriction.toolsets)];
+  return {
+    scopes,
+    toolsets,
+    dynamicCapabilities: capabilities,
+    capabilities,
+    allowedServiceIds,
+    allowedSecretBindings,
+    maxRisk: text(subject.maxRisk || grant.maxRisk || metadata.maxRisk || restriction.maxRisk)
+  };
+}
+
 export function evaluateDynamicOperationAuthorization(subject: Record<string, any> = {}, operation: Record<string, any> = {}) : any {
-  const subjectType: any = text(subject.type);
-  if (subjectType !== "tool-grant" && subjectType !== "scoped-api-key") {
-    return { allowed: true, reasonCode: "not_tool_grant" };
-  }
   const descriptor: any = operation.dynamicCapability || {};
   const capabilityId: any = text(descriptor.capabilityId);
   const capabilities: any = governedSubjectCapabilitySet(subject);
+  const subjectType: any = text(subject.type);
+  const typedGrant: boolean = subjectType === "tool-grant" || subjectType === "scoped-api-key";
+  // An upstream tool capability is an explicit grant for every subject type.
+  // A service operation that does not name a tool stays on the caller's scope gate.
+  const requiresExplicitHold: boolean = typedGrant || explicitToolCapability(descriptor, capabilityId);
+  if (!requiresExplicitHold) {
+    return { allowed: true, reasonCode: "dynamic_upstream_capability_allowed", capabilityId };
+  }
   if (!capabilityId || !capabilities.has(capabilityId)) {
     return { allowed: false, reasonCode: "missing_dynamic_upstream_capability", capabilityId };
   }

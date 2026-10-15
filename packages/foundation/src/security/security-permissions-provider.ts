@@ -324,8 +324,6 @@ function defaultSummary() {
       expiresAt: "",
       user: null
     },
-    roles: [],
-    oidc: {}
   };
 }
 

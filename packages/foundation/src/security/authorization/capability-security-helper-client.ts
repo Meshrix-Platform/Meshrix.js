@@ -30,7 +30,7 @@ const MAX_HELPER_INPUT_BYTES = 16 * 1024 * 1024;
 const MAX_HELPER_OUTPUT_BYTES = 1024 * 1024;
 const HELPER_SHUTDOWN_GRACE_MS = 2_000;
 
-function repoRoot(): string { return path.resolve(fileURLToPath(new URL("../../../../..", import.meta.url))); }
+function repoRoot(): string { return path.resolve(fileURLToPath(new URL("../../../../..", import.meta.url).href)); }
 export function capabilitySecurityHelperScriptPath(): string {
   return path.join(repoRoot(), "tools", "server-scripts", "meshrix-capability-security-helper.ts");
 }

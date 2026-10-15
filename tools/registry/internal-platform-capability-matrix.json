@@ -191,7 +191,8 @@
       "requiredRuntimePrefixes": [
         "operation_permission.",
         "tag_management.",
-        "gateway."
+        "gateway.",
+        "recording_governance."
       ],
       "expectedConsoleFeatures": [
         "admin.operation-permission-governance",

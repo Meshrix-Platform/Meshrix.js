@@ -13,6 +13,7 @@ import { loadVerifierPublishedServices, seedVerifierUpstreamServices, verifierOp
 import { createRawMcpCaller, runAggregateTrafficPolicyWorkflow, runEndpointPoolWorkflow, runProjectedToolWorkflows, runUrlAuthorityEscapeWorkflow } from "./lib/upstream-gateway-projected-tools-workflows.ts";
 import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 import { provisionVerifierLocalSecretKey } from "./lib/local-secret-verifier-key.ts";
+import { mcpModernHttpRequest } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 
 const REPORT_PATH: any = "build/reports/upstream-gateway-e2e.json";
 const MCP_INTERFACE_VERSION: any = "v0.0.1:mcp:interface-1";
@@ -275,7 +276,7 @@ async function createGrant(label?: any, toolsets?: any, extra: Record<string, an
 }
 
 async function callMcp(token?: any, toolName?: any, operation?: any, input: Record<string, any> = {}, id: any = 1, expectedStatuses: any = [200]) : Promise<any> {
-  const body: any = JSON.stringify(mcpRequest("tools/call", {
+  const wire: any = mcpModernHttpRequest(mcpRequest("tools/call", {
     name: toolName,
     arguments: {
       apiVersion: MCP_INTERFACE_VERSION,
@@ -283,11 +284,14 @@ async function callMcp(token?: any, toolName?: any, operation?: any, input: Reco
       input,
       clientVersion: "verify-upstream-gateway-e2e"
     }
-  }, id));
+  }, id), {
+    "X-Meshrix.js-Api-Key": token,
+    "X-Meshrix.js-MCP-Target": "codex"
+  });
   const response: any = await fetchJson(`${server.url}/mcp`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": token, "X-Meshrix.js-MCP-Target": "codex" },
-    body
+    headers: wire.headers,
+    body: wire.body
   });
   assert.equal(expectedStatuses.includes(response.status), true, `Unexpected MCP HTTP status ${response.status}: ${JSON.stringify(response.payload, null, 2)}`);
   return response.payload;

@@ -8,7 +8,7 @@ import {
 } from "@meshrix/gateway";
 import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
 import { POLICY_ONLY_INPUT_KEYS } from "@meshrix/capabilities/operation-permission-core/runtime-schema";
-import { projectedOperationForwardInput } from "@meshrix/agents/upstream-gateway/index";
+import { projectedOperationForwardInput } from "@meshrix/agents/upstream-gateway/operation-projection";
 import { createFinalProtectedSinkAttempt, digestFinalProtectedSinkInput } from "@meshrix/foundation/security/final-protected-sink-permit";
 import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
 import {
@@ -19,6 +19,7 @@ import {
   recordingProducerForPort,
   sanitizeRecordingRef
 } from "@meshrix/foundation/recording/producer";
+import { captureRecordingContentFields } from "@meshrix/foundation/recording/content-capture";
 import type {
   AuthenticatedContext,
   CatalogDescriptor,
@@ -150,7 +151,7 @@ function routeFor({
  * path cannot drift apart. Only the core outlets are published here: a plugin-contributed
  * outlet arrives through the tool provider with its own validated descriptor.
  */
-function coreOutletTools(): readonly Record<string, any>[] {
+export function coreOutletTools(): readonly Record<string, any>[] {
   return meshrixCategorizedTools()
     .filter((outletTool: Record<string, any>) : boolean => isRecord(MCP_OUTLET_METADATA[text(outletTool.name)]))
     .map((outletTool: Record<string, any>) : Record<string, any> => {
@@ -173,7 +174,7 @@ function coreOutletTools(): readonly Record<string, any>[] {
     });
 }
 
-function platformToolDescriptor(tool: Record<string, any>, catalogRevision: string): CatalogDescriptor | null {
+export function platformToolDescriptor(tool: Record<string, any>, catalogRevision: string): CatalogDescriptor | null {
   const name = text(tool.id || tool.operationId || tool.name);
   if (!name) return null;
   const revision = `platform:${catalogRevision}:${name}`;
@@ -390,7 +391,7 @@ function gatewayGrant({ authorization, routeRefs }: { readonly authorization: Re
   return Object.freeze({
     ...grant,
     revision,
-    tenant: text(authorization.tenantId || grant.tenantId || grant.tenant || subject.tenantId || "local"),
+    tenant: text(authorization.apiKeyAuthorization?.organizationNodeId || authorization.tenantId || grant.tenantId || grant.tenant || subject.tenantId || "local"),
     principal: text(apiKey?.workloadPrincipalId || grant.subjectId || grant.id || subject.subjectId),
     routeRefs: Object.freeze([...routeRefs]),
     methods: Object.freeze(["tools/call", "resources/read", "prompts/get", "completion/complete"]),
@@ -674,14 +675,17 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
         const diagnosticsCode = status === "denied" ? "operation.dispatch.denied"
           : status === "failed" ? "operation.dispatch.failed"
           : status === "in_doubt" ? "operation.dispatch.in_doubt" : "";
-        const contentFieldNames = ((): string[] => {
+        const contentCapture = ((): ReturnType<typeof captureRecordingContentFields> => {
           // Tenant-scoped selection: single-sink producers ignore the second
           // argument; the composed tenant router resolves this session's own
-          // live policy revision.
+          // live policy revision. fieldAllow selects top-level fields;
+          // fieldRedact and the forbidden key set apply recursively before
+          // serialization, so allowed parent fields cannot leak nested
+          // secrets into artifact custody.
           const selection = recordingProducer?.selectionFor?.("content", recordingSession?.tenantRef);
-          const allow = new Set((selection?.fieldAllow as readonly string[] | undefined) || []);
-          return Object.keys(inputArguments).filter((name) => allow.has(name));
+          return captureRecordingContentFields(inputArguments, selection);
         })();
+        const contentFieldNames = contentCapture?.fieldNames || [];
         recordingSession.settle({
           operationStatus,
           usageCounters: {
@@ -714,10 +718,8 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
             content: {
               fieldNames: contentFieldNames,
               build: () => {
-                if (contentFieldNames.length === 0) return null;
-                const captured: Record<string, any> = {};
-                for (const name of contentFieldNames) captured[name] = inputArguments[name];
-                const bytes = Buffer.from(canonicalJson(captured), "utf8");
+                if (contentFieldNames.length === 0 || !contentCapture) return null;
+                const bytes = Buffer.from(canonicalJson(contentCapture.captured), "utf8");
                 const artifact = recordingSession.putArtifact({ bytes });
                 if (!artifact?.artifactRef) return null;
                 return {
@@ -1172,11 +1174,28 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
         code: text(authorization?.reasonCode || "mcp_authorization_denied")
       });
     }
+    const subject = authorizationSubject(authorization);
+    const tenant = text(authorization.apiKeyAuthorization?.organizationNodeId || authorization.tenantId || authorization.grant?.tenantId || subject.tenantId || "local");
+    const principal = text(authorization.workloadPrincipalId || authorization.grant?.subjectId || authorization.grant?.id || subject.subjectId);
+    // The request was admitted under anonymous per-source budgets upstream of
+    // authorization; now that the real principal is known, charge its own
+    // subject/tenant budgets before any catalog or dispatch work runs.
+    const principalAdmission = await requestWithTransport.rawRequest?.__meshrixPrincipalAdmission?.({
+      credentialKind: authorization.credentialKind === "scoped_api_key" ? "api-key" : "grant",
+      subjectId: principal,
+      tenantId: tenant
+    });
+    if (principalAdmission?.allowed === false) {
+      logger?.warn?.("gateway.authentication.rate_limited", {
+        reason: text(principalAdmission.reason || "principal")
+      });
+      throw Object.assign(new Error("MCP request rate is limited."), {
+        status: 429,
+        code: "rate_limited"
+      });
+    }
     const visibleDescriptors = await syncCatalog(authorization, requestWithTransport.signal);
     const routeRefs = visibleDescriptors.map((descriptor) => descriptor.route.logicalRoute);
-    const subject = authorizationSubject(authorization);
-    const tenant = text(authorization.tenantId || authorization.grant?.tenantId || subject.tenantId || "local");
-    const principal = text(authorization.workloadPrincipalId || authorization.grant?.subjectId || authorization.grant?.id || subject.subjectId);
     const authGeneration = text(
       authorization.apiKeyAuthorization?.policyFingerprint ||
         authorization.grant?.revision ||

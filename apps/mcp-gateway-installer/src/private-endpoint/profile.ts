@@ -1,11 +1,17 @@
-import { createHash, createPrivateKey, createPublicKey, sign as cryptoSign, timingSafeEqual, verify as cryptoVerify } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, sign as cryptoSign, timingSafeEqual, verify as cryptoVerify, X509Certificate } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import type { AuthenticatedContext, CatalogDescriptor, Gateway, GatewayOutcome, PermitAuthorityPort } from "@meshrix/contracts/gateway";
-import { PRIVATE_RELAY_SESSION_STATES } from "@meshrix/contracts/private-relay";
+import { dirname, join } from "node:path";
+import { isPairingPeerIdentity, type AccountActionTarget, type AccountAuthorityBinding, type AccountDeviceCurrentBindingResponse } from "@meshrix/contracts/account";
+import type { AuthenticatedContext, CatalogDescriptor, CurrentAuthorityPort, Gateway, GatewayOutcome, PermitAuthorityPort, RouteSnapshot } from "@meshrix/contracts/gateway";
+import { PRIVATE_RELAY_SESSION_STATES, PRIVATE_RELAY_REJECT_REASONS, peerIdForRouteDevice } from "@meshrix/contracts/private-relay";
 import { createInnerDispatchLoop, isPeerSchemaMessage, type InnerDispatchLoop } from "@meshrix/entry-transport";
 import {
   createEndpointIdentityStore,
+  accountDeviceAuthorizationMatches,
+  EndpointAccountPairingApplication,
   createPrivateGatewayEndpoint,
+  AccountEndpointAuthorityClient,
+  createFileEndpointIdentityDurablePort,
   type EndpointAuthorityPort,
   type EndpointDeviceRecord,
   type EndpointIdentityStore,
@@ -16,8 +22,11 @@ import {
 } from "@meshrix/gateway/private-endpoint";
 import { createRuntime, loadConfig, version as packageVersion, type RuntimeConfig } from "../cli.ts";
 import { endpointConfigError, loadPrivateEndpointConfig } from "./config.ts";
-import { EndpointPeerRuntime } from "./peer.ts";
+import { EndpointPeerRuntime, stablePeerCode } from "./peer.ts";
 import { RelayWebSocketTransport, type RelaySocketFactory } from "./transport.ts";
+
+export { claimManagedEndpoint } from "./claim.ts";
+export type { ClaimManagedEndpointOptions, ClaimManagedEndpointProgress, ClaimManagedEndpointResult } from "./claim.ts";
 
 /**
  * Private-endpoint profile runtime.
@@ -52,7 +61,7 @@ export interface GatewayRuntimeParts {
 
 export interface PrivateEndpointServeDeps {
   /** Defaults to the installer runtime (`createRuntime` over gateway.configPath). */
-  readonly buildRuntime?: (config: RuntimeConfig, serverVersion: string, signal: AbortSignal) => Promise<GatewayRuntimeParts>;
+  readonly buildRuntime?: (config: RuntimeConfig, serverVersion: string, signal: AbortSignal, composition?: { readonly currentAuthority?: CurrentAuthorityPort }) => Promise<GatewayRuntimeParts>;
   /** Defaults to the undici WebSocket client. */
   readonly socketFactory?: RelaySocketFactory;
   /** Endpoint identity/admission store; injectable for tests. */
@@ -119,6 +128,41 @@ function innerUnavailableOutcome(detail: string): GatewayOutcome {
   } as GatewayOutcome;
 }
 
+function innerDeniedOutcome(detail: string): GatewayOutcome {
+  return {
+    kind: "failure",
+    code: "account_authority_denied",
+    message: detail,
+    status: 403,
+    effectOutcome: "not_started"
+  } as GatewayOutcome;
+}
+
+interface InnerPeerBinding {
+  readonly peerSessionId: string;
+  readonly peerSpki: string;
+  readonly pairingOnly: boolean;
+  readonly device?: EndpointDeviceRecord;
+}
+
+function isPairingMethod(message: unknown): boolean {
+  if (!message || typeof message !== "object" || Array.isArray(message)) return false;
+  const method = (message as { method?: unknown }).method;
+  return typeof method === "string" && method.startsWith("meshrix/pairing/");
+}
+
+function isAccountAuthorityNotFound(error: unknown): boolean {
+  return isRecord(error) && error.code === "not_found";
+}
+
+function isAccountAuthorityDenied(error: unknown): boolean {
+  return isRecord(error) && error.code === "forbidden";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 /**
  * Bind the shared inner-wire dispatch loop (`@meshrix/entry-transport`) to one
  * established pinned-TLS channel. The loop owns newline framing, the
@@ -131,15 +175,60 @@ function innerUnavailableOutcome(detail: string): GatewayOutcome {
 function attachInnerDispatch(
   owner: PrivateEndpoint,
   channel: InnerTlsChannel,
-  authority: Pick<EndpointAuthorityPort, "contextFor">
+  authority: Pick<EndpointAuthorityPort, "contextFor">,
+  peer: InnerPeerBinding,
+  accountAuthority?: AccountEndpointAuthorityClient
 ): InnerDispatchLoop {
   return createInnerDispatchLoop({
     socket: channel.socket,
     async dispatch(message) {
-      const device = owner.device;
+      if (peer.pairingOnly) {
+        if (!isPairingMethod(message)) return innerDeniedOutcome("The provisional channel only permits account pairing methods.");
+        return owner.dispatchAccountMessage({
+          peerSessionId: peer.peerSessionId,
+          pairingOnly: true,
+          message
+        });
+      }
+      if (isPairingMethod(message)) {
+        return owner.dispatchAccountMessage({
+          peerSessionId: peer.peerSessionId,
+          pairingOnly: false,
+          ...(peer.device ? { device: peer.device } : {}),
+          message
+        });
+      }
+      const device = peer.device;
       if (!device) return innerUnavailableOutcome("Endpoint device is not admitted.");
-      const context = await authority.contextFor({ device });
+      if (accountAuthority && (!device.accountBinding || device.role !== "entry")) {
+        return innerDeniedOutcome("This account-managed endpoint only admits devices with a current account grant.");
+      }
+      let context = await authority.contextFor({ device });
       if (!context) return innerUnavailableOutcome("Endpoint authority denied the device.");
+      if (device.accountBinding) {
+        if (!accountAuthority) return innerDeniedOutcome("Managed account authority is unavailable.");
+        let current: AccountDeviceCurrentBindingResponse | null;
+        try { current = await accountAuthority.currentDeviceAuthorization(device.deviceId); }
+        catch (error) {
+          if (isAccountAuthorityNotFound(error) || isAccountAuthorityDenied(error)) {
+            return innerDeniedOutcome("The account authority no longer authorizes this device.");
+          }
+          return innerUnavailableOutcome("The account authority could not be reached; the request was not started.");
+        }
+        if (!accountDeviceAuthorizationMatches({ response: current, binding: device.accountBinding, device })) {
+          return innerDeniedOutcome("The device grant is no longer current.");
+        }
+        context = Object.freeze({
+          ...context,
+          grant: Object.freeze({ ...context.grant, routes: Object.freeze([...new Set(current!.authorizedScopes)]) }),
+          metadata: Object.freeze({
+            ...(context.metadata ?? {}),
+            accountId: device.accountBinding.accountId,
+            authEpoch: device.accountBinding.authEpoch,
+            deviceId: device.deviceId
+          })
+        });
+      }
       return owner.dispatchInnerMessage(context, message);
     }
   });
@@ -176,10 +265,6 @@ export interface EndpointMetricsExtras {
   readonly transportQueuedMessages?: number;
   /** Transport socket generation (connect attempts since profile start). */
   readonly transportGeneration?: number;
-  /** Durable peer inbox depth — only present when the peer block is enabled. */
-  readonly peerInboxDepth?: number;
-  /** Durable peer outbox depth — only present when the peer block is enabled. */
-  readonly peerOutboxDepth?: number;
 }
 
 interface EndpointMetricSpec {
@@ -203,8 +288,8 @@ const TRANSPORT_STATES = Object.freeze(["idle", "connecting", "open", "closed"])
  * Prometheus text exposition (v0.0.4) of the endpoint's existing counters.
  *
  * This is a narrow read of the same point-in-time surface `GET /status`
- * emits, plus the transport's already-tracked queue/generation counters and
- * the durable peer store depths. No new per-operation instrumentation is
+ * emits, plus the transport's already-tracked queue/generation counters.
+ * Metrics do not scan peer history or add per-operation instrumentation;
  * added, and the output carries only counters and bounded enum labels —
  * never payloads, plaintext, key or digest material, tokens, session ids,
  * device ids or peer ids.
@@ -299,22 +384,6 @@ export function renderEndpointMetrics(surface: PrivateEndpointSurface, extras: E
       type: "gauge",
       samples: [{ value: surface.peer.live ? 1 : 0 }]
     });
-    if (extras.peerInboxDepth !== undefined) {
-      specs.push({
-        name: "meshrix_endpoint_peer_inbox_depth",
-        help: "Entries in the durable peer inbox store.",
-        type: "gauge",
-        samples: [{ value: extras.peerInboxDepth }]
-      });
-    }
-    if (extras.peerOutboxDepth !== undefined) {
-      specs.push({
-        name: "meshrix_endpoint_peer_outbox_depth",
-        help: "Entries in the durable peer outbox store.",
-        type: "gauge",
-        samples: [{ value: extras.peerOutboxDepth }]
-      });
-    }
   }
   const lines: string[] = [];
   for (const spec of specs) {
@@ -338,8 +407,8 @@ export async function checkPrivateEndpoint(options: { readonly config?: string }
   // `serve` — it stays offline (no upstream contact, no listeners).
   const gateway = await loadConfig(config.gatewayConfigPath).catch((error: unknown) => {
     throw endpointConfigError(
-      typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "private_endpoint_gateway_invalid",
-      `Gateway configuration is not usable: ${error instanceof Error ? error.message : String(error)}`
+      "private_endpoint_gateway_invalid",
+      "Gateway configuration is not usable."
     );
   });
   return Object.freeze({
@@ -356,10 +425,75 @@ export async function checkPrivateEndpoint(options: { readonly config?: string }
     relay: Object.freeze({ host: config.relayBaseUrl.host, secure: config.relayBaseUrl.protocol === "wss:" }),
     services: gateway.services.length,
     recoveryAuthorities: config.recovery.authorities.length,
+    ...(config.adminListen ? { admin: Object.freeze({
+      listen: config.adminListen,
+      credential: config.adminTokenFile ? { file: config.adminTokenFile } : { environment: config.adminTokenEnv }
+    }) } : {}),
     peer: config.peer
       ? Object.freeze({ enabled: true, peerId: config.peer.peerId ?? null, storageDir: config.peer.storageDir })
       : Object.freeze({ enabled: false })
   });
+}
+
+const MAX_ADMIN_ORIGIN_BYTES = 2048;
+
+/** Same origin shape as `createEntryMcpLoopbackHttp`: one http(s) origin, no userinfo or path. */
+function normalizeAdminOrigin(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > MAX_ADMIN_ORIGIN_BYTES || Buffer.byteLength(value, "utf8") > MAX_ADMIN_ORIGIN_BYTES || !/^https?:\/\/[^/?#]+$/iu.test(value)) return undefined;
+  try {
+    const origin = new URL(value);
+    if (value.includes("@") || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) return undefined;
+    return origin.origin;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Duplicate or unparseable Origin is invalid. A missing Origin is absent (non-browser clients). */
+function adminRequestOrigin(request: IncomingMessage): string | "absent" | "invalid" {
+  let found = false;
+  let value: string | undefined;
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    if (request.rawHeaders[index]?.toLowerCase() !== "origin") continue;
+    if (found) return "invalid";
+    found = true;
+    value = request.rawHeaders[index + 1];
+  }
+  if (!found) return "absent";
+  return normalizeAdminOrigin(value) ?? "invalid";
+}
+
+function isAllowedLoopbackOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return host === "127.0.0.1" || host === "::1" || host === "[::1]" || host === "localhost";
+  } catch {
+    return false;
+  }
+}
+
+function adminRequestHost(request: IncomingMessage): string | "absent" | "invalid" {
+  let found = false;
+  let value = "";
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    if (request.rawHeaders[index]?.toLowerCase() !== "host") continue;
+    if (found) return "invalid";
+    found = true;
+    value = request.rawHeaders[index + 1] ?? "";
+  }
+  if (!found) return "absent";
+  if (!value) return "invalid";
+  return value;
+}
+
+function adminHostAllowed(value: string, boundHost: string, boundPort: number): boolean {
+  if (value.length > 255 || value.includes("@") || /[\s/\\?#]/u.test(value)) return false;
+  const host = value.toLowerCase();
+  if (host === `localhost:${boundPort}` || (boundPort === 80 && host === "localhost")) return true;
+  if (boundHost === "::1") {
+    return host === `[::1]:${boundPort}` || (boundPort === 80 && host === "[::1]");
+  }
+  return host === `${boundHost.toLowerCase()}:${boundPort}` || (boundPort === 80 && host === boundHost.toLowerCase());
 }
 
 /**
@@ -374,8 +508,8 @@ export async function servePrivateEndpointProfile(
   const config = await loadPrivateEndpointConfig(configPath);
   const gatewayConfig = await loadConfig(config.gatewayConfigPath).catch((error: unknown) => {
     throw endpointConfigError(
-      typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "private_endpoint_gateway_invalid",
-      `Gateway configuration is not usable: ${error instanceof Error ? error.message : String(error)}`
+      "private_endpoint_gateway_invalid",
+      "Gateway configuration is not usable."
     );
   });
   const schedule = deps.schedule ?? ((fn: () => void, delayMs: number) => setTimeout(fn, delayMs));
@@ -387,8 +521,111 @@ export async function servePrivateEndpointProfile(
   const abortStartup = () => startup.abort();
   signal?.addEventListener("abort", abortStartup, { once: true });
 
-  const builder = deps.buildRuntime ?? (async (loaded: RuntimeConfig, serverVersion: string, startupSignal: AbortSignal) => {
-    const runtime = await createRuntime(loaded, serverVersion, startupSignal);
+  // Durable endpoint trust is loaded before gateway composition so a managed
+  // profile can inject the same current-authority check used by the remote
+  // device path into the kernel's pre-effect boundary.
+  const identity = deps.identityStore ?? createEndpointIdentityStore(
+    createFileEndpointIdentityDurablePort(join(dirname(configPath), ".meshrix-private-endpoint-state.json"))
+  );
+  const storedEndpoint = identity.device(config.admission.deviceId);
+  if (!storedEndpoint) {
+    identity.enroll({
+      deviceId: config.admission.deviceId,
+      routeId: config.admission.routeId,
+      tenantId: config.admission.tenantId,
+      trustBinding: config.trustBinding
+    });
+  } else if (storedEndpoint.routeId !== config.admission.routeId
+    || storedEndpoint.tenantId !== config.admission.tenantId
+    || storedEndpoint.role !== "endpoint"
+    || storedEndpoint.pairedIdentityKey !== String(config.trustBinding.pairedIdentityKey)
+    || storedEndpoint.pairedIdentityFingerprint !== String(config.trustBinding.pairedIdentityFingerprint)) {
+    throw endpointConfigError("private_endpoint_identity_conflict", "Persisted endpoint trust does not match this configuration.");
+  }
+  if (storedEndpoint?.accountBinding && !config.account) {
+    throw endpointConfigError("private_endpoint_account_downgrade", "An account-managed endpoint cannot start without its account authority configuration.");
+  }
+  if (config.account && config.recovery.authorities.length > 0) {
+    throw endpointConfigError("private_endpoint_account_recovery_conflict", "Managed-account endpoints cannot configure independent endpoint recovery authorities.");
+  }
+
+  const accountAuthority = config.account
+    ? new AccountEndpointAuthorityClient({
+        origin: config.account.origin,
+        tenantId: config.admission.tenantId,
+        routeId: config.admission.routeId,
+        deviceId: config.admission.deviceId,
+        signingKey: createPrivateKey(config.account.signingKey)
+      })
+    : undefined;
+  if (accountAuthority && config.account) {
+    let managedRoute;
+    try { managedRoute = await accountAuthority.managedRoute(); }
+    catch (error) {
+      throw endpointConfigError("account_authority_unavailable", "Managed account authority could not be reached.");
+    }
+    const endpointSigningKey = createPrivateKey(config.account.signingKey);
+    const endpointPublicKey = createPublicKey(endpointSigningKey).export({ format: "der", type: "spki" }).subarray(-32).toString("base64url");
+    const endpointPinRef = createHash("sha256")
+      .update(new X509Certificate(config.innerTls.cert).publicKey.export({ format: "der", type: "spki" }))
+      .digest("base64url");
+    if (!managedRoute || managedRoute.tenantId !== config.admission.tenantId
+      || managedRoute.routeId !== config.admission.routeId
+      || managedRoute.endpointDeviceId !== config.admission.deviceId
+      || managedRoute.endpointPublicKey !== endpointPublicKey
+      || managedRoute.endpointPinRef !== endpointPinRef
+      || managedRoute.endpointPinRef !== config.account.endpointPinRef
+      || managedRoute.vaultId !== config.account.vaultId) {
+      if (storedEndpoint?.accountBinding && managedRoute?.accountId === storedEndpoint.accountBinding.accountId
+        && managedRoute.authEpoch > storedEndpoint.accountBinding.authEpoch) {
+        identity.revokeAccountEpoch(managedRoute.accountId, managedRoute.authEpoch);
+      }
+      throw endpointConfigError("account_endpoint_not_current", "This endpoint is not currently authorized by its account owner.");
+    }
+    const boundEndpoint = identity.bindAccountEndpoint({
+      deviceId: config.admission.deviceId,
+      account: { accountId: managedRoute.accountId, authEpoch: managedRoute.authEpoch }
+    });
+    if (boundEndpoint.revoked) {
+      throw endpointConfigError("account_endpoint_reenrollment_required", "Account recovery revoked this endpoint; it must be explicitly re-enrolled before serving.");
+    }
+  }
+
+  const recoverySigner = createPrivateEndpointRecoverySigner(config.recovery.signingKey);
+  for (const authority of config.account ? [] : config.recovery.authorities) {
+    identity.enrollRecoveryAuthority(authority);
+  }
+
+  const currentAuthority: CurrentAuthorityPort | undefined = accountAuthority ? Object.freeze({
+    async read({ context, route }: { readonly context: AuthenticatedContext; readonly route: RouteSnapshot }): Promise<AuthenticatedContext> {
+      const metadata = context.metadata;
+      const deviceId = metadata && typeof metadata.deviceId === "string" ? metadata.deviceId : undefined;
+      const accountId = metadata && typeof metadata.accountId === "string" ? metadata.accountId : undefined;
+      const authEpoch = metadata && Number.isSafeInteger(metadata.authEpoch) ? Number(metadata.authEpoch) : undefined;
+      // Local operator/self-hosted gateway contexts retain their independent
+      // configured authority. Account-bound Entry contexts always carry these
+      // facts from the endpoint's enrolled identity record.
+      if (!deviceId || !accountId || authEpoch === undefined) return context;
+      const device = identity.device(deviceId);
+      if (!device?.accountBinding || device.accountBinding.accountId !== accountId || device.accountBinding.authEpoch !== authEpoch) {
+        throw endpointConfigError("account_device_stale", "The device account epoch is no longer current.");
+      }
+      const live = await accountAuthority.currentDeviceAuthorization(deviceId);
+      if (!accountDeviceAuthorizationMatches({ response: live, binding: device.accountBinding, device, scope: route.logicalRoute })) {
+        if (live?.account.accountId === device.accountBinding.accountId && live.account.authEpoch > device.accountBinding.authEpoch) {
+          identity.revokeAccountEpoch(live.account.accountId, live.account.authEpoch);
+        }
+        throw endpointConfigError("account_device_revoked", "The account no longer authorizes this device for the requested route.");
+      }
+      return Object.freeze({
+        ...context,
+        grant: Object.freeze({ ...context.grant, routes: Object.freeze([...new Set(live!.authorizedScopes)]) })
+      });
+    }
+  }) : undefined;
+
+  const builder = deps.buildRuntime ?? (async (loaded: RuntimeConfig, serverVersion: string, startupSignal: AbortSignal, composition?: { readonly currentAuthority?: CurrentAuthorityPort }) => {
+    const runtime = await createRuntime(loaded, serverVersion, startupSignal, composition);
     return {
       gateway: runtime.gateway,
       descriptors: runtime.descriptors,
@@ -396,49 +633,65 @@ export async function servePrivateEndpointProfile(
       ...(loaded.remoteAuth ? { allowedServiceIds: loaded.remoteAuth.allowedServiceIds } : {})
     };
   });
-  const runtime = await builder(gatewayConfig, await packageVersion(), startup.signal);
+  const runtime = await builder(gatewayConfig, await packageVersion(), startup.signal, currentAuthority ? { currentAuthority } : undefined);
   signal?.removeEventListener("abort", abortStartup);
   if (signal?.aborted) {
     await runtime.gateway.close({ drainDeadline: 1_000 }).catch(() => {});
     return Object.freeze({ profile: "private-endpoint" as const, outcome: "stopped" as const });
   }
 
-  // The identity store is shared across endpoint rebuilds: enrollment and
-  // revocations are endpoint authority state, never re-derived from the wire.
-  const identity = deps.identityStore ?? createEndpointIdentityStore();
-  identity.enroll({
-    deviceId: config.admission.deviceId,
-    routeId: config.admission.routeId,
-    tenantId: config.admission.tenantId,
-    trustBinding: config.trustBinding
-  });
-  for (const authority of config.recovery.authorities) {
-    identity.enrollRecoveryAuthority(authority);
-  }
-  const recoverySigner = createPrivateEndpointRecoverySigner(config.recovery.signingKey);
-
   const allowedRoutes = Object.freeze(runtime.descriptors
     .filter((descriptor) => !runtime.allowedServiceIds || runtime.allowedServiceIds.includes(descriptor.route.upstreamIdentity))
     .map((descriptor) => descriptor.route.logicalRoute));
   const authority = {
     contextFor({ device }: { device: EndpointDeviceRecord }): AuthenticatedContext {
+      const routes = device.accountBinding
+        ? allowedRoutes.filter((route) => device.accountScopes?.includes(route))
+        : allowedRoutes;
       return Object.freeze({
         tenant: device.tenantId,
         principal: device.principalRef,
         authGeneration: String(device.trustGeneration),
-        grant: Object.freeze({ revision: String(device.admissionGeneration), routes: allowedRoutes })
+        grant: Object.freeze({ revision: String(device.admissionGeneration), routes }),
+        ...(device.accountBinding ? { metadata: Object.freeze({
+          accountId: device.accountBinding.accountId,
+          authEpoch: device.accountBinding.authEpoch,
+          deviceId: device.deviceId
+        }) } : {})
       });
     }
   };
 
-  const credential = process.env[config.credentialEnv]!;
   const transport = new RelayWebSocketTransport({
     url: config.sessionUrl,
-    headers: { authorization: `Bearer ${credential}` },
+    headers: { authorization: `Bearer ${config.relayCredential}` },
     ...(deps.socketFactory ? { socketFactory: deps.socketFactory } : {})
   });
 
-  let admission = config.admission;
+  let admission = Object.freeze({
+    ...config.admission,
+    revocationRevision: Math.max(config.admission.revocationRevision, identity.revocationRevision(config.admission.tenantId))
+  });
+  const accountPairing = config.account && accountAuthority
+    ? new EndpointAccountPairingApplication({
+        identity,
+        authority: accountAuthority,
+        proof: accountAuthority,
+        invite: Object.freeze({
+          tenantId: config.admission.tenantId,
+          routeId: config.admission.routeId,
+          endpointDeviceId: config.admission.deviceId,
+          endpointPinRef: config.account.endpointPinRef,
+          endpointSpkiPin: config.account.endpointSpkiPin,
+          endpointPrincipalRef: String(config.trustBinding.endpointPrincipalRef),
+          relayService: config.relayBaseUrl.toString(),
+          vaultId: config.account.vaultId,
+          mode: config.admission.mode as "personal" | "enterprise",
+          recoveryAuthority: null
+        }),
+        availableScopes: allowedRoutes
+      })
+    : undefined;
   let endpoint = buildEndpoint(admission);
 
   // --- optional peer messaging ----------------------------------------------
@@ -457,6 +710,26 @@ export async function servePrivateEndpointProfile(
           deviceId: config.admission.deviceId
         },
         send: (message) => transport.send(message),
+        resolvePeerIdentity: async (peerDeviceId) => {
+          const paired = identity.device(peerDeviceId);
+          const ownBinding = identity.device(config.admission.deviceId)?.accountBinding;
+          const expectedPeerId = paired
+            ? peerIdForRouteDevice({ tenantId: paired.tenantId, routeId: paired.routeId, deviceId: paired.deviceId })
+            : null;
+          if (!paired || paired.role !== "entry" || paired.revoked
+            || paired.tenantId !== config.admission.tenantId || paired.routeId !== config.admission.routeId
+            || !expectedPeerId || !isPairingPeerIdentity(paired.entryPeerIdentity, expectedPeerId)) {
+            return null;
+          }
+          if (ownBinding) {
+            if (!accountAuthority || !paired.accountBinding
+              || paired.accountBinding.accountId !== ownBinding.accountId
+              || paired.accountBinding.authEpoch !== ownBinding.authEpoch) return null;
+          } else if (paired.accountBinding) {
+            return null;
+          }
+          return Object.freeze({ ...paired.entryPeerIdentity });
+        },
         sessionLive: () => {
           const state = endpoint.session.state;
           return state === "admitted" || state === "streaming";
@@ -484,6 +757,7 @@ export async function servePrivateEndpointProfile(
       authority,
       recoverySigner,
       ...(runtime.permits ? { permits: runtime.permits } : {}),
+      ...(accountPairing ? { accountPairing } : {}),
       transport,
       admission: currentAdmission,
       innerTls: {
@@ -491,11 +765,11 @@ export async function servePrivateEndpointProfile(
         cert: config.innerTls.cert,
         ...(config.innerTls.handshakeTimeoutMs ? { handshakeTimeoutMs: config.innerTls.handshakeTimeoutMs } : {})
       },
-      onInnerChannel(channel) {
+      onInnerChannel(channel, peerBinding) {
         // Both admission and session-restore rebuilds land here; the loop is
         // bound to the endpoint generation that owns the channel so a stale
         // generation's late teardown can never steal a live dispatch.
-        const loop = attachInnerDispatch(created, channel, authority);
+        const loop = attachInnerDispatch(created, channel, authority, peerBinding, accountAuthority);
         innerLoops.add(loop);
         channel.socket.once("close", () => innerLoops.delete(loop));
       }
@@ -589,7 +863,7 @@ export async function servePrivateEndpointProfile(
   }
 
   function onRelayMessage(message: unknown): void {
-    // Peer mailbox kinds never reach the session driver — they are
+    // Peer message kinds never reach the session driver — they are
     // request/response traffic on the same admitted channel and land on the
     // peer client's own parser/correlator.
     if (isPeerSchemaMessage(message)) {
@@ -616,7 +890,9 @@ export async function servePrivateEndpointProfile(
       peer?.onSessionLive();
     } else if (kind === "session-rejected" && sessionState === "rejected") {
       peer?.onSessionDown();
-      const reason = String((message as { reason?: unknown }).reason ?? "unknown");
+      const offeredReason = (message as { reason?: unknown }).reason;
+      const reason = typeof offeredReason === "string" && (PRIVATE_RELAY_REJECT_REASONS as readonly string[]).includes(offeredReason)
+        ? offeredReason : "unknown";
       const retryable = (message as { retryable?: unknown }).retryable === true;
       const expected = Number((message as { expectedRevocationRevision?: unknown }).expectedRevocationRevision);
       if (retryable) {
@@ -637,7 +913,7 @@ export async function servePrivateEndpointProfile(
       const closeReason = String((message as { reason?: unknown }).reason ?? "");
       if (closeReason === "revoked") {
         terminal = { outcome: "revoked", code: "private_endpoint_revoked", detail: "The relay closed the session as revoked." };
-      } else if (closeReason === "protocol_error" || closeReason === "capacity_exceeded") {
+      } else if (closeReason === "protocol_error") {
         terminal = { outcome: "terminated", code: "private_endpoint_session_failed", detail: `The relay closed the session: ${closeReason}.` };
       }
     }
@@ -697,16 +973,19 @@ export async function servePrivateEndpointProfile(
   }
 
   // --- optional loopback admin/state surface ------------------------------
-  // Optional bearer authority for the whole surface: when `admin.token` binds
-  // a credential env var, every route — /status, /healthz, /metrics, /peer/* —
-  // requires it. The header is hashed before comparison (same pattern as the
-  // entry product's loopback server) so the token itself is never stored and
-  // mismatched lengths cannot short-circuit the equality check.
-  const adminToken = config.adminTokenEnv === undefined ? undefined : process.env[config.adminTokenEnv];
-  if (config.adminTokenEnv !== undefined && !adminToken) {
-    throw endpointConfigError("private_endpoint_credential_missing", "Admin bearer token environment binding is unavailable.");
+  // `admin.listen` always requires a bearer. The header is hashed before
+  // comparison (same pattern as the entry product's loopback server) so the
+  // token itself is never stored and mismatched lengths cannot short-circuit
+  // the equality check. There is no path that serves the listener without it.
+  const adminToken = config.adminToken;
+  if ((config.adminListen || config.adminTokenEnv !== undefined) && !adminToken) {
+    throw endpointConfigError("private_endpoint_credential_missing", "Admin bearer credential is unavailable.");
   }
   const adminAuthHash = adminToken === undefined ? undefined : createHash("sha256").update(`Bearer ${adminToken}`).digest();
+  const adminSocket = {
+    host: config.adminListen?.host ?? "127.0.0.1",
+    port: config.adminListen?.port ?? 0
+  };
   const sendJson = (response: ServerResponse, status: number, body: unknown): void => {
     const payload = JSON.stringify(body ?? null);
     response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store", "Content-Length": Buffer.byteLength(payload) });
@@ -744,11 +1023,43 @@ export async function servePrivateEndpointProfile(
    * peers answer 404 `peer_disabled` rather than a generic not-found.
    */
   async function handleAdminRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    if (adminAuthHash !== undefined) {
-      const header = request.headers.authorization;
-      const provided = typeof header === "string" ? createHash("sha256").update(header).digest() : null;
-      if (provided === null || !timingSafeEqual(provided, adminAuthHash)) {
-        sendJson(response, 401, { error: "admin_unauthorized", message: "Missing or invalid bearer token." });
+    const origin = adminRequestOrigin(request);
+    if (origin === "invalid" || (origin !== "absent" && !isAllowedLoopbackOrigin(origin))) {
+      sendJson(response, 403, { error: "admin_origin_rejected", message: "Admin request origin is not an allowed loopback origin." });
+      return;
+    }
+    const host = adminRequestHost(request);
+    if (host === "absent" || host === "invalid" || !adminHostAllowed(host, adminSocket.host, adminSocket.port)) {
+      sendJson(response, 403, { error: "admin_host_rejected", message: "Admin host is not the bound loopback listener." });
+      return;
+    }
+    // A local browser may carry the bearer across loopback ports. Preflight
+    // discloses no state; every actual request still requires the bearer.
+    if (origin !== "absent") {
+      response.setHeader("access-control-allow-origin", origin);
+      response.setHeader("vary", "Origin");
+      if (request.method === "OPTIONS") {
+        response.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
+        response.setHeader("access-control-allow-headers", "Authorization, Content-Type");
+        response.writeHead(204);
+        response.end();
+        return;
+      }
+    }
+    if (adminAuthHash === undefined) {
+      sendJson(response, 401, { error: "admin_unauthorized", message: "Missing or invalid bearer token." });
+      return;
+    }
+    const header = request.headers.authorization;
+    const provided = typeof header === "string" ? createHash("sha256").update(header).digest() : null;
+    if (provided === null || !timingSafeEqual(provided, adminAuthHash)) {
+      sendJson(response, 401, { error: "admin_unauthorized", message: "Missing or invalid bearer token." });
+      return;
+    }
+    if (request.method === "POST") {
+      const contentType = String(request.headers["content-type"] ?? "").toLowerCase();
+      if (contentType.split(";", 1)[0]?.trim() !== "application/json") {
+        sendJson(response, 415, { error: "admin_content_type_rejected", message: "Admin POST requires application/json." });
         return;
       }
     }
@@ -762,20 +1073,22 @@ export async function servePrivateEndpointProfile(
       return;
     }
     if (route === "/metrics" && request.method === "GET") {
-      let extras: EndpointMetricsExtras = {
+      const extras: EndpointMetricsExtras = {
         transportQueuedMessages: transport.queuedMessages,
         transportGeneration: transport.generation
       };
-      if (peer !== null) {
-        // Depths ride the same durable store reads /peer/status performs; a
-        // store failure omits the gauges honestly rather than failing the
-        // whole scrape.
-        try {
-          const peerStatus = await peer.status();
-          extras = { ...extras, peerInboxDepth: peerStatus.inboxCount, peerOutboxDepth: peerStatus.outbox.length };
-        } catch { /* omit peer depth gauges */ }
-      }
       sendText(response, 200, renderEndpointMetrics(surface(), extras));
+      return;
+    }
+    if (route === "/pairing/invites" && request.method === "POST") {
+      if (!accountPairing || adminAuthHash === undefined) {
+        sendJson(response, 404, { error: "pairing_invitation_unavailable" });
+        return;
+      }
+      const issued = await accountPairing.issueInvite();
+      // The pairing bearer is returned exactly once in the operator's local
+      // response. It is never persisted in plaintext, logged, or echoed later.
+      sendJson(response, 201, { invite: issued.invite });
       return;
     }
     if (route.startsWith("/peer/")) {
@@ -791,7 +1104,11 @@ export async function servePrivateEndpointProfile(
         if (route === "/peer/inbox" && request.method === "GET") {
           const query = new URL(request.url ?? "", "http://loopback.invalid");
           const limit = query.searchParams.get("limit");
-          sendJson(response, 200, { entries: await peer.inbox(limit === null ? 64 : Number(limit)) });
+          const afterSequence = query.searchParams.get("afterSequence");
+          sendJson(response, 200, await peer.inbox(
+            limit === null ? 64 : Number(limit),
+            afterSequence === null ? 0 : Number(afterSequence)
+          ));
           return;
         }
         if (route === "/peer/pair-safety" && request.method === "GET") {
@@ -809,7 +1126,7 @@ export async function servePrivateEndpointProfile(
           try {
             body = await readJsonBody(request);
           } catch (error) {
-            sendJson(response, (error as { statusCode?: number }).statusCode ?? 400, { error: "peer_request_invalid", message: (error as Error).message });
+            sendJson(response, (error as { statusCode?: number }).statusCode ?? 400, { error: "peer_request_invalid", message: "Peer request body is invalid." });
             return;
           }
           const args = (body ?? {}) as Record<string, unknown>;
@@ -823,30 +1140,11 @@ export async function servePrivateEndpointProfile(
             sendJson(response, 200, entry);
             return;
           }
-          if (route === "/peer/ack-outcome") {
-            const result = await peer.reportOutcome({
-              messageId: String(args.messageId ?? ""),
-              outcome: args.outcome as "accepted_by_agent" | "completed" | "rejected",
-              detailBase64url: typeof args.detailBase64url === "string" ? args.detailBase64url : undefined
-            });
-            sendJson(response, 200, result);
-            return;
-          }
-          if (route === "/peer/reconcile") {
-            const messageIds = Array.isArray(args.messageIds) ? args.messageIds.map(String) : undefined;
-            await peer.client.reconcile(messageIds);
-            sendJson(response, 200, { reconciled: true, messageIds: messageIds ?? null });
-            return;
-          }
-          if (route === "/peer/sync") {
-            sendJson(response, 200, await peer.sync());
-            return;
-          }
         }
         sendJson(response, 404, { error: "peer_route_unknown" });
       } catch (error) {
-        const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "peer_failed";
-        sendJson(response, 400, { error: code, message: error instanceof Error ? error.message : String(error) });
+        const offered = (error as { code?: unknown })?.code;
+        sendJson(response, 400, { error: stablePeerCode(offered) ?? "peer_failed", message: "Peer operation could not be completed." });
       }
       return;
     }
@@ -857,7 +1155,7 @@ export async function servePrivateEndpointProfile(
     adminServer = createServer((request, response) => {
       void handleAdminRequest(request, response).catch((error: unknown) => {
         if (!response.headersSent) {
-          const code = typeof (error as { code?: unknown })?.code === "string" ? (error as { code: string }).code : "internal_error";
+          const code = "internal_error";
           response.writeHead(500, { "Content-Type": "application/json", "Cache-Control": "no-store" });
           response.end(JSON.stringify({ error: code }));
           return;
@@ -867,7 +1165,11 @@ export async function servePrivateEndpointProfile(
     });
     await new Promise<void>((resolve, reject) => {
       adminServer!.once("error", reject);
-      adminServer!.listen(config.adminListen!.port, config.adminListen!.host, resolve);
+      adminServer!.listen(config.adminListen!.port, config.adminListen!.host, () => {
+        const address = adminServer!.address();
+        if (address && typeof address !== "string") adminSocket.port = address.port;
+        resolve();
+      });
     });
   }
 

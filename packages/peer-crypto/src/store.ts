@@ -58,6 +58,36 @@ export interface PeerCryptoCounters {
   readonly nextKyberPreKeyId: number;
 }
 
+/** A read-through overlay write captured during one ratchet operation. */
+export type PeerCryptoMutation =
+  | { readonly kind: "identity"; readonly record: PeerIdentitySecretRecord }
+  | { readonly kind: "peerBinding"; readonly operation: "save"; readonly record: PeerIdentityBinding }
+  | { readonly kind: "peerBinding"; readonly operation: "delete"; readonly peerId: string }
+  | { readonly kind: "session"; readonly operation: "save"; readonly addressKey: string; readonly value: Uint8Array }
+  | { readonly kind: "session"; readonly operation: "delete"; readonly addressKey: string }
+  | { readonly kind: "preKey"; readonly operation: "save"; readonly record: StoredPreKeyRecord }
+  | { readonly kind: "preKey"; readonly operation: "delete"; readonly id: number }
+  | { readonly kind: "signedPreKey"; readonly operation: "save"; readonly id: number; readonly value: Uint8Array }
+  | { readonly kind: "signedPreKey"; readonly operation: "delete"; readonly id: number }
+  | { readonly kind: "kyberPreKey"; readonly operation: "save"; readonly record: StoredPreKeyRecord }
+  | { readonly kind: "kyberPreKey"; readonly operation: "delete"; readonly id: number }
+  | { readonly kind: "counters"; readonly counters: PeerCryptoCounters };
+
+/**
+ * One prepared ratchet + local-message commit. `applicationRecord` is opaque
+ * host-owned state (an inbox or outbox row); the crypto package never parses
+ * or logs it. The same WAL makes Ratchet advancement and exact ciphertext
+ * persistence recover as one local transaction in either direction.
+ */
+export interface PeerCryptoPreparedOperation {
+  readonly version: 1;
+  readonly kind: "send" | "receive";
+  readonly messageId: string;
+  readonly mutations: readonly PeerCryptoMutation[];
+  readonly applicationRecord: Uint8Array;
+  readonly preparedAt: string;
+}
+
 /** Stable store key for one session address: `sesame` resolution is per (name, device). */
 export function peerSessionAddressKey(name: string, deviceId: number = PEER_DEVICE_ID): string {
   return `${deviceId}--${name}`;
@@ -103,6 +133,49 @@ export interface PeerCryptoStore {
 
   loadCounters(): Promise<PeerCryptoCounters | null>;
   saveCounters(counters: PeerCryptoCounters): Promise<void>;
+
+  /** Single-record durable WAL for exact ciphertext or committed inbox transitions. */
+  loadPreparedOperation(): Promise<PeerCryptoPreparedOperation | null>;
+  prepareOperation(record: PeerCryptoPreparedOperation): Promise<void>;
+  /** Idempotently roll forward ratchet mutations; the host then saves applicationRecord. */
+  applyPreparedOperation(): Promise<void>;
+  /** Replace the prepared WAL with a durable finalized marker. */
+  finalizePreparedOperation(messageId: string, kind: PeerCryptoPreparedOperation["kind"]): Promise<void>;
+}
+
+/** Apply one committed ratchet mutation to the ordinary durable record set. */
+export async function applyPeerCryptoMutation(
+  store: PeerCryptoStore,
+  mutation: PeerCryptoMutation
+): Promise<void> {
+  switch (mutation.kind) {
+    case "identity":
+      await store.saveIdentity(mutation.record);
+      return;
+    case "peerBinding":
+      if (mutation.operation === "save") await store.savePeerBinding(mutation.record);
+      else await store.deletePeerBinding(mutation.peerId);
+      return;
+    case "session":
+      if (mutation.operation === "save") await store.saveSession(mutation.addressKey, mutation.value);
+      else await store.deleteSession(mutation.addressKey);
+      return;
+    case "preKey":
+      if (mutation.operation === "save") await store.savePreKey(mutation.record);
+      else await store.deletePreKey(mutation.id);
+      return;
+    case "signedPreKey":
+      if (mutation.operation === "save") await store.saveSignedPreKey(mutation.id, mutation.value);
+      else await store.deleteSignedPreKey(mutation.id);
+      return;
+    case "kyberPreKey":
+      if (mutation.operation === "save") await store.saveKyberPreKey(mutation.record);
+      else await store.deleteKyberPreKey(mutation.id);
+      return;
+    case "counters":
+      await store.saveCounters(mutation.counters);
+      return;
+  }
 }
 
 function cloneBytes(bytes: Uint8Array): Uint8Array {
@@ -126,6 +199,7 @@ export class InMemoryPeerCryptoStore implements PeerCryptoStore {
   readonly #signedPreKeys = new Map<number, Uint8Array>();
   readonly #kyberPreKeys = new Map<number, StoredPreKeyRecord>();
   readonly #counters: { current: PeerCryptoCounters | null } = { current: null };
+  #preparedOperation: PeerCryptoPreparedOperation | null = null;
 
   async loadIdentity(): Promise<PeerIdentitySecretRecord | null> {
     return this.#identity.current;
@@ -226,6 +300,71 @@ export class InMemoryPeerCryptoStore implements PeerCryptoStore {
   async saveCounters(counters: PeerCryptoCounters): Promise<void> {
     this.#counters.current = Object.freeze({ ...counters });
   }
+
+  async loadPreparedOperation(): Promise<PeerCryptoPreparedOperation | null> {
+    const record = this.#preparedOperation;
+    return record === null ? null : clonePreparedOperation(record);
+  }
+
+  async prepareOperation(record: PeerCryptoPreparedOperation): Promise<void> {
+    if (this.#preparedOperation !== null) {
+      throw peerCryptoError("peer_store_error", "A ratchet operation is still awaiting recovery.");
+    }
+    this.#preparedOperation = clonePreparedOperation(record);
+  }
+
+  async applyPreparedOperation(): Promise<void> {
+    const record = this.#preparedOperation;
+    if (record === null || record.version !== 1) return;
+    for (const mutation of record.mutations) await applyPeerCryptoMutation(this, mutation);
+  }
+
+  async finalizePreparedOperation(messageId: string, kind: PeerCryptoPreparedOperation["kind"]): Promise<void> {
+    if (this.#preparedOperation === null || this.#preparedOperation.messageId !== messageId || this.#preparedOperation.kind !== kind) {
+      throw peerCryptoError("peer_store_error", "The ratchet operation does not match its finalization id.");
+    }
+    this.#preparedOperation = null;
+  }
+}
+
+function cloneMutation(mutation: PeerCryptoMutation): PeerCryptoMutation {
+  switch (mutation.kind) {
+    case "identity":
+      return Object.freeze({ kind: "identity", record: Object.freeze({ ...mutation.record }) });
+    case "peerBinding":
+      return mutation.operation === "save"
+        ? Object.freeze({ kind: "peerBinding", operation: "save", record: Object.freeze({ ...mutation.record }) })
+        : Object.freeze({ kind: "peerBinding", operation: "delete", peerId: mutation.peerId });
+    case "session":
+      return mutation.operation === "save"
+        ? Object.freeze({ kind: "session", operation: "save", addressKey: mutation.addressKey, value: cloneBytes(mutation.value) })
+        : Object.freeze({ kind: "session", operation: "delete", addressKey: mutation.addressKey });
+    case "preKey":
+      return mutation.operation === "save"
+        ? Object.freeze({ kind: "preKey", operation: "save", record: cloneRecord(mutation.record) })
+        : Object.freeze({ kind: "preKey", operation: "delete", id: mutation.id });
+    case "signedPreKey":
+      return mutation.operation === "save"
+        ? Object.freeze({ kind: "signedPreKey", operation: "save", id: mutation.id, value: cloneBytes(mutation.value) })
+        : Object.freeze({ kind: "signedPreKey", operation: "delete", id: mutation.id });
+    case "kyberPreKey":
+      return mutation.operation === "save"
+        ? Object.freeze({ kind: "kyberPreKey", operation: "save", record: cloneRecord(mutation.record) })
+        : Object.freeze({ kind: "kyberPreKey", operation: "delete", id: mutation.id });
+    case "counters":
+      return Object.freeze({ kind: "counters", counters: Object.freeze({ ...mutation.counters }) });
+  }
+}
+
+function clonePreparedOperation(record: PeerCryptoPreparedOperation): PeerCryptoPreparedOperation {
+  return Object.freeze({
+    version: record.version,
+    kind: record.kind,
+    messageId: record.messageId,
+    mutations: Object.freeze(record.mutations.map(cloneMutation)),
+    applicationRecord: cloneBytes(record.applicationRecord),
+    preparedAt: record.preparedAt
+  });
 }
 
 export function createInMemoryPeerCryptoStore(): InMemoryPeerCryptoStore {

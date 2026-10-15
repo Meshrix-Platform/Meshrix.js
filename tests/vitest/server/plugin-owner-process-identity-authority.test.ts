@@ -128,7 +128,7 @@ describe("Plugin owner process identity authority", () : any => {
       invocationOperationId: "fixture.operation", invocationAuthorization: staleToken
     })).resolves.toMatchObject({ ok: false, reasonCode: "owner_process_binding_generation_retired" });
     host.close();
-    service.close();
+    await service.close();
   });
 
   it("resets a retired state without importing any retired binding", async () : Promise<any> => {
@@ -168,7 +168,7 @@ describe("Plugin owner process identity authority", () : any => {
     });
     const service: any = createProcessIdentityService({ dataDir, alias });
     await service.describe();
-    service.close();
+    await service.close();
     const persisted: any = openState(await readRecord({ dataDir, alias }));
     expect(persisted.stateVersion).toBe(2);
     expect(persisted).not.toHaveProperty("retiredBindings");

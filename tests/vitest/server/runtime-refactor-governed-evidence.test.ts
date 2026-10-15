@@ -10,6 +10,8 @@ import { dispatchOperation } from "#meshrix/server-runtime/composition/dispatch-
 import { createAuthorizationStore } from "../../../packages/foundation/src/security/authorization/authorization-store.ts";
 import { createAuthorizationEngine } from "../../../packages/foundation/src/security/authorization/authorization-engine.ts";
 import { createOperationAuditStore } from "../../../packages/foundation/src/security/operation-audit.ts";
+import { projectOperationAuditEntry } from "../../../packages/foundation/src/security/operation-audit-projection.ts";
+import { operationAuditTestProjectionOptions } from "./support/operation-audit-test-key.ts";
 import { createSecurityPermissionsProvider } from "../../../packages/foundation/src/security/security-permissions-provider.ts";
 import { getProofLifecycleRefactorInstrumentation } from "../../../packages/server-runtime/src/composition/dispatch-operation-proof-lifecycle.ts";
 import { auditOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-risk-control.ts";
@@ -255,7 +257,8 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
 
   it("retains audit-unique fields, stores decision and proof references, and sheds duplicated terminal errors", async () : any => {
     const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-audit-");
-    const store: any = createOperationAuditStore({ userDataPath });
+    const projectionOptions: any = operationAuditTestProjectionOptions(userDataPath);
+    const store: any = createOperationAuditStore({ userDataPath, ...projectionOptions });
     try {
       await auditOperation({
         operationAuditStore: store,
@@ -280,19 +283,25 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
       expect(records).toHaveLength(2);
       expect(records[0]).toMatchObject({
         decisionId: "",
-        proofId: "",
-        error: "unique-terminal-failure"
+        proofId: ""
       });
-      expect(records[0].redactedInput).toEqual({ password: "<redacted>" });
-      expect(records[1]).toMatchObject({
+      expect(records[0].error).toMatch(/^hmac-sha256:v1:[0-9a-f]{64}$/u);
+      expect(records[0].redactedInput).toEqual({});
+      const projectedReferences: any = projectOperationAuditEntry({
         decisionId: "decision-reference-1",
-        proofId: "proof-reference-1",
+        proofId: "proof-reference-1"
+      }, { key: projectionOptions.projectionKey, auditId: records[1].auditId });
+      expect(records[1]).toMatchObject({
+        decisionId: projectedReferences.decisionId,
+        proofId: projectedReferences.proofId,
         error: ""
       });
-      expect(records[1].redactedInput).toEqual({ password: "<redacted>" });
-      expect(records[1].inputHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(records[1].redactedInput).toEqual({});
+      expect(records[1].inputHash).toMatch(/^hmac-sha256:v1:[0-9a-f]{64}$/u);
+      expect(records[0].inputHash).toMatch(/^hmac-sha256:v1:[0-9a-f]{64}$/u);
       expect(JSON.stringify(records)).not.toContain("audit-secret-input");
       expect(JSON.stringify(records)).not.toContain("second-secret-input");
+      expect(JSON.stringify(records)).not.toContain("unique-terminal-failure");
 
       const replayed: any = await store.appendIdempotent({
         auditId: records[1].auditId,
@@ -309,13 +318,15 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
       expect(replayed.replayed).toBe(true);
     } finally {
       await store.close();
+      projectionOptions.projectionKey.fill(0);
     }
   });
 
   it("writes one decision, one proof settlement, and one reference-bound audit row for an allowed governed execution", async () : any => {
     const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-dispatch-");
     const authorizationStore: any = createAuthorizationStore({ userDataPath });
-    const auditStore: any = createOperationAuditStore({ userDataPath });
+    const projectionOptions: any = operationAuditTestProjectionOptions(userDataPath);
+    const auditStore: any = createOperationAuditStore({ userDataPath, ...projectionOptions });
     const engine: any = createAuthorizationEngine({ store: authorizationStore });
     const provider: any = createSecurityPermissionsProvider({ authorizationEngine: engine });
     const operation: any = governedOperation();
@@ -372,25 +383,31 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
 
       const auditRecords: any = await auditStore.list({ operationId: "unit.governed.evidence", limit: 10 });
       expect(auditRecords).toHaveLength(1);
-      expect(auditRecords[0]).toMatchObject({
+      const projectedReferences: any = projectOperationAuditEntry({
         decisionId: decisions[0].decisionId,
-        proofId: "prepared-proof",
+        proofId: "prepared-proof"
+      }, { key: projectionOptions.projectionKey, auditId: auditRecords[0].auditId });
+      expect(auditRecords[0]).toMatchObject({
+        decisionId: projectedReferences.decisionId,
+        proofId: projectedReferences.proofId,
         status: "ok",
         error: ""
       });
-      expect(auditRecords[0].inputHash).toMatch(/^[0-9a-f]{64}$/);
-      expect(auditRecords[0].redactedInput).toEqual({ body: { token: "<redacted>" } });
+      expect(auditRecords[0].inputHash).toMatch(/^hmac-sha256:v1:[0-9a-f]{64}$/u);
+      expect(auditRecords[0].redactedInput).toEqual({});
       expect(JSON.stringify(auditRecords)).not.toContain("governed-request-secret");
     } finally {
       await authorizationStore.close();
       await auditStore.close();
+      projectionOptions.projectionKey.fill(0);
     }
   });
 
   it("binds a denied admission to its canonical decision and reference-only denied row", async () : any => {
     const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-denied-");
     const authorizationStore: any = createAuthorizationStore({ userDataPath });
-    const auditStore: any = createOperationAuditStore({ userDataPath });
+    const projectionOptions: any = operationAuditTestProjectionOptions(userDataPath);
+    const auditStore: any = createOperationAuditStore({ userDataPath, ...projectionOptions });
     const engine: any = createAuthorizationEngine({ store: authorizationStore });
     const provider: any = createSecurityPermissionsProvider({ authorizationEngine: engine });
     const operation: any = governedOperation({ requiredScopes: ["runtime:write"] });
@@ -458,22 +475,27 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
       expect(JSON.stringify(deniedRequests[0].deniedRequest)).toContain("<redacted>");
       const auditRecords: any = await auditStore.list({ operationId: "unit.governed.evidence", limit: 10 });
       expect(auditRecords).toHaveLength(1);
+      const projectedReferences: any = projectOperationAuditEntry({
+        decisionId: decisions[0].decisionId
+      }, { key: projectionOptions.projectionKey, auditId: auditRecords[0].auditId });
       expect(auditRecords[0]).toMatchObject({
-        decisionId: decisions[0].decisionId,
+        decisionId: projectedReferences.decisionId,
         status: "denied",
         error: ""
       });
-      expect(auditRecords[0].redactedInput).toEqual({ body: { token: "<redacted>" } });
+      expect(auditRecords[0].redactedInput).toEqual({});
+      expect(auditRecords[0].inputHash).toMatch(/^hmac-sha256:v1:[0-9a-f]{64}$/u);
       expect(JSON.stringify(auditRecords)).not.toContain("denied-request-secret");
     } finally {
       await authorizationStore.close();
       await auditStore.close();
+      projectionOptions.projectionKey.fill(0);
     }
   });
 
   it("denies before any protected effect when mandatory proof preparation fails", async () : any => {
     const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-prepare-");
-    const auditStore: any = createOperationAuditStore({ userDataPath });
+    const auditStore: any = createOperationAuditStore({ userDataPath, ...operationAuditTestProjectionOptions(userDataPath) });
     const response: any = createResponse();
     const handler: any = vi.fn(({ response: innerResponse }: Record<string, any>) : any => {
       innerResponse.writeHead(200, {});
@@ -523,7 +545,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
 
   it("settles a post-effect settlement failure as in doubt without blind retry", async () : any => {
     const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-indoubt-");
-    const auditStore: any = createOperationAuditStore({ userDataPath });
+    const auditStore: any = createOperationAuditStore({ userDataPath, ...operationAuditTestProjectionOptions(userDataPath) });
     const response: any = createResponse();
     const handler: any = vi.fn(({ response: innerResponse }: Record<string, any>) : any => {
       innerResponse.writeHead(200, {});

@@ -38,7 +38,11 @@ function serviceEndpoint(targets, kind) {
   if (matches.length !== 1) throw new Error("schedule_service_target_invalid");
   try {
     const url = new URL(matches[0].id);
-    const allowed = url.protocol === "https:" || (url.protocol === "http:" && ["127.0.0.1", "::1", "localhost"].includes(url.hostname));
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+    const octets = hostname.split(".").map(Number);
+    const loopback = hostname === "::1" ||
+      (/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(hostname) && octets.every((octet) => octet <= 255) && octets[0] === 127);
+    const allowed = url.protocol === "https:" || (url.protocol === "http:" && loopback);
     if (!allowed || url.username || url.password || url.search || url.hash) throw new Error();
     return matches[0].id.replace(/\/+$/u, "");
   } catch {

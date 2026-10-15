@@ -69,6 +69,54 @@ describe("plugin console isolation", () : any => {
     expect(iframe.element.srcdoc).toBe("");
   });
 
+  it("keeps a healthy tool request alive past the former timeout and aborts it on revocation", async () : Promise<any> => {
+    vi.useFakeTimers();
+    try {
+      let onMessage: any = null;
+      const messages: any[] = [];
+      const port: any = {
+        addEventListener: (_type: string, listener: any) => { onMessage = listener; },
+        start: vi.fn(),
+        postMessage: (message: any) => messages.push(message),
+        close: vi.fn(),
+      };
+      let release: any = null;
+      let requestSignal: AbortSignal | null = null;
+      const pending: Promise<any> = new Promise((resolve?: any) => { release = resolve; });
+      const surface: any = admitPluginConsoleIsolationEntry(entry());
+      const bridge: any = connectPluginConsoleHostBridge({
+        port,
+        entry: surface,
+        context: { locale: "en", theme: { colorScheme: "light" }, route: { path: "/admin/sample-plugin", viewKey: "sampleView" } },
+        invokeTool: ({ signal }: Record<string, any>) : Promise<any> => {
+          requestSignal = signal;
+          return pending;
+        },
+        revalidate: () : any => ({ ok: true }),
+      });
+
+      const invocation: Promise<any> = onMessage({ data: {
+        type: "meshrix.plugin-console.invoke",
+        id: "call-slow",
+        toolId: "sample-plugin.inspect",
+        payload: {},
+      } });
+      await vi.advanceTimersByTimeAsync(30_001);
+      expect(requestSignal?.aborted).toBe(false);
+
+      bridge.revoke("plugin_console_unmounted");
+      expect(requestSignal?.aborted).toBe(true);
+      release({ ok: true });
+      await invocation;
+      expect(messages).toEqual([expect.objectContaining({
+        type: "meshrix.plugin-console.revoke",
+        reason: "plugin_console_unmounted",
+      })]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("bounds and revokes the MessageChannel bridge", async () : Promise<any> => {
     const { port1, port2 } = new MessageChannel();
     let release: any = null;

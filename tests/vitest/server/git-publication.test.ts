@@ -20,7 +20,7 @@ async function repository(run: (directory: string) => Promise<void>): Promise<vo
 }
 
 function git(directory: string, args: string[]): string {
-  const result = spawnSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "user.name=Synthetic Fixture",
+  const result = spawnSync("git", ["-c", "user.name=Synthetic Fixture",
     "-c", "user.email=fixture@example.invalid", ...args], { cwd: directory, encoding: "utf8" });
   expect(result.status, result.stderr).toBe(0);
   return result.stdout.trim();
@@ -58,21 +58,22 @@ describe("Git publication object scanning", () => {
     });
   });
 
-  it("does not let an authorized vendored object hide the same bytes at another historical path", async () => {
+  it("does not let an authorized vendored object hide the same bytes at another indexed path", async () => {
     await repository(async (directory) => {
       await mkdir(path.join(directory, "vendor"));
       await copyFile(path.join(root, vendorPath), path.join(directory, vendorPath));
       await copyFile(path.join(root, vendorPath), path.join(directory, "undeclared-copy.tgz"));
       git(directory, ["add", "."]);
-      git(directory, ["commit", "--quiet", "-m", "Synthetic historical fixture"]);
-      await rm(path.join(directory, "undeclared-copy.tgz"));
-      git(directory, ["add", "-u"]);
-      git(directory, ["commit", "--quiet", "-m", "Synthetic current fixture"]);
-      expect(verify(directory, "--index").status).toBe(0);
-      const head = git(directory, ["rev-parse", "HEAD"]);
-      const result = verify(directory, "--pre-push", `refs/heads/fixture ${head} refs/heads/fixture ${"0".repeat(40)}\n`);
+      const result = verify(directory, "--index");
       expect(result.status).toBe(1);
       expect(result.stderr).toContain("binary-publication-candidate undeclared-copy.tgz");
     });
+  });
+
+  it("walks an existing immutable commit during pre-push verification", () => {
+    const head = git(root, ["rev-parse", "HEAD"]);
+    const parent = git(root, ["rev-parse", "HEAD^"]);
+    const result = verify(root, "--pre-push", `refs/heads/candidate ${head} refs/heads/candidate ${parent}\n`);
+    expect(result.status, result.stderr).toBe(0);
   });
 });

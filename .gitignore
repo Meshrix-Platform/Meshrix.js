@@ -75,6 +75,11 @@ packages/capabilities/runtime-modules/knowledge/ocr/runtime/**
 !packages/capabilities/runtime-modules/knowledge/ocr/runtime/**/
 !packages/capabilities/runtime-modules/knowledge/ocr/runtime/**/.gitkeep
 
+# Local demo workspaces — demo scenes and mockups stay on this machine and
+# are never committed; see demo/README.md
+/demo/*
+!/demo/README.md
+
 # Temporary files
 *.tmp
 *.temp

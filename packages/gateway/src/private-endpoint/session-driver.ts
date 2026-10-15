@@ -78,7 +78,7 @@ export class PrivateRelaySession {
   readonly #transport: RelayTransportPort;
   readonly #handlers: RelaySessionHandlers;
   readonly #admission: RelayAdmissionInput;
-  readonly #purpose: "forward" | "recover_device";
+  readonly #purpose: "forward" | "recover_device" | "pair_device";
   readonly #nonceFactory: () => string;
   #state: RelaySessionState = "initiated";
   #limits: typeof DEFAULT_LIMITS = DEFAULT_LIMITS;
@@ -99,7 +99,7 @@ export class PrivateRelaySession {
   constructor(options: {
     transport: RelayTransportPort;
     admission: RelayAdmissionInput;
-    purpose?: "forward" | "recover_device";
+    purpose?: "forward" | "recover_device" | "pair_device";
     handlers?: RelaySessionHandlers;
     nonceFactory?: () => string;
   }) {
@@ -180,6 +180,15 @@ export class PrivateRelaySession {
       reconnectGeneration: this.#reconnectGeneration + 1,
       clientNonce: this.#nonceFactory()
     }));
+    return true;
+  }
+
+  /** Mark the transport gone without writing to its dead socket. Session id,
+   * cursors and queued frames remain intact for the next reconnect. */
+  transportLost(): boolean {
+    if (!this.#transition("transport_lost")) return false;
+    this.#routeState = "unreachable";
+    this.#handlers.onClosed?.("reconnect", this.#cursors);
     return true;
   }
 

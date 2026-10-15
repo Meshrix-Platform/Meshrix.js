@@ -50,7 +50,7 @@ describe("MCP stdio proxy cancellation", () : any => {
       return Promise.resolve({});
     };
     const transport: any = createProxyStdioTransport({
-      baseUrl: "http://gateway.invalid",
+      baseUrl: "https://gateway.invalid",
       token: "test-token",
       target: "test-client",
       forwardMessage,
@@ -437,14 +437,14 @@ describe("MCP stdio proxy cancellation", () : any => {
     vi.stubGlobal("fetch", fetchMock);
 
     const forwarded: any = forwardProxyMessage({
-      baseUrl: "http://gateway.invalid",
+      baseUrl: "https://gateway.invalid",
       token: `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`,
       target: "codex",
       message: { jsonrpc: "2.0", id: "long-proxy", method: "tools/list" },
       signal: new AbortController().signal,
       fetchImpl: fetchMock,
       dispatcherFactory: vi.fn((options?: any) : any => {
-        expect(options).toEqual({ headersTimeout: 0, bodyTimeout: 0 });
+        expect(options).toEqual({ connectTimeout: 0, headersTimeout: 0, bodyTimeout: 0 });
         return dispatcher;
       })
     });
@@ -497,7 +497,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     vi.stubGlobal("fetch", vi.fn((_url?: any, options?: any) : any => new Promise((_resolve?: any, reject?: any) : any => {
       options.signal.addEventListener("abort", () : any => reject(options.signal.reason), { once: true });
     })));
-    const response: any = fetchJson("http://gateway.invalid/control");
+    const response: any = fetchJson("https://gateway.invalid/control");
     const rejection: any = expect(response).rejects.toMatchObject({ name: "TimeoutError" });
 
     await vi.advanceTimersByTimeAsync(10_000);
@@ -516,7 +516,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     }));
     const externalController: any = new AbortController();
     const result: any = forwardProxyMessage({
-      baseUrl: "http://gateway.invalid",
+      baseUrl: "https://gateway.invalid",
       token: `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`,
       target: "codex",
       message: { jsonrpc: "2.0", id: "bounded-proxy", method: "tools/list" },
@@ -544,7 +544,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     vi.stubGlobal("fetch", fetchMock);
     const caller: any = new AbortController();
 
-    const pending: any = fetchJson("http://gateway.invalid/zero-timeout", { timeoutMs: 0, signal: caller.signal });
+    const pending: any = fetchJson("https://gateway.invalid/zero-timeout", { timeoutMs: 0, signal: caller.signal });
     const rejection: any = expect(pending).rejects.toThrow("caller cancellation");
     await vi.advanceTimersByTimeAsync(10_001);
     expect(requestSignals[0].aborted).toBe(false);
@@ -553,7 +553,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     expect(requestSignals[0].aborted).toBe(true);
 
     for (const timeoutMs of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648]) {
-      await expect(fetchJson("http://gateway.invalid/invalid-timeout", { timeoutMs })).rejects.toThrow(RangeError);
+      await expect(fetchJson("https://gateway.invalid/invalid-timeout", { timeoutMs })).rejects.toThrow(RangeError);
     }
     expect(fetchMock).toHaveBeenCalledOnce();
   });
@@ -573,7 +573,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     }));
     const externalController: any = new AbortController();
 
-    await expect(fetchJson("http://gateway.invalid/mcp", {
+    await expect(fetchJson("https://gateway.invalid/mcp", {
       signal: externalController.signal,
       timeoutMs: 5
     })).rejects.toMatchObject({ name: "TimeoutError" });
@@ -594,7 +594,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     })));
     const externalController: any = new AbortController();
     const expectedReason: any = new Error("client cancellation");
-    const response: any = fetchJson("http://gateway.invalid/mcp", {
+    const response: any = fetchJson("https://gateway.invalid/mcp", {
       signal: externalController.signal,
       timeoutMs: 1000
     });

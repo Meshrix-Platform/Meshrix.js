@@ -12,9 +12,11 @@ import {
   type UpstreamServiceReplaceCommand,
 } from "@meshrix/contracts/upstream-service-publishing";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+import { provisionVerifierLocalSecretKey } from "../../../tools/server-scripts/lib/local-secret-verifier-key.ts";
 
 const roots: any[] = [];
 const servers: any[] = [];
+const keyCustodies: any[] = [];
 
 function cookieHeader(response?: any) : any {
   const values: any = typeof response.headers.getSetCookie === "function"
@@ -76,6 +78,7 @@ async function waitForServerPublication(url?: any, serviceId?: any, headers?: an
 
 afterEach(async () : Promise<any> => {
   await Promise.all(servers.splice(0).map((server?: any) : any => server.close().catch(() : any => {})));
+  await Promise.all(keyCustodies.splice(0).map((keyCustody?: any) : any => keyCustody.close()));
   await Promise.all(roots.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
 });
 
@@ -93,6 +96,7 @@ describe("production upstream publishing HTTP composition", () : any => {
     await auth.close();
     tagStore.close();
 
+    keyCustodies.push(await provisionVerifierLocalSecretKey());
     const server: any = await startHttpServer({
       userDataPath,
       distPath: "",
@@ -283,6 +287,7 @@ describe("production upstream publishing HTTP composition", () : any => {
     const owner: any = await auth.ensureInitialOwner();
     await auth.close();
     tagStore.close();
+    keyCustodies.push(await provisionVerifierLocalSecretKey());
     const server: any = await startHttpServer({
       userDataPath,
       distPath: "",

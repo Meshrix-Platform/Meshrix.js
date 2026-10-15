@@ -4,7 +4,7 @@
  *
  * Configuration resolution order:
  *   1. The packaged app: `window.__TAURI__.core.invoke("meshrix_bridge_config")`
- *      returns `{port, token}` minted by the Rust shell for this launch;
+ *      returns the authenticated profile owner's `{port, token}`;
  *   2. Dev/test injection: `window.__MESHRIX_ENTRY_BRIDGE__ = {baseUrl, token}`;
  *   3. The vite dev server env: `VITE_ENTRY_SERVICE_URL` + `VITE_ENTRY_SERVICE_TOKEN`.
  *
@@ -41,6 +41,7 @@ let clientPromise: Promise<GuiLoopbackClient | null> | null = null;
  */
 const pendingSubscribers = new Set<(state: GuiState) => void>();
 const liveSubscriptions = new Map<(state: GuiState) => void, () => void>();
+let bridgeFailure: string | null = null;
 
 function envBridgeConfig(): GuiBridgeConfig | null {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
@@ -58,13 +59,18 @@ async function resolveBridgeConfig(): Promise<GuiBridgeConfig | null> {
       const config = await tauriInvoke.call(window.__TAURI__!.core, "meshrix_bridge_config");
       const parsed = config as { port?: unknown; token?: unknown } | null;
       if (parsed && typeof parsed.port === "number" && typeof parsed.token === "string") {
+        bridgeFailure = null;
         return guiBridgeConfig({ port: parsed.port, token: parsed.token });
       }
-    } catch {
-      // The command exists only inside the shell; fall through to env config.
+    } catch (error) {
+      bridgeFailure = typeof error === "string"
+        ? error
+        : error instanceof Error ? error.message : "The Meshrix service could not attach.";
     }
   }
-  return envBridgeConfig();
+  const fallback = envBridgeConfig();
+  if (fallback) bridgeFailure = null;
+  return fallback;
 }
 
 function client(): Promise<GuiLoopbackClient | null> {
@@ -106,9 +112,42 @@ export function bridgeAvailable(): boolean {
 export async function invoke<T = unknown>(op: GuiOp, args?: unknown): Promise<GuiIpcResult<T>> {
   const resolved = await client();
   if (!resolved) {
-    return { ok: false, error: { code: "bridge_unavailable", message: "The trusted bridge is not configured; run inside the packaged app or provide VITE_ENTRY_SERVICE_URL/TOKEN." } };
+    return {
+      ok: false,
+      error: {
+        code: bridgeFailure ? "entry_service_launch_failed" : "bridge_unavailable",
+        message: bridgeFailure ?? "The trusted bridge is not configured; run inside the packaged app or provide VITE_ENTRY_SERVICE_URL/TOKEN."
+      }
+    };
   }
   return resolved.invoke<T>(op, args);
+}
+
+/** Open the account site through the Tauri shell's origin-pinned command.
+ * The renderer can provide only an opaque transaction id, never a URL. */
+export async function openAccountPage(transactionId?: string | null): Promise<void> {
+  const invoke = typeof window === "undefined" ? undefined : window.__TAURI__?.core?.invoke;
+  if (typeof invoke !== "function") {
+    throw new Error("The system account browser is available only in the installed Entry app.");
+  }
+  await invoke.call(window.__TAURI__!.core, "meshrix_open_account_page", {
+    transactionId: transactionId ?? null
+  });
+}
+
+/** Explicit application quit; closing the main window only minimizes the owner. */
+export async function quitApp(): Promise<void> {
+  const invoke = typeof window === "undefined" ? undefined : window.__TAURI__?.core?.invoke;
+  if (typeof invoke !== "function") throw new Error("Explicit quit is available only in the installed Meshrix app.");
+  const resolved = await client();
+  if (!resolved) {
+    if (!bridgeFailure) throw new Error("The Meshrix profile owner is unavailable; it was not stopped.");
+    await invoke.call(window.__TAURI__!.core, "meshrix_quit");
+    return;
+  }
+  const stopped = await resolved.invoke("app.stop");
+  if (!stopped.ok) throw new Error(stopped.error.message);
+  await invoke.call(window.__TAURI__!.core, "meshrix_quit");
 }
 
 export function onState(callback: (state: GuiState) => void): () => void {

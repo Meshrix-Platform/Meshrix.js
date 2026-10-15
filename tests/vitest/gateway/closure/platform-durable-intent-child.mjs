@@ -10,6 +10,7 @@ import { mcpModernJsonRpcMessage, mcpModernRequestHeaders } from "../../../../pa
 const [dataRoot, peerUrl, mode, risk = "safe_write"] = process.argv.slice(2);
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
 let authorityAllowed = true;
+let releaseIntent = null;
 const proof = createOperationProofSubstrate({ dataDir: path.join(dataRoot, "proof") });
 const stdioPeerScript = String.raw`
 import fs from "node:fs/promises";
@@ -52,6 +53,7 @@ const proofPort = {
     const entry = await proof.beginLifecycle(input);
     send({ kind: "intent", ledgerEventId: entry.ledgerEventId, status: entry.status });
     if (mode === "pause-after-intent") await new Promise(() => {});
+    if (mode === "hold-after-intent") await new Promise((resolve) => { releaseIntent = resolve; });
     return entry;
   },
   async recordReceipt(input) {
@@ -151,6 +153,11 @@ for await (const line of input) {
   if (command.type === "revoke-authority") {
     authorityAllowed = false;
     send({ kind: "authority-revoked" });
+    continue;
+  }
+  if (command.type === "release-intent") {
+    releaseIntent?.();
+    releaseIntent = null;
     continue;
   }
   if (command.type === "close") {

@@ -22,10 +22,11 @@ import {
 import {
   verifyEd25519,
   sha256Hex,
-  snapshotCiphertextDigest,
   vaultFetchTranscript,
+  vaultSnapshotDigest,
   vaultWriteTranscript
 } from "@meshrix/entry";
+import type { VaultProtectedSnapshot } from "@meshrix/entry";
 import type { VaultTransport, VaultTransportResponse } from "@meshrix/entry";
 
 export interface VaultKeyRef {
@@ -155,7 +156,7 @@ export class FakeVault implements VaultTransport {
     if (snapshot.vaultId !== write.vaultId) return refuse();
     if (Number(snapshot.generation) < (this.current?.generation ?? this.generation)) return refuse();
     if (Number(snapshot.revision) !== Number(write.expectedRevision) + 1) return refuse();
-    const digest = snapshotCiphertextDigest(String(snapshot.snapshot.ciphertext));
+    const digest = vaultSnapshotDigest(snapshot as VaultProtectedSnapshot);
     if (digest !== write.writeAuth.snapshotDigest) return refuse();
     if (Number(write.expectedRevision) !== currentRevision) {
       // Idempotent reconcile: retry of the committed write reports committed.

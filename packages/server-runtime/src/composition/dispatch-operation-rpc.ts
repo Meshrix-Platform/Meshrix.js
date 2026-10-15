@@ -219,6 +219,16 @@ export async function dispatchRpcOperation({
     return;
   }
 
+  // Auth RPCs use the same HTTP session transport as ordinary auth routes.
+  // Copy only the explicit auth cookie and throttle response carriers.
+  if (["auth.login", "auth.logout", "auth.sessions.rotate"].includes(operation.id)) {
+    const cookies = captured.getHeader("set-cookie");
+    if (cookies) response.setHeader("Set-Cookie", cookies);
+  }
+  if (captured.statusCode === 429) {
+    const retryAfter = captured.getHeader("retry-after");
+    if (/^[1-9][0-9]*$/u.test(String(retryAfter || ""))) response.setHeader("Retry-After", retryAfter);
+  }
   const statusCode: any = captured.statusCode || 200;
   const result: any = parseCapturedResult({ operation, captured });
   logOperation(logger, statusCode >= 400 ? "warn" : "debug", "operation.rpc.completed", {

@@ -3,6 +3,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync } from "
 import path from "node:path";
 
 import type { TestSuiteEntry } from "./unified-test-runner-execution.ts";
+import { isPrivateRuntimePath, repositorySourceFiles } from "./repository-source-files.ts";
 
 /**
  * Passed results are reused by the content identity of a suite's inputs, not by
@@ -58,6 +59,7 @@ const SHARED_INPUT_PATHS: readonly string[] = Object.freeze([
   "tools/registry/tests.registry.json",
   "tools/scripts/lib/node-runtime-support.ts",
   "tools/scripts/lib/suite-input-fingerprint.ts",
+  "tools/scripts/lib/repository-source-files.ts",
   "tools/scripts/lib/unified-test-runner-execution.ts",
   "tools/scripts/local-ci.ts"
 ]);
@@ -93,6 +95,7 @@ export interface SuiteInputScopeCache {
   fileHashes: Map<string, string>;
   directoryListings: Map<string, string[]>;
   workspaceGraph?: WorkspaceDependencyGraph;
+  sourceFiles?: string[];
 }
 
 export function createSuiteInputScopeCache(): SuiteInputScopeCache {
@@ -204,7 +207,7 @@ function hashScopeContent(rootDir: string, scope: SuiteInputScope, cache: SuiteI
 }
 
 /**
- * Every file below one scope directory, with generated names skipped. Listings and
+ * Every public source file below one scope directory, with generated names skipped. Listings and
  * content hashes are memoized for the run, which assumes suites observe their inputs
  * rather than rewriting each other's sources; generated output is excluded precisely
  * so that producing it never perturbs a fingerprint.
@@ -217,40 +220,18 @@ function listScopeFiles(
   const memoized: string[] | undefined = cache.directoryListings.get(relativeDirectory);
   if (memoized) return memoized;
 
-  const listing: string[] = [];
-  const absolute: string = path.join(rootDir, ...relativeDirectory.split("/"));
-  let stats: any;
-  try {
-    stats = lstatSync(absolute);
-  } catch {
-    cache.directoryListings.set(relativeDirectory, listing);
-    return listing;
-  }
-  if (!stats.isDirectory()) {
-    listing.push(relativeDirectory);
-    cache.directoryListings.set(relativeDirectory, listing);
-    return listing;
-  }
-
-  let entries: any[];
-  try {
-    entries = readdirSync(absolute, { withFileTypes: true });
-  } catch {
-    cache.directoryListings.set(relativeDirectory, listing);
-    return listing;
-  }
-  for (const entry of entries) {
-    if (GENERATED_NAMES.has(entry.name)) continue;
-    const child: string = relativeDirectory === "." ? entry.name : `${relativeDirectory}/${entry.name}`;
-    if (entry.isDirectory()) listing.push(...listScopeFiles(rootDir, child, cache));
-    else listing.push(child);
-  }
+  cache.sourceFiles ??= repositorySourceFiles(rootDir);
+  const listing = cache.sourceFiles.filter((file) =>
+    (relativeDirectory === "." || file === relativeDirectory || file.startsWith(`${relativeDirectory}/`))
+    && !file.split("/").some((part) => GENERATED_NAMES.has(part))
+  );
   cache.directoryListings.set(relativeDirectory, listing);
   return listing;
 }
 
 /** Symbolic links are hashed by target, so a workspace link never pulls in its target tree. */
 function entryContentHash(rootDir: string, relativePath: string, cache: SuiteInputScopeCache): string {
+  if (isPrivateRuntimePath(relativePath)) throw new Error("suite_private_runtime_input_forbidden");
   const memoized: string | undefined = cache.fileHashes.get(relativePath);
   if (memoized) return memoized;
 

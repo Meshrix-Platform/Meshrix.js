@@ -197,6 +197,11 @@ export type RelayTrafficHistoryPoint = {
   sums: Record<string, number>;
 };
 
+export type RelayTrafficPersistence = {
+  state: "disabled" | "durable" | "degraded";
+  reason?: "load_failed" | "write_failed";
+};
+
 export type RelayTrafficResponse = {
   configured: boolean;
   fetchedAt?: string;
@@ -204,4 +209,5 @@ export type RelayTrafficResponse = {
   status?: number;
   metrics?: RelayMetricSeries[];
   history?: RelayTrafficHistoryPoint[];
+  persistence?: RelayTrafficPersistence;
 };

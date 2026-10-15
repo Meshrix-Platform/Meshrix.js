@@ -3,7 +3,7 @@
   "$id": "https://meshrix.local/schema/model-gateway-adapter-configuration.schema.json",
   "title": "Model Gateway Adapter Configuration",
   "type": "object",
-  "required": ["enabled", "serviceRef", "timeoutMs"],
+  "required": ["enabled", "serviceRef"],
   "properties": {
     "enabled": { "type": "boolean" },
     "serviceRef": {

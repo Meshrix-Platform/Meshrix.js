@@ -21,6 +21,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { assertNoLeak } from "./server-scripts/lib/report-evidence-safety.ts";
+import { repositorySourceFiles } from "./scripts/lib/repository-source-files.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -91,7 +92,8 @@ const RULES: any[] = [
     severity: "high-risk",
     message: "Public routable IP literals are production infrastructure metadata. Use <origin-ipv4>, <server-ip>, or an RFC 5737 documentation address.",
     pattern: /\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}\b/g,
-    shouldReport: ({ match, relativePath }: Record<string, any>) : any => !relativePath.endsWith(".svg") && isPublicIpv4Literal(match)
+    shouldReport: ({ match, relativePath, text, index }: Record<string, any>) : any =>
+      !relativePath.endsWith(".svg") && isPublicIpv4Literal(match) && !isGitRevisionReference(text, index)
   },
   {
     id: "public-ipv6-literal",
@@ -164,6 +166,13 @@ function stripUrlParts(value?: any) : any {
     .replace(/\/.*$/u, "")
     .replace(/:\d+$/u, "")
     .toLowerCase();
+}
+
+function isGitRevisionReference(text: string, index: number): boolean {
+  // A numeric Git revision in a source link is not its network host. Keep
+  // scanning host literals and later path components as infrastructure data.
+  return /https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/(?:blob|tree)\/[A-Za-z0-9._~%+-]*$/u
+    .test(text.slice(Math.max(0, index - 512), index));
 }
 
 function ipv4ToNumber(value?: any) : any {
@@ -270,6 +279,11 @@ function isRealEmailAddress(value?: any, relativePath?: any) : any {
   if (relativePath.endsWith("package-lock.json") || relativePath.endsWith("Cargo.lock")) {
     return false;
   }
+  // Apple retina icon names (`128x128@2x.png`) are mandated by Xcode/Tauri
+  // icon conventions and are not email addresses.
+  if (/^\d+x\d+@\d+x\.(?:png|icns|ico|jpg|jpeg|webp|gif|svg)$/iu.test(String(value || ""))) {
+    return false;
+  }
   const domain: any = emailDomain(value);
   if (!domain || isReservedEmailDomain(domain)) {
     return false;
@@ -362,23 +376,13 @@ function isTextCandidate(filePath?: any) : any {
   return TEXT_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
-function collectFiles(directory?: any, files: any = []) : any {
-  const entries: any = fs.readdirSync(directory, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      if (IGNORED_DIRECTORIES.has(entry.name)) {
-        continue;
-      }
-      collectFiles(path.join(directory, entry.name), files);
-    } else if (entry.isFile()) {
-      const filePath: any = path.join(directory, entry.name);
-      const relativePath: any = toRepoPath(filePath);
-      if (!IGNORED_RELATIVE_PATHS.has(relativePath) && isTextCandidate(filePath)) {
-        files.push(filePath);
-      }
-    }
-  }
-  return files;
+function collectFiles(directory: string): string[] {
+  return repositorySourceFiles(directory).filter((relativePath) => {
+    if (relativePath.split("/").some((part) => IGNORED_DIRECTORIES.has(part))) return false;
+    if (IGNORED_RELATIVE_PATHS.has(relativePath) || !isTextCandidate(relativePath)) return false;
+    try { return fs.lstatSync(path.join(directory, relativePath)).isFile(); }
+    catch { return false; } // Deleted tracked files are no longer source inputs.
+  }).map((relativePath) => path.join(directory, relativePath));
 }
 
 function lineAndColumn(text?: any, index?: any) : any {
@@ -409,7 +413,7 @@ export function scanText(relativePath?: any, text?: any, fingerprintKey: any = M
       if (!rule.inspectPlaceholderContainingMatch && /<[^>\r\n]+>/u.test(match[0])) {
         continue;
       }
-      if (typeof rule.shouldReport === "function" && !rule.shouldReport({ match: match[0], relativePath, text })) {
+      if (typeof rule.shouldReport === "function" && !rule.shouldReport({ match: match[0], relativePath, text, index: match.index || 0 })) {
         continue;
       }
       const position: any = lineAndColumn(text, match.index || 0);

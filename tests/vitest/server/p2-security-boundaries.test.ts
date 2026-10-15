@@ -35,7 +35,7 @@ function captureResponse() : any {
 describe("P2 security boundaries", () : any => {
   it("keeps connector authentication API-Key-only", () : any => {
     const apiKey: any = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
-    expect(connectorAuthHeaders(apiKey, "codex")).not.toHaveProperty("Authorization");
+    expect(connectorAuthHeaders(apiKey, "codex", "https://meshrix.example")).not.toHaveProperty("Authorization");
     expect(() : any => connectorAuthHeaders("generic-grant", "codex")).toThrow("strict mxak1");
   });
   it("does not treat a system actor or a caller-provided skip flag as authority", async () : Promise<any> => {

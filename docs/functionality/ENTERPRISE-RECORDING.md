@@ -12,16 +12,18 @@ inside organization-controlled storage, recording policy and retention are
 governed by the organization's own Console configurer roles, and no external
 service is involved in capture or custody.
 
-## Decryption And Custody Boundary
+## Storage And Access Boundary
 
-Recorded content is stored under the enterprise-local sink in encrypted form,
-but **the organization can decrypt recorded content**. Decryption and audit
-access are controlled by the organization at its own key boundary — this is
-the deliberate purpose of the enterprise profile: the operator that runs the
-platform retains the ability to review and decrypt what was recorded.
+Recorded content is stored under the enterprise-local sink as unencrypted
+bytes in private local files (owner-only permissions) inside the
+deployment's recording root. **The organization operating the deployment can
+read recorded content** — access is bounded by local filesystem and process
+permissions, not by a separate encryption key. This is the deliberate
+purpose of the enterprise profile: the operator that runs the platform
+retains the ability to review what was recorded.
 
 The recording governance authority reports `custody: "enterprise_local"` and
-`decryptionAuthority: "organization"` on every policy snapshot and sink health
+`contentAccess: "organization"` on every policy snapshot and sink health
 answer so Console operators see the custody fact where they govern policy.
 
 ## One Configuration Source
@@ -41,6 +43,7 @@ configuration path exists downstream.
       "sinkId": "recording-sink-local",
       "budgets": { "maxRecordBytes": 262144 },
       "reservationTtlMs": 30000,
+      "retentionSweepMs": 300000,
       "policy": {
         "policyId": "recording-policy",
         "issuerRole": "system",
@@ -57,6 +60,12 @@ configuration path exists downstream.
 - `policy` controls only the genesis identity used when a tenant store is
   created fresh; an existing store reopens its persisted policy and a
   supplied revision is never silently replaced on restart.
+- `retentionSweepMs` is the periodic retention interval for each open store
+  (default 300000, `0` disables the timer). One bounded retention pass also
+  runs every time a store opens, so categories that went idle while the
+  server was closed still leave custody on the same clock; expired rows are
+  never readable through `listRecords`/`readArtifact`, even in the window
+  before the next sweep.
 - Malformed or unknown keys fail startup honestly rather than diverging from
   the stated intent.
 

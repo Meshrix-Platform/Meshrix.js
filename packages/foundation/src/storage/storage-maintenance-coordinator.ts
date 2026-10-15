@@ -5,7 +5,7 @@ export interface StorageExecutionBudget {
   maxBytes: number;
   maxCleanupItems: number;
   maxQueueDepth: number;
-  maxDurationMs: number;
+  maxDurationMs?: number;
   bufferBytes: number;
 }
 
@@ -32,6 +32,7 @@ export interface StorageWorkTracker {
 }
 
 interface StorageExecutionHardLimits extends StorageExecutionBudget {
+  maxDurationMs: number;
   maxConcurrentMutationsPerRoot: number;
   queueAllocationBytes: number;
   queuedBufferProductBytes: number;
@@ -59,12 +60,11 @@ interface MaintenanceLane {
 
 type StorageMaintenanceError = Error & { code: string; reasonCode: string };
 
-const DEFAULT_EXECUTION_BUDGET: Readonly<StorageExecutionBudget> = Object.freeze({
+const DEFAULT_EXECUTION_BUDGET: Readonly<Omit<StorageExecutionBudget, "maxDurationMs">> = Object.freeze({
   maxFiles: 100_000,
   maxBytes: 1_099_511_627_776,
   maxCleanupItems: 100_000,
   maxQueueDepth: 64,
-  maxDurationMs: 3_600_000,
   bufferBytes: 64 * 1024
 });
 
@@ -91,7 +91,9 @@ function maintenanceError(code: string, message: string): StorageMaintenanceErro
   return error;
 }
 
-function boundedPositiveInteger(value: unknown, fallback: number, maximum: number, field: string): number {
+function boundedPositiveInteger(value: unknown, fallback: undefined, maximum: number, field: string): number | undefined;
+function boundedPositiveInteger(value: unknown, fallback: number, maximum: number, field: string): number;
+function boundedPositiveInteger(value: unknown, fallback: number | undefined, maximum: number, field: string): number | undefined {
   if (value === undefined || value === null || value === "") return fallback;
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number < 1) {
@@ -135,12 +137,16 @@ export function normalizeStorageExecutionBudget(value: unknown = {}): Readonly<S
       STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxQueueDepth,
       "maxQueueDepth"
     ),
-    maxDurationMs: boundedPositiveInteger(
-      source.maxDurationMs,
-      DEFAULT_EXECUTION_BUDGET.maxDurationMs,
-      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxDurationMs,
-      "maxDurationMs"
-    ),
+    ...(source.maxDurationMs === undefined || source.maxDurationMs === null
+      ? {}
+      : {
+          maxDurationMs: boundedPositiveInteger(
+            source.maxDurationMs,
+            undefined,
+            STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxDurationMs,
+            "maxDurationMs"
+          )
+        }),
     bufferBytes: boundedPositiveInteger(
       source.bufferBytes,
       DEFAULT_EXECUTION_BUDGET.bufferBytes,
@@ -215,13 +221,15 @@ export function createStorageWorkTracker({
 } = {}): Readonly<StorageWorkTracker> {
   const limits = normalizeStorageExecutionBudget(budget);
   const counters: StorageWorkCounters = { files: 0, bytes: 0, cleanupItems: 0 };
-  const deadlineAt = startedAt + limits.maxDurationMs;
+  const deadlineAt = limits.maxDurationMs === undefined
+    ? Number.POSITIVE_INFINITY
+    : startedAt + limits.maxDurationMs;
 
   function assertActive(): void {
     if (signal?.aborted) {
       throw signal.reason || maintenanceError("storage_operation_cancelled", "Storage operation was cancelled.");
     }
-    if (Date.now() > deadlineAt) {
+    if (Number.isFinite(deadlineAt) && Date.now() > deadlineAt) {
       throw maintenanceError("storage_operation_timeout", "Storage operation exceeded its execution deadline.");
     }
   }
@@ -297,21 +305,22 @@ function beginNext(lane: MaintenanceLane): void {
     return;
   }
   lane.active = entry;
-  const remainingMs = entry.enqueuedAt + entry.budget.maxDurationMs - Date.now();
-  if (remainingMs <= 0) {
+  const remainingMs = entry.budget.maxDurationMs === undefined
+    ? null
+    : entry.enqueuedAt + entry.budget.maxDurationMs - Date.now();
+  if (remainingMs !== null && remainingMs <= 0) {
     rejectCaller(entry, maintenanceError("storage_operation_timeout", "Storage operation expired before admission."));
     lane.active = null;
     beginNext(lane);
     return;
   }
 
-  const timeout = setTimeout((): void => {
+  const timeout = remainingMs === null ? null : setTimeout((): void => {
     const error = maintenanceError("storage_operation_timeout", "Storage operation exceeded its execution deadline.");
     lane.fenced = true;
     entry.controller.abort(error);
-    rejectCaller(entry, error);
   }, remainingMs);
-  timeout.unref?.();
+  timeout?.unref?.();
 
   const tracker = createStorageWorkTracker({
     signal: entry.controller.signal,
@@ -319,13 +328,21 @@ function beginNext(lane: MaintenanceLane): void {
     startedAt: entry.enqueuedAt
   });
   Promise.resolve()
-    .then(() => entry.task(tracker))
+    .then(() => {
+      if (entry.controller.signal.aborted) {
+        throw entry.controller.signal.reason || maintenanceError(
+          "storage_operation_cancelled",
+          "Storage operation was cancelled before dispatch."
+        );
+      }
+      return entry.task(tracker);
+    })
     .then(
       (result) => resolveCaller(entry, result),
       (error: unknown) => rejectCaller(entry, error)
     )
     .finally(() => {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
       entry.removeAbortListener?.();
       lane.active = null;
       lane.fenced = false;
@@ -390,7 +407,7 @@ export function runStorageMaintenanceMutation<T>(
         entry.cancelled = lane.active !== entry;
         if (lane.active === entry) lane.fenced = true;
         controller.abort(error);
-        rejectCaller(entry, error);
+        if (entry.cancelled) rejectCaller(entry, error);
       };
       signal.addEventListener("abort", onAbort, { once: true });
       entry.removeAbortListener = () => signal.removeEventListener("abort", onAbort);

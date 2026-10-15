@@ -1,6 +1,6 @@
 /**
  * Typed errors for the peer crypto layer. `code` is the stable
- * machine-readable vocabulary the wire/mailbox layer projects into its own
+ * machine-readable vocabulary the online peer layer projects into its own
  * failure taxonomy; the layer never fabricates a decryption result — every
  * cryptographic failure surfaces as one of these codes.
  */

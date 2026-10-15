@@ -48,9 +48,10 @@ closed object validated before activation. Empty configuration remains empty,
 and activation failure publishes no partial contribution generation.
 
 The runtime module exports `activatePlugin`. An active runtime returns its exact
-declared contribution maps and a `close` function. Closing stops admission,
-drains or cancels owned work according to the Host contract, persists required
-state through `pluginData`, and releases resources. Dependencies close in
+declared contribution maps and a `close` function. `close()` is awaitable:
+closing stops admission, drains or signals cancellation to owned work, and does
+not resolve until accepted work has actually settled. It then persists required
+state through `pluginData` and releases resources. Dependencies close in
 reverse activation order.
 
 ## Host capabilities

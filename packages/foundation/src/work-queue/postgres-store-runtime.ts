@@ -161,7 +161,6 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     ], excludeWorkItemId || "", Math.max(0, Number(limit) || 0)]);
     const ids = selected.rows.map((row) => row.work_item_id);
     if (ids.length === 0) return 0;
-    await client.query("DELETE FROM work_queue_fallback_tasks WHERE work_item_id = ANY($1::text[])", [ids]);
     await client.query("DELETE FROM work_queue_transition_journal WHERE work_item_id = ANY($1::text[])", [ids]);
     await client.query("DELETE FROM work_items WHERE work_item_id = ANY($1::text[])", [ids]);
     return ids.length;
@@ -277,7 +276,6 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       Math.min(retention.cleanupBatchSize, failedCount - capacity.maxFailed + 1)
     ]);
     for (const candidate of selected.rows) {
-      await client.query("DELETE FROM work_queue_fallback_tasks WHERE work_item_id = $1", [candidate.work_item_id]);
       await client.query("DELETE FROM work_queue_transition_journal WHERE work_item_id = $1", [candidate.work_item_id]);
       await client.query("DELETE FROM work_items WHERE work_item_id = $1", [candidate.work_item_id]);
     }

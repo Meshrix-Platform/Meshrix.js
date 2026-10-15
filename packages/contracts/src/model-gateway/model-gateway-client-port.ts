@@ -98,7 +98,7 @@ export function assertModelGatewayCallRequest(value: unknown): ModelGatewayCallR
     throw new Error("model_gateway_call_input_refs_bounded");
   }
   const deadlineMs = value.deadlineMs;
-  if (!Number.isSafeInteger(deadlineMs) || (deadlineMs as number) <= 0) {
+  if (!Number.isSafeInteger(deadlineMs) || (deadlineMs as number) <= 0 || (deadlineMs as number) > 2_147_483_647) {
     throw new Error("model_gateway_call_deadline_invalid");
   }
   if (typeof value.stream !== "boolean") {

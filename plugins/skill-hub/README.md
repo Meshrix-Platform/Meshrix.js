@@ -14,6 +14,10 @@ or permission state. Activation requires one operator-published `serviceRef`:
 }
 ```
 
+`service.timeoutMs` is an optional operator-selected budget from 100 to
+120000 milliseconds. When omitted, the adapter adds no external-service
+timeout; caller and service lifecycle cancellation remain active.
+
 The adapter preserves the stable `skill_hub.*` HTTP, RPC, and MCP operation
 surface while all application calls cross the governed external-service Host
 port. Meshrix binds the fixed service and operation, rechecks current Operation
@@ -36,6 +40,14 @@ fallback, and commits only a closed terminal outcome projection to the service.
 Permission grants similarly use a prepare/commit exchange around the narrow
 `operationPermissionGrant.recordPluginGrant` Host port; the service receives
 only an opaque recorded-outcome reference.
+
+The adapter scopes Host idempotency keys to the operation and phase. An
+explicit operation key remains the stable identity used to derive each
+phase-specific Host key; otherwise the adapter creates one random logical
+invocation identity and carries it through prepare/commit. This avoids merging
+separate same-content operations. It does not promise durable retry
+deduplication: the independent Skill Hub HTTP contract does not implement a
+generic idempotency ledger.
 
 The service package, deployment image, API documentation, and focused tests
 live under `services/skill-hub`. Import

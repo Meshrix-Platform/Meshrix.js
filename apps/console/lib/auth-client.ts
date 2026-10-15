@@ -3,6 +3,8 @@ import type {
   ConsoleAuditItem,
   ConsoleAuthSummary,
   ConsoleOidcConfig,
+  ConsoleRole,
+  ConsoleRoleOption,
   ConsoleUser,
 } from "./auth-types";
 
@@ -24,7 +26,7 @@ export type AuthOidcPatch = Partial<ConsoleOidcConfig> & {
 
 export type AuthUsersResponse = {
   users: ConsoleUser[];
-  roles: ConsoleAuthSummary["roles"];
+  roles: ConsoleRole[];
 };
 
 export type AuthAuditResponse = {
@@ -40,7 +42,7 @@ export function getAuthSession() : any {
 }
 
 export function loginAuth(payload: AuthLoginPayload) : any {
-  return postJson<ConsoleAuthSummary & { ok: boolean }>("/api/auth/login", payload);
+  return postJson<{ ok: boolean; csrfToken?: string; roles?: ConsoleRoleOption[] }>("/api/auth/login", payload);
 }
 
 export function logoutAuth() : any {

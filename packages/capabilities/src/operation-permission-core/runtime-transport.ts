@@ -147,7 +147,7 @@ export async function runWithAbortableTimeout(run?: any, timeoutMs?: any, parent
   }
   if (parentSignal?.aborted) throw abortedError();
   const normalizedTimeout: any = timeoutMs === undefined
-    ? 30_000
+    ? null
     : timeoutMs === null
       ? null
       : timeoutMs;
@@ -174,7 +174,11 @@ export async function runWithAbortableTimeout(run?: any, timeoutMs?: any, parent
       }, normalizedTimeout);
       timer.unref?.();
     }
-    const result: any = await run(abortController.signal);
+    const result = await run(abortController.signal);
+    // Caller cancellation and an explicitly selected deadline remain the
+    // outcome only after the dispatched operation has actually settled. The
+    // caller must not receive a success response after its selected budget,
+    // while dispatch/audit ownership remains alive until the real settlement.
     if (terminalFailure) throw terminalFailure;
     return result;
   } catch (error: any) {

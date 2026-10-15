@@ -56,6 +56,15 @@ describe("Gateway envelope contract", () => {
       .toThrow("agent_mcp_envelope_input_refs_bounded");
   });
 
+  it("accepts only positive safe-integer millisecond request budgets", () => {
+    for (const deadlineMs of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => createDownstreamGatewayEnvelope({
+        ...refs("gateway_transit", ["in-1"]),
+        deadlineMs
+      })).toThrow("agent_mcp_envelope_deadline_out_of_bounds");
+    }
+  });
+
   it("mirrors pinned upstream and downstream generations on the return path", () => {
     const upstream = createUpstreamGatewayEnvelope({
       ...refs("workspace_application", ["in-1"]),

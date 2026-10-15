@@ -1,44 +1,61 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { ref } from "vue";
 
+import AccountView from "./views/AccountView.vue";
+import ActivityView from "./views/ActivityView.vue";
+import AgentsView from "./views/AgentsView.vue";
 import ConnectionsView from "./views/ConnectionsView.vue";
 import LifecycleView from "./views/LifecycleView.vue";
 import McpSetupView from "./views/McpSetupView.vue";
 import PairingView from "./views/PairingView.vue";
+import PersonalView from "./views/PersonalView.vue";
 import RecoveryImportView from "./views/RecoveryImportView.vue";
 import RecoveryView from "./views/RecoveryView.vue";
-import { state } from "./store.ts";
+import { quitApp as requestQuit } from "./bridge.ts";
+import { state, store } from "./store.ts";
 
-type NavItem = "connections" | "pair" | "recovery" | "recover" | "mcp" | "app";
+type NavItem = "personal" | "connections" | "pair" | "agents" | "activity" | "account" | "recovery" | "recover" | "mcp" | "app";
 
-const nav = ref<NavItem>(state.value.connections.length ? "connections" : "pair");
+const nav = ref<NavItem>(state.value.connections.length ? "connections" : "personal");
 
-const showPair = computed(
-  () =>
-    nav.value === "pair" ||
-    state.value.pairing.phase === "challenge_issued" ||
-    state.value.pairing.phase === "proof_submitted" ||
-    state.value.pairing.phase === "offline" ||
-    state.value.pairing.phase === "retry_required"
-);
+function quitApp(): void {
+  void requestQuit().catch((error: unknown) => {
+    store.lastError = error instanceof Error ? error.message : "Meshrix could not stop the profile service.";
+  });
+}
+
 </script>
 
 <template>
   <header class="top">
     <h1>Meshrix Entry</h1>
     <nav>
+      <button class="nav" :class="{ on: nav === 'personal' }" @click="nav = 'personal'">Personal space</button>
       <button class="nav" :class="{ on: nav === 'connections' }" @click="nav = 'connections'">Connections</button>
-      <button class="nav" :class="{ on: nav === 'pair' }" @click="nav = 'pair'">Pair New Endpoint</button>
+      <button class="nav" :class="{ on: nav === 'pair' }" @click="nav = 'pair'">Pair New Device</button>
+      <button class="nav" :class="{ on: nav === 'agents' }" @click="nav = 'agents'">Agents</button>
+      <button class="nav" :class="{ on: nav === 'activity' }" @click="nav = 'activity'">Activity</button>
+      <button class="nav" :class="{ on: nav === 'account' }" @click="nav = 'account'">Account</button>
       <button class="nav" :class="{ on: nav === 'recovery' }" @click="nav = 'recovery'">Recovery</button>
       <button class="nav" :class="{ on: nav === 'recover' }" @click="nav = 'recover'">Recover This Device</button>
       <button class="nav" :class="{ on: nav === 'mcp' }" @click="nav = 'mcp'">MCP Setup</button>
       <button class="nav" :class="{ on: nav === 'app' }" @click="nav = 'app'">App</button>
+      <button class="nav" @click="quitApp">Quit Meshrix</button>
     </nav>
   </header>
 
+  <p v-if="state.lifecycle.state === 'starting' && !store.lastError" class="startup-status" role="status">
+    Starting Meshrix and reconnecting to the profile service…
+  </p>
+  <p v-if="store.lastError" class="startup-error error" role="alert">{{ store.lastError }}</p>
+
   <main>
-    <ConnectionsView v-if="nav === 'connections'" :state="state" />
-    <PairingView v-else-if="showPair" :state="state" />
+    <PersonalView v-if="nav === 'personal'" :state="state" />
+    <ConnectionsView v-else-if="nav === 'connections'" :state="state" />
+    <PairingView v-else-if="nav === 'pair'" :state="state" />
+    <AgentsView v-else-if="nav === 'agents'" :state="state" />
+    <ActivityView v-else-if="nav === 'activity'" :state="state" />
+    <AccountView v-else-if="nav === 'account'" :state="state" />
     <RecoveryView v-else-if="nav === 'recovery'" :state="state" />
     <RecoveryImportView v-else-if="nav === 'recover'" :state="state" />
     <McpSetupView v-else-if="nav === 'mcp'" :state="state" />
@@ -75,6 +92,9 @@ button.danger { border: 1px solid #c0392b; color: #c0392b; background: transpare
 .badge.reachable, .badge.enrolled, .badge.active, .badge.enabled, .badge.acknowledged { border-color: #1e8e3e; color: #1e8e3e; }
 .badge.unreachable, .badge.closed, .badge.offline, .badge.refused, .badge.disabled { border-color: #c0392b; color: #c0392b; }
 .error { color: #c0392b; }
+.startup-status, .startup-error { border-radius: 0.4rem; padding: 0.6rem 0.8rem; }
+.startup-status { background: #8882; }
+.startup-error { background: #c0392b18; }
 .notices { position: fixed; bottom: 0.5rem; right: 1rem; max-width: 24rem; }
 .notice { background: #333; color: #eee; padding: 0.4rem 0.8rem; border-radius: 0.4rem; font-size: 0.8rem; }
 dl { margin: 0.5rem 0; }

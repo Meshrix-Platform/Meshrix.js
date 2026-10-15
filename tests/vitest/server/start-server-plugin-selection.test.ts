@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { createServerCompositionRoot } from "../../../packages/server-runtime/src/composition/composition-root.ts";
+import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
 import {
   DEPLOYMENT_PROFILE_ID_CONFIG_PATH,
   ENABLED_PLUGINS_CONFIG_PATH,
@@ -66,6 +67,7 @@ describe("packaged server plugin selection", () : any => {
     try {
       await expect(createServerCompositionRoot({
         userDataPath,
+        secretKeyProvider: createMemoryLocalSecretKeyProvider(),
         runtimeOptions: {
           pluginArtifactTrustedPublicKeys: { "ed25519:configured": PUBLIC_JWK }
         },

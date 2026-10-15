@@ -1,90 +1,89 @@
 # `@meshrix/peer-client`
 
-Device-side durable peer messaging client for `DEC-PEER-ENCRYPTED-MAILBOX`.
-The package composes the `@meshrix/peer-crypto` Signal session layer
-(PQXDH prekey exchange + Double Ratchet) with the private-relay peer
-mailbox wire contract into a reliable, honest delivery surface. It runs on
-the admitted session channel a device already owns — all 13 peer wire
-kinds are request/response on that channel, with `peer-messages` pages
-pushed as wakeups and `peer-fetch` as the always-correct fallback.
+`@meshrix/peer-client` provides device-local durable messaging over the
+private relay's online forwarding channel. It composes the Signal PQXDH and
+Double Ratchet implementation in `@meshrix/peer-crypto` with an authenticated
+route identity, a pairing-pinned peer directory, and a host-supplied session
+transport.
 
-## Composition
+The relay forwards encrypted messages only while the recipient is reachable.
+It does not keep an offline mailbox or store business messages, delivery
+receipts, task state, or results. The sender retains the exact ciphertext in
+its local outbox until it verifies a signed receipt from the recipient. The
+recipient commits decrypted data and its ratchet changes to local durable
+storage before signing that receipt. Application dispatch is tracked
+separately, so a deferred handler remains recoverable after transport delivery
+has settled.
 
-```text
-PeerClient (lane-serialized operations + typed events)
-  ├── PeerOutbox            durable sender-scoped sends + receipt states
-  ├── PeerInbox             durable dedup'd inbound entries + cursor + tombstones
-  ├── ReceiptReconciler     peer-receipt → peer-status pulls for lost replies
-  ├── PeerClientStore       durable port: FilePeerClientStore | InMemory
-  ├── PeerCryptoStore       crypto layer's own store (sessions, pins, prekeys)
-  ├── PeerClientTransport   host port: send() + onMessage() on the session channel
-  └── PeerDeviceDirectory   host port: wire device id → crypto peer id
-```
+## Delivery behavior
 
-## Delivery semantics
+- `sendMessage()` records the exact encrypted envelope locally before trying
+  online forwarding. An uncertain or unreachable attempt leaves the entry
+  pending. Retries reuse its tuple and ciphertext; only a verified signed
+  `peer-delivery-ack` changes the outbox state to `delivered`.
+- A recipient's durable inbox is keyed by tenant, route, sender device,
+  recipient device, and message id. An exact duplicate replays its stored
+  receipt without decrypting or dispatching again. Reuse of that tuple with
+  different ciphertext is a conflict. A Signal-level duplicate under a new
+  message id is retained as skipped evidence and receives no delivery receipt.
+- The receipt signs a domain-separated transcript with the sender device's
+  existing Signal identity key. The sender verifies it only against the
+  identity persisted by authenticated pairing. Relay-provided identity data
+  never establishes trust.
+- Durable inbox receipt and application handoff are independent. A handler
+  result of `deferred`, or a temporary exception, leaves the dispatch pending
+  for `retryPendingDispatch()` or `resume()`. The host acknowledges application
+  acceptance only after its own journal commit.
+- Peer presence is route-scoped retry information, not authority. A reachable
+  transition wakes pending ciphertext and receipt retries. The relay carries
+  presence and control messages without retaining business payloads.
+- A live-session `authority_stale`, `rate_limited`, or `backpressured` result
+  retries the same durable tuple with exponential backoff from one to thirty
+  seconds, with no retry deadline. An unreachable peer waits for its presence
+  wakeup. Disposing the client clears only in-memory timers; the durable
+  message remains available to the next client instance.
 
-- **Outbox.** `sendMessage` persists `pending` first, then sends the exact
-  stored wire envelope. `accepted`/`duplicate` both record the mailbox's
-  accepted receipt and position — `duplicate` is the honest success for a
-  retry. `conflict` (same sender scope, different bytes) is terminal,
-  surfaced, never retried. A lost `peer-accepted` is recovered by
-  `peer-receipt`/`peer-status` reconciliation; a send the mailbox provably
-  never recorded past the attempt bound is surfaced `unrecorded`.
-- **Inbox.** Every fetched/stored message dedups on `(messageId,
-  position)` before decrypt or dispatch; the decrypt output commits to the
-  store before the host sees it; each page closes with an idempotent
-  `peer-ack` (`received[]` + queued application `reports[]`) and only then
-  does the durable cursor advance. `gaps[]` tombstones persist and surface
-  as `lostRange` events — a lost range is never silently skipped.
-- **Receipts.** `accepted` is the mailbox's, `received` is the recipient's,
-  and `accepted_by_agent`/`completed`/`rejected` are independent agent
-  reports (`peer-ack` `reports[]`), never derived from acknowledgements.
-- **Trust.** `peer_identity_changed` emits `requiresRePair` and blocks
-  delivery; the only recovery is the explicit `repinPeer` re-pair call —
-  never silent re-trust. `peer_prekey_exhausted` triggers one
-  replenish-and-retry, then surfaces.
+## Host integration
 
-## Dispatch boundary — no agent authority
-
-`PeerDispatchSurface.onInboundMessage` hands the host
-`{messageId, position, senderPeerId, senderDeviceId, plaintext,
-receivedAt}` and awaits `"accepted_by_agent" | "rejected"` (optionally
-with a detail payload). The client reports that outcome back as the
-application receipt. **The client never executes message content, never
-calls runtime control, and never interprets plaintext semantics.** The
-handler is the product's trust boundary: what it does with bytes is the
-host's decision, on the host's authority.
-
-## Wiring (what the product layer supplies)
+The host supplies a Signal identity, its `PeerCryptoStore`, a route-scoped
+`PeerClientStore`, the currently admitted session transport, and a directory
+that resolves a paired device to the identity established by pairing:
 
 ```ts
 const client = new PeerClient({
-  identity,                          // loadPeerIdentity(store) result
-  cryptoStore,                       // FilePeerCryptoStore
-  clientStore: createFilePeerClientStore(dir),
-  transport,                         // { send(msg), onMessage(handler) }
-  route: { tenantId, routeId, deviceId },   // admitted session identity
-  directory: staticPeerDirectory({ "dev.bob": "peer.bob.1" }), // optional
+  identity,
+  cryptoStore,
+  clientStore: createFilePeerClientStore(localStateDirectory),
+  transport, // send(message), onMessage(handler)
+  route: { tenantId, routeId, deviceId },
+  directory: staticPeerDirectory({
+    "dev.bob": peerIdentityPublicDescriptor(bobIdentity)
+  })
 });
-client.onInboundMessage(async (msg) => "accepted_by_agent");
-client.on("requiresRePair", ({ peerId }) => /* out-of-band re-pair UX */);
-await client.publishBundle();                 // advertise our prekeys
-await client.sendMessage("dev.bob", bytes);   // first send: prekey type
-await client.resume();                        // after restart/reconnect
-await client.reportOutcome(messageId, "completed");
+
+client.onInboundMessage(async (message) => {
+  // Return accepted_by_agent only after the host journal has committed.
+  await applicationJournal.commit(message);
+  return "accepted_by_agent";
+});
+client.on("peerPresence", (presence) => {
+  // Presence can wake UI or retry work; pairing remains the authority.
+});
+
+await client.publishBundle();
+await client.resume(); // recover local WAL, pending receipts, dispatch, and sends
+const state = await client.sendMessage("dev.bob", encodedApplicationEvent);
+await client.dispose(); // clear retry timers and drain queued durable writes before retiring storage
 ```
 
-`handleInboundMessage(obj)` is the manual demux entry when a transport
-cannot offer `onMessage`. `resume()` retries pending sends (same ids, same
-envelopes), reconciles receipts, flushes queued reports and runs the fetch
-loop — the session itself resumes lazily from the durable crypto store.
+`presence(peerDeviceId)` returns the latest route-scoped peer reachability
+observation. `outbox.pendingPage()` / `outbox.historyPage()` and the matching
+inbox page methods expose bounded local projections using ascending local
+sequence cursors. These cursors are device-local indexes; they are not relay
+mailbox positions.
 
-## Honesty rules this layer keeps
-
-- Never fabricates a receipt, position, plaintext or acceptance.
-- Never retries a `conflict`, never auto-repairs a changed identity.
-- Never drops an ack entry silently — mailbox refusals surface with
-  reasons (`ackRefused`), dispatch failures surface (`dispatchFailed`),
-  undecryptable input is stored as evidence (`decryptFailure`).
-- Never exposes plaintext to the mailbox or the log path; the wire
-  envelope stays an opaque ciphertext carrier.
+The client transports opaque ciphertext only. It does not execute application
+content or infer Agent task state; the application protocol and host journal
+own those semantics. Historical records from the retired mailbox model are
+preserved locally during transition and are never sent as active authority or
+used as proof of signed delivery.

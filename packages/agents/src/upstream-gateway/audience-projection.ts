@@ -108,6 +108,34 @@ function grantAllowedServiceIds(grant: Record<string, any> = {}) : any {
   return new Set<any>(uniqueStrings(values));
 }
 
+const GRANT_ALLOWED_TOOLS_LIMIT: number = 64;
+const GRANT_ALLOWED_TOOL_PATTERN_LENGTH: number = 256;
+
+/**
+ * Grant-scoped tool narrowing: exact public names or `prefix*` globs. Entries
+ * with `*` anywhere other than the trailing position are treated as literal
+ * names (they simply never match). The set is bounded so a malformed grant
+ * cannot turn admission into an unbounded scan.
+ */
+function grantAllowedTools(grant: Record<string, any> = {}) : any {
+  const metadata: any = plainObject(grant.metadata);
+  return uniqueStrings([
+    ...(Array.isArray(grant.allowedTools) ? grant.allowedTools : []),
+    ...(Array.isArray(metadata.allowedTools) ? metadata.allowedTools : [])
+  ]).map((entry?: any) : any => entry.slice(0, GRANT_ALLOWED_TOOL_PATTERN_LENGTH))
+    .slice(0, GRANT_ALLOWED_TOOLS_LIMIT);
+}
+
+function toolNameMatchesPattern(name: any = "", pattern: any = "") : any {
+  const value: any = text(name);
+  const rule: any = text(pattern);
+  if (!value || !rule) return false;
+  if (rule.endsWith("*")) {
+    return value.startsWith(rule.slice(0, -1));
+  }
+  return value === rule;
+}
+
 function grantAllowedSecretBindings(grant: Record<string, any> = {}) : any {
   const metadata: any = plainObject(grant.metadata);
   return new Set<any>(uniqueStrings([
@@ -177,6 +205,19 @@ export function evaluateAudienceDecision({
       purpose: mode,
       visibleMetadata: false
     });
+  }
+
+  const allowedTools: any = grantAllowedTools(authorizationPolicy);
+  if (allowedTools.length > 0) {
+    const toolName: any = text(operation.toolId || operation.id);
+    if (!toolName || !allowedTools.some((pattern?: any) : any => toolNameMatchesPattern(toolName, pattern))) {
+      return Object.freeze({
+        allowed: false,
+        reasonCode: "audience_tool_not_granted",
+        purpose: mode,
+        visibleMetadata: false
+      });
+    }
   }
 
   const capability: any = plainObject(operation._meta?.dynamicCapability || operation.dynamicCapability);

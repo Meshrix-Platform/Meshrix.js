@@ -48,7 +48,7 @@ parentPort?.on("message", async (message?: WorkerRequest): Promise<void> => {
     if (!COMMANDS.has(kind)) {
       throw Object.assign(new Error("Authorization SQLite command is not allowed."), { code: "sqlite_lane_command_rejected" });
     }
-    if (Date.now() > Number(message?.deadlineAtMs || 0)) {
+    if (Number(message?.deadlineAtMs || 0) > 0 && Date.now() > Number(message?.deadlineAtMs)) {
       throw Object.assign(new Error("Authorization SQLite command deadline elapsed."), { code: "sqlite_lane_deadline_exceeded" });
     }
     if (kind === "appendReceipt") {

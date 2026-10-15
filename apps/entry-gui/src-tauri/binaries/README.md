@@ -5,25 +5,29 @@ Node.js runtime** (`bundle.externalBin` → `binaries/node`) which executes the
 compiled service bundle `resources/service/entry-service.mjs` (shipped via
 `bundle.resources`). No system Node.js is required.
 
-## Populating this directory
+## Packaging
 
 Tauri's externalBin convention resolves the file as
 `binaries/node-<target-triple>[.exe]`; at install time it is renamed to
-`node`/`node.exe` next to the app executable. Place one upstream Node binary
-per target triple here:
+`node`/`node.exe` next to the app executable. `tools/stage-service.mjs` fetches
+the pinned runtime and stages it before Tauri bundling. `tools/node-runtime.mjs`
+owns the upstream version and SHA-256 pins; do not substitute the build host's
+Node executable.
 
 | Target triple            | File                       |
 | ------------------------ | -------------------------- |
 | `aarch64-apple-darwin`   | `node-aarch64-apple-darwin` |
 | `x86_64-apple-darwin`    | `node-x86_64-apple-darwin`  |
+| `aarch64-pc-windows-msvc` | `node-aarch64-pc-windows-msvc.exe` |
 | `x86_64-pc-windows-msvc` | `node-x86_64-pc-windows-msvc.exe` |
+| `aarch64-unknown-linux-gnu` | `node-aarch64-unknown-linux-gnu` |
+| `x86_64-unknown-linux-gnu` | `node-x86_64-unknown-linux-gnu` |
 
-Use the single-file distribution of a supported Node release (the repo's
-`engines` floor: Node >= 22.18 / >= 24.3 — upstream `node` binaries are
-single executables on all desktop targets). Download them from
-`https://nodejs.org/dist/` and verify the published SHA-256 checksums.
-The binaries are gitignored (`src-tauri/binaries/node*`): they are build
-inputs fetched at packaging time, not repository content.
+Node.js 24.21.0 is the pinned LTS runtime for the installed app. The staging
+tool downloads the target asset from `https://nodejs.org/dist/`, verifies the
+pinned archive checksum, extracts only the Node executable when needed, and
+checks the executable hash before Tauri bundles it. The binaries are gitignored
+build inputs; installed users do not need a system Node.js installation.
 
 ## Alternatives evaluated
 

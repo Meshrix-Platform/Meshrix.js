@@ -230,7 +230,7 @@ export class IsolatedSchemaValidator {
         const workerUrl = new URL(import.meta.url.endsWith(".ts") ? "./isolated-worker.ts" : "./isolated-worker.js", import.meta.url);
         // Never inherit parent `-e`/`--input-type` or instrumentation arguments:
         // Worker has a file entry and must run independently of caller CLI flags.
-        try { worker = new Worker(workerUrl, { execArgv: [] }); }
+        try { worker = new Worker(workerUrl as unknown as ConstructorParameters<typeof Worker>[0], { execArgv: [] }); }
         catch (error) { job.reject(error); continue; }
         this.#workers.add(worker);
         starting = true;
@@ -363,7 +363,7 @@ function makeAjv(): Ajv2020 {
     strict: false,
     strictSchema: true,
     strictTypes: false,
-    allErrors: true,
+    allErrors: false,
     addUsedSchema: false,
     validateFormats: false,
     allowUnionTypes: true

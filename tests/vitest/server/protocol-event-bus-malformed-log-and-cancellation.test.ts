@@ -45,6 +45,28 @@ afterEach(() : any => {
 });
 
 describe("protocol event bus validation and cancellation", () : any => {
+  it("skips revision metadata for plain reads while subscriptions retain revision checks", async () : Promise<any> => {
+    const read = vi.fn(async ({ cursor = 0, includeRevision = true }: Record<string, any> = {}) : Promise<any> => ({
+      events: [],
+      nextCursor: cursor,
+      ...(includeRevision ? { revision: 0 } : {})
+    }));
+    const eventStore: Record<string, any> = {
+      publish: vi.fn(),
+      read,
+      getLatest: vi.fn(async () : Promise<any> => []),
+      getStats: vi.fn(async () : Promise<any> => ({}))
+    };
+    const bus: any = createProtocolEventBus({ eventStore, logger: logger() });
+
+    await bus.readEvents({ cursor: 4 });
+    expect(read).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 4, includeRevision: false }));
+
+    await bus.subscribe({ cursor: 4, timeoutMs: 0 });
+    expect(read.mock.calls.at(-1)?.[0]).not.toHaveProperty("includeRevision");
+    await bus.close();
+  });
+
   it("normalizes and deduplicates topic filters before indexed reads", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
       const { bus, eventStore } = openBus(userDataPath);
@@ -76,7 +98,6 @@ describe("protocol event bus validation and cancellation", () : any => {
       }),
       read: vi.fn(async () : Promise<any> => ({ events: [], nextCursor: 0, revision: 0 })),
       getLatest: vi.fn(async () : Promise<any> => []),
-      getRevision: vi.fn(async () : Promise<any> => 0),
       getStats: vi.fn(async () : Promise<any> => ({}))
     };
     const currentLogger: any = logger();

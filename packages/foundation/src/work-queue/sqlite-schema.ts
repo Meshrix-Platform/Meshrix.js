@@ -129,18 +129,6 @@ export function ensureSqliteWorkQueueSchema(db: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_work_queue_background_writes_type_entity
           ON work_queue_background_writes(aspect_type, entity_id);
 
-        CREATE TABLE IF NOT EXISTS work_queue_fallback_tasks (
-          fallback_task_id TEXT PRIMARY KEY,
-          work_item_id TEXT NOT NULL,
-          state TEXT NOT NULL,
-          attempt INTEGER NOT NULL DEFAULT 0,
-          max_attempts INTEGER NOT NULL DEFAULT 0,
-          reason TEXT NOT NULL DEFAULT '',
-          decision_json TEXT NOT NULL DEFAULT '{}',
-          created_at_ms INTEGER NOT NULL,
-          updated_at_ms INTEGER NOT NULL
-        );
-
         CREATE TABLE IF NOT EXISTS work_queue_internal_health (
           health_key TEXT PRIMARY KEY,
           state_json TEXT NOT NULL DEFAULT '{}',

@@ -1,4 +1,14 @@
+import crypto from "node:crypto";
+import path from "node:path";
+
 import { createSqliteExecutionLane } from "../storage/sqlite-execution-lane.ts";
+import {
+  inspectOperationAuditProjectionDatabase,
+  operationAuditProjectionKeyId,
+  projectOperationAuditEntry,
+  projectOperationAuditFilter,
+  projectOperationAuditRetentionPolicy
+} from "./operation-audit-projection.ts";
 import {
   OperationAuditCapacityError,
   OperationAuditIdempotencyConflictError,
@@ -29,18 +39,19 @@ const COMMANDS: readonly string[] = Object.freeze([
 
 type DataRecord = Record<string, unknown>;
 interface OperationAuditStoreOptions {
-  userDataPath?: string;
+  userDataPath: string;
+  projectionKey: Uint8Array;
+  projectionKeyId: string;
   maxPending?: number;
   maxPendingBytes?: number;
-  defaultDeadlineMs?: number;
 }
 interface SqliteExecutionLane {
   execute(kind: string, payload: DataRecord): Promise<unknown>;
+  ready(): Promise<void>;
   close(): Promise<unknown>;
   getStats(): unknown;
 }
 export interface OperationAuditStore {
-  lane: SqliteExecutionLane;
   append(entry?: DataRecord): Promise<unknown>;
   appendIdempotent(entry?: DataRecord): Promise<unknown>;
   getById(auditId?: string): Promise<unknown>;
@@ -51,6 +62,7 @@ export interface OperationAuditStore {
   exportRedacted(input?: DataRecord): Promise<unknown>;
   getTrace(traceId?: string, input?: DataRecord): Promise<unknown>;
   getCapacityStats(): Promise<unknown>;
+  ready(): Promise<void>;
   close(): Promise<unknown>;
   getStats(): unknown;
 }
@@ -83,22 +95,38 @@ function restoreOperationAuditError(error: unknown): never {
  */
 export function createOperationAuditStore({
   userDataPath,
+  projectionKey: suppliedProjectionKey,
+  projectionKeyId,
   maxPending = 1024,
-  maxPendingBytes = 16 * 1024 * 1024,
-  defaultDeadlineMs = 30_000
+  maxPendingBytes = 16 * 1024 * 1024
 }: OperationAuditStoreOptions): Readonly<OperationAuditStore> {
-  const lane = createSqliteExecutionLane({
-    owner: "mandatory-evidence-operation-audit",
-    workerUrl: new URL(
-      `./operation-audit-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`,
-      import.meta.url
-    ),
-    workerData: { userDataPath },
-    allowedCommands: COMMANDS,
-    maxPending,
-    maxPendingBytes,
-    defaultDeadlineMs
-  }) as SqliteExecutionLane;
+  const projectionKey = Buffer.from(suppliedProjectionKey);
+  const expectedKeyId = operationAuditProjectionKeyId(projectionKey);
+  if (projectionKey.length !== 32 || expectedKeyId !== projectionKeyId) {
+    projectionKey.fill(0);
+    throw Object.assign(new Error("Operation audit projection key is invalid."), {
+      code: "operation_audit_projection_key_invalid"
+    });
+  }
+
+  let lane: SqliteExecutionLane;
+  try {
+    lane = createSqliteExecutionLane({
+      owner: "mandatory-evidence-operation-audit",
+      workerUrl: new URL(
+        `./operation-audit-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`,
+        import.meta.url
+      ),
+      workerData: { userDataPath, projectionKey, projectionKeyId },
+      requiresReadyHandshake: true,
+      allowedCommands: COMMANDS,
+      maxPending,
+      maxPendingBytes
+    }) as SqliteExecutionLane;
+  } catch (error: unknown) {
+    projectionKey.fill(0);
+    throw error;
+  }
 
   async function execute(kind: string, payload: DataRecord = {}): Promise<unknown> {
     try {
@@ -108,21 +136,55 @@ export function createOperationAuditStore({
     }
   }
 
+  function projectEntry(entry: DataRecord = {}, idempotent = false): DataRecord {
+    const source = record(entry);
+    const auditId = String(source.auditId || (idempotent ? "" : `op_audit_${crypto.randomUUID()}`));
+    if (idempotent && !auditId.trim()) throw new OperationAuditIdRequiredError();
+    const createdAt = source.createdAt ? String(source.createdAt) : undefined;
+    const projected = projectOperationAuditEntry(source, {
+      key: projectionKey,
+      auditId,
+      ...(createdAt ? { createdAt } : {})
+    });
+    if (idempotent && !createdAt) projected.createdAt = "";
+    return {
+      projectionVersion: "meshrix-operation-audit-projection-v1",
+      ...projected
+    };
+  }
+
+  async function close(): Promise<void> {
+    try {
+      await lane.close();
+    } finally {
+      projectionKey.fill(0);
+    }
+  }
+
   return Object.freeze({
-    lane,
-    append: (entry: DataRecord = {}) => execute("append", entry),
-    appendIdempotent: (entry: DataRecord = {}) => execute("appendIdempotent", entry),
+    append: async (entry: DataRecord = {}) => execute("append", projectEntry(entry)),
+    appendIdempotent: async (entry: DataRecord = {}) => execute("appendIdempotent", projectEntry(entry, true)),
     getById: (auditId = "") => execute("getById", auditId ? { auditId } : {}),
-    list: (input: DataRecord = {}) => execute("list", input),
+    list: (input: DataRecord = {}) => execute("list", projectOperationAuditFilter(input, projectionKey)),
     getRetentionPolicy: () => execute("getRetentionPolicy"),
-    setRetentionPolicy: (input: DataRecord = {}) => execute("setRetentionPolicy", input),
-    pruneExpired: (input: DataRecord = {}) => execute("pruneExpired", input),
-    exportRedacted: (input: DataRecord = {}) => execute("exportRedacted", input),
-    getTrace: (traceId = "", input: DataRecord = {}) => execute("getTrace", { traceId, input }),
+    setRetentionPolicy: (input: DataRecord = {}) => execute("setRetentionPolicy", projectOperationAuditRetentionPolicy(input, projectionKey)),
+    pruneExpired: (input: DataRecord = {}) => execute("pruneExpired", projectOperationAuditRetentionPolicy(input, projectionKey)),
+    exportRedacted: (input: DataRecord = {}) => execute("exportRedacted", projectOperationAuditFilter(input, projectionKey)),
+    getTrace: (traceId = "", input: DataRecord = {}) => execute("getTrace", {
+      traceId: projectOperationAuditFilter({ traceId }, projectionKey).traceId || "",
+      input: projectOperationAuditFilter(input, projectionKey)
+    }),
     getCapacityStats: () => execute("getCapacityStats"),
-    close: () => lane.close(),
+    ready: () => lane.ready(),
+    close,
     getStats: () => lane.getStats()
   });
+}
+
+export async function inspectOperationAuditProjection({
+  userDataPath
+}: { userDataPath: string }): Promise<ReturnType<typeof inspectOperationAuditProjectionDatabase>> {
+  return inspectOperationAuditProjectionDatabase(path.join(path.resolve(userDataPath), "security", "operation-audit.sqlite"));
 }
 
 export default createOperationAuditStore;

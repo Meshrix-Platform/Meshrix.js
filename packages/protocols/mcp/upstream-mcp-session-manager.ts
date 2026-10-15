@@ -72,13 +72,24 @@ function executionScopeMatchesGrant(scopeValue?: any, grantIdValue?: any) : any 
 
 function waitForPromise(promise?: any, signal?: any) : any {
   if (!signal) return promise;
-  if (signal.aborted) return Promise.reject(abortError());
+  if (signal.aborted) {
+    void promise.catch(() : any => undefined);
+    return Promise.reject(abortError());
+  }
   return new Promise((resolve?: any, reject?: any) : any => {
-    const onAbort: any = () : any => reject(abortError());
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(resolve, reject).finally(() : any => {
+    let settled: any = false;
+    const finish: any = (callback?: any, value?: any) : any => {
+      if (settled) return;
+      settled = true;
       signal.removeEventListener("abort", onAbort);
-    });
+      callback(value);
+    };
+    const onAbort: any = () : any => finish(reject, abortError());
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value?: any) : any => finish(resolve, value),
+      (error?: any) : any => finish(reject, error)
+    );
   });
 }
 
@@ -444,15 +455,29 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
   }
 
   function beginCreation(config?: any, key?: any, scope?: any, kind?: any) : any {
+    const pending: Record<string, any> = {
+      scope,
+      kind: kind === STATEFUL_SESSION_KIND ? STATEFUL_SESSION_KIND : "ephemeral",
+      controller: new AbortController(),
+      waiters: 0,
+      abandoned: false,
+      settled: false,
+      entry: null,
+      promise: null
+    };
     const promise: any = (async () : Promise<any> => {
       let session: any;
       try {
-        session = await createTransportSession(config, transportOptions);
+        session = await createTransportSession(config, {
+          ...transportOptions,
+          signal: pending.controller.signal
+        });
         return await withPoolLock(async () : Promise<any> => {
-          creating.delete(key);
-          if (closed || (scope && currentScopeKeys.get(scope)?.key !== key)) {
+          if (closed || pending.abandoned || pending.controller.signal.aborted || (scope && currentScopeKeys.get(scope)?.key !== key)) {
             await session.close().catch(() : any => undefined);
-            throw fatalSessionError("Upstream MCP session configuration changed during initialization.");
+            throw pending.abandoned || pending.controller.signal.aborted
+              ? abortError()
+              : fatalSessionError("Upstream MCP session configuration changed during initialization.");
           }
           const at: any = now();
           const entry: Record<string, any> = {
@@ -469,27 +494,85 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
           };
           sessions.set(key, entry);
           allEntries.add(entry);
+          pending.entry = entry;
+          pending.settled = true;
+          if (creating.get(key) === pending) creating.delete(key);
           scheduleSweep();
           return entry;
         });
       } catch (error: any) {
         await withPoolLock(() : any => {
-          if (creating.get(key)?.promise === promise) creating.delete(key);
+          pending.settled = true;
+          if (creating.get(key) === pending) creating.delete(key);
           releaseFailedInitializationScope(scope, key);
         });
         throw error;
       }
     })();
-    creating.set(key, { promise, scope, kind: kind === STATEFUL_SESSION_KIND ? STATEFUL_SESSION_KIND : "ephemeral" });
-    return promise;
+    pending.promise = promise;
+    creating.set(key, pending);
+    return pending;
+  }
+
+  function releaseCreationWaiterLocked(pending?: any, { keepSession = false }: Record<string, any> = {}) : any {
+    if (!pending || pending.waiters <= 0) return;
+    pending.waiters -= 1;
+    if (pending.waiters > 0) return;
+    if (!pending.settled) {
+      pending.abandoned = true;
+      pending.controller.abort();
+      return;
+    }
+    const entry: any = pending.entry;
+    if (!keepSession && entry && entry.inFlight === 0 && sessions.get(entry.key) === entry) {
+      retireEntry(entry);
+    }
   }
 
   async function acquire(config?: any, signal?: any) : Promise<any> {
     const identity: any = sessionIdentity(config);
     let missingSessionRetries: any = 0;
+    let waitingCreation: any = null;
     while (true) {
-      if (signal?.aborted) throw abortError();
       const decision: any = await withPoolLock(async () : Promise<any> => {
+        if (signal?.aborted) {
+          releaseCreationWaiterLocked(waitingCreation);
+          waitingCreation = null;
+          throw abortError();
+        }
+        if (closed) {
+          releaseCreationWaiterLocked(waitingCreation);
+          waitingCreation = null;
+          throw fatalSessionError("Upstream MCP session manager is closed.");
+        }
+        if (waitingCreation) {
+          const pending: any = waitingCreation;
+          waitingCreation = null;
+          const ready: any = sessions.get(identity.key);
+          if (ready && !ready.retired && !ready.session.closed && !ready.session.fatal) {
+            if (ready.inFlight >= maxConcurrentRequestsPerSession) {
+              releaseCreationWaiterLocked(pending, { keepSession: true });
+              throw capacityError(
+                "Upstream MCP per-session concurrency limit was reached.",
+                "UPSTREAM_MCP_SESSION_CONCURRENCY"
+              );
+            }
+            if (totalInFlight >= maxConcurrentRequests) {
+              releaseCreationWaiterLocked(pending, { keepSession: true });
+              throw capacityError(
+                "Upstream MCP manager concurrency limit was reached.",
+                "UPSTREAM_MCP_MANAGER_CONCURRENCY"
+              );
+            }
+            ready.inFlight += 1;
+            totalInFlight += 1;
+            ready.lastUsedAt = now();
+            releaseCreationWaiterLocked(pending, { keepSession: true });
+            scheduleSweep();
+            return { entry: ready };
+          }
+          releaseCreationWaiterLocked(pending);
+        }
         if (closed) throw fatalSessionError("Upstream MCP session manager is closed.");
         if (lostStatefulIdentity(identity)) throw statefulSessionLostError();
         sweepExpired();
@@ -514,7 +597,11 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
           return { entry: existing };
         }
         const pendingCreation: any = creating.get(identity.key);
-        if (pendingCreation) return { creation: pendingCreation.promise };
+        if (pendingCreation) {
+          if (pendingCreation.abandoned) return { abandonedCreation: pendingCreation };
+          pendingCreation.waiters += 1;
+          return { creation: pendingCreation.promise, pendingCreation };
+        }
         const previous: any = identity.scope ? currentScopeKeys.get(identity.scope) : null;
         const replacing: any = Boolean(previous?.key && previous.key !== identity.key);
         if (replacing) {
@@ -524,18 +611,30 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
         if (!replacing) {
           adoptScope(identity.scope, identity.key, identity.generation);
         }
-        return { creation: beginCreation(config, identity.key, identity.scope, identity.kind) };
+        const creation: any = beginCreation(config, identity.key, identity.scope, identity.kind);
+        creation.waiters += 1;
+        return { creation: creation.promise, pendingCreation: creation };
       });
       if (decision.entry) return decision.entry;
+      if (decision.abandonedCreation) {
+        try {
+          await waitForPromise(decision.abandonedCreation.promise, signal);
+        } catch (error: any) {
+          if (signal?.aborted) throw error;
+        }
+        continue;
+      }
       try {
         await waitForPromise(decision.creation, signal);
       } catch (error: any) {
+        await withPoolLock(() : any => releaseCreationWaiterLocked(decision.pendingCreation));
         if (error?.mcpSessionNotFound && missingSessionRetries === 0 && !signal?.aborted) {
           missingSessionRetries += 1;
           continue;
         }
         throw error;
       }
+      waitingCreation = decision.pendingCreation;
     }
   }
 
@@ -556,8 +655,14 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
     return new Promise((resolve?: any) : any => drainWaiters.add(resolve));
   }
 
-  async function execute(config?: any, signal?: any, operation?: any) : Promise<any> {
-    for (let attempt: any = 0; attempt < 2; attempt += 1) {
+  async function execute(
+    config?: any,
+    signal?: any,
+    operation?: any,
+    { retryMissingSession = false }: Record<string, any> = {}
+  ) : Promise<any> {
+    const attempts: any = retryMissingSession ? 2 : 1;
+    for (let attempt: any = 0; attempt < attempts; attempt += 1) {
       const entry: any = await acquire(config, signal);
       try {
         return await operation(entry.session);
@@ -571,7 +676,7 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
         if (error?.mcpSessionNotFound && isStatefulEntry(entry)) {
           throw statefulSessionLostError();
         }
-        if (error?.mcpSessionNotFound && attempt === 0 && !signal?.aborted) continue;
+        if (retryMissingSession && error?.mcpSessionNotFound && attempt === 0 && !signal?.aborted) continue;
         throw error;
       } finally {
         release(entry);
@@ -651,7 +756,7 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
           initialized: session.initialized,
           tools
         };
-      });
+      }, { retryMissingSession: true });
     },
 
     async callTool(config: Record<string, any> = {}, call: Record<string, any> = {}, requestOptions: Record<string, any> = {}) : Promise<any> {
@@ -692,7 +797,7 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
             ? { beforeSend: requestOptions.beforeSend }
             : {})
         })
-      }));
+      }), { retryMissingSession: method !== "tools/call" });
     },
 
     snapshot() : any {
@@ -734,7 +839,11 @@ export function createUpstreamMcpSessionManager(options: Record<string, any> = {
           closed = true;
           clearTimeout(sweepTimer);
           sweepTimer = null;
-          pendingCreations = [...creating.values()].map((entry?: any) : any => entry.promise);
+          pendingCreations = [...creating.values()].map((entry?: any) : any => {
+            entry.abandoned = true;
+            entry.controller.abort();
+            return entry.promise;
+          });
           closing = [...allEntries]
             .map((entry?: any) : any => retireEntry(entry, { force: true }))
             .filter(Boolean);

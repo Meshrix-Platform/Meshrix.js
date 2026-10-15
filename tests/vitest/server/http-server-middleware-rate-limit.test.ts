@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createFixedWindowRateLimiter,
   normalizeClientIp,
+  requestRouteTemplate,
   resolveHttpRateLimits,
+  resolveRequestSubjectKey,
   resolveRequestTenantKey
 } from "../../../apps/server/runtime/http-server-middleware.ts";
 import { clientIpFromRequest } from "../../../packages/foundation/src/security/trusted-client-ip.ts";
@@ -220,7 +222,14 @@ describe("HTTP tenant admission identity", () : any => {
     expect(resolveRequestTenantKey(request, {
       getSessionFromRequest: () : any => ({ user: { username: "user-a" } })
     })).toBe("tenant-subject:user-a");
-    expect(resolveRequestTenantKey(request, null)).toBe("tenant:anonymous");
+    // Anonymous traffic is scoped to its own source so no caller shares a
+    // global anonymous bucket with unrelated sources or API-key principals.
+    expect(resolveRequestTenantKey(request, null)).toBe("tenant:anonymous:127.0.0.1");
+    expect(resolveRequestTenantKey({
+      socket: { remoteAddress: "10.0.0.8" }
+    }, null)).toBe("tenant:anonymous:10.0.0.8");
+    expect(resolveRequestSubjectKey(request, null)).toBe("subject:anonymous:127.0.0.1");
+    expect(resolveRequestSubjectKey(request, consoleAuth)).toBe("subject:user-a");
   });
 
   it("resolves a separately configurable tenant rate limit", () : any => {
@@ -233,5 +242,31 @@ describe("HTTP tenant admission identity", () : any => {
       subject: { limit: 12 },
       tenant: { limit: 13 }
     });
+  });
+});
+
+describe("HTTP metric route templating", () : any => {
+  it("keeps declared templates and collapses attacker-controlled paths", () : any => {
+    expect(requestRouteTemplate({
+      method: "PUT",
+      pathname: "/api/upload-sessions/sess-9/files/report.pdf",
+      registryTemplate: "/api/upload-sessions/:sessionId/files/:fileIndex"
+    })).toBe("/api/upload-sessions/:sessionId/files/:fileIndex");
+    expect(requestRouteTemplate({ method: "POST", pathname: "/mcp" })).toBe("/mcp");
+    expect(requestRouteTemplate({ method: "GET", pathname: "/" })).toBe("/");
+    expect(requestRouteTemplate({
+      method: "GET",
+      pathname: "/api/plugins/v1/console-sandboxes/plugin-a/component-b"
+    })).toBe("/api/plugins/v1/console-sandboxes/:ref");
+    expect(requestRouteTemplate({
+      method: "GET",
+      pathname: "/api/plugins/v1/console-bridges/plugin-a/call"
+    })).toBe("/api/plugins/v1/console-bridges/:ref");
+    for (let index: any = 0; index < 32; index += 1) {
+      expect(requestRouteTemplate({
+        method: "GET",
+        pathname: `/api/attacker-controlled/segment-${index}-probe`
+      })).toBe("unmatched");
+    }
   });
 });

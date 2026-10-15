@@ -18,6 +18,9 @@ async function readConfig(path: unknown): Promise<Record<string, unknown> | unde
 export async function runGatewayCommand(args: Record<string, any>): Promise<boolean> {
   const profile = String(args._?.[0] ?? "");
   if (profile !== "gateway" && profile !== "gateway-only") return false;
+  // Named subcommands (e.g. `gateway forward`) belong to the operation
+  // registry dispatcher; the embedded profile owns only bare invocations.
+  if (profile === "gateway" && (args._?.length ?? 0) > 1) return false;
   const config = await readConfig(args.config ?? args["config-file"]);
   if (args["dry-run"]) {
     console.log(JSON.stringify({ profile: "gateway-only", valid: true, hasConfig: Boolean(config), startsConsole: false, startsPlugins: false }));

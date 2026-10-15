@@ -1,4 +1,4 @@
-import { computed, onMounted, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { ComputedRef, Ref } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
@@ -156,6 +156,7 @@ export function useServiceReadiness(options: {
   const error: any = ref("");
 
   async function refreshReadiness(): Promise<any> {
+    if (!options.selectedService.value) return;
     loading.value = true;
     error.value = "";
     try {
@@ -177,9 +178,13 @@ export function useServiceReadiness(options: {
     }
   }
 
-  onMounted(() : any => {
-    void refreshReadiness();
-  });
+  watch(
+    () => options.selectedService.value?.serviceId,
+    (serviceId?: any) : any => {
+      if (serviceId) void refreshReadiness();
+    },
+    { immediate: true },
+  );
 
   usePageRefreshHandler(
     (detail?: any) : any => detail.viewId === "admin" && detail.adminView === "upstreamServices",

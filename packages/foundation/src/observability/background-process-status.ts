@@ -342,12 +342,15 @@ function buildProcessSystemStatus(processes?: any, updatedAt: any = "") : any {
   );
 }
 
-export async function getBackgroundProcessStatus(userDataPath?: any) : Promise<any> {
+export async function getBackgroundProcessStatus(
+  userDataPath?: any,
+  { demandSnapshot = null }: Record<string, any> = {}
+) : Promise<any> {
   const state: any = await readStateFile(userDataPath);
   const nowMs: any = Date.now();
   const definitions: any = BACKGROUND_PROCESS_DEFINITIONS;
   const demandByRole: Record<string, any> = {
-    importWorker: await inspectImportParseWorkerDemand(userDataPath)
+    importWorker: demandSnapshot?.importWorker || await inspectImportParseWorkerDemand(userDataPath)
   };
   if (!state) {
     const supervisor: Record<string, any> = {
