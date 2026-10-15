@@ -25,6 +25,7 @@ import {
   verifyEmptyPluginSelection
 } from "./lib/console-admin-browser-fixture.ts";
 import { stagePluginArtifactVerificationFixture } from "./lib/plugin-artifact-verification-fixture.ts";
+import { provisionVerifierLocalSecretKey } from "./lib/local-secret-verifier-key.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const distPath: any = path.join(repoRoot, "build", "dist");
@@ -40,6 +41,7 @@ const {
 } = createConsoleAdminBrowserAssertions({ repoRoot, screenshotRoot });
 
 async function main() : Promise<any> {
+  const localSecretKeyCustody: any = await provisionVerifierLocalSecretKey();
   await ensureBuiltConsole(distPath);
   await fs.rm(path.join(repoRoot, screenshotRoot), { recursive: true, force: true });
 
@@ -229,6 +231,7 @@ async function main() : Promise<any> {
     await browser?.close().catch(() : any => {});
     await server?.close().catch(() : any => {});
     await pluginArtifactFixture?.close().catch(() : any => {});
+    await localSecretKeyCustody.close().catch(() : any => {});
     await fs.rm(userDataPath, { recursive: true, force: true }).catch(() : any => {});
   }
 }

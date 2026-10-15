@@ -282,11 +282,38 @@ export function bundledPackageNamesInArtifact(files?: string[]) : string[] {
   return [...names].sort((left?: any, right?: any) : any => left.localeCompare(right));
 }
 
+function expectedArtifactBundleNames(
+  sourceBundles?: string[],
+  workspaceByName?: Map<string, any>,
+  lockPackages?: Record<string, any>
+) : string[] {
+  const expected = new Set<string>(sourceBundles || []);
+  const queue: string[] = [...expected];
+  while (queue.length) {
+    const name: string = queue.shift()!;
+    const workspaceManifest: any = workspaceByName?.get(name)?.manifest;
+    const lockEntry: any = lockPackages?.[`node_modules/${name}`];
+    const dependencyNames: any = {
+      ...(workspaceManifest?.dependencies || {}),
+      ...(workspaceManifest?.optionalDependencies || {}),
+      ...(lockEntry?.dependencies || {}),
+      ...(lockEntry?.optionalDependencies || {})
+    };
+    for (const dependencyName of Object.keys(dependencyNames)) {
+      if (expected.has(dependencyName)) continue;
+      expected.add(dependencyName);
+      queue.push(dependencyName);
+    }
+  }
+  return [...expected].sort((left?: any, right?: any) : any => left.localeCompare(right));
+}
+
 export async function assertPreparedProductBundleClosure({
   rootDir = process.cwd(),
   rootPackage,
   releaseSet,
-  packedArtifacts
+  packedArtifacts,
+  lockfile
 }: Record<string, any>) : Promise<Record<string, any>> {
   const publicNames: any[] = releaseSet.packages.map((packageRecord?: any) : any => String(packageRecord.name));
   if (
@@ -375,7 +402,12 @@ export async function assertPreparedProductBundleClosure({
     }
 
     const bundledFiles = bundledPackageNamesInArtifact(artifact.files);
-    if (JSON.stringify(bundledFiles) !== JSON.stringify(sourceBundles)) {
+    const expectedArtifactBundles = expectedArtifactBundleNames(
+      sourceBundles,
+      workspaceByName,
+      lockfile?.packages
+    );
+    if (JSON.stringify(bundledFiles) !== JSON.stringify(expectedArtifactBundles)) {
       throw new Error("npm_package_bundled_packages_mismatch");
     }
     const fileSet = new Set<string>(artifact.files);
@@ -832,7 +864,7 @@ async function runInstallabilityQualification({ reportPath, artifactDirectory }:
     const releaseSet = await discoverReleaseSet({ rootDir: repoRoot });
     const packedArtifacts = await loadPreparedInstallabilityArtifacts({ artifactDirectory, rootDir: repoRoot });
     assert.equal(releaseSet.version, rootPackage.version, "npm_package_release_set_version_mismatch");
-    const bundleEvidence = await assertPreparedProductBundleClosure({ rootDir: repoRoot, rootPackage, releaseSet, packedArtifacts });
+    const bundleEvidence = await assertPreparedProductBundleClosure({ rootDir: repoRoot, rootPackage, releaseSet, packedArtifacts, lockfile });
 
     const expectedBin = "dist/apps/server/bin/meshrix.js";
     const expectedServerBin = "dist/tools/server-scripts/start-server.js";
