@@ -4,7 +4,30 @@ All notable changes to Meshrix.js are recorded here.
 
 ## Unreleased
 
-No unreleased changes.
+- Adds encrypted online-only Peer forwarding between paired devices with
+  device-local delivery custody. The relay does not persist business
+  messages or signed delivery receipts; offline work remains pending on
+  the sender until the paired device reconnects.
+- Adds recoverable application events and an SQLite-backed Skill Hub
+  registry.
+- Adds the account lifecycle and security baseline: registration,
+  authentication methods, recovery and revocation, OAuth password
+  enrollment, and current-session validation before exchange.
+- Adds Console operational visibility: built-in traffic views, standard
+  metrics export and optional persistence consistent with the current
+  Peer semantics.
+- Adds self-hosted enterprise recording governance: recording categories,
+  organizational custody and consistent failure semantics.
+- Adds governed gateway consumption through CLI scenarios and tenant
+  routing.
+- Adds the installed desktop entry applications (`entry-gui` on Tauri and
+  the `entry-native` crates).
+- Moves the hosted account, private relay and public gateway deployment
+  to a private operations repository. This repository keeps the public
+  protocol contracts under `packages/contracts/`.
+- Publishes through npm Trusted Publishing instead of a stored token, and
+  adds the `@meshrix/mcp-kernel` package scaffold with the portable
+  kernel RFC.
 
 ## [0.1.0] - 2026-10-04
 
