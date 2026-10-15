@@ -7,10 +7,15 @@ child `AGENTS.md` may strengthen these rules but must not weaken them.
 ## Short-Term And Long-Term Planning
 
 Use the current Better Plan skill for all repository delivery planning, from a
-small scoped change to the long-term product programme. Use the existing local
-planning workspace; do not create a competing roadmap or copy private execution
-state into public source. When that workspace is unavailable, report the missing
-context before creating a replacement.
+small scoped change to the long-term product programme. The maintainer-designated
+private project workspace owns the sole active `docs/plans/Programme.json`, with
+`Requirements.json` beside it and referenced split Tree/Task/Node workspaces
+under that plan directory. In the combined development workspace, that source is
+`../docs/plans/Programme.json`; this repository's ignored `docs/plans/` retains
+inactive predecessor evidence only. Keep private planning and execution details
+out of published source and artifacts. Preserve independently completed plans as
+historical assets. When the designated workspace is unavailable, report the
+missing context rather than creating a competing plan in this repository.
 
 - `Programme.json` owns delivery identities, milestone outlines and dependencies.
   Future milestones remain outlines until investigation establishes executable work.
@@ -28,6 +33,10 @@ context before creating a replacement.
   conversation context and superseded plans through its history commands before
   replacement. Preserve prior outcomes and evidence without relabeling them as
   current verification. Do not maintain an older tool dialect as the active path.
+- Repository-plan readers project only the active Programme, requirement catalogue,
+  delivery outlines and referenced split Trees. They must not import that source
+  as another writable execution plan or treat reading it as authority to run work.
+  History, commands, private paths and raw check output are not presentation fields.
 - Markdown reports are navigation or generated views of Better Plan state, never
   a second editable plan. Product status remains in `docs/STATUS.md`; it describes
   verified product facts rather than dispatch instructions.
@@ -109,6 +118,26 @@ its absence must never block a standard client. Capability authorization
 (protocol, toolsets, scopes, risk, dynamic capabilities) is the gate, not
 which product the caller happens to be.
 
+## Browser Verification Hygiene
+
+Browser-based verification must never leave a running browser or server
+behind on the developer machine.
+
+1. Use `headless: true` for every Playwright/Puppeteer launch unless the task
+   is explicitly an interactive human review. Never default to a visible
+   browser.
+2. Always close the browser on every exit path (`browser.close()` in
+   `finally`, or equivalent), including failures and interruptions. A visible
+   Chrome launched with Playwright intercepts the user's default browser while
+   it stays alive.
+3. One-shot sandboxes (for example `/private/tmp/meshrix-first-use-*`, npm
+   consumer installs, Playwright profiles) must be removed in the same run
+   that created them. Do not leave the sandbox, its server process, its port,
+   or its browser behind.
+4. Before finishing a verification task, confirm no lingering processes from
+   it remain (check for the sandbox server, its port, and Chrome instances
+   with automation flags); clean up anything found.
+
 ## Automatic Tool And Script Registration
 
 When an agent adds or changes a package script, verifier command, or other
@@ -185,6 +214,11 @@ This file owns Agent execution authority, privacy, live/performance ordering,
 and Better Plan lifecycle. Specialist skills and handbooks route to
 `CONTRIBUTING.md` and the owning architecture or runbook source instead of
 restating that workflow.
+
+Frontend design and art assets are indexed in
+[docs/design/README.md](docs/design/README.md); shared masters live under
+`assets/` and consumers reference or sync from that store rather than keeping
+copies.
 
 Before pushing or promoting a candidate, complete the applicable engineering
 checks locally using the same maintained entry points, test selection, build
