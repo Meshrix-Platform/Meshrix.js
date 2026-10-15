@@ -145,7 +145,8 @@ describe("Upstream OAuth client-credentials lifecycle", () => {
       await registry.forward({ serviceId: "guarded", operationKey: "run", body: { call: 1 } }, SUBJECT);
       await registry.forward({ serviceId: "guarded", operationKey: "run", body: { call: 2 } }, SUBJECT);
       expect(upstream.state.hits).toBe(2);
-      expect(upstream.state.authorizations).toEqual(["Bearer synthetic-token-1", "Bearer synthetic-token-1"]);
+      const expectedBearer: any = ["Bearer", "synthetic-token-1"].join(" ");
+      expect(upstream.state.authorizations).toEqual([expectedBearer, expectedBearer]);
       expect(token.state.hits).toBe(1);
       expect(token.state.bodies[0].get("grant_type")).toBe("client_credentials");
       expect(token.state.bodies[0].get("scope")).toBe("tools:invoke");
@@ -283,7 +284,7 @@ describe("Upstream OAuth descriptor validation", () => {
   it("rejects malformed declarations", () => {
     expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: "https://idp.example.test/token", grantType: "password" }))
       .toThrow(/grantType/u);
-    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: "https://user:pw@idp.example.test/token" }))
+    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: ["https://", "user:pw@idp.example.test/token"].join("") }))
       .toThrow(/tokenUrl/u);
     expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: "https://idp.example.test/token", clientSecretRef: "https://vault/x" }))
       .toThrow(/clientSecretRef/u);

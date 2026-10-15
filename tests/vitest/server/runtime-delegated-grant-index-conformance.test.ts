@@ -68,7 +68,7 @@ describe("delegated grant parent index", () : any => {
 
       await store.revokeGrant(root.grant.id, "indexed_subtree_test");
       expect(store.db.prepare("SELECT count(*) AS count FROM tool_grants WHERE enabled = 0").get().count).toBe(121);
-      expect(store.db.prepare("PRAGMA user_version").get().user_version).toBe(15);
+      expect(store.db.prepare("PRAGMA user_version").get().user_version).toBe(16);
     } finally {
       await store.close();
     }

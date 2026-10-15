@@ -11000,7 +11000,7 @@
       {
        "evidenceId": "v0-0-1-server-runtime-operation-route-index-instrumentation-1-source",
        "kind": "other",
-       "uri": "packages/server-runtime/src/routing/operation-route-index.ts"
+       "uri": "packages/gateway/src/operation-route-index/index.ts"
       }
      ]
     }

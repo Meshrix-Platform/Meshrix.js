@@ -223,7 +223,11 @@ function pathFinding(relativePath?: any, options: Record<string, any> = {}) : an
         allowedBundledDependencyPath(normalizedPath, options)) &&
       !(rule.ruleId === "generated_or_local_output" && (
         allowedGeneratedOutputSegments.has(segment) ||
-        index < allowedGeneratedOutputPrefixLength
+        index < allowedGeneratedOutputPrefixLength ||
+        // A bundled dependency's own build output (node_modules/<dep>/build)
+        // is that package's published content, not this artifact's generated
+        // output.
+        allowedBundledDependencyPath(normalizedPath, options)
       ))
     ))) {
       return createFinding(rule.ruleId, normalizedPath);

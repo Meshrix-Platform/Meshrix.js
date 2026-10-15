@@ -65,6 +65,10 @@
       "types": "./dist/concurrency/lock-manager.d.ts",
       "default": "./dist/concurrency/lock-manager.js"
     },
+    "./config/entity-config/*.json": {
+      "source": "./config/entity-config/*.json",
+      "default": "./config/entity-config/*.json"
+    },
     "./config/server-config": {
       "source": "./src/config/server-config.ts",
       "types": "./dist/config/server-config.d.ts",

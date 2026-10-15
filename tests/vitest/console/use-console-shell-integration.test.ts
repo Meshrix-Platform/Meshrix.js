@@ -336,6 +336,12 @@ describe("useConsole to useServerConsoleShell integration", () : any => {
   it("loads server appearance presets only after authentication", async () : Promise<any> => {
     const isAuthenticated: any = ref(false);
     const setIntervalSpy: any = vi.spyOn(window, "setInterval");
+    // jsdom implements requestAnimationFrame through setInterval(1000/60); the
+    // DOM localizer's frame-scheduled refresh is not a polling timer. Assert
+    // the absence of any interval other than that frame shim.
+    const pollingIntervals: any = () : any => setIntervalSpy.mock.calls.filter(
+      (call: any) : any => Number(call?.[1] ?? 0) !== 1000 / 60
+    );
     let preferences: any = null;
     const Harness: any = defineComponent({
       name: "ConsoleShellPreferencesHarness",
@@ -348,13 +354,13 @@ describe("useConsole to useServerConsoleShell integration", () : any => {
 
     await flushPromises();
     expect(appearancePresetClientMock.fetchServerAppearancePresetConfigs).not.toHaveBeenCalled();
-    expect(setIntervalSpy).not.toHaveBeenCalled();
+    expect(pollingIntervals()).toEqual([]);
 
     isAuthenticated.value = true;
     await nextTick();
     await flushPromises();
     expect(appearancePresetClientMock.fetchServerAppearancePresetConfigs).toHaveBeenCalledTimes(1);
-    expect(setIntervalSpy).not.toHaveBeenCalled();
+    expect(pollingIntervals()).toEqual([]);
 
     await preferences.refreshAppearancePresetConfigs();
     await flushPromises();

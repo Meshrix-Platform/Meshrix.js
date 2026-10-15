@@ -623,7 +623,8 @@ export async function executeKeyLifecycleProof() : Promise<any> {
           serviceId: "fixture-service",
           scopes: ["gateway:read"],
           allowedHosts: ["api.example.test"],
-          allowedProtocols: ["https"]
+          allowedProtocols: ["https"],
+          allowedOrigins: ["https://api.example.test"]
         }
       },
       payload: { token: "fixture-material" }

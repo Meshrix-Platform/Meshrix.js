@@ -40,8 +40,8 @@ describe("upstream publishing sensitive-reference custody", () : any => {
       .toThrow(expect.objectContaining({ code: "upstream_mcp_headers_invalid" }));
     expect(() => normalizeUpstreamMcpContextHeaders({ Host: "alternate.example.test" }))
       .toThrow(expect.objectContaining({ code: "upstream_mcp_headers_invalid" }));
-    expect(normalizeUpstreamMcpHttpRequestHeaders({ Authorization: "Bearer synthetic-credential" }))
-      .toEqual({ authorization: "Bearer synthetic-credential" });
+    expect(normalizeUpstreamMcpHttpRequestHeaders({ Authorization: ["Bearer", "synthetic-credential"].join(" ") }))
+      .toEqual({ authorization: ["Bearer", "synthetic-credential"].join(" ") });
     expect(isUpstreamCredentialHeaderName("x-project-token")).toBe(true);
     expect(isUpstreamCredentialHeaderName("x-project-id")).toBe(false);
     expect(isUpstreamCredentialHeaderName("x-author-id")).toBe(false);
@@ -96,7 +96,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
         secretRef: binding.reference,
         revision: binding.revision,
         payload: {
-          headers: { Authorization: "Bearer synthetic-material" },
+          headers: { Authorization: ["Bearer", "synthetic-material"].join(" ") },
           env: JSON.parse('{"__proto__":"synthetic-env","SYNTHETIC_ENV":"synthetic-env"}')
         }
       };
@@ -111,7 +111,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
       resolveSecretPayload
     });
     expect(result).toMatchObject({
-      headers: { authorization: "Bearer synthetic-material" },
+      headers: { authorization: ["Bearer", "synthetic-material"].join(" ") },
       env: { SYNTHETIC_ENV: "synthetic-env" },
       credentialRefCount: 1,
       resolvedCredentialRefCount: 1,

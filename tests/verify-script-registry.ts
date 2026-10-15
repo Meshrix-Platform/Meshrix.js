@@ -892,12 +892,49 @@ if (packResult.status !== 0) {
       detail: `declared=${mismatch.declaredPackageIncluded} actual=${mismatch.actualPackageIncluded}`
     });
   }
+  const bundledDependencyNames: any[] =
+    packageJson.bundleDependencies || packageJson.bundledDependencies || [];
+  // npm packs the production-dependency closure of declared bundles: a registry
+  // dependency owned by a bundled workspace package lands under node_modules/
+  // in the tarball and is legitimate bundled content, not undeclared artifact
+  // metadata. Peer dependencies are excluded — consumers provide them.
+  const workspacePackageDirs: any = new Map<string, string>();
+  for (const workspaceEntry of packageJson.workspaces || []) {
+    const workspaceRoot: any = path.join(repoRoot, workspaceEntry);
+    const candidateDirs: any = workspaceEntry.endsWith("/*")
+      ? (await fs.readdir(path.dirname(workspaceRoot), { withFileTypes: true }))
+          .filter((entry?: any) : any => entry.isDirectory())
+          .map((entry?: any) : any => path.join(path.dirname(workspaceRoot), entry.name))
+      : [workspaceRoot];
+    for (const candidateDir of candidateDirs) {
+      try {
+        const manifest: any = JSON.parse(
+          await fs.readFile(path.join(candidateDir, "package.json"), "utf8")
+        );
+        if (manifest?.name) workspacePackageDirs.set(manifest.name, candidateDir);
+      } catch {
+        // A workspace glob may match directories without a package manifest.
+      }
+    }
+  }
+  const allowedBundledDependencyPaths: any = new Set<string>(
+    bundledDependencyNames.map((name?: any) : any => `node_modules/${name}`)
+  );
+  for (const bundledName of bundledDependencyNames) {
+    const bundledDir: any = workspacePackageDirs.get(bundledName);
+    if (!bundledDir) continue;
+    const bundledManifest: any = JSON.parse(
+      await fs.readFile(path.join(bundledDir, "package.json"), "utf8")
+    );
+    for (const dependencyName of Object.keys(bundledManifest?.dependencies || {})) {
+      allowedBundledDependencyPaths.add(`node_modules/${dependencyName}`);
+    }
+  }
   const artifactBoundary: any = await scanPublicArtifactFiles(repoRoot, [...packedFiles], {
     localNeedles: [repoRoot],
     allowedGeneratedOutputSegments: ["dist"],
     allowedGeneratedOutputPrefixes: ["build/dist", "build/usage-skills"],
-    allowedBundledDependencyPaths: (packageJson.bundleDependencies || packageJson.bundledDependencies || [])
-      .map((name?: any) : any => `node_modules/${name}`)
+    allowedBundledDependencyPaths: [...allowedBundledDependencyPaths]
   });
   for (const finding of artifactBoundary.findings) {
     packagePackFindings.push({

@@ -34,6 +34,34 @@ const AUTHORIZED_BINARIES: any = new Map<string, string>([
   [
     "apps/entry-gui/src-tauri/icons/icon.ico",
     "sha512-mvplhI/Trd0HHySW6I3mCcwoM0o5T4aAs90YSf15hAP4TBfIK07nrOBnbjn4lyQxnYhHwg0s9ebbYVq0m2dSIQ=="
+  ],
+  [
+    "apps/entry-native/crates/entry-gui/assets/fonts/Inter-Bold.ttf",
+    "sha512-kTFFrsLxze4cfgjGOjcg2sSV3ZXoskeOya6pFQioF4+y8nbSv6yjIMrFedzrP5h0qoQc2nyyEGKG3IMZf4nmQg=="
+  ],
+  [
+    "apps/entry-native/crates/entry-gui/assets/fonts/Inter-Medium.ttf",
+    "sha512-d9H7DWz/+kTBSJ6eYUW7aISlgBRrp8bpqplb1B1Yv+Eth3JFOaWu8S4a6YpJi4v9JGPNBMxBNpr/3E4YqvblRQ=="
+  ],
+  [
+    "apps/entry-native/crates/entry-gui/assets/fonts/Inter-Regular.ttf",
+    "sha512-SMM9XrbFPv2wkqFoGWlds8mutD7WJfHCAf6LlH/IhXTzO+T95kTsJHTngIVjq6LQkQnn9ag8SWhnpKpFA40bbA=="
+  ],
+  [
+    "apps/entry-native/crates/entry-gui/assets/fonts/Inter-SemiBold.ttf",
+    "sha512-KaG5ST5EzvYDyihuH3J0K2X6M+H68GgE+f1iAlbBkJbOZUvo6mMS6u4GUihsYNRZWrp3Pll4h6rcVWVfmnbzVQ=="
+  ],
+  [
+    "apps/entry-native/crates/entry-gui/assets/fonts/InterDisplay-Bold.ttf",
+    "sha512-YtxNjTz+ZgpKdMHnIcGurpogZmPa/wMLdD9Fk5rZctLqUsVci2vRoCvExudLYJQw7xton97gDCQjWbP97MuRyw=="
+  ],
+  [
+    "apps/entry-native/crates/entry-gui/assets/fonts/InterDisplay-SemiBold.ttf",
+    "sha512-XND7uwO0EGP2uTrq0rQQkhjlK6TaBMHJC/BKka4Ve6danw2p4L5VtkNJt4t/tgceQbbU8hI3OkHMy+xSdiTYUA=="
+  ],
+  [
+    "apps/entry-native/crates/entry-gui/assets/logo.png",
+    "sha512-HhM0eAUVNc6mQAEdCzHcLWWAf4uLBSvw6vbVk1k5grQbQfb3DFUGL6yD3I2ig0jA/28gRVl3oi/Tf06XSq7Mow=="
   ]
 ]);
 const PRIVATE_PATH_PREFIXES: readonly any[] = Object.freeze([

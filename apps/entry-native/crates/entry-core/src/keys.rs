@@ -13,12 +13,14 @@ use crate::error::{entry_error, Result};
 
 pub const ENTRY_KDF_SALT: &[u8] = b"meshrix/entry/recovery-root/v1";
 
-/// DER prefix of an Ed25519 SubjectPublicKeyInfo (`300a`+OID `1.3.101.112`).
+/// DER prefix of an Ed25519 SubjectPublicKeyInfo (`300a`+ the RFC 8410
+/// `id-Ed25519` algorithm OID).
 const ED25519_SPKI_PREFIX: [u8; 12] = [0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
 
 /// PKCS#8 DER prefix for an Ed25519 private key (`OneAsymmetricKey` with the
-/// `1.3.101.112` algorithm id); Node's `export({format:"der",type:"pkcs8"})`
-/// produces exactly `prefix || seed` = 48 bytes.
+/// RFC 8410 `id-Ed25519` algorithm id); Node's
+/// `export({format:"der",type:"pkcs8"})` produces exactly `prefix || seed`
+/// = 48 bytes.
 const ED25519_PKCS8_PREFIX: [u8; 16] = [
     0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
 ];

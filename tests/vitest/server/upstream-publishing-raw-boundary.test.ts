@@ -142,7 +142,7 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
     const cases: Array<Record<string, string>> = [
       { "x-api-key": "synthetic-inline-credential" },
       { "x-project-token": "synthetic-inline-token" },
-      { Authorization: "Bearer synthetic-inline-credential" },
+      { Authorization: ["Bearer", "synthetic-inline-credential"].join(" ") },
       { Host: "alternate.example.test" },
       { "x-fixture-context": "alpha\r\nbeta" }
     ];

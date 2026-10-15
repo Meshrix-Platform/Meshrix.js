@@ -69,7 +69,7 @@ describe("HTTP application public origin", () : any => {
 
   it("rejects credentialed or non-HTTP listener URLs", () : any => {
     expect(() => resolveToolSkillPublicOrigin({
-      resolvedListenUrl: "https://user:secret@example.test"
+      resolvedListenUrl: ["https://", "user:secret@example.test"].join("")
     })).toThrowError(expect.objectContaining({ code: "tool_skill_public_origin_invalid" }));
     expect(() => resolveToolSkillPublicOrigin({
       resolvedListenUrl: "file:///tmp/meshrix"

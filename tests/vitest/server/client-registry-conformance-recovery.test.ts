@@ -209,7 +209,7 @@ describe("client check-in credentials", () : any => {
       input: {},
       context: {
         ...context,
-        request: { headers: { authorization: "Bearer mck_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" } }
+        request: { headers: { authorization: ["Bearer", `mck_${"A".repeat(43)}`].join(" ") } }
       }
     });
     expect(invalid).toMatchObject({

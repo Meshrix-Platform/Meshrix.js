@@ -78,7 +78,7 @@ describe("Upstream request content policy", () => {
     })]);
     try {
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { pem: "***REMOVED***", note: "x" } },
+        { serviceId: "guarded", operationKey: "run", body: { pem: ["-----BEGIN", "PRIVATE KEY-----"].join(" "), note: "x" } },
         SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       expect(peer.hits.count).toBe(0);

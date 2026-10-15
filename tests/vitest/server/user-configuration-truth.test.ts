@@ -69,6 +69,7 @@ describe("user configuration truth", () : any => {
         refreshIntervalSeconds: 0,
         checkInIntervalSeconds: 0,
         offlineAfterSeconds: 0,
+        checkInPolicy: "credential",
       });
       const runtimeObservation: any = await resolveDiscoveryState(root, {
         listenUrl: "http://127.0.0.1:7228",
