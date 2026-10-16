@@ -37,6 +37,3 @@ apps/desktop/build
 packages/capabilities/runtime-modules/knowledge/runtime/jre
 packages/capabilities/runtime-modules/knowledge/tika
 packages/capabilities/runtime-modules/knowledge/ocr/runtime
-apps/entry-gui/src-tauri/binaries
-apps/entry-gui/src-tauri/resources
-apps/entry-gui/dist

@@ -11,7 +11,6 @@ COPY package.json package-lock.json tsconfig.json tsconfig.node.json vite.config
 COPY apps/server/package.json ./apps/server/package.json
 COPY apps/mcp-gateway-installer/package.json ./apps/mcp-gateway-installer/package.json
 COPY apps/entry/package.json ./apps/entry/package.json
-COPY apps/entry-gui/package.json ./apps/entry-gui/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY packages/agents/package.json ./packages/agents/package.json
 COPY packages/capabilities/package.json ./packages/capabilities/package.json
@@ -57,7 +56,6 @@ FROM deps AS build
 COPY apps/server ./apps/server
 COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
 COPY apps/entry ./apps/entry
-COPY apps/entry-gui ./apps/entry-gui
 COPY apps/console ./apps/console
 COPY packages ./packages
 COPY plugins/agents ./plugins/agents
@@ -76,7 +74,6 @@ COPY skills ./skills
 COPY apps/server ./apps/server
 COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
 COPY apps/entry ./apps/entry
-COPY apps/entry-gui ./apps/entry-gui
 COPY apps/console ./apps/console
 COPY packages ./packages
 COPY plugins/agents ./plugins/agents

@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/protocols",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Meshrix.js MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
   "license": "Apache-2.0",
   "engines": {
@@ -193,8 +193,8 @@
   },
   "private": true,
   "peerDependencies": {
-    "@meshrix/contracts": "0.1.0",
-    "@meshrix/foundation": "0.1.0",
+    "@meshrix/contracts": "0.2.0",
+    "@meshrix/foundation": "0.2.0",
     "undici": "^8.11.2"
   }
 }

@@ -253,11 +253,9 @@ an ID derived from an unverified device identifier.
   `/peer/pair-safety` and `/peer/send`. Without an enabled `peer` config
   block these routes answer `404 peer_disabled` and no peer traffic is
   accepted.
-- **Entry product** (`@meshrix/entry-gui`): `EntryPeerRuntime` keeps a
-  per-connection store at `<dataDir>/peer/<connectionId>/`, exposed through
-  the closed IPC operation set `peer.status`, `peer.send`, `peer.inbox` and
-  `peer.pairSafety`. Revoking or uninstalling a connection removes only that
-  connection's peer store.
+- **Entry product** (`apps/entry-native`): `PeerHost` routes application
+  events through one `EntryPeerRuntime` per enrolled connection. Each runtime
+  stores its durable Peer state under `<dataDir>/peer/<connectionId>/`.
 - **Application events** (`@meshrix/peer-client`):
   `PeerApplicationEngine` sends encrypted discovery, task, permission,
   cancellation and result events to an explicitly paired peer. Long logical
@@ -350,7 +348,7 @@ The current delivery's implementation ownership is:
 | Online relay, route-scoped presence, Directory bundles and ephemeral metrics | hosted relay runtime (private operations repository) | `NODE-COST-RELAY` |
 | Account/epoch/tenant/managed-route authority and device revocation targets | `packages/contracts/src/account/`, hosted account authority (private operations repository) | `NODE-COST-ACCOUNT` |
 | Device-local crypto, durable inbox/outbox, receipt replay and paged history | `packages/peer-crypto/`, `packages/peer-client/` | `NODE-COST-PEER-CLIENT` |
-| Entry and endpoint application-event journaling, fragmentation and recovery | `apps/entry-gui/`, `apps/mcp-gateway-installer/`, `packages/entry-transport/` | `NODE-COST-APPLICATION` |
+| Entry and endpoint application-event journaling, fragmentation and recovery | `apps/entry-native/crates/entry-core/src/peer/`, `apps/mcp-gateway-installer/`, `packages/entry-transport/` | `NODE-COST-APPLICATION` |
 | Private local storage and available-capacity checks | `packages/foundation/src/storage/` | `NODE-COST-PRIVATE-IO` |
 | Skill Hub registry transaction and legacy-file archive | `services/skill-hub/` | `NODE-COST-SKILL-HUB` |
 

@@ -226,6 +226,7 @@ describe("platform MCP key selection closure", () => {
         });
       },
     });
+    toolProvider.configurePublicOrigin("http://meshrix.test");
     const platform = createPlatformMcpGateway({
       upstreamGatewayRegistry: registry,
       toolSkillManagementProvider: toolProvider,
@@ -238,7 +239,7 @@ describe("platform MCP key selection closure", () => {
     const apiClient = {
       async getIssuerScopes() {
         const response = capturedResponse();
-        await operationPermission!.router.handleOperationPermissionHttpRequest({
+        await toolProvider!.handleOperationPermissionHttpRequest({
           request: { method: "GET", headers: { host: "meshrix.test" } },
           response,
           requestBody: Buffer.alloc(0),
@@ -259,7 +260,7 @@ describe("platform MCP key selection closure", () => {
       client: apiClient as any,
       confirmAction: async () => true,
     });
-    expect(await consoleController.refresh()).toBe(true);
+    expect(await consoleController.refresh(), consoleController.error.value).toBe(true);
     const selectedRead = consoleController.mcpToolOptions.value.find((tool) =>
       tool.serviceId === "inventory-read" && tool.publicName.endsWith(".read_selected"));
     const siblingRead = consoleController.mcpToolOptions.value.find((tool) =>

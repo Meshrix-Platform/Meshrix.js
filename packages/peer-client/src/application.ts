@@ -131,6 +131,9 @@ export interface PeerApplicationRecord {
   readonly requestDigest: string;
   /** Locally protected journal content; never logged or sent in status updates. */
   readonly prompt: string;
+  /** Optional per-turn selectors; AwP supplies the profile defaults. */
+  readonly model?: string;
+  readonly effort?: string;
   readonly status: PeerApplicationOperationStatus;
   /** Set durably immediately before invoking ACP session/prompt. */
   readonly promptReserved: boolean;
@@ -284,6 +287,8 @@ export interface PeerApplicationAgentExecutor {
   start(input: {
     readonly operationId: string;
     readonly prompt: string;
+    readonly model?: string;
+    readonly effort?: string;
   }, handlers: PeerApplicationExecutionHandlers): PeerApplicationExecution;
 }
 
@@ -310,6 +315,8 @@ export interface PeerApplicationSubmitInput {
   readonly callerAgentId?: string | null;
   readonly targetAgentId: string;
   readonly prompt: string;
+  readonly model?: string;
+  readonly effort?: string;
 }
 
 export function newPeerApplicationOperationId(): string {
@@ -378,15 +385,18 @@ export function peerApplicationRequestDigest(input: {
   readonly callerAgentId: string | null;
   readonly targetAgentId: string;
   readonly prompt: string;
+  readonly model?: string;
+  readonly effort?: string;
 }): string {
-  return crypto.createHash("sha256")
-    .update(JSON.stringify({
-      address: input.address,
-      callerAgentId: input.callerAgentId,
-      targetAgentId: input.targetAgentId,
-      prompt: input.prompt
-    }))
-    .digest("hex");
+  const projection: Record<string, unknown> = {
+    address: input.address,
+    callerAgentId: input.callerAgentId,
+    targetAgentId: input.targetAgentId,
+    prompt: input.prompt
+  };
+  if (input.model !== undefined) projection.model = input.model;
+  if (input.effort !== undefined) projection.effort = input.effort;
+  return crypto.createHash("sha256").update(JSON.stringify(projection)).digest("hex");
 }
 
 export function peerApplicationTransportMessageId(senderDeviceId: string, key: string, kind: string, revision = 0, part = 0): string {

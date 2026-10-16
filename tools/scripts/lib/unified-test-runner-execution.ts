@@ -520,7 +520,7 @@ export function runSuiteProcess(entry?: any, {
   terminationGraceMs = TEST_PROCESS_TERMINATION_GRACE_MS,
   spawnImpl = nodeSpawn,
   stdio = "inherit",
-  executionCommand = entry?.command,
+  executionCommand = entry?.command === "node" ? process.execPath : entry?.command,
   executionArgs = entry?.args
 }: Record<string, any> = {}) : any {
   if (!Number.isSafeInteger(terminationGraceMs) || terminationGraceMs <= 0) {

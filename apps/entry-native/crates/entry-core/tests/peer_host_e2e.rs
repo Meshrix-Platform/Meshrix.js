@@ -6,13 +6,12 @@
 //! a network.
 
 use futures_util::future::LocalBoxFuture;
-use meshrix_entry_core::agent::registry::AcpAgentSecretResolver;
 use meshrix_entry_core::peer::application::AcpAgentSummary;
+use meshrix_entry_core::peer::application::PeerApplicationAddress;
 use meshrix_entry_core::peer::application_engine::{
     PeerApplicationAgentDirectory, PeerApplicationAgentExecutor, PeerApplicationExecution,
     PeerApplicationExecutionHandlers, PeerApplicationExecutionResult,
 };
-use meshrix_entry_core::peer::application::PeerApplicationAddress;
 use meshrix_entry_core::peer::client::PeerClientEvent;
 use meshrix_entry_core::peer::host::{PeerAttachRequest, PeerHost, PeerHostOptions};
 use meshrix_entry_core::peer::wire as peer_wire;
@@ -34,9 +33,10 @@ const DEV_A: &str = "dev.entry.a";
 const DEV_B: &str = "dev.endpoint.b";
 
 struct NoSecrets;
-impl AcpAgentSecretResolver for NoSecrets {
-    fn resolve(&self, _reference: &str) -> LocalBoxFuture<'static, Option<String>> {
-        Box::pin(async { None })
+#[async_trait::async_trait]
+impl a4aa::SecretResolver for NoSecrets {
+    async fn resolve(&self, _reference: &str) -> Option<String> {
+        None
     }
 }
 
@@ -67,8 +67,14 @@ struct EndpointAuthority {
 impl EndpointAuthority {
     fn wire(&self, kind: &str, extras: serde_json::Map<String, Value>) -> Value {
         let mut map = serde_json::Map::new();
-        map.insert("schemaVersion".into(), Value::from(peer_wire::PRIVATE_RELAY_PEER_SCHEMA_VERSION));
-        map.insert("wireProtocol".into(), Value::from(peer_wire::PRIVATE_RELAY_PEER_WIRE));
+        map.insert(
+            "schemaVersion".into(),
+            Value::from(peer_wire::PRIVATE_RELAY_PEER_SCHEMA_VERSION),
+        );
+        map.insert(
+            "wireProtocol".into(),
+            Value::from(peer_wire::PRIVATE_RELAY_PEER_WIRE),
+        );
         map.insert("kind".into(), Value::from(kind));
         map.extend(extras);
         Value::Object(map)
@@ -107,10 +113,10 @@ impl EndpointAuthority {
         match kind.as_str() {
             "peer-bundle-publish" => {
                 let publish = peer_wire::parse_peer_bundle_publish(&message).unwrap();
-                self.bundles
-                    .lock()
-                    .unwrap()
-                    .insert(publish.device_id.clone(), serde_json::to_value(&publish.bundle).unwrap());
+                self.bundles.lock().unwrap().insert(
+                    publish.device_id.clone(),
+                    serde_json::to_value(&publish.bundle).unwrap(),
+                );
                 let reply = self.wire(
                     "peer-bundle-published",
                     json!({
@@ -129,7 +135,12 @@ impl EndpointAuthority {
             }
             "peer-bundle-fetch" => {
                 let fetch = peer_wire::parse_peer_bundle_fetch(&message).unwrap();
-                let stored = self.bundles.lock().unwrap().get(&fetch.peer_device_id).cloned();
+                let stored = self
+                    .bundles
+                    .lock()
+                    .unwrap()
+                    .get(&fetch.peer_device_id)
+                    .cloned();
                 let (state, bundle) = match stored {
                     Some(bundle) => ("available", bundle),
                     None => ("unpublished", Value::Null),
@@ -372,7 +383,12 @@ fn host_peer_send_roundtrips_through_real_runtime() {
             }
             _ => unreachable!(),
         }
-        await_client_event(&mut events_a, "delivered", std::time::Duration::from_secs(10)).await;
+        await_client_event(
+            &mut events_a,
+            "delivered",
+            std::time::Duration::from_secs(10),
+        )
+        .await;
 
         pair.stub_b.close("test-done");
         pair.host_a.shutdown().await;
@@ -390,12 +406,11 @@ struct EchoExecutor;
 
 impl PeerApplicationAgentDirectory for EchoAgents {
     fn list(&self) -> LocalBoxFuture<'_, meshrix_entry_core::error::Result<Vec<AcpAgentSummary>>> {
-        Box::pin(async {
-            Ok(vec![EchoExecutor.summary()])
-        })
+        Box::pin(async { Ok(vec![EchoExecutor.summary()]) })
     }
     fn get(&self, agent_id: &str) -> Option<Rc<dyn PeerApplicationAgentExecutor>> {
-        (agent_id == "agent.echo").then(|| Rc::new(EchoExecutor) as Rc<dyn PeerApplicationAgentExecutor>)
+        (agent_id == "agent.echo")
+            .then(|| Rc::new(EchoExecutor) as Rc<dyn PeerApplicationAgentExecutor>)
     }
 }
 
@@ -415,6 +430,7 @@ impl PeerApplicationAgentExecutor for EchoExecutor {
         _operation_id: &str,
         prompt: &str,
         _model: Option<String>,
+        _effort: Option<String>,
         handlers: PeerApplicationExecutionHandlers,
     ) -> PeerApplicationExecution {
         let (tx, rx) = oneshot::channel();
@@ -496,10 +512,13 @@ fn host_application_submit_runs_remote_agent() {
                 None,
                 "agent.echo".into(),
                 "ping".into(),
-                Some("gpt-6.1-sol[low]".into()),
+                Some("gpt-6.1-sol".into()),
+                Some("low".into()),
             )
             .await
             .unwrap();
+        assert_eq!(record.model.as_deref(), Some("gpt-6.1-sol"));
+        assert_eq!(record.effort.as_deref(), Some("low"));
         let operation_id = record.operation_id.clone();
         assert!(matches!(
             record.status.as_str(),

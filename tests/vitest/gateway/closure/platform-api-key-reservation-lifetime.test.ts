@@ -397,6 +397,7 @@ async function createFixture() {
       });
     },
   });
+  toolProvider.configurePublicOrigin("http://meshrix.test");
   platform = createPlatformMcpGateway({
     upstreamGatewayRegistry: registry,
     toolSkillManagementProvider: toolProvider,
@@ -526,7 +527,10 @@ describe.each([
     const credential = await fixture.createKey(keyName, 5);
     const listing = await fixture.listTools(credential);
     const listedNames = ((listing.response?.body as any)?.result?.tools || []).map((tool: Record<string, any>) => tool.name);
-    expect(listedNames).toContain(fixture.selectedHttpOperation.toolId);
+    expect(
+      listedNames,
+      `tools/list returned no selected operation (status=${listing.response?.status}, ${outcomeCategory(listing.response?.body)})`,
+    ).toContain(fixture.selectedHttpOperation.toolId);
 
     const unselected = await fixture.call(credential, kind, "denied-before-send", undefined, false);
     expect(successfulResponse(unselected)).toBe(false);

@@ -10,6 +10,9 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 meshrix-entry-core = { path = "crates/entry-core" }
+a4aa = "0.2.0"
+awp = { package = "agents-with-profiles", version = "0.1.0" }
+a4aa-dialects = "0.2.0"
 
 # Official Signal implementation — the same sources the TS
 # @signalapp/libsignal-client@0.104.0 npm bridge wraps (PQXDH + SPQR).
@@ -53,7 +56,7 @@ webpki-roots = "0.26"
 clap = { version = "4", features = ["derive", "cargo", "env"] }
 ratatui = "0.29"
 crossterm = "0.28"
-eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow", "persistence", "wayland", "x11"] }
 egui_extras = { version = "0.32", features = ["image"] }
 
 directories = "6"

@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/gateway",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Policy-aware MCP gateway for routing and executing service capabilities.",
   "license": "Apache-2.0",
   "type": "module",
@@ -8,7 +8,7 @@
     "node": ">=22.18.0 <23 || >=24.3.0"
   },
   "dependencies": {
-    "@meshrix/contracts": "0.1.0",
+    "@meshrix/contracts": "0.2.0",
     "ajv": "^8.20.0"
   },
   "exports": {

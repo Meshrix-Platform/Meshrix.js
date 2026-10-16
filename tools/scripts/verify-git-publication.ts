@@ -16,24 +16,16 @@ const AUTHORIZED_BINARIES: any = new Map<string, string>([
     "sha512-/Qs9JJ8ElyGcqEx1nf9+YH9to4rECAKkfXGu4RgR4tg5Z+JMgAFgOw7lXC5l/KGp69ZHf+Qro3L1sXjlKNKvNg=="
   ],
   [
-    "apps/entry-gui/src-tauri/icons/128x128.png",
-    "sha512-Iuar12QsFJ8KuGllUOF5xy4hLOl9kq+E8dJN+vUy+0TcOSBN7XvxSNZCCVQAm6rV7jSDkf6kAnr5SSJm6Swe5w=="
+    "assets/brand/entry-app-icons/icon_128x128.png",
+    "sha512-CikJod/7I+nYcxEQawaUU0OoSkWx56bXCjf6Du8qjvZU98PzScyj+LORYw2RScEZDFaAAU4WdJPuEVLW0JIw8g=="
   ],
   [
-    "apps/entry-gui/src-tauri/icons/128x128@2x.png",
-    "sha512-IHFJgruitWK9OqxSVwu+AliN0Vtvm4ndLldq9EcZMK/V9Atss+KEsaLY8Qq3IdXExBP2nbtQFkZkynMIcnPJBA=="
+    "assets/brand/entry-app-icons/icon_256x256.png",
+    "sha512-wzz+3FcPJj9Yw4/u1rPhSiR2QTqLV2x3YGFYv2jAVC1ozFZaWEfhObgt+ccthemBXs8f8/ToMG7TNJtMnSylDA=="
   ],
   [
-    "apps/entry-gui/src-tauri/icons/32x32.png",
-    "sha512-Zh4q6Up6qWjs3QDqsZelKlbZDj3j09yIit5Wi+TVryLg2eauXibwGO+yE6j1GChM9F9QqwX5wy0lxSrc2DLV2w=="
-  ],
-  [
-    "apps/entry-gui/src-tauri/icons/icon.icns",
-    "sha512-UtpJT4oVUq7SuWgpWSjFidyKLJZ3x0LvFUxz0Owwg8TC9oWb/HL/1ILZunYNnrQSMJJOYupB+1GsRS/iHk3zcw=="
-  ],
-  [
-    "apps/entry-gui/src-tauri/icons/icon.ico",
-    "sha512-mvplhI/Trd0HHySW6I3mCcwoM0o5T4aAs90YSf15hAP4TBfIK07nrOBnbjn4lyQxnYhHwg0s9ebbYVq0m2dSIQ=="
+    "assets/brand/entry-app-icons/icon_512x512_2x.png",
+    "sha512-taxtnDXv5Vfc1hVU9+uvMAWyk3YBuJqWHEuGGTP9f7O4ApSNBJnAZHpeGBkVF6F2wD8gNGfUpdeJUW33iqKhWA=="
   ],
   [
     "apps/entry-native/crates/entry-gui/assets/fonts/Inter-Bold.ttf",

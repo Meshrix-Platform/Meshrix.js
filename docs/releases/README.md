@@ -3,6 +3,7 @@
 - Repository: `Meshrix.js`
 - Profile: `semver`
 - Published version: `0.1.0`
+- Prepared source version: `0.2.0` (not published)
 
 ## Release history
 
@@ -19,6 +20,13 @@ operator blindness or unqualified environment compatibility. See
 boundaries.
 
 ## Subsequent releases
+
+The `0.2.0` source candidate consolidates the Rust client, adopts A4AA and
+AwP for Agent adaptation and behavior profiles, and updates the Peer,
+recording and security implementation. See the [changelog](../../CHANGELOG.md).
+The native client is qualified independently from the two npm products.
+Its current dependency API changes require matching distributable A4AA and
+AwP releases; development-source checks alone do not establish that build path.
 
 The standard tag-driven workflow performs build, test, packaging and
 clean-consumer checks before npm and GitHub publication. Local source

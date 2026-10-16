@@ -18,6 +18,12 @@
         "repo.product-distribution"
       ]
     },
+    "native-linux-client": {
+      "description": "Qualify prebuilt Meshrix Entry Linux client archives independently from server and npm release verification",
+      "suites": [
+        "entry.native-linux-artifact-qualification"
+      ]
+    },
     "core-baseline": {
       "description": "Shared repository and foundation baseline",
       "execution": {
@@ -787,6 +793,37 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "entry.native-linux-artifact-qualification",
+      "label": "Verify packaged Linux Entry ELF, ABI, license and isolated runtime probes",
+      "owner": "entry-native",
+      "package": "entry-native",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-native-linux-artifacts.ts"
+      ],
+      "sideEffects": "container",
+      "requiredServices": [
+        "docker"
+      ],
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "triggerPaths": [
+        "apps/entry-native/",
+        "package.json",
+        "tests/run.ts",
+        "tools/scripts/lib/unified-test-runner-execution.ts",
+        "tools/scripts/package-script-registry-catalog.ts",
+        "tools/server-scripts/verify-native-linux-artifacts.ts",
+        "tools/registry/tests.registry.json"
+      ],
       "artifacts": []
     },
     {
@@ -3704,97 +3741,6 @@
       ]
     },
     {
-      "id": "entry.gui",
-      "label": "Installed entry GUI: redacted state and local history, exact paired-peer reachability, durable event/result routing, pairing and recovery, and pinned transport lifecycle",
-      "owner": "platform",
-      "package": "repo",
-      "level": "integration",
-      "command": "npm",
-      "args": [
-        "run",
-        "vitest",
-        "--",
-        "tests/vitest/entry-gui/entry-gui-model.test.ts",
-        "tests/vitest/entry-gui/entry-gui-ipc.test.ts",
-        "tests/vitest/entry-gui/entry-gui-integration.test.ts",
-        "tests/vitest/entry-gui/account-client.test.ts",
-        "tests/vitest/entry-gui/pairing-bootstrap-retry.test.ts",
-        "tests/vitest/entry-gui/pairing-completion-replay.test.ts",
-        "tests/vitest/entry-gui/account-vault-writer.test.ts",
-        "tests/vitest/entry-gui/personal-mcp-structured-content.test.ts",
-        "tests/vitest/entry-gui/agent-registry.test.ts",
-        "tests/vitest/entry-gui/agent-runtime.test.ts",
-        "tests/vitest/entry-gui/personal-endpoint-runtime.test.ts",
-        "tests/vitest/entry-gui/application-peer-router.test.ts"
-      ],
-      "sideEffects": "temp-files",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [],
-      "triggerPaths": [
-        "apps/entry-gui",
-        "apps/entry",
-        "packages/entry-transport",
-        "packages/gateway/src/private-endpoint",
-        "packages/contracts/src/private-relay",
-        "tests/vitest/entry-gui"
-      ]
-    },
-    {
-      "id": "entry.gui.service-owner",
-      "label": "Entry GUI canonical service ownership and native attach lifecycle: single writer, parent-crash reattachment, no premature shutdown and authenticated MCP attachment",
-      "owner": "platform",
-      "package": "repo",
-      "level": "integration",
-      "command": "npm",
-      "args": [
-        "run",
-        "vitest",
-        "--",
-        "tests/vitest/entry-gui/service-owner.test.ts"
-      ],
-      "sideEffects": "temp-files",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [],
-      "triggerPaths": [
-        "apps/entry-gui/src/main/service-owner.ts",
-        "apps/entry-gui/src/main/service-entry.ts",
-        "apps/entry-gui/src-tauri/src/main.rs",
-        "tests/vitest/entry-gui/service-owner.test.ts"
-      ]
-    },
-    {
-      "id": "entry.gui.service-build",
-      "label": "Compile the Entry GUI production Node service bundle from the current peer and storage sources",
-      "owner": "platform",
-      "package": "repo",
-      "level": "integration",
-      "command": "npm",
-      "args": [
-        "--prefix",
-        "apps/entry-gui",
-        "run",
-        "build:service"
-      ],
-      "sideEffects": "temp-files",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [],
-      "triggerPaths": [
-        "apps/entry-gui/src/main",
-        "apps/entry-gui/package.json",
-        "packages/contracts/src/private-relay",
-        "packages/entry-transport",
-        "packages/foundation/src/storage",
-        "packages/peer-client",
-        "packages/peer-crypto"
-      ]
-    },
-    {
       "id": "peer.crypto",
       "label": "Peer crypto layer: PQXDH prekey exchange, Double Ratchet round trip, out-of-order/duplicate/tamper handling, identity-pin honesty and durable store reload",
       "owner": "platform",
@@ -3845,8 +3791,8 @@
       ]
     },
     {
-      "id": "peer.product-wiring",
-      "label": "Peer product wiring: actual Account + Relay clients, bidirectional encrypted requests/results, Entry stale-revision and capacity-close recovery, durable pending same-ciphertext replay, paired-peer authorization, and no duplicate dispatch",
+      "id": "account.endpoint-claim",
+      "label": "Personal endpoint account claim and namespace binding",
       "owner": "platform",
       "package": "repo",
       "level": "integration",
@@ -3855,40 +3801,7 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/peer-integration/peer-product-wiring.test.ts"
-      ],
-      "sideEffects": "network-service",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [],
-      "triggerPaths": [
-        "apps/entry-gui/src/main",
-        "apps/entry-gui/src/shared",
-        "apps/mcp-gateway-installer/src/private-endpoint",
-        "packages/entry-transport",
-        "packages/peer-client",
-        "packages/peer-crypto",
-        "packages/contracts/src/private-relay",
-        "tests/vitest/peer-client",
-        "tests/vitest/peer-integration"
-      ]
-    },
-    {
-      "id": "account.namespace-consumers",
-      "label": "Public personal namespace consumers: Endpoint claim and Entry GUI bootstrap",
-      "owner": "platform",
-      "package": "repo",
-      "level": "integration",
-      "command": "npm",
-      "args": [
-        "run",
-        "vitest",
-        "--",
-        "tests/vitest/gateway/private-endpoint-claim.test.ts",
-        "tests/vitest/entry-gui/account-client.test.ts",
-        "tests/vitest/entry-gui/pairing-bootstrap-retry.test.ts",
-        "--maxWorkers=1"
+        "tests/vitest/gateway/private-endpoint-claim.test.ts"
       ],
       "sideEffects": "temp-files",
       "requiredServices": [],
@@ -3898,34 +3811,7 @@
       "triggerPaths": [
         "apps/mcp-gateway-installer/src/private-endpoint/claim.ts",
         "apps/mcp-gateway-installer/src/private-endpoint/config.ts",
-        "apps/entry-gui/src/main/account-client.ts",
-        "apps/entry-gui/src/main/product-service.ts",
-        "tests/vitest/gateway/private-endpoint-claim.test.ts",
-        "tests/vitest/entry-gui/account-client.test.ts",
-        "tests/vitest/entry-gui/pairing-bootstrap-retry.test.ts"
-      ]
-    },
-    {
-      "id": "account.consumer-typecheck",
-      "label": "Entry GUI authentication consumer static contracts",
-      "owner": "platform",
-      "package": "repo",
-      "level": "architecture",
-      "command": "npm",
-      "args": [
-        "--prefix",
-        "apps/entry-gui",
-        "run",
-        "typecheck"
-      ],
-      "sideEffects": "none",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": false,
-      "artifacts": [],
-      "triggerPaths": [
-        "apps/entry-gui",
-        "packages/contracts/src/account"
+        "tests/vitest/gateway/private-endpoint-claim.test.ts"
       ]
     }
   ]

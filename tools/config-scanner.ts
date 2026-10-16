@@ -279,8 +279,7 @@ function isRealEmailAddress(value?: any, relativePath?: any) : any {
   if (relativePath.endsWith("package-lock.json") || relativePath.endsWith("Cargo.lock")) {
     return false;
   }
-  // Apple retina icon names (`128x128@2x.png`) are mandated by Xcode/Tauri
-  // icon conventions and are not email addresses.
+  // Resolution suffixes in raster icon names are not email addresses.
   if (/^\d+x\d+@\d+x\.(?:png|icns|ico|jpg|jpeg|webp|gif|svg)$/iu.test(String(value || ""))) {
     return false;
   }

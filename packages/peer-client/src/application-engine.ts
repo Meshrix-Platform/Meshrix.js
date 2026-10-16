@@ -218,6 +218,8 @@ function makeOperationRecord(input: {
   targetAgentId: string;
   requestDigest: string;
   prompt: string;
+  model?: string;
+  effort?: string;
   status: PeerApplicationOperationStatus;
   inboundMessageId: string | null;
 }): PeerApplicationRecord {
@@ -233,6 +235,8 @@ function makeOperationRecord(input: {
     targetAgentId: input.targetAgentId,
     requestDigest: input.requestDigest,
     prompt: input.prompt,
+    ...(input.model === undefined ? {} : { model: input.model }),
+    ...(input.effort === undefined ? {} : { effort: input.effort }),
     status: input.status,
     promptReserved: false,
     promptExecutionId: null,
@@ -582,7 +586,9 @@ export class PeerApplicationEngine {
     const targetAgentId = assertPeerClientOpaqueId(input.targetAgentId, "targetAgentId");
     const callerAgentId = input.callerAgentId == null ? null : assertPeerClientOpaqueId(input.callerAgentId, "callerAgentId");
     const prompt = assertPeerApplicationString(input.prompt, "prompt", 32_000);
-    const digest = peerApplicationRequestDigest({ address: routeAddress, callerAgentId, targetAgentId, prompt });
+    const model = input.model == null ? undefined : assertPeerApplicationString(input.model, "model");
+    const effort = input.effort == null ? undefined : assertPeerApplicationString(input.effort, "effort");
+    const digest = peerApplicationRequestDigest({ address: routeAddress, callerAgentId, targetAgentId, prompt, model, effort });
     const key = peerApplicationOperationKey(routeAddress, operationId);
     // A caller ID names one immutable local submission across all destinations.
     // The durable operation-id index keeps this check bounded without scanning
@@ -594,7 +600,9 @@ export class PeerApplicationEngine {
           || !sameRecordAddress(existing.originAddress, routeAddress)
           || existing.callerAgentId !== callerAgentId
           || existing.targetAgentId !== targetAgentId
-          || existing.prompt !== prompt) {
+          || existing.prompt !== prompt
+          || existing.model !== model
+          || existing.effort !== effort) {
           throw peerClientError("peer_client_state", "This operation id is already bound to different immutable request data.");
         }
         return existing;
@@ -610,6 +618,8 @@ export class PeerApplicationEngine {
         callerAgentId,
         targetAgentId,
         prompt,
+        ...(model === undefined ? {} : { model }),
+        ...(effort === undefined ? {} : { effort }),
         requestDigest: digest,
         deliveryId: "request"
       } satisfies Envelope;
@@ -625,6 +635,8 @@ export class PeerApplicationEngine {
         targetAgentId,
         requestDigest: digest,
         prompt,
+        ...(model === undefined ? {} : { model }),
+        ...(effort === undefined ? {} : { effort }),
         status: "delivery_pending",
         inboundMessageId: null
       });
@@ -918,6 +930,8 @@ export class PeerApplicationEngine {
         callerAgentId: current.callerAgentId,
         targetAgentId: current.targetAgentId,
         prompt: current.prompt,
+        ...(current.model === undefined ? {} : { model: current.model }),
+        ...(current.effort === undefined ? {} : { effort: current.effort }),
         requestDigest: current.requestDigest,
         deliveryId: "request"
       };
@@ -1187,6 +1201,8 @@ export class PeerApplicationEngine {
         callerAgentId: record.callerAgentId,
         targetAgentId: record.targetAgentId,
         prompt: record.prompt,
+        ...(record.model === undefined ? {} : { model: record.model }),
+        ...(record.effort === undefined ? {} : { effort: record.effort }),
         deliveryId: "request"
       };
     }
@@ -1385,8 +1401,10 @@ export class PeerApplicationEngine {
     const targetAgentId = assertPeerClientOpaqueId(envelope.targetAgentId, "targetAgentId");
     const callerAgentId = envelope.callerAgentId === null ? null : assertPeerClientOpaqueId(envelope.callerAgentId, "callerAgentId");
     const prompt = assertPeerApplicationString(envelope.prompt, "prompt", 32_000);
+    const model = envelope.model == null ? undefined : assertPeerApplicationString(envelope.model, "model");
+    const effort = envelope.effort == null ? undefined : assertPeerApplicationString(envelope.effort, "effort");
     const digest = assertPeerApplicationString(envelope.requestDigest, "requestDigest", 128);
-    const expectedDigest = peerApplicationRequestDigest({ address: originAddress, callerAgentId, targetAgentId, prompt });
+    const expectedDigest = peerApplicationRequestDigest({ address: originAddress, callerAgentId, targetAgentId, prompt, model, effort });
     if (digest !== expectedDigest || envelope.deliveryId !== "request") {
       throw peerClientError("peer_client_state", "The operation request is immutable or malformed.");
     }
@@ -1446,6 +1464,8 @@ export class PeerApplicationEngine {
         targetAgentId,
         requestDigest: digest,
         prompt,
+        model,
+        effort,
         status: "accepted",
         inboundMessageId: inbound.message.messageId
       });
@@ -1764,7 +1784,12 @@ export class PeerApplicationEngine {
     }
     let execution: PeerApplicationExecution;
     try {
-      execution = agent.start({ operationId: record.operationId, prompt: record.prompt }, {
+      execution = agent.start({
+        operationId: record.operationId,
+        prompt: record.prompt,
+        ...(record.model === undefined ? {} : { model: record.model }),
+        ...(record.effort === undefined ? {} : { effort: record.effort })
+      }, {
       beforePrompt: async () => {
         const currentAuthority = await this.#resolveExecutionAuthority(record.routeAddress);
         if (currentAuthority === "unavailable") {

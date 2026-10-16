@@ -1,7 +1,7 @@
-//! Meshrix Entry native core — Rust port of the installed client's domain.
+//! Meshrix Entry native core — shared domain for the Rust CLI/TUI and egui app.
 //!
-//! Module map (mirrors `apps/entry` + `apps/entry-gui/src/main`):
-//! - `error`        typed entry errors (`code` values identical to the TS source)
+//! Module map:
+//! - `error`        typed entry errors used by the native service and wire layers
 //! - `canonical`    canonical JSON used by every signed transcript/digest
 //! - `b64`          strict base64url helpers
 //! - `keys`         Ed25519 generation/signing, HKDF, fingerprints, opaque ids
@@ -20,6 +20,7 @@
 //! - `store`        atomic JSON config store (non-secret facts only)
 //! - `service`      EntryService — the single facade CLI/TUI/GUI drive
 //! - `mcp`          local MCP stdio bridge + editor snippet
+//! - `agent`        A4AA agent adaptation, AwP profile registry and execution
 //! - `peer`         device↔device Signal crypto: identity, prekey bundles,
 //!                  durable store, envelopes, ratchet sessions
 

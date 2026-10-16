@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/agent-claude-code-adapter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "license": "Apache-2.0",
   "files": [
@@ -24,6 +24,6 @@
   "description": "JSON-stdio MCP client adapter for Claude Code.",
   "private": true,
   "peerDependencies": {
-    "@meshrix/client-adapter-kit": "0.1.0"
+    "@meshrix/client-adapter-kit": "0.2.0"
   }
 }

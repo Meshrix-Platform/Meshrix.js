@@ -8,13 +8,13 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use futures_util::future::LocalBoxFuture;
+use meshrix_entry_core::error::entry_error;
 use meshrix_entry_core::peer::application::*;
 use meshrix_entry_core::peer::application_engine::*;
 use meshrix_entry_core::peer::application_journal::FilePeerApplicationJournal;
 use meshrix_entry_core::peer::client::{PeerInboundMessage, PeerInboundOutcome};
 use meshrix_entry_core::peer::client_store::StoredOutboxEntry;
 use meshrix_entry_core::peer::wire::{PeerEnvelopeHeaders, PeerMessageIdentity, PeerWireEnvelope};
-use meshrix_entry_core::error::entry_error;
 use meshrix_entry_core::EntryError;
 
 type Result<T> = std::result::Result<T, EntryError>;
@@ -105,18 +105,6 @@ impl PeerApplicationPeerPort for MockPort {
         message_id: String,
     ) -> LocalBoxFuture<'a, Result<StoredOutboxEntry>> {
         Box::pin(async move {
-            if self.fail_sends.get() > 0 {
-                self.fail_sends.set(self.fail_sends.get() - 1);
-                self.states.borrow_mut().insert(message_id.clone(), "pending".to_string());
-                return Err(entry_error(
-                    "transport",
-                    "mock transport write failed",
-                ));
-            }
-            self.sent.set(self.sent.get() + 1);
-            self.states
-                .borrow_mut()
-                .insert(message_id.clone(), "forwarded".to_string());
             let inbound = PeerApplicationInbound {
                 address: PeerApplicationAddress {
                     tenant_id: address.tenant_id.clone(),
@@ -128,10 +116,22 @@ impl PeerApplicationPeerPort for MockPort {
                     message_id: message_id.clone(),
                     sender_peer_id: format!("peer:{}", self.device_id),
                     sender_device_id: address.local_device_id.clone(),
-                    plaintext: plaintext.clone(),
+                    plaintext,
                     received_at: "2026-01-01T00:00:00.000Z".to_string(),
                 },
             };
+            if self.fail_sends.get() > 0 {
+                self.fail_sends.set(self.fail_sends.get() - 1);
+                self.states
+                    .borrow_mut()
+                    .insert(message_id.clone(), "pending".to_string());
+                self.queue.borrow_mut().push_back(inbound);
+                return Err(entry_error("transport", "mock transport write failed"));
+            }
+            self.sent.set(self.sent.get() + 1);
+            self.states
+                .borrow_mut()
+                .insert(message_id.clone(), "forwarded".to_string());
             self.queue.borrow_mut().push_back(inbound);
             Ok(StoredOutboxEntry {
                 identity: PeerMessageIdentity {
@@ -217,6 +217,7 @@ impl PeerApplicationAgentExecutor for MockExecutor {
         _operation_id: &str,
         prompt: &str,
         _model: Option<String>,
+        _effort: Option<String>,
         handlers: PeerApplicationExecutionHandlers,
     ) -> PeerApplicationExecution {
         self.started.set(self.started.get() + 1);
@@ -230,11 +231,10 @@ impl PeerApplicationAgentExecutor for MockExecutor {
             AgentBehavior::Permission => 1,
             AgentBehavior::Hanging => 2,
         };
-        let cancel: Rc<dyn Fn() -> LocalBoxFuture<'static, ()>> =
-            Rc::new(move || {
-                cancel_flag.set(true);
-                Box::pin(async {})
-            });
+        let cancel: Rc<dyn Fn() -> LocalBoxFuture<'static, ()>> = Rc::new(move || {
+            cancel_flag.set(true);
+            Box::pin(async {})
+        });
         match behavior {
             2 => {
                 // Result arrives only when cancelled — poll the flag.
@@ -347,7 +347,9 @@ fn addr_a() -> PeerApplicationAddress {
     }
 }
 
-fn make_pair(behavior_b: Option<AgentBehavior>) -> (tempfile::TempDir, tempfile::TempDir, Side, Side) {
+fn make_pair(
+    behavior_b: Option<AgentBehavior>,
+) -> (tempfile::TempDir, tempfile::TempDir, Side, Side) {
     let (pa, pb) = MockPort::pair("dev-a", "dev-b");
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
@@ -380,7 +382,10 @@ fn make_pair(behavior_b: Option<AgentBehavior>) -> (tempfile::TempDir, tempfile:
     let engine_a = PeerApplicationEngine::new(PeerApplicationEngineOptions {
         peer: pa.clone(),
         journal: Rc::new(FilePeerApplicationJournal::new(dir_a.path().to_path_buf()).unwrap()),
-        agents: Rc::new(MockDirectory { agents: Vec::new(), executors: HashMap::new() }),
+        agents: Rc::new(MockDirectory {
+            agents: Vec::new(),
+            executors: HashMap::new(),
+        }),
     });
     let engine_b = PeerApplicationEngine::new(PeerApplicationEngineOptions {
         peer: pb.clone(),
@@ -390,8 +395,20 @@ fn make_pair(behavior_b: Option<AgentBehavior>) -> (tempfile::TempDir, tempfile:
     (
         dir_a,
         dir_b,
-        Side { port: pa, engine: engine_a, started: Rc::new(Cell::new(0)), cancelled: Rc::new(Cell::new(false)), permission_seen: Rc::new(Cell::new(false)) },
-        Side { port: pb, engine: engine_b, started, cancelled, permission_seen },
+        Side {
+            port: pa,
+            engine: engine_a,
+            started: Rc::new(Cell::new(0)),
+            cancelled: Rc::new(Cell::new(false)),
+            permission_seen: Rc::new(Cell::new(false)),
+        },
+        Side {
+            port: pb,
+            engine: engine_b,
+            started,
+            cancelled,
+            permission_seen,
+        },
     )
 }
 
@@ -427,6 +444,31 @@ async fn wait_status(
 }
 
 #[test]
+fn request_digest_matches_shared_peer_client_projection() {
+    let address = PeerApplicationAddress {
+        tenant_id: "tenant".into(),
+        route_id: "route".into(),
+        local_device_id: "local".into(),
+        peer_device_id: "peer".into(),
+    };
+    let digest = |model, effort| {
+        peer_application_request_digest(&address, None, "profile:demo", "hello", model, effort)
+    };
+    assert_eq!(
+        digest(None, None),
+        "55cde01433a840d17d6aa39b86197c45c26d7b1017d426683c394599ffdeffa6"
+    );
+    assert_eq!(
+        digest(Some("gpt-6.1-sol"), None),
+        "cd6df19b4c5a9f0c06f2f7fd14359573147440c1f61b202cf7cabacca6db4d49"
+    );
+    assert_eq!(
+        digest(Some("gpt-6.1-sol"), Some("low")),
+        "fd5a9ee627a57981735c362ceb4c71ab3c5d911fc7f2e32106399bf7fc0cf21f"
+    );
+}
+
+#[test]
 fn submit_completes_with_result() {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -438,7 +480,15 @@ fn submit_completes_with_result() {
                 let (_da, _db, a, b) = make_pair(Some(AgentBehavior::Echo));
                 let record = a
                     .engine
-                    .submit(addr_a(), None, None, "agent-1".to_string(), "hello".to_string(), None)
+                    .submit(
+                        addr_a(),
+                        None,
+                        None,
+                        "agent-1".to_string(),
+                        "hello".to_string(),
+                        Some("gpt-6.1-sol".to_string()),
+                        Some("low".to_string()),
+                    )
                     .await
                     .unwrap();
                 assert_eq!(record.status, "delivery_pending");
@@ -452,11 +502,25 @@ fn submit_completes_with_result() {
                         None,
                         "agent-1".to_string(),
                         "hello".to_string(),
-                        None,
+                        Some("gpt-6.1-sol".to_string()),
+                        Some("low".to_string()),
                     )
                     .await
                     .unwrap();
                 assert_eq!(again.key, record.key);
+                let conflicting_effort = a
+                    .engine
+                    .submit(
+                        addr_a(),
+                        Some(record.operation_id.clone()),
+                        None,
+                        "agent-1".to_string(),
+                        "hello".to_string(),
+                        Some("gpt-6.1-sol".to_string()),
+                        Some("high".to_string()),
+                    )
+                    .await;
+                assert!(conflicting_effort.is_err());
                 for _ in 0..200 {
                     settle(&a, &b, 1).await;
                     let done = a.engine.get_operation(&record.operation_id).await.unwrap();
@@ -467,6 +531,19 @@ fn submit_completes_with_result() {
                 let final_record = wait_status(&a, &b, &record.operation_id, &["completed"]).await;
                 assert_eq!(final_record.result_text.as_deref(), Some("echo:hello"));
                 assert_eq!(final_record.result_stop_reason.as_deref(), Some("end_turn"));
+                assert_eq!(final_record.model.as_deref(), Some("gpt-6.1-sol"));
+                assert_eq!(final_record.effort.as_deref(), Some("low"));
+                assert_eq!(final_record.request_digest, record.request_digest);
+                let receiver_record = b
+                    .engine
+                    .list_operations()
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .find(|operation| operation.operation_id == record.operation_id)
+                    .expect("receiver persists the explicit selectors");
+                assert_eq!(receiver_record.model.as_deref(), Some("gpt-6.1-sol"));
+                assert_eq!(receiver_record.effort.as_deref(), Some("low"));
                 assert_eq!(b.started.get(), 1);
             })
             .await;
@@ -487,12 +564,21 @@ fn discovery_returns_remote_agents() {
                 assert_eq!(record.status, "pending");
                 for _ in 0..200 {
                     settle(&a, &b, 1).await;
-                    let current = a.engine.get_discovery(&addr_a(), &record.request_id).await.unwrap();
+                    let current = a
+                        .engine
+                        .get_discovery(&addr_a(), &record.request_id)
+                        .await
+                        .unwrap();
                     if current.map(|d| d.status == "completed").unwrap_or(false) {
                         break;
                     }
                 }
-                let discovery = a.engine.get_discovery(&addr_a(), &record.request_id).await.unwrap().unwrap();
+                let discovery = a
+                    .engine
+                    .get_discovery(&addr_a(), &record.request_id)
+                    .await
+                    .unwrap()
+                    .unwrap();
                 assert_eq!(discovery.status, "completed");
                 assert_eq!(discovery.agents.len(), 1);
                 assert_eq!(discovery.agents[0].id, "agent-1");
@@ -513,7 +599,15 @@ fn permission_roundtrip_resolves_execution() {
                 let (_da, _db, a, b) = make_pair(Some(AgentBehavior::Permission));
                 let record = a
                     .engine
-                    .submit(addr_a(), None, None, "agent-1".to_string(), "hi".to_string(), None)
+                    .submit(
+                        addr_a(),
+                        None,
+                        None,
+                        "agent-1".to_string(),
+                        "hi".to_string(),
+                        Some("gpt-6.1-sol".to_string()),
+                        Some("low".to_string()),
+                    )
                     .await
                     .unwrap();
                 // Wait until the receiver's execution is waiting on permission.
@@ -527,7 +621,9 @@ fn permission_roundtrip_resolves_execution() {
                     }
                 };
                 assert_eq!(receiver_record.status, "awaiting_permission");
-                let permission = receiver_record.permission.expect("pending permission record");
+                let permission = receiver_record
+                    .permission
+                    .expect("pending permission record");
                 b.engine
                     .resolve_permission(
                         &receiver_record.operation_id,
@@ -557,7 +653,15 @@ fn cancel_stops_receiver_execution() {
                 let (_da, _db, a, b) = make_pair(Some(AgentBehavior::Hanging));
                 let record = a
                     .engine
-                    .submit(addr_a(), None, None, "agent-1".to_string(), "work".to_string(), None)
+                    .submit(
+                        addr_a(),
+                        None,
+                        None,
+                        "agent-1".to_string(),
+                        "work".to_string(),
+                        None,
+                        None,
+                    )
                     .await
                     .unwrap();
                 // Wait until the receiver started the execution.
@@ -619,7 +723,13 @@ fn result_survives_caller_restart() {
                         executors,
                     }),
                 });
-                let b = Side { port: pb, engine: engine_b, started, cancelled, permission_seen };
+                let b = Side {
+                    port: pb,
+                    engine: engine_b,
+                    started,
+                    cancelled,
+                    permission_seen,
+                };
                 let engine_a = PeerApplicationEngine::new(PeerApplicationEngineOptions {
                     peer: pa.clone(),
                     journal: Rc::new(
@@ -637,23 +747,33 @@ fn result_survives_caller_restart() {
                     cancelled: Rc::new(Cell::new(false)),
                     permission_seen: Rc::new(Cell::new(false)),
                 };
+                // Force the first forward to fail after the mock durably
+                // retains its pending outbox payload, then restart the caller.
+                a.port.fail_sends.set(1);
                 let record = a
                     .engine
-                    .submit(addr_a(), None, None, "agent-1".to_string(), "hi".to_string(), None)
+                    .submit(
+                        addr_a(),
+                        None,
+                        None,
+                        "agent-1".to_string(),
+                        "hi".to_string(),
+                        Some("gpt-6.1-sol".to_string()),
+                        Some("low".to_string()),
+                    )
                     .await
                     .unwrap();
-                // Deliver the request only; hold B's result events in its queue.
-                loop {
-                    tokio::task::yield_now().await;
-                    a.port.flush().await;
-                    tokio::task::yield_now().await;
-                    if b.started.get() > 0 {
+                for _ in 0..200 {
+                    if a.port.fail_sends.get() == 0 {
                         break;
                     }
-                    tokio::time::sleep(Duration::from_millis(5)).await;
+                    tokio::task::yield_now().await;
                 }
-                // Simulate caller process restart: same journal, new engine on
-                // the same port (re-registers the inbound handler).
+                assert_eq!(a.port.fail_sends.get(), 0);
+                assert_eq!(b.started.get(), 0);
+                // Simulate caller restart before delivery: the same journal
+                // and port retain the pending request, which is retried once.
+                a.engine.dispose();
                 drop(a.engine);
                 let engine_a2 = PeerApplicationEngine::new(PeerApplicationEngineOptions {
                     peer: pa.clone(),
@@ -680,9 +800,21 @@ fn result_survives_caller_restart() {
                         break;
                     }
                 }
-                let final_record =
-                    wait_status(&a2, &b, &record.operation_id, &["completed"]).await;
+                let final_record = wait_status(&a2, &b, &record.operation_id, &["completed"]).await;
                 assert_eq!(final_record.result_text.as_deref(), Some("echo:hi"));
+                assert_eq!(final_record.model.as_deref(), Some("gpt-6.1-sol"));
+                assert_eq!(final_record.effort.as_deref(), Some("low"));
+                assert_eq!(final_record.request_digest, record.request_digest);
+                assert_eq!(b.started.get(), 1);
+                let receiver_record = b
+                    .engine
+                    .get_operation(&record.operation_id)
+                    .await
+                    .unwrap()
+                    .expect("the receiver retained the completed request and result");
+                assert_eq!(receiver_record.request_digest, record.request_digest);
+                assert_eq!(receiver_record.model.as_deref(), Some("gpt-6.1-sol"));
+                assert_eq!(receiver_record.effort.as_deref(), Some("low"));
             })
             .await;
     });

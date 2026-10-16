@@ -1279,68 +1279,6 @@
    ]
   },
   {
-   "artifactId": "meshrix.entry-gui.state",
-   "kind": "schema",
-   "description": "Renderer-visible GUI state schema for the installed entry product (redacted snapshots over the meshrix-entry IPC contract).",
-   "activeVersion": "v0.0.1:entry-gui:state-3",
-   "versions": [
-    {
-     "version": "v0.0.1:entry-gui:state-1",
-     "ref": "meshrix.entry-gui.state@v0.0.1:entry-gui:state-1",
-     "lifecycle": "deprecated",
-     "compatibility": {
-      "newBindingsAllowed": false,
-      "historicalResolutionAllowed": true,
-      "notes": "Current scanned governed version."
-     },
-     "artifactRefs": [],
-     "evidenceRefs": [
-      {
-       "evidenceId": "v0-0-1-entry-gui-state-1-source",
-       "kind": "other",
-       "uri": "apps/entry-gui/src/shared/gui-state.ts"
-      }
-     ]
-    },
-    {
-     "version": "v0.0.1:entry-gui:state-2",
-     "ref": "meshrix.entry-gui.state@v0.0.1:entry-gui:state-2",
-     "lifecycle": "deprecated",
-     "compatibility": {
-      "newBindingsAllowed": false,
-      "historicalResolutionAllowed": true,
-      "notes": "Current scanned governed version."
-     },
-     "artifactRefs": [],
-     "evidenceRefs": [
-      {
-       "evidenceId": "v0-0-1-entry-gui-state-2-source",
-       "kind": "other",
-       "uri": "apps/entry-gui/src/shared/gui-state.ts"
-      }
-     ]
-    },
-    {
-     "version": "v0.0.1:entry-gui:state-3",
-     "ref": "meshrix.entry-gui.state@v0.0.1:entry-gui:state-3",
-     "lifecycle": "active",
-     "compatibility": {
-      "newBindingsAllowed": true,
-      "historicalResolutionAllowed": true,
-      "notes": "Current scanned governed version."
-     },
-     "artifactRefs": [],
-     "evidenceRefs": [
-      {
-       "evidenceId": "v0-0-1-entry-gui-state-3-source",
-       "kind": "other",
-       "uri": "apps/entry-gui/src/shared/gui-state.ts"
-      }
-     ]
-    }
-   ]
-  },
-  {
    "artifactId": "meshrix.entry.custody-file",
    "kind": "store",
    "description": "File-backed custody record schema for entry device/recovery secrets.",
@@ -1361,32 +1299,6 @@
        "evidenceId": "v0-0-1-entry-custody-file-1-source",
        "kind": "other",
        "uri": "apps/entry/src/identity/custody-file.ts"
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "artifactId": "meshrix.entry.pairing-exchange",
-   "kind": "protocol",
-   "description": "Pairing invite/challenge/proof exchange between the installed entry and the endpoint surface.",
-   "activeVersion": "v0.0.1:entry:pairing-exchange-1",
-   "versions": [
-    {
-     "version": "v0.0.1:entry:pairing-exchange-1",
-     "ref": "meshrix.entry.pairing-exchange@v0.0.1:entry:pairing-exchange-1",
-     "lifecycle": "active",
-     "compatibility": {
-      "newBindingsAllowed": true,
-      "historicalResolutionAllowed": true,
-      "notes": "Current scanned governed version."
-     },
-     "artifactRefs": [],
-     "evidenceRefs": [
-      {
-       "evidenceId": "v0-0-1-entry-pairing-exchange-1-source",
-       "kind": "other",
-       "uri": "apps/entry-gui/src/main/pairing-channel.ts"
       }
      ]
     }

@@ -351,6 +351,32 @@ describe("unified test runner execution lifecycle", () : any => {
     expect(result.command).toBe("npm run build");
     expect(result.status).toBe("passed");
   });
+
+  it("runs registered Node suites with the test runner's supported runtime", async () => {
+    const entry = { id: "fixture.node", command: "node", args: ["fixture.ts"] };
+    const child: any = new EventEmitter();
+    child.exitCode = null;
+    child.signalCode = null;
+    child.pid = null;
+    child.kill = vi.fn(() => true);
+    let actualCommand = "";
+    const resultPromise = runSuiteProcess(entry, {
+      cwd: process.cwd(),
+      spawnImpl: (command: string) => {
+        actualCommand = command;
+        queueMicrotask(() => {
+          child.exitCode = 0;
+          child.emit("close", 0, null);
+        });
+        return child;
+      }
+    });
+
+    const result = await resultPromise;
+    expect(actualCommand).toBe(process.execPath);
+    expect(result.command).toBe("node fixture.ts");
+    expect(result.status).toBe("passed");
+  });
 });
 
 describe("unified test runner phase execution", () => {

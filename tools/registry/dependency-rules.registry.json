@@ -83,7 +83,6 @@
         "gateway",
         "entry-transport",
         "entry-app",
-        "entry-gui-app",
         "model-gateway-contracts",
         "agents",
         "capabilities",
@@ -113,7 +112,6 @@
         "gateway",
         "entry-transport",
         "entry-app",
-        "entry-gui-app",
         "model-gateway-contracts",
         "agents",
         "capabilities",
@@ -146,35 +144,6 @@
         "ui-console",
         "gateway",
         "entry-transport",
-        "apps",
-        "plugin-console",
-        "plugin-verifiers",
-        "plugin-tests",
-        "plugins",
-        "tools",
-        "skill-tools",
-        "model-gateway-contracts"
-      ]
-    },
-    {
-      "id": "entry-gui-app",
-      "name": "Installed Entry GUI Product",
-      "directory": "apps/entry-gui",
-      "allowedDependsOn": [
-        "contracts",
-        "entry-app",
-        "entry-transport",
-        "gateway",
-        "peer-crypto",
-        "peer-client",
-        "foundation"
-      ],
-      "forbiddenDependsOn": [
-        "agents",
-        "capabilities",
-        "protocols",
-        "server-runtime",
-        "ui-console",
         "apps",
         "plugin-console",
         "plugin-verifiers",
@@ -569,26 +538,6 @@
         "apps/**",
         "packages/**",
         "tools/**"
-      ],
-      "severity": "error"
-    },
-    {
-      "id": "entry-gui-foundation-primitives-require-node-backend",
-      "description": "Only the Entry Node backend may consume shared Foundation primitives; renderer and shared UI sources remain isolated.",
-      "fromPattern": "apps/entry-gui/**",
-      "excludedFromPatterns": [
-        "apps/entry-gui/src/main/**"
-      ],
-      "fromLayers": [
-        "entry-gui-app"
-      ],
-      "specifierKinds": [
-        "relative",
-        "package",
-        "package-import"
-      ],
-      "forbiddenTargets": [
-        "packages/foundation/**"
       ],
       "severity": "error"
     }

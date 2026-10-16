@@ -260,6 +260,18 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
     inputs: ["tests/run.ts", "vitest.config.ts", "tools/registry/tests.registry.json", "Dockerfile", "package.json", "tsconfig.node.json", "tools/server-scripts/lib/source-package-contract.ts", "tools/server-scripts/lib/local-execution-environment.ts", "tools/server-scripts/publish-release-set.ts", "tests/vitest/server/distribution-*.test.ts"], outputs: ["build/reports/product-distribution.json", "build/packages/**", "dist/**"],
   },
+  "build:native-linux-client": {
+    scriptName: "build:native-linux-client", command: "npm run build:native-linux-client", category: "packaging", subsystem: "native-client-linux",
+    owner: "entry-native", tier: "release", sideEffects: "container",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["apps/entry-native/Cargo.toml", "apps/entry-native/Cargo.lock", "apps/entry-native/crates/**", "apps/entry-native/packaging/linux/**", "apps/entry-native/tools/build-linux.mjs", "apps/entry-native/tools/package-linux.mjs", "apps/entry-native/tools/linux-builder/**", "LICENSE"], outputs: ["apps/entry-native/dist/linux/**"],
+  },
+  "test:native-linux-client": {
+    scriptName: "test:native-linux-client", command: "npm run test:native-linux-client", category: "test", subsystem: "native-client-linux",
+    owner: "entry-native", tier: "integration", sideEffects: "container",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["package.json", "tests/run.ts", "tools/registry/tests.registry.json", "tools/scripts/lib/unified-test-runner-execution.ts", "tools/scripts/package-script-registry-catalog.ts", "tools/server-scripts/verify-native-linux-artifacts.ts", "apps/entry-native/Cargo.toml", "apps/entry-native/Cargo.lock", "apps/entry-native/packaging/linux/**", "apps/entry-native/dist/linux/**"], outputs: ["build/reports/native-linux-client.json"],
+  },
   "server:verify:resource-discipline": {
     scriptName: "server:verify:resource-discipline", command: "npm run server:verify:resource-discipline", category: "verifier", subsystem: "resource-discipline",
     owner: "platform", tier: "integration", sideEffects: "temp-files",

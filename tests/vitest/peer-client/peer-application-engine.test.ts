@@ -382,6 +382,7 @@ class CompletingAgent implements PeerApplicationAgentExecutor {
   readonly summary = Object.freeze({ id: "agent.local", displayName: "Local Agent", description: null, enabled: true });
   starts = 0;
   readonly prompts: string[] = [];
+  readonly inputs: Parameters<PeerApplicationAgentExecutor["start"]>[0][] = [];
   readonly text: string;
   readonly progress: string | null;
 
@@ -390,9 +391,10 @@ class CompletingAgent implements PeerApplicationAgentExecutor {
     this.progress = progress;
   }
 
-  start(input: { readonly operationId: string; readonly prompt: string }, handlers: Parameters<PeerApplicationAgentExecutor["start"]>[1]) {
+  start(input: Parameters<PeerApplicationAgentExecutor["start"]>[0], handlers: Parameters<PeerApplicationAgentExecutor["start"]>[1]) {
     this.starts += 1;
     this.prompts.push(input.prompt);
+    this.inputs.push(input);
     const result = (async () => {
       await handlers.beforePrompt();
       if (this.progress !== null) await handlers.onProgress({ kind: "message", text: this.progress });
@@ -446,6 +448,54 @@ function linkedEngines(options: {
 }
 
 describe("Peer application execution journal", () => {
+  it("carries optional model and effort through the durable Peer request and local executor", async () => {
+    const agent = new CompletingAgent("profiled request completed");
+    const { engineA, engineB, peerA, journalA, journalB } = linkedEngines({ agentB: agent });
+    const input = {
+      address: ADDRESS_AB,
+      operationId: "op.model-effort.request",
+      targetAgentId: "agent.local",
+      prompt: "run with the selected profile defaults",
+      model: "provider/model",
+      effort: "high"
+    };
+    const callerRecord = await engineA.submit(input);
+
+    expect(callerRecord).toMatchObject({ model: input.model, effort: input.effort });
+    await waitFor(async () => (await engineB.getOperation(input.operationId))?.status === "completed",
+      "the request carrying model and effort did not complete");
+
+    const request = peerA.sent
+      .map((entry) => JSON.parse(new TextDecoder().decode(entry.bytes)) as Record<string, unknown>)
+      .find((envelope) => envelope.kind === "operation_request" && envelope.operationId === input.operationId);
+    expect(request).toMatchObject({ model: input.model, effort: input.effort });
+    expect(await journalA.getOperation(callerRecord.key)).toMatchObject({ model: input.model, effort: input.effort });
+    expect((await journalB.listOperations()).find((record) => record.operationId === input.operationId))
+      .toMatchObject({ model: input.model, effort: input.effort });
+    expect(agent.inputs).toEqual([{
+      operationId: input.operationId,
+      prompt: input.prompt,
+      model: input.model,
+      effort: input.effort
+    }]);
+
+    await expect(engineA.submit({ ...input, effort: "low" })).rejects.toMatchObject({ code: "peer_client_state" });
+    const withoutSelectors = peerApplicationRequestDigest({
+      address: ADDRESS_AB,
+      callerAgentId: null,
+      targetAgentId: "agent.local",
+      prompt: "same request"
+    });
+    expect(peerApplicationRequestDigest({
+      address: ADDRESS_AB,
+      callerAgentId: null,
+      targetAgentId: "agent.local",
+      prompt: "same request",
+      model: undefined,
+      effort: undefined
+    })).toBe(withoutSelectors);
+  });
+
   it("fragments the full 32,000-byte escaped and multibyte prompt without changing its paid dispatch", async () => {
     const agent = new CompletingAgent("fragmented prompt completed");
     const { engineA, engineB, peerA, peerB } = linkedEngines({ agentB: agent });

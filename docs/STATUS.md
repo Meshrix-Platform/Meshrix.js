@@ -1,86 +1,47 @@
 # Meshrix.js Status
 
-Status follows the source, published artifacts and candidate-bound verification.
-A plan describes intended work; completing a plan does not establish a working
-deployment or extend an earlier candidate's acceptance to later source.
+Status distinguishes source implementation, deterministic engineering checks
+and published artifacts. Each result applies to the source and configuration
+it exercised.
 
 ## Current product state
 
 | Dimension | Current status |
 | --- | --- |
-| **Published products** | `meshrix.js@0.1.0` and `@meshrix/gateway@0.1.0` are published. GitHub release `v0.1.0` is available. See [release history](releases/README.md) for the public references. |
-| **Implementation** | The published Node.js platform includes the Server, Web Console, storage, jobs, governed operation dispatch, standard MCP ingress and the plugin contract. The current unreleased source candidate implements encrypted online-only Peer forwarding, device-local delivery custody, recoverable application events and an SQLite-backed Skill Hub registry. Relay messages are not persisted as business data; offline work remains pending on the sender until the paired device reconnects. Independent source review and scoped engineering verification are complete; all discovered failures and omitted coverage were repaired. The original failed runs remain preserved. |
-| **Current source** | Post-release source changes require their own affected verification. Published `0.1.0` artifacts, prior source checks and earlier deployed instances do not establish the present candidate's runtime or cloud readiness. |
-| **Deployment** | The maintained Node.js and container paths remain the current implementation. The hosted account authority, private relay and public gateway deployment is operated privately in a separate operations repository and is not part of this repository's published artifacts; no public hosted endpoint is currently offered. The private-relay wire contract in `packages/contracts/src/private-relay/` and the account contract in `packages/contracts/src/account/` define the public boundary that a hosted runtime or a self-hosted deployment implements. Native SQLite, filesystem and process assumptions for the broader Node.js platform still require deliberate runtime adapters. |
-| **Privacy and enterprise operation** | The published `0.1.0` release retains its documented operator trust boundary. The current source candidate keeps Peer payloads end-to-end encrypted between paired devices and does not persist business messages or signed delivery receipts in the relay. This is not a hosted-service or privacy acceptance claim; no hosted relay service is publicly offered. |
-| **Verification** | Engineering closure completed on 2026-10-12. The unique whole run remains 11 passed / 11 failed, and the affected run remains 7 passed / 2 failed. Later targeted repairs passed; the Reviewer also fixed a name-filter merge bug and completed 20 omitted files (176 current tests), repairing all three newly exposed failures and two unhandled readiness rejections. The final lifecycle tests and node/test typechecks pass. Existing valid results are reused; no second full regression ran. Raw failures, scoped successes and session-only evidence remain in the private programme records. Comparative performance, native Windows/power-loss behavior, real Agent/browser/provider acceptance and deployment remain unqualified. The product-level functional gate remains `npm run verify:acceptance`. |
+| **Published products** | `meshrix.js@0.1.0` and `@meshrix/gateway@0.1.0` remain the published npm products. GitHub release `v0.1.0` is available. See [release history](releases/README.md). |
+| **Prepared source** | `0.2.0` is the next source candidate, not a published release. It adds device-local encrypted Peer communication, recoverable application events, an SQLite-backed Skill Hub registry, recording governance and scoped security fixes. |
+| **Native client** | Rust egui and ratatui are the maintained client surfaces. A4AA owns Agent adaptation and process/protocol behavior; AwP owns behavior-profile schema, resolution and execution defaults. Meshrix owns authorization, secret custody, Peer delivery and durable task state. Available Agents are distinct from user-enrolled Agents and saved profiles. |
+| **Antigravity** | The native integration uses the A4AA Antigravity descriptor and explicit AwP profiles. Deterministic tests cover CLI stream results, configuration, cancellation and the production enrollment-to-execution path. Headless execution does not provide interactive per-tool approval; unsupported controls are rejected. No real Agent acceptance is claimed. |
+| **Native build availability** | Local builds use matching development sources of A4AA and AwP. Their required APIs are not all available through the declared registry coordinates. These builds can produce local client binaries; clean-checkout builds using registry dependencies and public native releases remain unqualified until matching distributable dependencies are available. |
+| **Linux clients** | Separate x86_64 and aarch64 builds provide musl CLI/TUI executables and X11/Wayland GUI portable archives. The GUI targets glibc 2.28 and carries ordinary client libraries; the host supplies its display server and graphics drivers. Build, packaging and artifact verification commands live in the [native client guide](../apps/entry-native/README.md). |
+| **Self-hosted runtime** | The Node.js server and optional container paths provide the framework runtime. Published packages do not supply a hosted endpoint. Public account and Peer protocol contracts describe integration boundaries; they do not establish deployment of a corresponding service. |
+| **Privacy and recording** | Peer delivery keeps payload custody on paired devices. Self-hosted recording explicitly trusts the organization's administrator and local storage permissions; recording content does not have an independent encryption-key boundary. Policy redaction, retention and failure behavior are covered by deterministic tests. |
+| **Engineering evidence** | Scoped Rust compilation, Agent/profile/Peer tests and Node typechecks cover the current migration. The client Cargo workspace is verified separately from server/npm checks. Release packaging and clean-consumer checks apply to their exact artifacts; earlier acceptance does not establish later-source readiness. |
 
 ## Publication and support boundary
 
 The published `0.1.0` products cover the single-node Core platform with Web
 Console, standard MCP access, governed upstream services and the independently
 embeddable gateway within their documented artifact and environment support.
-Hosted Workers operation, application-layer operator blindness, multi-node
-availability and a dedicated enterprise deployment are separate qualification
-claims. Project-owned source is Apache-2.0; independent dependency and asset
-licenses remain applicable.
+Project-owned source is Apache-2.0; independent dependency and asset licenses
+remain applicable.
 
-The standard release workflow builds, checks, packs and smoke-installs the two
-products from a selected version tag, then performs npm publication and creates
-the GitHub Release. The first publication is complete; subsequent source work
-must preserve actual published contracts and use the normal release path. A
-local build, a branch comparison or an npm archive does not publish a new version.
+The tag-driven release workflow builds, checks, packs and smoke-installs the
+two npm products before publication and GitHub Release creation. Preparing
+version metadata or installing a local client does not publish another release.
+Native client builds and their qualification do not gate server receipts.
 
-## Development direction
+## Verification scope
 
-The current programme prioritizes product completeness, reliability, privacy,
-operational control, efficiency and first-use quality. Initial shared hosting
-targets Cloudflare Workers. Enterprise operators should be able to self-host the
-platform and control recording categories, destinations and retention using their
-own resources. Dedicated Workers, Containers or other infrastructure follow an
-actual deployment requirement.
+The current Peer implementation uses durable device-local inbox/outbox state,
+paired-device authorization, encrypted forwarding, signed receipts and local
+application journals. Receiving a message does not authorize execution; the
+host must admit the operation and reserve it durably before sending a prompt.
+Rust and TypeScript use one request digest projection for new operations.
 
-Personal privacy depends on authenticated endpoints holding decryption keys,
-not on a server-side audit switch. A content-blind relay can still observe
-connection metadata or retain ciphertext. Enterprise content processing and
-audit explicitly trust the organization's selected administrator and endpoint.
-The future recording design must distinguish execution state required for
-authorization and recovery from optional retained audit, and migrate the owning
-contracts with its implementation. The current
-[minimum-evidence contract](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
-continues to describe the existing implementation boundary; planned changes are
-not already implemented behavior.
-
-The unreleased source candidate develops Peer communication around device-local
-durable inbox/outbox state, paired-device authorization, online encrypted
-forwarding, signed receipt replay with the pairing-pinned Signal identity and
-locally journaled application events. Logical events can be fragmented and
-reassembled locally without adding a fixed catalog-size limit. Receiving a
-message does not authorize execution or remote control; only the explicit host
-integration may dispatch an authorized operation. These changes have current-candidate deterministic engineering evidence;
-live acceptance remains separately assigned.
-The maintainer-designated private project Programme owns delivery planning;
-repository-local predecessor plans remain inactive evidence. Reading a plan
-does not activate a future milestone.
-
-## Evidence and remaining qualification
-
-Earlier candidate evidence includes deterministic gateway authorization,
-cancellation, durable-effect and recovery checks, plus a bounded Core, Console
-and standard MCP upstream journey. Those observations remain bound to their
-original source and configuration. Historical failed attempts remain failed;
-publication does not rewrite those attempts or prove every future environment.
-
-The current source needs its own affected verification and functional evidence
-before performance claims, as defined in
-[the repository rules](../AGENTS.md#functional-availability-before-benchmarking-and-optimization).
-There is no current evidence here for comparative industry-leading performance,
-absence of all security vulnerabilities, a complete operator-blind Workers
-deployment or actual autonomous host wake-up.
-
-Future real-cloud verification proceeds through authorized isolated targets and
-the actual Workers runtime before public rollout. A private-network laboratory
-can test endpoints and failure behavior, but it does not substitute for Workers
-qualification. Real Agent conversations and live use belong to separately
-assigned acceptance tasks. Deployment, procurement, publication and access to
-private runtime data remain their own authorization boundaries.
+Real Agent conversations, provider behavior, visual acceptance, native Windows
+and power-loss behavior, comparative performance and deployment require their
+own evidence. They are not established by source review, synthetic fixtures or
+a local build. The product-level functional gate remains
+`npm run verify:acceptance`; client-owned verification is documented in the
+[native client guide](../apps/entry-native/README.md).

@@ -70,10 +70,21 @@ describe("Git publication object scanning", () => {
     });
   });
 
-  it("walks an existing immutable commit during pre-push verification", () => {
-    const head = git(root, ["rev-parse", "HEAD"]);
-    const parent = git(root, ["rev-parse", "HEAD^"]);
-    const result = verify(root, "--pre-push", `refs/heads/candidate ${head} refs/heads/candidate ${parent}\n`);
-    expect(result.status, result.stderr).toBe(0);
+  it("walks an existing immutable commit during pre-push verification", async () => {
+    await repository(async (directory) => {
+      const trackedFile = path.join(directory, "source.ts");
+      await writeFile(trackedFile, "export const stage = 1;\n");
+      git(directory, ["add", "source.ts"]);
+      git(directory, ["commit", "--quiet", "-m", "seed clean history"]);
+      const parent = git(directory, ["rev-parse", "HEAD"]);
+
+      await writeFile(trackedFile, "export const stage = 2;\n");
+      git(directory, ["add", "source.ts"]);
+      git(directory, ["commit", "--quiet", "-m", "advance clean history"]);
+      const head = git(directory, ["rev-parse", "HEAD"]);
+
+      const result = verify(directory, "--pre-push", `refs/heads/candidate ${head} refs/heads/candidate ${parent}\n`);
+      expect(result.status, result.stderr).toBe(0);
+    });
   });
 });

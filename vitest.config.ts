@@ -49,7 +49,6 @@ const scopedExcludedTestPatterns = [
 const WORKSPACE_PACKAGE_DIRS: [string, string][] = [
   ["contracts", "packages/contracts"],
   ["entry", "apps/entry"],
-  ["entry-gui", "apps/entry-gui"],
   ["entry-transport", "packages/entry-transport"],
   ["gateway", "packages/gateway"],
   ["foundation", "packages/foundation"],

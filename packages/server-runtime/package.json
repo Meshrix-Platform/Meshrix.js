@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/server-runtime",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Meshrix.js composition root, state stores, jobs, workers, product API",
   "license": "Apache-2.0",
   "engines": {
@@ -352,12 +352,12 @@
   },
   "private": true,
   "peerDependencies": {
-    "@meshrix/agents": "0.1.0",
-    "@meshrix/capabilities": "0.1.0",
-    "@meshrix/contracts": "0.1.0",
-    "@meshrix/foundation": "0.1.0",
-    "@meshrix/gateway": "0.1.0",
-    "@meshrix/protocols": "0.1.0",
+    "@meshrix/agents": "0.2.0",
+    "@meshrix/capabilities": "0.2.0",
+    "@meshrix/contracts": "0.2.0",
+    "@meshrix/foundation": "0.2.0",
+    "@meshrix/gateway": "0.2.0",
+    "@meshrix/protocols": "0.2.0",
     "better-sqlite3": "^12.9.0",
     "pactium": "0.8.1"
   }

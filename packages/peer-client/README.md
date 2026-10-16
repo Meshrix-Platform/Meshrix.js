@@ -34,6 +34,10 @@ has settled.
   result of `deferred`, or a temporary exception, leaves the dispatch pending
   for `retryPendingDispatch()` or `resume()`. The host acknowledges application
   acceptance only after its own journal commit.
+- An application request binds its target, prompt, and optional `model` and
+  `effort` selectors to one operation digest. The selectors are retained with
+  the local operation record and forwarded to the receiving executor; omitted
+  selectors remain omitted.
 - Peer presence is route-scoped retry information, not authority. A reachable
   transition wakes pending ciphertext and receipt retries. The relay carries
   presence and control messages without retaining business payloads.

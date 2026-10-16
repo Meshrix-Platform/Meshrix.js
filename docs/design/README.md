@@ -22,9 +22,9 @@ and [AGENTS.md](../../AGENTS.md).
   assets under `demo/`; that directory is git-ignored and must never be
   committed or shipped. Documentation walkthroughs under `docs/examples/` are
   documentation, not demo workspaces.
-- **`apps/entry-gui` (Tauri) is retiring.** The lightweight Rust egui client
-  in `apps/entry-native` is the current desktop entry product. Do not extend
-  the Tauri UI or add new design assets under `apps/entry-gui`.
+- **`apps/entry-native` is the sole maintained desktop client.** Shared and
+  retained artwork lives under `assets/`; the native build derives its app
+  icon from the brand logo.
 - **Cloudflare-hosted commercial operations live elsewhere.** The hosted
   account, private relay, and public gateway deployment has moved to a
   separate private operations repository; this repository carries only the
@@ -72,14 +72,11 @@ copied: `apps/console/components/MeshrixJsMark.vue` (theme-aware inline SVG).
 | Bundled Inter / Inter Display fonts (OFL) | `crates/entry-gui/assets/fonts/` |
 | Icon tile source | `build.rs` rasterizes `assets/brand/logo.svg`; `crates/entry-gui/assets/logo.png` is only the standalone-build fallback |
 
-### Installed entry GUI — `apps/entry-gui` (Tauri, retiring)
+### Retained Entry app-icon design references
 
 | Resource | Location |
 | --- | --- |
-| Application icon set | `src-tauri/icons/` |
-| Renderer styles | `<style>` blocks inside `src/renderer/**/*.vue` |
-
-Removal is pending; index retained so agents can find what remains.
+| PNG artwork set | `assets/brand/entry-app-icons/` (preserved as design references; not consumed by the current native build) |
 
 ### Generated HTML surfaces (owned by the HTML report contract skill)
 

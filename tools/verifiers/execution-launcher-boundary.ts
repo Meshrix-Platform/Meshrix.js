@@ -199,15 +199,6 @@ const LAUNCHER_CATALOG: any = new Map<any, any>([
     })
   ],
   [
-    "apps/entry-gui/src/main/agent/acp-executor.ts",
-    Object.freeze({
-      approved: true,
-      classification: "registered_agent_stdio_session_launcher",
-      authority: "entry-app.agent.acp",
-      reason: "owns the bounded user-registered local ACP agent stdio session and kills its child during execution close"
-    })
-  ],
-  [
     "apps/mcp-gateway-installer/src/cli.ts",
     Object.freeze({
       approved: true,

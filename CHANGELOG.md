@@ -4,30 +4,46 @@ All notable changes to Meshrix.js are recorded here.
 
 ## Unreleased
 
-- Adds encrypted online-only Peer forwarding between paired devices with
-  device-local delivery custody. The relay does not persist business
-  messages or signed delivery receipts; offline work remains pending on
-  the sender until the paired device reconnects.
-- Adds recoverable application events and an SQLite-backed Skill Hub
-  registry.
-- Adds the account lifecycle and security baseline: registration,
-  authentication methods, recovery and revocation, OAuth password
-  enrollment, and current-session validation before exchange.
-- Adds Console operational visibility: built-in traffic views, standard
-  metrics export and optional persistence consistent with the current
-  Peer semantics.
-- Adds self-hosted enterprise recording governance: recording categories,
-  organizational custody and consistent failure semantics.
-- Adds governed gateway consumption through CLI scenarios and tenant
-  routing.
-- Adds the installed desktop entry applications (`entry-gui` on Tauri and
-  the `entry-native` crates).
-- Moves the hosted account, private relay and public gateway deployment
-  to a private operations repository. This repository keeps the public
-  protocol contracts under `packages/contracts/`.
-- Publishes through npm Trusted Publishing instead of a stored token, and
-  adds the `@meshrix/mcp-kernel` package scaffold with the portable
-  kernel RFC.
+No unreleased changes.
+
+## [0.2.0] - 2026-10-15
+
+Prepared source candidate; not yet published. The npm products remain
+`meshrix.js` and `@meshrix/gateway`. Native client qualification is separate
+from npm qualification. Public native source builds require matching
+distributable A4AA and AwP dependencies.
+
+- Adds encrypted Peer communication, device-local delivery custody,
+  recoverable application events and an SQLite-backed Skill Hub registry.
+  Offline work stays on the sending device; receipt processing and execution
+  reservations prevent automatic replay of completed operations.
+- Consolidates the installed client on Rust with egui and ratatui. Removes
+  the Tauri client and its exclusive build, dependency and test paths while
+  preserving shared components, source assets and user data.
+- Adds Linux x86_64 and aarch64 build targets for standalone musl CLI/TUI
+  executables and X11/Wayland GUI portable archives. Native artifact checks
+  remain independent of server and npm verification.
+- Moves native Agent adaptation to A4AA and behavior profiles to AwP.
+  Available Agents are separate from saved configuration; enrollment and
+  named-profile creation are explicit GUI and CLI actions. Meshrix retains
+  authorization, secret-reference resolution and durable task state.
+- Integrates Antigravity through the maintained A4AA descriptor. Model,
+  effort and execution-mode controls follow the adapter's actual support;
+  unsupported settings fail before prompt reservation. Headless Antigravity
+  does not provide interactive per-tool approval.
+- Preserves ACP streamed replies in the final Peer result, separates model
+  and effort overrides, and aligns the Rust and TypeScript request digest
+  projections. Restart and receipt tests cover the current format.
+- Adds self-hosted recording policies, recursive field redaction, enforced
+  retention and explicit recording failure behavior. Recording storage is
+  organization-controlled local storage, not an independent encryption boundary.
+- Adds Console traffic views and metrics export, bounds metrics ingestion
+  and history, and reports degraded persistence instead of healthy status.
+- Hardens upstream credential origin binding, authorization and public error
+  projections, scopes event delivery to its grants, and bounds schema pattern
+  evaluation with RE2.
+- Publishes npm archives through Trusted Publishing and improves artifact
+  installation checks and retained failure diagnostics.
 
 ## [0.1.0] - 2026-10-04
 

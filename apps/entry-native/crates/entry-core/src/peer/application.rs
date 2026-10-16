@@ -8,18 +8,20 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+use super::client::PEER_CLIENT_MAX_PLAINTEXT_BYTES;
 use crate::b64::b64u_encode;
 use crate::error::{entry_error, EntryError, Result};
 use crate::wire::common::is_opaque_id;
-use super::client::PEER_CLIENT_MAX_PLAINTEXT_BYTES;
-
 
 pub const PEER_APPLICATION_PROTOCOL_VERSION: u64 = 1;
 
 pub type PeerApplicationOperationStatus = String;
 
 pub fn status_terminal(s: &str) -> bool {
-    matches!(s, "completed" | "refused" | "stopped" | "cancelled" | "unknown" | "failed")
+    matches!(
+        s,
+        "completed" | "refused" | "stopped" | "cancelled" | "unknown" | "failed"
+    )
 }
 
 pub fn status_valid(s: &str) -> bool {
@@ -40,7 +42,10 @@ pub fn status_valid(s: &str) -> bool {
 }
 
 pub fn stop_reason_valid(s: &str) -> bool {
-    matches!(s, "end_turn" | "max_tokens" | "max_turn_requests" | "refusal" | "cancelled")
+    matches!(
+        s,
+        "end_turn" | "max_tokens" | "max_turn_requests" | "refusal" | "cancelled"
+    )
 }
 
 /// `canFollowOperationState` — receiver-published state transitions the
@@ -73,7 +78,9 @@ pub fn assert_peer_client_opaque_id(value: &str, field: &str) -> Result<String> 
     if !is_opaque_id(value, 128) {
         return Err(entry_error(
             "peer_client_state",
-            &format!("Peer application {field} is empty or does not satisfy the opaque id contract."),
+            &format!(
+                "Peer application {field} is empty or does not satisfy the opaque id contract."
+            ),
         ));
     }
     Ok(value.to_string())
@@ -87,8 +94,14 @@ pub fn assert_address(value: &PeerApplicationAddress) -> Result<PeerApplicationA
     Ok(PeerApplicationAddress {
         tenant_id: assert_peer_client_opaque_id(&value.tenant_id, "address.tenantId")?,
         route_id: assert_peer_client_opaque_id(&value.route_id, "address.routeId")?,
-        local_device_id: assert_peer_client_opaque_id(&value.local_device_id, "address.localDeviceId")?,
-        peer_device_id: assert_peer_client_opaque_id(&value.peer_device_id, "address.peerDeviceId")?,
+        local_device_id: assert_peer_client_opaque_id(
+            &value.local_device_id,
+            "address.localDeviceId",
+        )?,
+        peer_device_id: assert_peer_client_opaque_id(
+            &value.peer_device_id,
+            "address.peerDeviceId",
+        )?,
     })
 }
 
@@ -98,7 +111,9 @@ pub fn parse_peer_application_address(value: &Value) -> Option<PeerApplicationAd
 }
 
 /// Receiver-side view of the same route: swap the direction fields.
-pub fn reverse_peer_application_address(address: &PeerApplicationAddress) -> PeerApplicationAddress {
+pub fn reverse_peer_application_address(
+    address: &PeerApplicationAddress,
+) -> PeerApplicationAddress {
     PeerApplicationAddress {
         tenant_id: address.tenant_id.clone(),
         route_id: address.route_id.clone(),
@@ -117,7 +132,10 @@ fn sha256_hex(parts: &[String]) -> String {
 
 /// `peerApplicationOperationKey` — stable storage identity derived from the
 /// origin tuple + operation id.
-pub fn peer_application_operation_key(address: &PeerApplicationAddress, operation_id: &str) -> String {
+pub fn peer_application_operation_key(
+    address: &PeerApplicationAddress,
+    operation_id: &str,
+) -> String {
     let origin = address.clone();
     sha256_hex(&[
         origin.tenant_id,
@@ -129,7 +147,10 @@ pub fn peer_application_operation_key(address: &PeerApplicationAddress, operatio
 }
 
 /// `peerApplicationDiscoveryKey`.
-pub fn peer_application_discovery_key(address: &PeerApplicationAddress, request_id: &str) -> String {
+pub fn peer_application_discovery_key(
+    address: &PeerApplicationAddress,
+    request_id: &str,
+) -> String {
     sha256_hex(&[
         address.tenant_id.clone(),
         address.route_id.clone(),
@@ -168,35 +189,54 @@ pub fn peer_application_transport_message_id(
 pub fn peer_application_fragment_message_id(message_id: &str, part_index: u64) -> Result<String> {
     let mut hasher = Sha256::new();
     hasher.update(
-        [assert_peer_client_opaque_id(message_id, "fragment.messageId")?, part_index.to_string()]
-            .join("\u{0}")
-            .as_bytes(),
+        [
+            assert_peer_client_opaque_id(message_id, "fragment.messageId")?,
+            part_index.to_string(),
+        ]
+        .join("\u{0}")
+        .as_bytes(),
     );
     Ok(format!("appf.{}", b64u_encode(&hasher.finalize())))
 }
 
 /// `peerApplicationRequestDigest` — sha256 hex over the canonical request
-/// projection `{address, callerAgentId, targetAgentId, prompt[, model]}`.
-/// `model` enters the projection only when present so peers built before the
-/// field existed produce the identical digest for model-less requests.
+/// projection `{address, callerAgentId, targetAgentId, prompt[, model][, effort]}`.
+/// Optional selectors enter the projection only when present, preserving the
+/// canonical digest for requests that omit them.
 pub fn peer_application_request_digest(
     address: &PeerApplicationAddress,
     caller_agent_id: Option<&str>,
     target_agent_id: &str,
     prompt: &str,
     model: Option<&str>,
+    effort: Option<&str>,
 ) -> String {
-    let mut projection = json!({
-        "address": address,
-        "callerAgentId": caller_agent_id,
-        "targetAgentId": target_agent_id,
-        "prompt": prompt,
-    });
-    if let Some(model) = model {
-        projection["model"] = json!(model);
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RequestDigestProjection<'a> {
+        address: &'a PeerApplicationAddress,
+        caller_agent_id: Option<&'a str>,
+        target_agent_id: &'a str,
+        prompt: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        effort: Option<&'a str>,
     }
+    let projection = RequestDigestProjection {
+        address,
+        caller_agent_id,
+        target_agent_id,
+        prompt,
+        model,
+        effort,
+    };
     let mut hasher = Sha256::new();
-    hasher.update(serde_json::to_string(&projection).unwrap_or_default().as_bytes());
+    hasher.update(
+        serde_json::to_string(&projection)
+            .unwrap_or_default()
+            .as_bytes(),
+    );
     format!("{:x}", hasher.finalize())
 }
 
@@ -222,12 +262,12 @@ pub struct AcpAgentSummary {
     pub display_name: String,
     pub description: Option<String>,
     pub enabled: bool,
-    /// How the agent was found on this device — `cli`, `desktop`,
-    /// `cli+desktop`, or absent for owner-registered definitions.
+    /// How the card was found on this device — `cli`, `desktop`,
+    /// `cli+desktop`, `configured`, or absent when no detection evidence applies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detected: Option<String>,
-    /// Callable transport — `acp` when the agent can be launched as an ACP
-    /// subprocess, absent when the agent is presence-only.
+    /// Callable A4AA lane — `acp`, `rpc`, or `cli`; absent when no lane is
+    /// callable on this device.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transport: Option<String>,
 }
@@ -278,7 +318,11 @@ pub struct AcpPermissionPrompt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "outcome", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "outcome",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum AcpPermissionResolution {
     Cancelled,
     Selected { option_id: String },
@@ -318,10 +362,12 @@ pub struct PeerApplicationRecord {
     pub target_agent_id: String,
     pub request_digest: String,
     pub prompt: String,
-    /// Optional ACP `model[effort]` selector the receiver applies before
-    /// `session/prompt` — e.g. `gpt-6.1-sol[low]`.
+    /// Optional per-turn model override; AwP supplies profile defaults.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Optional per-turn reasoning effort override; AwP supplies profile defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
     pub status: String,
     pub prompt_reserved: bool,
     pub prompt_execution_id: Option<String>,
@@ -469,7 +515,9 @@ pub fn serialize_application_envelope(envelope: &Value) -> Vec<u8> {
 pub fn application_envelope_bytes(envelope: &Value) -> Result<Vec<u8>> {
     let bytes = serialize_application_envelope(envelope);
     if bytes.len() > PEER_CLIENT_MAX_PLAINTEXT_BYTES {
-        return Err(app_error("The Peer application envelope exceeds the encrypted message bound."));
+        return Err(app_error(
+            "The Peer application envelope exceeds the encrypted message bound.",
+        ));
     }
     Ok(bytes)
 }
@@ -493,12 +541,22 @@ pub fn nullable_string(value: &Value, field: &str, max: usize) -> Result<Option<
 }
 
 fn base64url_length(byte_length: usize) -> usize {
-    byte_length / 3 * 4 + if byte_length % 3 == 0 { 0 } else { byte_length % 3 + 1 }
+    byte_length / 3 * 4
+        + if byte_length % 3 == 0 {
+            0
+        } else {
+            byte_length % 3 + 1
+        }
 }
 
 /// `maxRawFragmentBytes` — largest raw byte count a fragment envelope can
 /// carry for this header shape.
-fn max_raw_fragment_bytes(message_id: &str, message_kind: &str, part_count: u64, total_bytes: u64) -> Result<usize> {
+fn max_raw_fragment_bytes(
+    message_id: &str,
+    message_kind: &str,
+    part_count: u64,
+    total_bytes: u64,
+) -> Result<usize> {
     let header = json!({
         "version": PEER_APPLICATION_PROTOCOL_VERSION,
         "kind": "application_fragment",
@@ -511,7 +569,9 @@ fn max_raw_fragment_bytes(message_id: &str, message_kind: &str, part_count: u64,
     });
     let header_len = serde_json::to_vec(&header).unwrap_or_default().len();
     if header_len >= PEER_CLIENT_MAX_PLAINTEXT_BYTES {
-        return Err(app_error("The Peer fragment header exceeds the encrypted transport bound."));
+        return Err(app_error(
+            "The Peer fragment header exceeds the encrypted transport bound.",
+        ));
     }
     let available = PEER_CLIENT_MAX_PLAINTEXT_BYTES - header_len;
     let mut candidate = available / 4 * 3;
@@ -524,7 +584,9 @@ fn max_raw_fragment_bytes(message_id: &str, message_kind: &str, part_count: u64,
         candidate -= 1;
     }
     if candidate < 1 {
-        return Err(app_error("The Peer fragment header exceeds the encrypted transport bound."));
+        return Err(app_error(
+            "The Peer fragment header exceeds the encrypted transport bound.",
+        ));
     }
     Ok(candidate)
 }
@@ -546,17 +608,21 @@ pub fn fragment_logical_envelope(
     bytes: &[u8],
 ) -> Result<Vec<LogicalFragment>> {
     let mut part_count: u64 = 1;
-    let mut part_bytes = max_raw_fragment_bytes(message_id, message_kind, part_count, bytes.len() as u64)?;
+    let mut part_bytes =
+        max_raw_fragment_bytes(message_id, message_kind, part_count, bytes.len() as u64)?;
     loop {
         let next = (bytes.len() as u64).div_ceil(part_bytes as u64);
         if next < 1 {
-            return Err(app_error("The Peer application envelope is too large to fragment safely."));
+            return Err(app_error(
+                "The Peer application envelope is too large to fragment safely.",
+            ));
         }
         if next == part_count {
             break;
         }
         part_count = next;
-        part_bytes = max_raw_fragment_bytes(message_id, message_kind, part_count, bytes.len() as u64)?;
+        part_bytes =
+            max_raw_fragment_bytes(message_id, message_kind, part_count, bytes.len() as u64)?;
     }
     let mut out = Vec::new();
     let mut offset = 0usize;
@@ -608,7 +674,9 @@ pub fn result_parts(
     };
     let mut output: Vec<PeerApplicationResultPart> = Vec::new();
     let mut current = String::new();
-    let mut encoded_bytes = serde_json::to_vec(&make_envelope(0, "")).unwrap_or_default().len();
+    let mut encoded_bytes = serde_json::to_vec(&make_envelope(0, ""))
+        .unwrap_or_default()
+        .len();
     for ch in text.chars() {
         let escaped = serde_json::to_string(&ch.to_string()).unwrap_or_default();
         let escaped = escaped[1..escaped.len() - 1].to_string();
@@ -619,11 +687,15 @@ pub fn result_parts(
                 index,
                 text: std::mem::take(&mut current),
             });
-            encoded_bytes = serde_json::to_vec(&make_envelope(index + 1, "")).unwrap_or_default().len();
+            encoded_bytes = serde_json::to_vec(&make_envelope(index + 1, ""))
+                .unwrap_or_default()
+                .len();
         }
         let character_bytes = escaped.len();
         if encoded_bytes + character_bytes > PEER_CLIENT_MAX_PLAINTEXT_BYTES {
-            return Err(app_error("A single result character exceeds the encrypted transport bound."));
+            return Err(app_error(
+                "A single result character exceeds the encrypted transport bound.",
+            ));
         }
         current.push(ch);
         encoded_bytes += character_bytes;

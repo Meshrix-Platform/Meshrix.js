@@ -1,5 +1,5 @@
-//! Local ACP agent hosting — owner-only command registry plus subprocess
-//! executor over the official `agent-client-protocol` crate.
+//! Native Agent enrollment and execution through A4AA, with AwP profile
+//! management and generic discovery driven by A4AA AgentCards.
 
 pub mod detect;
 pub mod executor;

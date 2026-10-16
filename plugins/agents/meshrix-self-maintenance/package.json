@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/agent-self-maintenance",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Separately started, configuration-controlled Meshrix self-maintenance client peer.",
   "type": "module",

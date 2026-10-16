@@ -93,7 +93,7 @@ describe("installed first-party client adapter resolution", () : any => {
     await fs.mkdir(packageRoot, { recursive: true });
     await fs.writeFile(path.join(packageRoot, "package.json"), JSON.stringify({
       name: "@meshrix/agent-codex-adapter",
-      version: "0.1.0"
+      version: mcpClientAdapterForTarget("codex").version
     }));
     const entrypoint = path.join(packageRoot, "adapter.mjs");
     await fs.writeFile(entrypoint, "process.stdout.write('x'.repeat(300 * 1024));\n");

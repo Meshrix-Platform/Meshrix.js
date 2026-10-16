@@ -27,15 +27,12 @@
     "apps/server/**/*.ts",
     "apps/mcp-gateway-installer/**/*.ts",
     "apps/entry/**/*.ts",
-    "apps/entry-gui/src/**/*.ts",
     "packages/**/*.ts",
     "tools/**/*.ts"
   ],
   "exclude": [
     "tools/server-scripts/benchmark-gateway.ts",
     "apps/console/**",
-    "apps/entry-gui/src/renderer/**",
-    "apps/entry-gui/vite.config.ts",
     "packages/ui-console/**",
     "tests/**",
     "node_modules/**",

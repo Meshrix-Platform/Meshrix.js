@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
-import { AccountEndpointAuthorityClient } from "../../../packages/gateway/src/private-endpoint/account-authority-client.ts";
+import { AccountEndpointAuthorityClient } from "../../../../packages/gateway/src/private-endpoint/account-authority-client.ts";
 
 function client(fetchImpl: typeof fetch): AccountEndpointAuthorityClient {
   const keys = generateKeyPairSync("ed25519");

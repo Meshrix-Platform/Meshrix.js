@@ -38,7 +38,9 @@ directories.workspace = true
 chrono.workspace = true
 libsignal-protocol.workspace = true
 async-trait.workspace = true
-agent-client-protocol = "3.3.0"
+a4aa.workspace = true
+awp.workspace = true
+a4aa-dialects.workspace = true
 libc.workspace = true
 gethostname = "1.1.0"
 

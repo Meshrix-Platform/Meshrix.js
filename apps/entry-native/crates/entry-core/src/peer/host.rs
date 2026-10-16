@@ -1,6 +1,6 @@
 //! The peer host thread — one dedicated `current_thread` runtime + `LocalSet`
 //! owning every `!Send` peer object: the application router, the durable
-//! engine, the ACP agent registry, and one `EntryPeerRuntime` per enrolled
+//! engine, the AwP-backed Agent registry, and one `EntryPeerRuntime` per enrolled
 //! connection. This is the faithful port of the TS product service's
 //! single-threaded composition; the multi-thread `EntryService` talks to it
 //! over unbounded channels only.
@@ -17,23 +17,21 @@ use crate::relay::entry::{EntrySession, EntrySessionEvent};
 use crate::Result;
 
 use super::application::{
-    AcpAgentSummary, AcpPermissionResolution, PeerApplicationAddress, PeerApplicationDiscoveryRecord,
-    PeerApplicationRecord, PeerApplicationRouteAuthority,
+    AcpAgentSummary, AcpPermissionResolution, PeerApplicationAddress,
+    PeerApplicationDiscoveryRecord, PeerApplicationRecord, PeerApplicationRouteAuthority,
 };
-use super::application_engine::{
-    PeerApplicationAgentDirectory, PeerApplicationEngine, PeerApplicationPeerPort,
-};
+use super::application_engine::{PeerApplicationEngine, PeerApplicationPeerPort};
 use super::application_journal::FilePeerApplicationJournal;
 use super::client::{PeerClientEvent, PeerInboundOutcome, PeerRouteIdentity};
 use super::client_store::{FilePeerClientStore, StoredOutboxEntry};
-use super::runtime::{EntryPeerRuntime, EntryPeerRuntimeOptions, EntryPeerStatus};
-use super::router::{ApplicationPeerRouteBinding, EntryApplicationPeerRouter};
 use super::identity::PairedSignalIdentity;
+use super::router::{ApplicationPeerRouteBinding, EntryApplicationPeerRouter};
+use super::runtime::{EntryPeerRuntime, EntryPeerRuntimeOptions, EntryPeerStatus};
+use crate::endpoint::runtime::PersonalEndpointInboundHandler;
 use crate::endpoint::runtime::{
     PersonalEndpointEnrollmentInput, PersonalEndpointEntryDevice, PersonalEndpointRuntime,
     PersonalEndpointRuntimeOptions, PersonalEndpointSnapshot,
 };
-use crate::endpoint::runtime::PersonalEndpointInboundHandler;
 use crate::pairing::invite::PairingInvite;
 
 /// Everything the host needs to bind one enrolled connection.
@@ -90,6 +88,7 @@ pub enum PeerHostCommand {
         target_agent_id: String,
         prompt: String,
         model: Option<String>,
+        effort: Option<String>,
         reply: oneshot::Sender<Result<PeerApplicationRecord>>,
     },
     Discover {
@@ -117,22 +116,44 @@ pub enum PeerHostCommand {
     LocalAgents {
         reply: oneshot::Sender<Result<Vec<AcpAgentSummary>>>,
     },
-    RemoteAgents {
-        address: PeerApplicationAddress,
-        reply: oneshot::Sender<Result<Vec<AcpAgentSummary>>>,
+    AgentSpecs {
+        reply: oneshot::Sender<Result<Vec<a4aa::AgentSpec>>>,
     },
-    AgentRegister {
-        input: crate::agent::registry::AcpAgentDefinitionInput,
-        reply: oneshot::Sender<Result<AcpAgentSummary>>,
+    AgentCards {
+        reply: oneshot::Sender<Result<Vec<crate::agent::registry::AgentCardAvailability>>>,
     },
-    AgentUpdate {
+    Profiles {
+        reply: oneshot::Sender<Result<Vec<awp::Profile>>>,
+    },
+    ProfileEnroll {
+        card_id: String,
+        reply: oneshot::Sender<Result<awp::Profile>>,
+    },
+    ProfileUpsert {
         id: String,
-        input: crate::agent::registry::AcpAgentDefinitionInput,
-        reply: oneshot::Sender<Result<AcpAgentSummary>>,
+        patch: awp::ProfilePatch,
+        reply: oneshot::Sender<Result<awp::Profile>>,
+    },
+    ProfileRemove {
+        id: String,
+        reply: oneshot::Sender<Result<bool>>,
+    },
+    ProfileEnable {
+        id: String,
+        enabled: bool,
+        reply: oneshot::Sender<Result<bool>>,
+    },
+    AgentUpsert {
+        spec: a4aa::AgentSpec,
+        reply: oneshot::Sender<Result<()>>,
     },
     AgentRemove {
         id: String,
         reply: oneshot::Sender<Result<bool>>,
+    },
+    RemoteAgents {
+        address: PeerApplicationAddress,
+        reply: oneshot::Sender<Result<Vec<AcpAgentSummary>>>,
     },
     Resume,
     /// Create (or replace) the personal endpoint runtime on this host thread.
@@ -228,10 +249,17 @@ impl PeerHost {
                     }
                 }));
             })
-            .map_err(|_| entry_error("peer_unavailable", "The peer host thread could not spawn."))?;
+            .map_err(|_| {
+                entry_error("peer_unavailable", "The peer host thread could not spawn.")
+            })?;
         ready_rx
             .recv_timeout(std::time::Duration::from_secs(10))
-            .map_err(|_| entry_error("peer_unavailable", "The peer host did not signal readiness."))??;
+            .map_err(|_| {
+                entry_error(
+                    "peer_unavailable",
+                    "The peer host did not signal readiness.",
+                )
+            })??;
         Ok(Arc::new(Self {
             cmd: cmd_tx,
             events: events_tx,
@@ -332,6 +360,7 @@ impl PeerHost {
         target_agent_id: String,
         prompt: String,
         model: Option<String>,
+        effort: Option<String>,
     ) -> Result<PeerApplicationRecord> {
         self.call(|reply| PeerHostCommand::Submit {
             address,
@@ -340,6 +369,7 @@ impl PeerHost {
             target_agent_id,
             prompt,
             model,
+            effort,
             reply,
         })
         .await
@@ -386,10 +416,7 @@ impl PeerHost {
             .await
     }
 
-    pub async fn get_operation(
-        &self,
-        operation_id: &str,
-    ) -> Result<Option<PeerApplicationRecord>> {
+    pub async fn get_operation(&self, operation_id: &str) -> Result<Option<PeerApplicationRecord>> {
         self.call(|reply| PeerHostCommand::GetOperation {
             operation_id: operation_id.to_string(),
             reply,
@@ -402,41 +429,73 @@ impl PeerHost {
             .await
     }
 
+    pub async fn agent_specs(&self) -> Result<Vec<a4aa::AgentSpec>> {
+        self.call(|reply| PeerHostCommand::AgentSpecs { reply })
+            .await
+    }
+
+    pub async fn agent_cards(&self) -> Result<Vec<crate::agent::registry::AgentCardAvailability>> {
+        self.call(|reply| PeerHostCommand::AgentCards { reply })
+            .await
+    }
+
+    pub async fn profiles(&self) -> Result<Vec<awp::Profile>> {
+        self.call(|reply| PeerHostCommand::Profiles { reply }).await
+    }
+
+    pub async fn profile_enroll(&self, card_id: &str) -> Result<awp::Profile> {
+        self.call(|reply| PeerHostCommand::ProfileEnroll {
+            card_id: card_id.to_owned(),
+            reply,
+        })
+        .await
+    }
+
+    pub async fn profile_upsert(&self, id: &str, patch: awp::ProfilePatch) -> Result<awp::Profile> {
+        self.call(|reply| PeerHostCommand::ProfileUpsert {
+            id: id.to_owned(),
+            patch,
+            reply,
+        })
+        .await
+    }
+
+    pub async fn profile_remove(&self, id: &str) -> Result<bool> {
+        self.call(|reply| PeerHostCommand::ProfileRemove {
+            id: id.to_owned(),
+            reply,
+        })
+        .await
+    }
+
+    pub async fn profile_set_enabled(&self, id: &str, enabled: bool) -> Result<bool> {
+        self.call(|reply| PeerHostCommand::ProfileEnable {
+            id: id.to_owned(),
+            enabled,
+            reply,
+        })
+        .await
+    }
+
+    pub async fn agent_upsert(&self, spec: a4aa::AgentSpec) -> Result<()> {
+        self.call(|reply| PeerHostCommand::AgentUpsert { spec, reply })
+            .await
+    }
+
+    pub async fn agent_remove(&self, id: &str) -> Result<bool> {
+        self.call(|reply| PeerHostCommand::AgentRemove {
+            id: id.to_owned(),
+            reply,
+        })
+        .await
+    }
+
     pub async fn remote_agents(
         &self,
         address: PeerApplicationAddress,
     ) -> Result<Vec<AcpAgentSummary>> {
         self.call(|reply| PeerHostCommand::RemoteAgents { address, reply })
             .await
-    }
-
-    pub async fn agent_register(
-        &self,
-        input: crate::agent::registry::AcpAgentDefinitionInput,
-    ) -> Result<AcpAgentSummary> {
-        self.call(|reply| PeerHostCommand::AgentRegister { input, reply })
-            .await
-    }
-
-    pub async fn agent_update(
-        &self,
-        id: &str,
-        input: crate::agent::registry::AcpAgentDefinitionInput,
-    ) -> Result<AcpAgentSummary> {
-        self.call(|reply| PeerHostCommand::AgentUpdate {
-            id: id.to_string(),
-            input,
-            reply,
-        })
-        .await
-    }
-
-    pub async fn agent_remove(&self, id: &str) -> Result<bool> {
-        self.call(|reply| PeerHostCommand::AgentRemove {
-            id: id.to_string(),
-            reply,
-        })
-        .await
     }
 
     pub async fn resume(&self) {
@@ -517,7 +576,11 @@ impl PeerHost {
 
     pub async fn shutdown(&self) {
         let (tx, rx) = oneshot::channel();
-        if self.cmd.send(PeerHostCommand::Shutdown { reply: tx }).is_ok() {
+        if self
+            .cmd
+            .send(PeerHostCommand::Shutdown { reply: tx })
+            .is_ok()
+        {
             let _ = rx.await;
         }
         if let Some(thread) = self.thread.lock().unwrap().take() {
@@ -534,10 +597,10 @@ impl Drop for PeerHost {
 }
 
 pub struct PeerHostOptions {
-    /// `<dataDir>/personal-agent` — journal + agents.json root.
+    /// `<dataDir>/personal-agent` — application journal and AwP registry root.
     pub agent_root: std::path::PathBuf,
-    /// Secret resolution for `secret_reference` agent environment sources.
-    pub secret_resolver: Arc<dyn crate::agent::registry::AcpAgentSecretResolver>,
+    /// Resolve AwP/A4AA secret references through local custody at launch.
+    pub secret_resolver: Arc<dyn a4aa::SecretResolver>,
     /// Stored-connection authority — resolved against live service state on
     /// the service's thread context, callable synchronously from the host.
     pub authority_resolver:
@@ -548,10 +611,11 @@ pub struct PeerHostOptions {
     /// Test seam — substitutes the local agent directory the engine receives.
     /// A `Send` factory because `PeerHostOptions` crosses the spawn boundary;
     /// the host thread builds the `Rc` locally on its own `LocalSet`.
-    /// (`None` = `FileAcpAgentRegistry` over `agent_root`, the production path.)
+    /// (`None` = `FileAgentProfileRegistry` over `agent_root`, the production path.)
     #[doc(hidden)]
-    pub agents_override:
-        Option<Box<dyn Fn() -> Rc<dyn super::application_engine::PeerApplicationAgentDirectory> + Send>>,
+    pub agents_override: Option<
+        Box<dyn Fn() -> Rc<dyn super::application_engine::PeerApplicationAgentDirectory> + Send>,
+    >,
 }
 
 /* ------------------------------ actor internals ---------------------------- */
@@ -559,7 +623,7 @@ pub struct PeerHostOptions {
 struct HostState {
     router: Rc<EntryApplicationPeerRouter>,
     engine: Rc<PeerApplicationEngine>,
-    registry: Rc<crate::agent::registry::FileAcpAgentRegistry>,
+    registry: Rc<crate::agent::registry::FileAgentProfileRegistry>,
     runtimes: HashMap<String, Rc<EntryPeerRuntime>>,
     unbind: HashMap<String, Box<dyn Fn()>>,
     watchers: HashMap<String, tokio::task::AbortHandle>,
@@ -578,13 +642,10 @@ async fn host_main(
 ) -> Result<()> {
     let journal_dir = options.agent_root.join("history");
     let journal = Rc::new(FilePeerApplicationJournal::new(journal_dir)?);
-    let registry = crate::agent::registry::FileAcpAgentRegistry::new(
+    let registry = crate::agent::registry::FileAgentProfileRegistry::new(
         options.agent_root.join("agents.json"),
         options.secret_resolver.clone(),
     )?;
-    // Load before accepting inbound ACP requests; otherwise a valid enrolled
-    // Agent could be mistaken for an unknown id during first recovery.
-    let _ = registry.list().await;
 
     let authority = options.authority_resolver.clone();
     let router = EntryApplicationPeerRouter::new(Some(Rc::new(move |address| {
@@ -598,22 +659,17 @@ async fn host_main(
         }) as LocalBoxFuture<'static, _>
     })));
 
-    let agents: Rc<dyn super::application_engine::PeerApplicationAgentDirectory> = match
-        &options.agents_override
-    {
-        Some(factory) => factory(),
-        None => crate::agent::detect::DetectedAgentDirectory::new(
-            registry.clone(),
-            options.secret_resolver.clone(),
-        ),
-    };
-    let engine = PeerApplicationEngine::new(
-        super::application_engine::PeerApplicationEngineOptions {
+    let agents: Rc<dyn super::application_engine::PeerApplicationAgentDirectory> =
+        match &options.agents_override {
+            Some(factory) => factory(),
+            None => registry.clone(),
+        };
+    let engine =
+        PeerApplicationEngine::new(super::application_engine::PeerApplicationEngineOptions {
             peer: router.clone(),
             journal,
             agents,
-        },
-    );
+        });
 
     let state = Rc::new(RefCell::new(HostState {
         router: router.clone(),
@@ -680,7 +736,9 @@ async fn host_main(
             } => {
                 let result = match state.borrow().runtimes.get(&connection_id) {
                     Some(runtime) => {
-                        runtime.send_message(&peer_device_id, plaintext, message_id).await
+                        runtime
+                            .send_message(&peer_device_id, plaintext, message_id)
+                            .await
                     }
                     None => Err(entry_error(
                         "peer_unavailable",
@@ -689,7 +747,10 @@ async fn host_main(
                 };
                 let _ = reply.send(result);
             }
-            PeerHostCommand::PeerStatus { connection_id, reply } => {
+            PeerHostCommand::PeerStatus {
+                connection_id,
+                reply,
+            } => {
                 let runtime = state.borrow().runtimes.get(&connection_id).cloned();
                 let result = match runtime {
                     Some(runtime) => runtime.status().await,
@@ -738,6 +799,7 @@ async fn host_main(
                 target_agent_id,
                 prompt,
                 model,
+                effort,
                 reply,
             } => {
                 let _ = reply.send(
@@ -745,7 +807,15 @@ async fn host_main(
                         .borrow()
                         .engine
                         .clone()
-                        .submit(address, operation_id, caller_agent_id, target_agent_id, prompt, model)
+                        .submit(
+                            address,
+                            operation_id,
+                            caller_agent_id,
+                            target_agent_id,
+                            prompt,
+                            model,
+                            effort,
+                        )
                         .await,
                 );
             }
@@ -755,10 +825,18 @@ async fn host_main(
                 reply,
             } => {
                 let _ = reply.send(
-                    state.borrow().engine.clone().discover_agents(address, request_id).await,
+                    state
+                        .borrow()
+                        .engine
+                        .clone()
+                        .discover_agents(address, request_id)
+                        .await,
                 );
             }
-            PeerHostCommand::Cancel { operation_id, reply } => {
+            PeerHostCommand::Cancel {
+                operation_id,
+                reply,
+            } => {
                 let _ = reply.send(state.borrow().engine.clone().cancel(&operation_id).await);
             }
             PeerHostCommand::ResolvePermission {
@@ -779,27 +857,65 @@ async fn host_main(
             PeerHostCommand::ListOperations { reply } => {
                 let _ = reply.send(state.borrow().engine.clone().list_operations().await);
             }
-            PeerHostCommand::GetOperation { operation_id, reply } => {
+            PeerHostCommand::GetOperation {
+                operation_id,
+                reply,
+            } => {
                 let _ = reply.send(
-                    state.borrow().engine.clone().get_operation(&operation_id).await,
+                    state
+                        .borrow()
+                        .engine
+                        .clone()
+                        .get_operation(&operation_id)
+                        .await,
                 );
             }
             PeerHostCommand::LocalAgents { reply } => {
                 let _ = reply.send(state.borrow().engine.clone().local_agents().await);
             }
-            PeerHostCommand::RemoteAgents { address, reply } => {
-                let _ = reply.send(
-                    state.borrow().engine.clone().remote_agents(&address).await,
-                );
+            PeerHostCommand::AgentSpecs { reply } => {
+                let _ = reply.send(state.borrow().registry.clone().list_agents());
             }
-            PeerHostCommand::AgentRegister { input, reply } => {
-                let _ = reply.send(state.borrow().registry.clone().register(input).await);
+            PeerHostCommand::AgentCards { reply } => {
+                let _ = reply.send(state.borrow().registry.clone().available_agent_cards());
             }
-            PeerHostCommand::AgentUpdate { id, input, reply } => {
-                let _ = reply.send(state.borrow().registry.clone().update(&id, input).await);
+            PeerHostCommand::Profiles { reply } => {
+                let _ = reply.send(state.borrow().registry.clone().list_profiles());
+            }
+            PeerHostCommand::ProfileEnroll { card_id, reply } => {
+                let registry = state.borrow().registry.clone();
+                let _ = reply.send(registry.enroll_card(&card_id).await);
+            }
+            PeerHostCommand::ProfileUpsert { id, patch, reply } => {
+                let registry = state.borrow().registry.clone();
+                let _ = reply.send(registry.upsert_profile(&id, patch).await);
+            }
+            PeerHostCommand::ProfileRemove { id, reply } => {
+                let registry = state.borrow().registry.clone();
+                let _ = reply.send(registry.remove_profile(&id).await);
+            }
+            PeerHostCommand::ProfileEnable { id, enabled, reply } => {
+                let registry = state.borrow().registry.clone();
+                let _ = reply.send(registry.set_profile_enabled(&id, enabled).await);
+            }
+            PeerHostCommand::AgentUpsert { spec, reply } => {
+                let registry = state.borrow().registry.clone();
+                let id = spec.id.clone();
+                let result = match registry.list_agents() {
+                    Ok(agents) if agents.iter().any(|agent| agent.id == id) => {
+                        registry.update_agent(&id, spec).await.map(|_| ())
+                    }
+                    Ok(_) => registry.register_agent(spec).await.map(|_| ()),
+                    Err(error) => Err(error),
+                };
+                let _ = reply.send(result);
             }
             PeerHostCommand::AgentRemove { id, reply } => {
-                let _ = reply.send(state.borrow().registry.clone().remove(&id).await);
+                let registry = state.borrow().registry.clone();
+                let _ = reply.send(registry.remove_agent(&id).await);
+            }
+            PeerHostCommand::RemoteAgents { address, reply } => {
+                let _ = reply.send(state.borrow().engine.clone().remote_agents(&address).await);
             }
             PeerHostCommand::Resume => {
                 let _ = state.borrow().engine.clone().resume().await;
@@ -879,11 +995,12 @@ async fn host_main(
 }
 
 fn endpoint_of(state: &Rc<RefCell<HostState>>) -> Result<PersonalEndpointRuntime> {
-    state
-        .borrow()
-        .endpoint
-        .clone()
-        .ok_or_else(|| entry_error("personal_endpoint_unavailable", "The personal endpoint is not attached."))
+    state.borrow().endpoint.clone().ok_or_else(|| {
+        entry_error(
+            "personal_endpoint_unavailable",
+            "The personal endpoint is not attached.",
+        )
+    })
 }
 
 fn endpoint_attach(
@@ -910,9 +1027,7 @@ async fn endpoint_start(state: &Rc<RefCell<HostState>>) -> Result<PersonalEndpoi
     let runtime = endpoint_of(state)?;
     let snapshot = runtime.start().await?;
     if state.borrow().endpoint_unbind.is_none() {
-        let (Some(address), Some(client)) =
-            (runtime.claimed_route(), runtime.peer_client())
-        else {
+        let (Some(address), Some(client)) = (runtime.claimed_route(), runtime.peer_client()) else {
             return Ok(snapshot);
         };
         let runtime_allow = runtime.clone();
@@ -952,9 +1067,7 @@ async fn endpoint_start(state: &Rc<RefCell<HostState>>) -> Result<PersonalEndpoi
             resolve_peer_authority: Some(Rc::new(move |peer_device_id| {
                 let runtime = runtime_authority.clone();
                 let route = route_of(peer_device_id);
-                Box::pin(
-                    async move { runtime.resolve_peer_authority(&route).await },
-                )
+                Box::pin(async move { runtime.resolve_peer_authority(&route).await })
                     as LocalBoxFuture<'static, PeerApplicationRouteAuthority>
             })),
             is_reachable: Rc::new(move |peer_device_id| {
@@ -962,18 +1075,21 @@ async fn endpoint_start(state: &Rc<RefCell<HostState>>) -> Result<PersonalEndpoi
                 Box::pin(async move { runtime.is_peer_reachable(&peer_device_id).await })
                     as LocalBoxFuture<'static, bool>
             }),
-            subscribe: Some(Rc::new(move |handler: super::client::PeerDispatchHandler| {
-                // Adapt the router dispatch handler into the runtime's
-                // sender-validated inbound signature; the address argument
-                // is already pinned to this binding by the router itself.
-                runtime_sub.on_inbound_message(Rc::new(
-                    move |inbound: crate::endpoint::runtime::PersonalEndpointInboundMessage| {
-                        let handler = handler.clone();
-                        Box::pin(async move { handler(inbound.message).await })
-                            as LocalBoxFuture<'static, PeerInboundOutcome>
-                    },
-                ) as PersonalEndpointInboundHandler)
-            })),
+            subscribe: Some(Rc::new(
+                move |handler: super::client::PeerDispatchHandler| {
+                    // Adapt the router dispatch handler into the runtime's
+                    // sender-validated inbound signature; the address argument
+                    // is already pinned to this binding by the router itself.
+                    runtime_sub.on_inbound_message(Rc::new(
+                        move |inbound: crate::endpoint::runtime::PersonalEndpointInboundMessage| {
+                            let handler = handler.clone();
+                            Box::pin(async move { handler(inbound.message).await })
+                                as LocalBoxFuture<'static, PeerInboundOutcome>
+                        },
+                    )
+                        as PersonalEndpointInboundHandler)
+                },
+            )),
         };
         let unregister = state.borrow().router.clone().register(binding)?;
         state.borrow_mut().endpoint_unbind = Some(unregister);
@@ -992,10 +1108,7 @@ async fn endpoint_stop(state: &Rc<RefCell<HostState>>) {
     }
 }
 
-async fn attach(
-    state: &Rc<RefCell<HostState>>,
-    request: PeerAttachRequest,
-) -> Result<()> {
+async fn attach(state: &Rc<RefCell<HostState>>, request: PeerAttachRequest) -> Result<()> {
     detach(state, &request.connection_id).await;
 
     let (client_events_tx, mut client_events_rx) = mpsc::unbounded_channel::<PeerClientEvent>();
@@ -1071,8 +1184,7 @@ async fn attach(
                     tokio::task::spawn_blocking(move || authority())
                         .await
                         .unwrap_or(PeerApplicationRouteAuthority::Unavailable)
-                })
-                    as LocalBoxFuture<'static, PeerApplicationRouteAuthority>
+                }) as LocalBoxFuture<'static, PeerApplicationRouteAuthority>
             })
         }),
         is_reachable: {

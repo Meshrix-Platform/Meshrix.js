@@ -52,6 +52,8 @@ export const ROOT_SOURCE_FILES: readonly string[] = Object.freeze([
 
 export const INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS: readonly string[] = Object.freeze([
   "tools/server-scripts/benchmark-gateway.ts",
+  "apps/entry-native/tools/build-linux.mjs",
+  "apps/entry-native/tools/package-linux.mjs",
   "docs/plans",
   "docs/reports"
 ]);

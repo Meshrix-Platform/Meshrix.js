@@ -1,6 +1,6 @@
 //! Meshrix Entry — native CLI + ratatui TUI on `entry-core`.
 //!
-//! Commands mirror the TS `apps/entry` surface: account login, pairing
+//! Commands cover account login, pairing
 //! (challenge + browser step-up + completion), forward sessions, operation
 //! queries, recovery bootstrap, MCP stdio bridge and a live TUI dashboard.
 
@@ -19,7 +19,11 @@ use meshrix_entry_core::service::{EntryService, FileCustodyOpts, ServiceConfig, 
 use serde_json::{json, Value};
 
 #[derive(Parser)]
-#[command(name = "meshrix-entry", version, about = "Meshrix Entry client — native binary")]
+#[command(
+    name = "meshrix-entry",
+    version,
+    about = "Meshrix Entry client — native binary"
+)]
 struct Cli {
     /// Data directory for config + file custody (default: platform config dir).
     #[arg(long, global = true, env = "MESHRIX_ENTRY_DATA_DIR")]
@@ -114,59 +118,47 @@ enum Command {
         capabilities: Option<String>,
     },
     /// Serve the agent-facing MCP tool surface over stdio: paired devices as
-    /// destinations, remote agent discovery and durable task submission —
-    /// the same contract the desktop `--mcp-stdio` owner bridge exposes.
+    /// destinations, remote profile discovery and durable task submission.
     Mcp,
-    /// List local ACP agents hosted on this device.
+    /// List locally selectable AwP profiles hosted by this device.
     Agents,
-    /// Register a local ACP agent (subprocess, executed under "ask" policy).
-    AgentAdd {
-        /// Display name.
-        name: String,
-        /// Executable path or name.
-        command: String,
-        /// Argument for the command (repeatable).
-        #[arg(long = "arg")]
-        args: Vec<String>,
-        /// Working directory (default: current dir).
-        #[arg(long)]
-        cwd: Option<PathBuf>,
-        /// Environment: NAME=VALUE (host env passthrough) or
-        /// NAME=@custody-ref (secret resolved from custody at launch).
-        #[arg(long = "env")]
-        environment: Vec<String>,
-    },
-    /// Update a local agent definition (same fields as agent-add).
-    AgentUpdate {
-        id: String,
-        name: String,
-        command: String,
-        #[arg(long = "arg")]
-        args: Vec<String>,
-        #[arg(long)]
-        cwd: Option<PathBuf>,
-        #[arg(long = "env")]
-        environment: Vec<String>,
-    },
-    /// Remove a local agent definition.
+    /// List saved A4AA base-agent specifications.
+    AgentSpecs,
+    /// List installed/available maintained A4AA cards without saving them.
+    AgentCards,
+    /// Register or update one A4AA AgentSpec from JSON.
+    AgentUpsert { spec_json: String },
+    /// Remove one A4AA AgentSpec and its dependent behavior profiles.
     AgentRemove { id: String },
-    /// Fetch the remote agent catalog for a connection.
+    /// List AwP behavior profiles.
+    Profiles,
+    /// Explicitly enroll one A4AA card, creating its AgentSpec and AwP profile.
+    ProfileEnroll { card_id: String },
+    /// Create or patch using AwP ProfilePatch JSON; unsupported fields are rejected.
+    ProfileUpsert { id: String, patch_json: String },
+    /// Remove one AwP behavior profile.
+    ProfileRemove { id: String },
+    /// Enable or disable a profile in the local Peer catalog.
+    ProfileSetEnabled { id: String, enabled: bool },
+    /// Fetch the remote callable-profile catalog for a connection.
     RemoteAgents { connection_id: String },
     /// Trigger a live remote agent scan for a connection (the catalog
     /// request); prints the completed discovery record.
     RemoteDiscover { connection_id: String },
-    /// Submit a prompt to a remote agent and stream progress to a terminal
-    /// state (the primary ACP conversation path).
+    /// Submit a prompt to a remote profile and stream progress to a terminal
+    /// state.
     Chat {
         connection_id: String,
-        /// Remote agent id (from `remote-agents`).
+        /// Opaque remote profile id (from `remote-agents`).
         agent: String,
         /// Prompt text.
         prompt: String,
-        /// Remote model selector as `model[effort]` (e.g.
-        /// `gpt-6.1-sol[low]`); bare model ids leave the effort untouched.
+        /// Per-turn model override; AwP profile defaults apply when omitted.
         #[arg(long)]
         model: Option<String>,
+        /// Per-turn reasoning effort override; AwP profile defaults apply when omitted.
+        #[arg(long)]
+        effort: Option<String>,
         /// Print the operation id and exit without waiting for completion.
         #[arg(long)]
         no_wait: bool,
@@ -360,10 +352,12 @@ fn open_service(cli: &Cli) -> anyhow::Result<EntryService> {
         None
     };
     let account_access = match (&cli.account_access_id, &cli.account_access_secret) {
-        (Some(client_id), Some(client_secret)) => Some(meshrix_entry_core::account::AccessServiceToken {
-            client_id: client_id.clone(),
-            client_secret: client_secret.clone(),
-        }),
+        (Some(client_id), Some(client_secret)) => {
+            Some(meshrix_entry_core::account::AccessServiceToken {
+                client_id: client_id.clone(),
+                client_secret: client_secret.clone(),
+            })
+        }
         (None, None) => None,
         _ => anyhow::bail!("--account-access-id and --account-access-secret must be set together"),
     };
@@ -394,10 +388,37 @@ fn print_json(value: &Value) {
     println!("{}", serde_json::to_string_pretty(value).unwrap());
 }
 
-async fn poll_login(service: &EntryService, transaction_id: &str, verifier: &str) -> anyhow::Result<()> {
+/// Local summary deliberately omits instructions, paths, environment values,
+/// MCP credentials and other potentially private profile configuration.
+fn profile_summary(profile: &awp::Profile, enabled: Option<bool>) -> Value {
+    let mut summary = json!({
+        "id": profile.id.as_str(),
+        "name": profile.name.as_str(),
+        "agent": profile.agent.as_str(),
+        "revision": profile.revision.as_deref(),
+        "model": profile.model.as_deref(),
+        "effort": profile.effort.as_deref(),
+        "mode": profile.mode.as_deref(),
+        "permission": profile.permission.as_deref(),
+        "instructionMode": profile.instruction_mode,
+    });
+    if let Some(enabled) = enabled {
+        summary["enabled"] = json!(enabled);
+    }
+    summary
+}
+
+async fn poll_login(
+    service: &EntryService,
+    transaction_id: &str,
+    verifier: &str,
+) -> anyhow::Result<()> {
     for _ in 0..150 {
         tokio::time::sleep(Duration::from_secs(2)).await;
-        match service.poll_account_login(transaction_id, verifier)?.as_str() {
+        match service
+            .poll_account_login(transaction_id, verifier)?
+            .as_str()
+        {
             "complete" => {
                 println!("signed in");
                 return Ok(());
@@ -425,7 +446,9 @@ async fn main() -> anyhow::Result<()> {
     let service = open_service(&cli)?;
     match &cli.command {
         Command::Status => {
-            print_json(&meshrix_entry_core::service::redacted_state_json(&service.state()));
+            print_json(&meshrix_entry_core::service::redacted_state_json(
+                &service.state(),
+            ));
         }
         Command::Login { no_wait } => {
             let tx = service.begin_account_login()?;
@@ -439,7 +462,10 @@ async fn main() -> anyhow::Result<()> {
                 poll_login(&service, &tx.transaction_id, &tx.verifier).await?;
             }
         }
-        Command::LoginPoll { transaction_id, verifier } => {
+        Command::LoginPoll {
+            transaction_id,
+            verifier,
+        } => {
             let state = service.poll_account_login(transaction_id, verifier)?;
             println!("{state}");
         }
@@ -458,7 +484,9 @@ async fn main() -> anyhow::Result<()> {
                 "transactionId": tx.transaction_id,
             }));
             if *no_wait {
-                println!("(pairing cannot be resumed from another process — rerun `pair` to start over)");
+                println!(
+                    "(pairing cannot be resumed from another process — rerun `pair` to start over)"
+                );
                 return Ok(());
             }
             let mut completed = None;
@@ -469,7 +497,11 @@ async fn main() -> anyhow::Result<()> {
                     StepUpPoll::Expired | StepUpPoll::Consumed => {
                         bail!("step-up approval expired; start pairing again")
                     }
-                    StepUpPoll::Complete { account, permit_id, target } => {
+                    StepUpPoll::Complete {
+                        account,
+                        permit_id,
+                        target,
+                    } => {
                         completed = Some((account, permit_id, target));
                         break;
                     }
@@ -506,12 +538,18 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Command::Request { connection_id, message } => {
+        Command::Request {
+            connection_id,
+            message,
+        } => {
             let msg: Value = serde_json::from_str(message).context("message must be JSON")?;
             let result = service.request(connection_id, msg).await?;
             print_json(&result);
         }
-        Command::QueryOp { connection_id, operation_id } => {
+        Command::QueryOp {
+            connection_id,
+            operation_id,
+        } => {
             let result = service.query_operation(connection_id, operation_id).await?;
             print_json(&result);
         }
@@ -519,11 +557,20 @@ async fn main() -> anyhow::Result<()> {
             service.disconnect(connection_id).await;
             println!("disconnected");
         }
-        Command::Recover { connection_id, recovery_text } => {
-            let outcome = service.recover_connection(connection_id, recovery_text).await?;
+        Command::Recover {
+            connection_id,
+            recovery_text,
+        } => {
+            let outcome = service
+                .recover_connection(connection_id, recovery_text)
+                .await?;
             println!("{outcome}");
         }
-        Command::McpStdio { connection_id, server_info, capabilities } => {
+        Command::McpStdio {
+            connection_id,
+            server_info,
+            capabilities,
+        } => {
             let session = service.connect(connection_id).await?;
             let info = server_info
                 .as_deref()
@@ -557,21 +604,59 @@ async fn main() -> anyhow::Result<()> {
         Command::Agents => {
             print_json(&json!({ "agents": service.local_agents().await? }));
         }
-        Command::AgentAdd { name, command, args, cwd, environment } => {
-            let summary = service
-                .agent_register(agent_input(None, name, command, args, cwd, environment)?)
-                .await?;
-            print_json(&serde_json::to_value(&summary)?);
+        Command::AgentSpecs => {
+            let ids = service
+                .agent_specs()
+                .await?
+                .into_iter()
+                .map(|spec| spec.id)
+                .collect::<Vec<_>>();
+            print_json(&json!({ "agentIds": ids }));
         }
-        Command::AgentUpdate { id, name, command, args, cwd, environment } => {
-            let summary = service
-                .agent_update(id, agent_input(Some(id.clone()), name, command, args, cwd, environment)?)
-                .await?;
-            print_json(&serde_json::to_value(&summary)?);
+        Command::AgentCards => {
+            print_json(&json!({ "cards": service.agent_cards().await? }));
+        }
+        Command::AgentUpsert { spec_json } => {
+            let spec: a4aa::AgentSpec = serde_json::from_str(spec_json)
+                .context("agent spec must be an A4AA AgentSpec JSON object")?;
+            service.agent_upsert(spec).await?;
+            print_json(&json!({ "saved": true }));
         }
         Command::AgentRemove { id } => {
             let removed = service.agent_remove(id).await?;
             print_json(&json!({ "removed": removed }));
+        }
+        Command::Profiles => {
+            let profiles = service.profiles().await?;
+            let enabled = service
+                .local_agents()
+                .await?
+                .into_iter()
+                .map(|summary| (summary.id, summary.enabled))
+                .collect::<std::collections::HashMap<_, _>>();
+            let summaries = profiles
+                .iter()
+                .map(|profile| profile_summary(profile, enabled.get(&profile.id).copied()))
+                .collect::<Vec<_>>();
+            print_json(&json!({ "profiles": summaries }));
+        }
+        Command::ProfileEnroll { card_id } => {
+            let profile = service.profile_enroll(card_id).await?;
+            print_json(&profile_summary(&profile, None));
+        }
+        Command::ProfileUpsert { id, patch_json } => {
+            let patch: awp::ProfilePatch = serde_json::from_str(patch_json)
+                .context("profile patch must be an AwP ProfilePatch JSON object")?;
+            let profile = service.profile_upsert(id, patch).await?;
+            print_json(&profile_summary(&profile, None));
+        }
+        Command::ProfileRemove { id } => {
+            let removed = service.profile_remove(id).await?;
+            print_json(&json!({ "removed": removed }));
+        }
+        Command::ProfileSetEnabled { id, enabled } => {
+            let updated = service.profile_set_enabled(id, *enabled).await?;
+            print_json(&json!({ "id": id, "enabled": enabled, "updated": updated }));
         }
         Command::RemoteAgents { connection_id } => {
             service.connect(connection_id).await?;
@@ -581,9 +666,7 @@ async fn main() -> anyhow::Result<()> {
         Command::RemoteDiscover { connection_id } => {
             service.connect(connection_id).await?;
             let mut events = service.peer_events()?;
-            let record = service
-                .application_discover(connection_id, None)
-                .await?;
+            let record = service.application_discover(connection_id, None).await?;
             if record.status == "completed" {
                 print_json(&serde_json::to_value(&record)?);
                 return Ok(());
@@ -614,7 +697,15 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Command::Chat { connection_id, agent, prompt, model, no_wait, caller_agent } => {
+        Command::Chat {
+            connection_id,
+            agent,
+            prompt,
+            model,
+            effort,
+            no_wait,
+            caller_agent,
+        } => {
             // Ensure the session is live before submitting — admission opens
             // the peer lane the operation rides on.
             service.connect(connection_id).await?;
@@ -627,6 +718,7 @@ async fn main() -> anyhow::Result<()> {
                     agent,
                     prompt,
                     model.clone(),
+                    effort.clone(),
                 )
                 .await?;
             print_json(&serde_json::to_value(&record)?);
@@ -638,29 +730,39 @@ async fn main() -> anyhow::Result<()> {
         Command::Ops => {
             print_json(&json!({ "operations": service.application_operations().await? }));
         }
-        Command::Op { operation_id } => {
-            match service.application_operation(operation_id).await? {
-                Some(record) => print_json(&serde_json::to_value(&record)?),
-                None => bail!("operation {operation_id} not found"),
-            }
-        }
+        Command::Op { operation_id } => match service.application_operation(operation_id).await? {
+            Some(record) => print_json(&serde_json::to_value(&record)?),
+            None => bail!("operation {operation_id} not found"),
+        },
         Command::OpCancel { operation_id } => {
             let record = service.application_cancel(operation_id).await?;
             print_json(&serde_json::to_value(&record)?);
         }
-        Command::Inbox { connection_id, limit, after } => {
+        Command::Inbox {
+            connection_id,
+            limit,
+            after,
+        } => {
             let result = service.peer_inbox(connection_id, *limit, *after).await?;
             print_json(&serde_json::to_value(&result)?);
         }
-        Command::Safety { connection_id, peer_device_id } => {
-            let result = service.peer_pair_safety(connection_id, peer_device_id).await?;
+        Command::Safety {
+            connection_id,
+            peer_device_id,
+        } => {
+            let result = service
+                .peer_pair_safety(connection_id, peer_device_id)
+                .await?;
             print_json(&serde_json::to_value(&result)?);
         }
         Command::SignOut => {
             service.sign_out()?;
             println!("signed out");
         }
-        Command::Revoke { connection_id, remote } => {
+        Command::Revoke {
+            connection_id,
+            remote,
+        } => {
             service.revoke_connection(connection_id, *remote).await?;
             println!("{}", if *remote { "revoked" } else { "disconnected" });
         }
@@ -672,11 +774,18 @@ async fn main() -> anyhow::Result<()> {
             };
             print_json(&result);
         }
-        Command::Permit { operation_id, permission_id, option, deny } => {
+        Command::Permit {
+            operation_id,
+            permission_id,
+            option,
+            deny,
+        } => {
             let resolution = if *deny {
                 meshrix_entry_core::peer::AcpPermissionResolution::Cancelled
             } else {
-                let option = option.clone().context("--option <id> selects a permission option (or pass --deny)")?;
+                let option = option
+                    .clone()
+                    .context("--option <id> selects a permission option (or pass --deny)")?;
                 meshrix_entry_core::peer::AcpPermissionResolution::Selected { option_id: option }
             };
             let record = service
@@ -738,71 +847,83 @@ async fn main() -> anyhow::Result<()> {
                 let devices = service.endpoint_peer_status().await?;
                 print_json(&json!({ "devices": devices }));
             }
-            EndpointCommand::Send { peer_device_id, message, message_id } => {
+            EndpointCommand::Send {
+                peer_device_id,
+                message,
+                message_id,
+            } => {
                 let entry = service
                     .endpoint_peer_send(peer_device_id, message.as_bytes(), message_id.clone())
                     .await?;
                 print_json(&serde_json::to_value(&entry)?);
             }
         },
-        Command::Recovery { command } => match command {
-            RecoveryCommand::Status => {
-                print_json(&service.recovery_view());
-            }
-            RecoveryCommand::Begin => {
-                print_json(&service.begin_recovery_setup()?);
-            }
-            RecoveryCommand::Reveal => {
-                print_json(&service.reveal_recovery_key()?);
-            }
-            RecoveryCommand::Confirm => {
-                print_json(&service.confirm_recovery_saved().await?);
-            }
-            RecoveryCommand::Rotate => {
-                print_json(&service.begin_recovery_rotation().await?);
-            }
-            RecoveryCommand::Publish => {
-                print_json(&service.publish_snapshot().await?);
-            }
-            RecoveryCommand::RetryWriter => {
-                print_json(&service.retry_vault_writer_registration().await?);
-            }
-            RecoveryCommand::PollWriter => {
-                for _ in 0..150 {
-                    match service.poll_vault_writer_step_up().await? {
-                        meshrix_entry_core::service::VaultWriterStepUpPoll::Idle => {
-                            println!("no pending writer registration");
-                            break;
+        Command::Recovery { command } => {
+            match command {
+                RecoveryCommand::Status => {
+                    print_json(&service.recovery_view());
+                }
+                RecoveryCommand::Begin => {
+                    print_json(&service.begin_recovery_setup()?);
+                }
+                RecoveryCommand::Reveal => {
+                    print_json(&service.reveal_recovery_key()?);
+                }
+                RecoveryCommand::Confirm => {
+                    print_json(&service.confirm_recovery_saved().await?);
+                }
+                RecoveryCommand::Rotate => {
+                    print_json(&service.begin_recovery_rotation().await?);
+                }
+                RecoveryCommand::Publish => {
+                    print_json(&service.publish_snapshot().await?);
+                }
+                RecoveryCommand::RetryWriter => {
+                    print_json(&service.retry_vault_writer_registration().await?);
+                }
+                RecoveryCommand::PollWriter => {
+                    for _ in 0..150 {
+                        match service.poll_vault_writer_step_up().await? {
+                            meshrix_entry_core::service::VaultWriterStepUpPoll::Idle => {
+                                println!("no pending writer registration");
+                                break;
+                            }
+                            meshrix_entry_core::service::VaultWriterStepUpPoll::Pending {
+                                browser_url,
+                                user_code,
+                            } => {
+                                println!("approve the vault writer registration in your browser (code {user_code}):\n{browser_url}");
+                            }
+                            meshrix_entry_core::service::VaultWriterStepUpPoll::Expired => {
+                                bail!("the writer authorization expired; retry registration");
+                            }
+                            meshrix_entry_core::service::VaultWriterStepUpPoll::Consumed => {
+                                bail!("the writer authorization was consumed without completing");
+                            }
+                            meshrix_entry_core::service::VaultWriterStepUpPoll::Complete => {
+                                print_json(&service.recovery_view());
+                                break;
+                            }
                         }
-                        meshrix_entry_core::service::VaultWriterStepUpPoll::Pending { browser_url, user_code } => {
-                            println!("approve the vault writer registration in your browser (code {user_code}):\n{browser_url}");
-                        }
-                        meshrix_entry_core::service::VaultWriterStepUpPoll::Expired => {
-                            bail!("the writer authorization expired; retry registration");
-                        }
-                        meshrix_entry_core::service::VaultWriterStepUpPoll::Consumed => {
-                            bail!("the writer authorization was consumed without completing");
-                        }
-                        meshrix_entry_core::service::VaultWriterStepUpPoll::Complete => {
-                            print_json(&service.recovery_view());
-                            break;
-                        }
+                        tokio::time::sleep(Duration::from_secs(2)).await;
                     }
-                    tokio::time::sleep(Duration::from_secs(2)).await;
                 }
-            }
-            RecoveryCommand::RetryRotation => {
-                print_json(&service.retry_rotation_delivery().await?);
-            }
-            RecoveryCommand::AbortRotation => {
-                print_json(&service.abort_rotation()?);
-            }
-            RecoveryCommand::Import { recovery_text, service_url, access } => {
-                struct FileAccess {
-                    body: serde_json::Value,
+                RecoveryCommand::RetryRotation => {
+                    print_json(&service.retry_rotation_delivery().await?);
                 }
-                impl meshrix_entry_core::recovery::service::RecoveryAccessPort for FileAccess {
-                    fn provision(
+                RecoveryCommand::AbortRotation => {
+                    print_json(&service.abort_rotation()?);
+                }
+                RecoveryCommand::Import {
+                    recovery_text,
+                    service_url,
+                    access,
+                } => {
+                    struct FileAccess {
+                        body: serde_json::Value,
+                    }
+                    impl meshrix_entry_core::recovery::service::RecoveryAccessPort for FileAccess {
+                        fn provision(
                         &self,
                         _vault_id: &str,
                     ) -> std::pin::Pin<
@@ -814,16 +935,16 @@ async fn main() -> anyhow::Result<()> {
                                 > + Send
                                 + '_,
                         >,
-                    > {
-                        let body = self.body.clone();
-                        Box::pin(async move {
-                            let get = |k: &str| body.get(k).and_then(|v| v.as_str());
-                            if body.get("outcome").and_then(|v| v.as_str()) == Some("refused") {
-                                return Ok(meshrix_entry_core::recovery::service::RecoveryAccessOutcome::Refused {
+                        >{
+                            let body = self.body.clone();
+                            Box::pin(async move {
+                                let get = |k: &str| body.get(k).and_then(|v| v.as_str());
+                                if body.get("outcome").and_then(|v| v.as_str()) == Some("refused") {
+                                    return Ok(meshrix_entry_core::recovery::service::RecoveryAccessOutcome::Refused {
                                     refusal: get("refusal").unwrap_or("refused").to_string(),
                                 });
-                            }
-                            Ok(meshrix_entry_core::recovery::service::RecoveryAccessOutcome::Issued {
+                                }
+                                Ok(meshrix_entry_core::recovery::service::RecoveryAccessOutcome::Issued {
                                 device_id: get("deviceId").unwrap_or_default().to_string(),
                                 relay_credential: get("relayCredential").unwrap_or_default().to_string(),
                                 tenant_id: get("tenantId").unwrap_or_default().to_string(),
@@ -833,47 +954,57 @@ async fn main() -> anyhow::Result<()> {
                                 revocation_revision: body
                                     .get("revocationRevision").and_then(|v| v.as_u64()).unwrap_or(0),
                             })
-                        })
+                            })
+                        }
                     }
-                }
-                let provisioner = match &access {
-                    Some(path) => {
-                        let body: serde_json::Value =
-                            serde_json::from_str(&std::fs::read_to_string(path)?)?;
-                        Some(FileAccess { body })
-                    }
-                    None => None,
-                };
-                let outcome = service
+                    let provisioner = match &access {
+                        Some(path) => {
+                            let body: serde_json::Value =
+                                serde_json::from_str(&std::fs::read_to_string(path)?)?;
+                            Some(FileAccess { body })
+                        }
+                        None => None,
+                    };
+                    let outcome = service
                     .import_recovery_text(&recovery_text, service_url.as_deref(), provisioner.as_ref().map(|p| -> &dyn meshrix_entry_core::recovery::service::RecoveryAccessPort { p }))
                     .await?;
-                print_json(&serde_json::json!({
-                    "phase": match &outcome {
-                        meshrix_entry_core::service::RecoveryImportPhase::Enrolled { .. } => "enrolled",
-                        meshrix_entry_core::service::RecoveryImportPhase::Refused { .. } => "refused",
-                        meshrix_entry_core::service::RecoveryImportPhase::SnapshotMissing => "snapshot_missing",
-                        meshrix_entry_core::service::RecoveryImportPhase::SnapshotUnusable { .. } => "snapshot_unusable",
-                    },
-                    "outcome": match &outcome {
-                        meshrix_entry_core::service::RecoveryImportPhase::Enrolled { connection_id, vault_id, key_id, generation } =>
-                            serde_json::json!({"connectionId": connection_id, "vaultId": vault_id, "keyId": key_id, "generation": generation}),
-                        meshrix_entry_core::service::RecoveryImportPhase::Refused { refusal } =>
-                            serde_json::json!({"refusal": refusal}),
-                        meshrix_entry_core::service::RecoveryImportPhase::SnapshotUnusable { reason } =>
-                            serde_json::json!({"reason": reason}),
-                        _ => serde_json::Value::Null,
-                    },
-                }));
+                    print_json(&serde_json::json!({
+                        "phase": match &outcome {
+                            meshrix_entry_core::service::RecoveryImportPhase::Enrolled { .. } => "enrolled",
+                            meshrix_entry_core::service::RecoveryImportPhase::Refused { .. } => "refused",
+                            meshrix_entry_core::service::RecoveryImportPhase::SnapshotMissing => "snapshot_missing",
+                            meshrix_entry_core::service::RecoveryImportPhase::SnapshotUnusable { .. } => "snapshot_unusable",
+                        },
+                        "outcome": match &outcome {
+                            meshrix_entry_core::service::RecoveryImportPhase::Enrolled { connection_id, vault_id, key_id, generation } =>
+                                serde_json::json!({"connectionId": connection_id, "vaultId": vault_id, "keyId": key_id, "generation": generation}),
+                            meshrix_entry_core::service::RecoveryImportPhase::Refused { refusal } =>
+                                serde_json::json!({"refusal": refusal}),
+                            meshrix_entry_core::service::RecoveryImportPhase::SnapshotUnusable { reason } =>
+                                serde_json::json!({"reason": reason}),
+                            _ => serde_json::Value::Null,
+                        },
+                    }));
+                }
             }
-        },
+        }
         Command::Grant { command } => match command {
             GrantCommand::Catalog { connection_id } => {
-                print_json(&serde_json::to_value(service.load_grant_catalog(connection_id).await?)?);
+                print_json(&serde_json::to_value(
+                    service.load_grant_catalog(connection_id).await?,
+                )?);
             }
-            GrantCommand::Request { connection_id, scopes } => {
-                let (_view, transaction) =
-                    service.request_grant_access(connection_id, scopes.clone()).await?;
-                println!("approve the grant in your browser (code {}):\n{}", transaction.user_code, transaction.browser_url);
+            GrantCommand::Request {
+                connection_id,
+                scopes,
+            } => {
+                let (_view, transaction) = service
+                    .request_grant_access(connection_id, scopes.clone())
+                    .await?;
+                println!(
+                    "approve the grant in your browser (code {}):\n{}",
+                    transaction.user_code, transaction.browser_url
+                );
                 for _ in 0..150 {
                     match service.poll_grant_access(&transaction).await? {
                         meshrix_entry_core::service::GrantPoll::Pending => {}
@@ -907,7 +1038,10 @@ fn endpoint_step_up_driver(service: std::sync::Arc<EntryService>) -> StepUpDrive
         let service = service.clone();
         Box::pin(async move {
             let tx = service.begin_endpoint_step_up(&request)?;
-            println!("approve the personal route claim in your browser (code {}):\n{}", tx.user_code, tx.browser_url);
+            println!(
+                "approve the personal route claim in your browser (code {}):\n{}",
+                tx.user_code, tx.browser_url
+            );
             for _ in 0..150 {
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 match service.poll_endpoint_step_up(&request, &tx)? {
@@ -918,8 +1052,16 @@ fn endpoint_step_up_driver(service: std::sync::Arc<EntryService>) -> StepUpDrive
                             "The personal route approval expired; start enrollment again.",
                         ));
                     }
-                    StepUpPoll::Complete { account, permit_id, target } => {
-                        return Ok(PersonalEndpointStepUpResult { account, permit_id, target });
+                    StepUpPoll::Complete {
+                        account,
+                        permit_id,
+                        target,
+                    } => {
+                        return Ok(PersonalEndpointStepUpResult {
+                            account,
+                            permit_id,
+                            target,
+                        });
                     }
                 }
             }
@@ -927,45 +1069,11 @@ fn endpoint_step_up_driver(service: std::sync::Arc<EntryService>) -> StepUpDrive
                 "account_step_up_expired",
                 "Timed out waiting for the personal route approval.",
             ))
-        }) as futures_util::future::LocalBoxFuture<
-            'static,
-            meshrix_entry_core::Result<PersonalEndpointStepUpResult>,
-        >
-    })
-}
-
-/// `NAME=VALUE` passes a host environment variable name; `NAME=@ref` stores
-/// a custody reference that resolves at agent launch time only.
-fn agent_input(
-    id: Option<String>,
-    name: &str,
-    command: &str,
-    args: &[String],
-    cwd: &Option<PathBuf>,
-    environment: &[String],
-) -> anyhow::Result<meshrix_entry_core::agent::registry::AcpAgentDefinitionInput> {
-    use meshrix_entry_core::agent::registry::AcpEnvironmentSource;
-    let mut env = std::collections::BTreeMap::new();
-    for entry in environment {
-        let Some((k, v)) = entry.split_once('=') else {
-            bail!("env entries must be NAME=VALUE or NAME=@custody-ref")
-        };
-        let source = if let Some(reference) = v.strip_prefix('@') {
-            AcpEnvironmentSource::SecretReference { reference: reference.to_string() }
-        } else {
-            AcpEnvironmentSource::HostEnvironment { variable: v.to_string() }
-        };
-        env.insert(k.to_string(), source);
-    }
-    Ok(meshrix_entry_core::agent::registry::AcpAgentDefinitionInput {
-        id,
-        display_name: name.to_string(),
-        description: None,
-        command: command.to_string(),
-        args: args.to_vec(),
-        cwd: cwd.clone().unwrap_or(std::env::current_dir()?),
-        environment: env,
-        enabled: true,
+        })
+            as futures_util::future::LocalBoxFuture<
+                'static,
+                meshrix_entry_core::Result<PersonalEndpointStepUpResult>,
+            >
     })
 }
 
@@ -1049,10 +1157,7 @@ fn session_view(session: &meshrix_entry_core::relay::EntrySession) -> Value {
 }
 
 mod agent_mcp {
-    //! Agent-facing MCP surface: the same six-tool contract the desktop
-    //! `--mcp-stdio` owner bridge serves (`personal-mcp.ts`), backed by
-    //! `EntryService` directly so hosts can use it headless — no running
-    //! GUI owner required.
+    //! Agent-facing MCP tools backed directly by `EntryService`.
 
     use std::sync::Arc;
 
@@ -1068,7 +1173,7 @@ mod agent_mcp {
         },
         {
             "name": "meshrix_discover_agents",
-            "description": "Discover the enrolled Agents available on one paired device.",
+            "description": "Discover the enrolled AwP profiles exposed as callable Agents on one paired device.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -1081,15 +1186,16 @@ mod agent_mcp {
         },
         {
             "name": "meshrix_send_task",
-            "description": "Send a task to an enrolled Agent on a paired device. Generate one operationId per new task; reuse the same value to retry an unknown response, then query task status before attempting another call. A disconnected route rejects new work without accepting it.",
+            "description": "Send a task to an enrolled AwP profile exposed as an Agent on a paired device. Generate one operationId per new task; reuse the same value to retry an unknown response, then query task status before attempting another call. A disconnected route rejects new work without accepting it.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "operationId": { "type": "string", "minLength": 8, "maxLength": 128 },
                     "destinationHandle": { "type": "string", "minLength": 1 },
-                    "targetAgentId": { "type": "string", "minLength": 1 },
+                    "targetAgentId": { "type": "string", "minLength": 1, "description": "Opaque profile id returned by meshrix_discover_agents." },
                     "prompt": { "type": "string", "minLength": 1 },
-                    "model": { "type": "string", "description": "Optional remote model selector as model[effort]." }
+                    "model": { "type": "string", "description": "Optional per-turn model override; profile defaults apply when omitted." },
+                    "effort": { "type": "string", "description": "Optional per-turn reasoning effort override; profile defaults apply when omitted." }
                 },
                 "required": ["operationId", "destinationHandle", "targetAgentId", "prompt"],
                 "additionalProperties": false
@@ -1151,18 +1257,43 @@ mod agent_mcp {
         args.get(key).and_then(Value::as_str)
     }
 
+    fn optional_selector(args: &Value, key: &str) -> anyhow::Result<Option<String>> {
+        match args.get(key) {
+            None => Ok(None),
+            Some(Value::String(value)) if !value.trim().is_empty() => Ok(Some(value.clone())),
+            Some(_) => anyhow::bail!("{key} must be a nonempty string when provided"),
+        }
+    }
+
+    #[test]
+    fn task_selectors_reject_malformed_values_instead_of_using_profile_defaults() {
+        for key in ["model", "effort"] {
+            assert_eq!(optional_selector(&json!({}), key).unwrap(), None);
+            assert_eq!(
+                optional_selector(&json!({(key): "selected"}), key).unwrap(),
+                Some("selected".to_owned())
+            );
+            for value in [Value::Null, json!(17), json!(false), json!({}), json!("  ")] {
+                assert!(optional_selector(&json!({(key): value}), key).is_err());
+            }
+        }
+    }
+
     /// Honest effect semantics: never fabricated success. `not_started`
     /// keeps the caller free to retry the same operationId; anything else is
     /// `operation_status_unknown` — query before submitting again.
     fn dispatch_error(id: &Value, error: &EntryError, operation_id: Option<&str>) -> Value {
         let not_started = error.effect.as_deref() == Some("not_started")
-            || error.effect.as_deref() == Some(meshrix_entry_core::error::effect_outcome::NOT_REQUIRED);
+            || error.effect.as_deref()
+                == Some(meshrix_entry_core::error::effect_outcome::NOT_REQUIRED);
         let mut data = json!({
             "code": error.code,
             "effectOutcome": if not_started { "not_started" } else { "unknown" },
         });
         if let Some(op) = operation_id {
-            data.as_object_mut().unwrap().insert("operationId".into(), op.into());
+            data.as_object_mut()
+                .unwrap()
+                .insert("operationId".into(), op.into());
         }
         if !not_started {
             data.as_object_mut().unwrap().insert(
@@ -1188,24 +1319,41 @@ mod agent_mcp {
             || body.get("jsonrpc").and_then(Value::as_str) != Some("2.0")
             || body.get("method").and_then(Value::as_str).is_none()
         {
-            return Some(rpc_error(&Value::Null, -32600, "Invalid JSON-RPC request.", None));
+            return Some(rpc_error(
+                &Value::Null,
+                -32600,
+                "Invalid JSON-RPC request.",
+                None,
+            ));
         }
         let method = body.get("method").and_then(Value::as_str).unwrap();
-        let Some(id) = body.get("id") else { return None };
+        let Some(id) = body.get("id") else {
+            return None;
+        };
         let id = id.clone();
 
         match method {
             "initialize" => {
-                return Some(rpc_result(&id, json!({
-                    "protocolVersion": body.get("params").and_then(|p| p.get("protocolVersion")).and_then(Value::as_str).unwrap_or("2025-06-18"),
-                    "capabilities": { "tools": { "listChanged": false } },
-                    "serverInfo": { "name": "meshrix-entry", "version": env!("CARGO_PKG_VERSION") },
-                })));
+                return Some(rpc_result(
+                    &id,
+                    json!({
+                        "protocolVersion": body.get("params").and_then(|p| p.get("protocolVersion")).and_then(Value::as_str).unwrap_or("2025-06-18"),
+                        "capabilities": { "tools": { "listChanged": false } },
+                        "serverInfo": { "name": "meshrix-entry", "version": env!("CARGO_PKG_VERSION") },
+                    }),
+                ));
             }
             "ping" => return Some(rpc_result(&id, json!({}))),
             "tools/list" => return Some(rpc_result(&id, json!({ "tools": tools() }))),
             "tools/call" => {}
-            _ => return Some(rpc_error(&id, -32601, format!("Method not found: {method}"), None)),
+            _ => {
+                return Some(rpc_error(
+                    &id,
+                    -32601,
+                    format!("Method not found: {method}"),
+                    None,
+                ))
+            }
         }
 
         let params = body.get("params").cloned().unwrap_or(Value::Null);
@@ -1213,7 +1361,10 @@ mod agent_mcp {
         let args = params.get("arguments").cloned().unwrap_or(Value::Null);
         let known = tools()
             .as_array()
-            .map(|t| t.iter().any(|t| t.get("name").and_then(Value::as_str) == Some(name)))
+            .map(|t| {
+                t.iter()
+                    .any(|t| t.get("name").and_then(Value::as_str) == Some(name))
+            })
             .unwrap_or(false);
         if !known {
             return Some(rpc_error(&id, -32602, "Unknown Meshrix tool.", None));
@@ -1244,7 +1395,10 @@ mod agent_mcp {
                         .ok_or_else(|| anyhow::anyhow!("destinationHandle is required"))?;
                     service.connect(handle_id).await?;
                     let record = service
-                        .application_discover(handle_id, arg(&args, "requestId").map(str::to_string))
+                        .application_discover(
+                            handle_id,
+                            arg(&args, "requestId").map(str::to_string),
+                        )
                         .await?;
                     serde_json::to_value(record).map_err(anyhow::Error::from)
                 }
@@ -1257,6 +1411,8 @@ mod agent_mcp {
                         .ok_or_else(|| anyhow::anyhow!("targetAgentId is required"))?;
                     let prompt = arg(&args, "prompt")
                         .ok_or_else(|| anyhow::anyhow!("prompt is required"))?;
+                    let model = optional_selector(&args, "model")?;
+                    let effort = optional_selector(&args, "effort")?;
                     service.connect(handle_id).await?;
                     let record = service
                         .application_submit(
@@ -1265,13 +1421,16 @@ mod agent_mcp {
                             None,
                             agent,
                             prompt,
-                            arg(&args, "model").map(str::to_string),
+                            model,
+                            effort,
                         )
                         .await?;
                     serde_json::to_value(record).map_err(anyhow::Error::from)
                 }
-                "meshrix_list_tasks" => serde_json::to_value(service.application_operations().await?)
-                    .map_err(anyhow::Error::from),
+                "meshrix_list_tasks" => {
+                    serde_json::to_value(service.application_operations().await?)
+                        .map_err(anyhow::Error::from)
+                }
                 "meshrix_get_task" => {
                     let operation_id = arg(&args, "operationId")
                         .ok_or_else(|| anyhow::anyhow!("operationId is required"))?;
@@ -1298,7 +1457,12 @@ mod agent_mcp {
                 let operation_id = arg(&args, "operationId");
                 match entry {
                     Some(e) => Some(dispatch_error(&id, e, operation_id)),
-                    None => Some(rpc_error(&id, -32000, error.to_string(), operation_id.map(|o| json!({ "operationId": o })))),
+                    None => Some(rpc_error(
+                        &id,
+                        -32000,
+                        error.to_string(),
+                        operation_id.map(|o| json!({ "operationId": o })),
+                    )),
                 }
             }
         }
@@ -1317,6 +1481,7 @@ mod tui {
     use crossterm::terminal::{
         disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
     };
+    use meshrix_entry_core::agent::registry::AgentCardAvailability;
     use meshrix_entry_core::peer::{AcpPermissionResolution, PeerApplicationRecord, PeerHostEvent};
     use meshrix_entry_core::relay::EntrySessionEvent;
     use meshrix_entry_core::service::{EntryService, ServiceState};
@@ -1365,6 +1530,10 @@ mod tui {
         let service = Arc::new(service);
         let mut selected = 0usize;
         let mut logs: Vec<String> = Vec::new();
+        let mut profiles = service.profiles().await.unwrap_or_default();
+        let mut cards: Vec<AgentCardAvailability> = service.agent_cards().await.unwrap_or_default();
+        let mut show_profiles = false;
+        let mut show_cards = false;
         let mut ops: std::collections::HashMap<String, PeerApplicationRecord> = Default::default();
         let mut watchers: std::collections::HashMap<String, ()> = Default::default();
 
@@ -1379,7 +1548,10 @@ mod tui {
                                 return;
                             }
                         }
-                        Ok(PeerHostEvent::PeerClient { connection_id, event }) => {
+                        Ok(PeerHostEvent::PeerClient {
+                            connection_id,
+                            event,
+                        }) => {
                             if tx
                                 .send(Msg::Log(format!("{connection_id}: peer {event:?}")))
                                 .is_err()
@@ -1438,11 +1610,38 @@ mod tui {
                         });
                     }
                 }
-                terminal.draw(|f| draw(f, &state, selected, &logs, &ops, &service))?;
+                terminal.draw(|f| {
+                    draw(
+                        f,
+                        &state,
+                        selected,
+                        &logs,
+                        &ops,
+                        &profiles,
+                        &cards,
+                        show_profiles,
+                        show_cards,
+                        &service,
+                    )
+                })?;
                 let Some(msg) = rx.recv().await else { break };
                 match msg {
                     Msg::Tick => {}
                     Msg::Key(KeyCode::Char('q')) | Msg::Key(KeyCode::Esc) => break,
+                    Msg::Key(KeyCode::Char('p')) => {
+                        show_profiles = !show_profiles;
+                        show_cards = false;
+                        if show_profiles {
+                            profiles = service.profiles().await.unwrap_or_default();
+                        }
+                    }
+                    Msg::Key(KeyCode::Char('a')) => {
+                        show_cards = !show_cards;
+                        show_profiles = false;
+                        if show_cards {
+                            cards = service.agent_cards().await.unwrap_or_default();
+                        }
+                    }
                     Msg::Key(KeyCode::Down) | Msg::Key(KeyCode::Char('j')) => {
                         if selected + 1 < state.connections.len() {
                             selected += 1;
@@ -1533,7 +1732,9 @@ mod tui {
                     Msg::Key(KeyCode::Char('x')) => {
                         if let Some(op) = ops
                             .values()
-                            .filter(|o| !matches!(o.status.as_str(), "completed" | "failed" | "cancelled"))
+                            .filter(|o| {
+                                !matches!(o.status.as_str(), "completed" | "failed" | "cancelled")
+                            })
                             .max_by(|a, b| a.updated_at.cmp(&b.updated_at))
                             .cloned()
                         {
@@ -1561,6 +1762,10 @@ mod tui {
         selected: usize,
         logs: &[String],
         ops: &std::collections::HashMap<String, PeerApplicationRecord>,
+        profiles: &[awp::Profile],
+        cards: &[AgentCardAvailability],
+        show_profiles: bool,
+        show_cards: bool,
         service: &EntryService,
     ) {
         let chunks = Layout::default()
@@ -1579,47 +1784,154 @@ mod tui {
             .unwrap_or("unknown")
             .replace('_', " ");
         let header = Paragraph::new(format!(
-            "meshrix-entry — account: {} — connections: {} — recovery: {} — (q quit, j/k move, d disconnect, x cancel op, 1-9/n permit)",
+            "meshrix-entry — account: {} — connections: {} — profiles: {} — A4AA cards: {} — recovery: {} — (p profiles, a cards, q quit, j/k move, d disconnect, x cancel, 1-9/n permit)",
             if state.account_signed_in { "signed in" } else { "signed out" },
             state.connections.len(),
+            profiles.len(),
+            cards.len(),
             recovery_state,
         ))
         .block(Block::default().borders(Borders::ALL).title("Status"));
         f.render_widget(header, chunks[0]);
 
-        let rows: Vec<Row> = state
-            .connections
-            .iter()
-            .enumerate()
-            .map(|(i, c)| {
-                let style = if i == selected {
-                    Style::default().add_modifier(Modifier::REVERSED)
-                } else {
-                    Style::default()
-                };
-                Row::new(vec![
-                    Cell::from(c.display_label.clone()),
-                    Cell::from(format!("{}/{}", c.tenant_id, c.route_id)),
-                    Cell::from(c.session_state.clone().unwrap_or_else(|| "idle".into())),
-                    Cell::from(c.route_state.clone().unwrap_or_else(|| "-".into())),
-                    Cell::from(if c.re_pair_required { "re-pair" } else { "ok" }),
-                ])
-                .style(style)
-            })
-            .collect();
-        let table = Table::new(
-            rows,
-            [
-                Constraint::Percentage(30),
-                Constraint::Percentage(30),
-                Constraint::Percentage(15),
-                Constraint::Percentage(15),
-                Constraint::Percentage(10),
-            ],
-        )
-        .header(Row::new(vec!["label", "tenant/route", "session", "route", "flags"]))
-        .block(Block::default().borders(Borders::ALL).title("Connections"));
-        f.render_widget(table, chunks[1]);
+        if show_profiles {
+            if profiles.is_empty() {
+                f.render_widget(Paragraph::new("No saved AwP behavior profiles."), chunks[1]);
+            } else {
+                let rows = profiles.iter().map(|profile| {
+                    Row::new(vec![
+                        Cell::from(if profile.name.trim().is_empty() {
+                            profile.id.clone()
+                        } else {
+                            profile.name.clone()
+                        }),
+                        Cell::from(profile.id.clone()),
+                        Cell::from(profile.agent.clone()),
+                        Cell::from(profile.model.clone().unwrap_or_default()),
+                        Cell::from(profile.effort.clone().unwrap_or_default()),
+                    ])
+                });
+                let table = Table::new(
+                    rows,
+                    [
+                        Constraint::Percentage(22),
+                        Constraint::Percentage(23),
+                        Constraint::Percentage(23),
+                        Constraint::Percentage(18),
+                        Constraint::Percentage(14),
+                    ],
+                )
+                .header(Row::new(vec![
+                    "name",
+                    "profile id",
+                    "agent",
+                    "model",
+                    "effort",
+                ]))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Saved AwP profiles"),
+                );
+                f.render_widget(table, chunks[1]);
+            }
+        } else if show_cards {
+            if cards.is_empty() {
+                f.render_widget(Paragraph::new("No A4AA cards available."), chunks[1]);
+            } else {
+                let rows = cards.iter().map(|card| {
+                    Row::new(vec![
+                        Cell::from(card.display_name.clone()),
+                        Cell::from(card.id.clone()),
+                        Cell::from(card.transport.clone().unwrap_or_else(|| "-".into())),
+                        Cell::from(
+                            card.detected
+                                .clone()
+                                .unwrap_or_else(|| "not detected".into()),
+                        ),
+                        Cell::from(format!(
+                            "model {} · mode {} · effort {}",
+                            if card.supports_model { "yes" } else { "no" },
+                            if card.supports_execution_mode {
+                                card.execution_modes.join(", ")
+                            } else {
+                                "unsupported".to_owned()
+                            },
+                            if card.supports_effort { "yes" } else { "no" }
+                        )),
+                        Cell::from(if !card.supports_permission {
+                            "unsupported".to_owned()
+                        } else {
+                            card.permission_modes.join(", ")
+                        }),
+                        Cell::from(if card.enrolled { "saved" } else { "available" }),
+                    ])
+                });
+                let table = Table::new(
+                    rows,
+                    [
+                        Constraint::Percentage(24),
+                        Constraint::Percentage(24),
+                        Constraint::Percentage(10),
+                        Constraint::Percentage(12),
+                        Constraint::Percentage(12),
+                        Constraint::Percentage(11),
+                        Constraint::Percentage(7),
+                    ],
+                )
+                .header(Row::new(vec![
+                    "A4AA card",
+                    "id",
+                    "transport",
+                    "detection",
+                    "selectors",
+                    "permission modes",
+                    "profile",
+                ]))
+                .block(Block::default().borders(Borders::ALL).title("A4AA cards"));
+                f.render_widget(table, chunks[1]);
+            }
+        } else {
+            let rows: Vec<Row> = state
+                .connections
+                .iter()
+                .enumerate()
+                .map(|(i, c)| {
+                    let style = if i == selected {
+                        Style::default().add_modifier(Modifier::REVERSED)
+                    } else {
+                        Style::default()
+                    };
+                    Row::new(vec![
+                        Cell::from(c.display_label.clone()),
+                        Cell::from(format!("{}/{}", c.tenant_id, c.route_id)),
+                        Cell::from(c.session_state.clone().unwrap_or_else(|| "idle".into())),
+                        Cell::from(c.route_state.clone().unwrap_or_else(|| "-".into())),
+                        Cell::from(if c.re_pair_required { "re-pair" } else { "ok" }),
+                    ])
+                    .style(style)
+                })
+                .collect();
+            let table = Table::new(
+                rows,
+                [
+                    Constraint::Percentage(30),
+                    Constraint::Percentage(30),
+                    Constraint::Percentage(15),
+                    Constraint::Percentage(15),
+                    Constraint::Percentage(10),
+                ],
+            )
+            .header(Row::new(vec![
+                "label",
+                "tenant/route",
+                "session",
+                "route",
+                "flags",
+            ]))
+            .block(Block::default().borders(Borders::ALL).title("Connections"));
+            f.render_widget(table, chunks[1]);
+        }
 
         let mut op_list: Vec<&PeerApplicationRecord> = ops.values().collect();
         op_list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
@@ -1627,10 +1939,7 @@ mod tui {
             .iter()
             .take(6)
             .map(|o| {
-                let pending = o
-                    .permission
-                    .as_ref()
-                    .is_some_and(|p| p.status == "pending");
+                let pending = o.permission.as_ref().is_some_and(|p| p.status == "pending");
                 Row::new(vec![
                     Cell::from(o.operation_id[..o.operation_id.len().min(22)].to_string()),
                     Cell::from(o.target_agent_id.clone()),
@@ -1639,7 +1948,12 @@ mod tui {
                     } else {
                         o.status.clone()
                     }),
-                    Cell::from(o.progress.as_ref().map(|p| p.text.clone()).unwrap_or_default()),
+                    Cell::from(
+                        o.progress
+                            .as_ref()
+                            .map(|p| p.text.clone())
+                            .unwrap_or_default(),
+                    ),
                 ])
             })
             .collect();
@@ -1664,8 +1978,11 @@ mod tui {
             .cloned()
             .collect::<Vec<_>>()
             .join("\n");
-        let log = Paragraph::new(log_text)
-            .block(Block::default().borders(Borders::ALL).title("Session events"));
+        let log = Paragraph::new(log_text).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Session events"),
+        );
         f.render_widget(log, chunks[3]);
     }
 }

@@ -11,28 +11,28 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::account::{
-    new_operation_id, pairing_bootstrap_body, sign_desktop_pairing_bootstrap, DesktopAccountClient,
-    DesktopAccountTransaction, DesktopAuth, DeviceAuthorizationCheck, DeviceAuthorizationDecision,
-    sign_desktop_account_proof, TransactionPoll, ROUTE_DESKTOP_WRITER_COMPLETE,
-    ROUTE_DESKTOP_WRITER_PREPARE,
+    new_operation_id, pairing_bootstrap_body, sign_desktop_account_proof,
+    sign_desktop_pairing_bootstrap, DesktopAccountClient, DesktopAccountTransaction, DesktopAuth,
+    DeviceAuthorizationCheck, DeviceAuthorizationDecision, TransactionPoll,
+    ROUTE_DESKTOP_WRITER_COMPLETE, ROUTE_DESKTOP_WRITER_PREPARE,
 };
 use crate::custody::{select_custody_adapter, CustodyAdapter, CustodyOptions, CustodyPreference};
+use crate::endpoint::runtime::{
+    PersonalEndpointEnrollmentInput, PersonalEndpointEntryDevice, PersonalEndpointRuntimeOptions,
+    PersonalEndpointSnapshot, PersonalEndpointStepUpRequest, StepUpDriver,
+};
 use crate::error::{entry_error, Result};
 use crate::identity::{
     device_identity_from_custody, enroll_device_identity, load_device_keypair, DeviceIdentity,
+};
+use crate::pairing::invite::{parse_pairing_invite_text, PairingInvite};
+use crate::pairing::session::{
+    BeginOutcome, CompleteOutcomeRaw, PairingCompletionRequest, PairingEndpointPort,
 };
 use crate::peer::{
     AcpPermissionResolution, PeerApplicationAddress, PeerApplicationDiscoveryRecord,
     PeerApplicationRecord, PeerApplicationRouteAuthority, PeerAttachRequest, PeerHost,
     PeerHostEvent, PeerHostOptions,
-};
-use crate::endpoint::runtime::{
-    PersonalEndpointEnrollmentInput, PersonalEndpointEntryDevice, PersonalEndpointRuntimeOptions,
-    PersonalEndpointSnapshot, PersonalEndpointStepUpRequest, StepUpDriver,
-};
-use crate::pairing::invite::{parse_pairing_invite_text, PairingInvite};
-use crate::pairing::session::{
-    BeginOutcome, CompleteOutcomeRaw, PairingCompletionRequest, PairingEndpointPort,
 };
 use crate::recovery::key::parse_recovery_text;
 use crate::relay::entry::{EntrySession, EntrySessionOptions, InnerTlsOptions};
@@ -46,8 +46,8 @@ use crate::store::{
 };
 use crate::wire::account::{
     account_device_authority_transcript, canonical_account_action_target,
-    canonical_account_vault_writer_rotation_input, AccountActionTarget,
-    AccountAuthorityBinding, AccountDeviceAuthorityProof,
+    canonical_account_vault_writer_rotation_input, AccountActionTarget, AccountAuthorityBinding,
+    AccountDeviceAuthorityProof,
 };
 use crate::wire::session::RelayAdmission;
 
@@ -186,10 +186,13 @@ impl EntryService {
     pub fn open(data_dir: PathBuf, config: ServiceConfig) -> Result<Self> {
         let custody: Arc<dyn CustodyAdapter> = select_custody_adapter(CustodyOptions {
             preference: config.custody,
-            file: config.file_custody.clone().map(|c| crate::custody::FileCustodyConfig {
-                data_dir: c.data_dir,
-                wrap_secret: c.wrap_secret,
-            }),
+            file: config
+                .file_custody
+                .clone()
+                .map(|c| crate::custody::FileCustodyConfig {
+                    data_dir: c.data_dir,
+                    wrap_secret: c.wrap_secret,
+                }),
         })?
         .into();
         let mut store = EntryConfigStore::new(&data_dir);
@@ -229,8 +232,9 @@ impl EntryService {
             };
             if let Some(recovery) = material {
                 if let Some(secret) = self.custody.load_secret(&recovery.material_ref)? {
-                    *self.recovery_material.lock().unwrap() =
-                        Some(crate::recovery::crypto::deserialize_recovery_material(&secret)?);
+                    *self.recovery_material.lock().unwrap() = Some(
+                        crate::recovery::crypto::deserialize_recovery_material(&secret)?,
+                    );
                 }
             }
         }
@@ -273,7 +277,10 @@ impl EntryService {
         let sessions = self.sessions.try_lock().ok();
         ServiceState {
             profile_label: config.profile.display_label.clone(),
-            account_signed_in: config.account.as_ref().is_some_and(|a| a.account_id.is_some()),
+            account_signed_in: config
+                .account
+                .as_ref()
+                .is_some_and(|a| a.account_id.is_some()),
             account_email: config.account.as_ref().and_then(|a| a.email.clone()),
             device_label: host_label(),
             recovery_configured: config.recovery.is_some(),
@@ -346,12 +353,21 @@ impl EntryService {
             TransactionPoll::Pending => Ok("pending".into()),
             TransactionPoll::Expired => Ok("expired".into()),
             TransactionPoll::Consumed => Ok("consumed".into()),
-            TransactionPoll::Complete { account, account_email, device_session_credential, .. } => {
+            TransactionPoll::Complete {
+                account,
+                account_email,
+                device_session_credential,
+                ..
+            } => {
                 let credential = device_session_credential.ok_or_else(|| {
-                    entry_error("account_transaction_invalid", "The account worker returned an invalid transaction result.")
+                    entry_error(
+                        "account_transaction_invalid",
+                        "The account worker returned an invalid transaction result.",
+                    )
                 })?;
                 let credential_ref = format!("entry.account.session.{}", generate_suffix());
-                self.custody.store_secret(&credential_ref, credential.as_bytes())?;
+                self.custody
+                    .store_secret(&credential_ref, credential.as_bytes())?;
                 let account_id = account.account_id.clone();
                 let auth_epoch = account.auth_epoch;
                 let device = self.account_device_identity()?;
@@ -421,22 +437,38 @@ impl EntryService {
     fn desktop_auth(&self) -> Result<(DesktopAuth, String)> {
         let store = self.store.lock().unwrap();
         let Some(account) = &store.config().account else {
-            return Err(entry_error("account_login_required", "A current OS-custodied account session is required for this authorization."));
+            return Err(entry_error(
+                "account_login_required",
+                "A current OS-custodied account session is required for this authorization.",
+            ));
         };
-        let (Some(account_id), Some(auth_epoch), Some(credential_ref)) =
-            (account.account_id.clone(), account.auth_epoch, account.session_credential_ref.clone())
-        else {
-            return Err(entry_error("account_login_required", "A current OS-custodied account session is required for this authorization."));
+        let (Some(account_id), Some(auth_epoch), Some(credential_ref)) = (
+            account.account_id.clone(),
+            account.auth_epoch,
+            account.session_credential_ref.clone(),
+        ) else {
+            return Err(entry_error(
+                "account_login_required",
+                "A current OS-custodied account session is required for this authorization.",
+            ));
         };
-        let credential = self
-            .custody
-            .load_secret(&credential_ref)?
-            .ok_or_else(|| entry_error("account_login_required", "The account session credential is not in custody."))?;
+        let credential = self.custody.load_secret(&credential_ref)?.ok_or_else(|| {
+            entry_error(
+                "account_login_required",
+                "The account session credential is not in custody.",
+            )
+        })?;
         Ok((
             DesktopAuth {
-                account: AccountAuthorityBinding { account_id, auth_epoch },
+                account: AccountAuthorityBinding {
+                    account_id,
+                    auth_epoch,
+                },
                 credential: String::from_utf8(credential).map_err(|_| {
-                    entry_error("account_login_required", "The account session credential is unreadable.")
+                    entry_error(
+                        "account_login_required",
+                        "The account session credential is unreadable.",
+                    )
                 })?,
             },
             credential_ref,
@@ -481,7 +513,10 @@ impl EntryService {
         })?;
         let store_dir = self.peer_store_dir(&flow.device.device_id);
         std::fs::create_dir_all(&store_dir).map_err(|_| {
-            entry_error("peer_store_error", "The peer store directory could not be created.")
+            entry_error(
+                "peer_store_error",
+                "The peer store directory could not be created.",
+            )
         })?;
         #[cfg(unix)]
         {
@@ -519,7 +554,13 @@ impl EntryService {
             &invite.endpoint_pin_ref,
             &invite.mode,
         );
-        let request = sign_desktop_pairing_bootstrap(&auth.account, &auth.credential, &client_public_key, &body, &signer);
+        let request = sign_desktop_pairing_bootstrap(
+            &auth.account,
+            &auth.credential,
+            &client_public_key,
+            &body,
+            &signer,
+        );
         let client = self.account_client.as_ref().ok_or_else(|| {
             entry_error("account_origin_missing", "No account origin is configured.")
         })?;
@@ -528,7 +569,12 @@ impl EntryService {
         let bootstrap_account = bootstrap.account.clone();
         let cert = {
             let keypair = load_device_keypair(&*self.custody, None, &device.device_id)?
-                .ok_or_else(|| entry_error("custody_unavailable", "The fresh device key is not in custody."))?;
+                .ok_or_else(|| {
+                    entry_error(
+                        "custody_unavailable",
+                        "The fresh device key is not in custody.",
+                    )
+                })?;
             crate::cert::device_certificate_for_keypair(&keypair)?
         };
         let key_der = custody_pkcs8(&*self.custody, &device.device_id)?;
@@ -576,7 +622,11 @@ impl EntryService {
     pub async fn pairing_challenge(&self, flow: &mut PairingFlow) -> Result<String> {
         match flow
             .channel
-            .begin_pairing(&flow.invite, &flow.device.device_id, &flow.device.public_key)
+            .begin_pairing(
+                &flow.invite,
+                &flow.device.device_id,
+                &flow.device.public_key,
+            )
             .await
         {
             Ok(BeginOutcome::Challenge(challenge)) => {
@@ -591,11 +641,17 @@ impl EntryService {
             }
             Ok(BeginOutcome::Offline) => {
                 flow.state = "offline".into();
-                Err(entry_error("endpoint_unreachable", "The pairing endpoint is offline."))
+                Err(entry_error(
+                    "endpoint_unreachable",
+                    "The pairing endpoint is offline.",
+                ))
             }
             Ok(BeginOutcome::Expired) => {
                 flow.state = "expired".into();
-                Err(entry_error("pairing_expired", "The pairing invite has expired."))
+                Err(entry_error(
+                    "pairing_expired",
+                    "The pairing invite has expired.",
+                ))
             }
             Err(e) => Err(e),
         }
@@ -606,7 +662,10 @@ impl EntryService {
     /// and the restricted bootstrap id).
     pub fn begin_pairing_step_up(&self, flow: &PairingFlow) -> Result<DesktopAccountTransaction> {
         let challenge = flow.challenge.as_ref().ok_or_else(|| {
-            entry_error("pairing_state_invalid", "No issued challenge is bound to this flow.")
+            entry_error(
+                "pairing_state_invalid",
+                "No issued challenge is bound to this flow.",
+            )
         })?;
         let client = self.account_client.as_ref().ok_or_else(|| {
             entry_error("account_origin_missing", "No account origin is configured.")
@@ -633,7 +692,10 @@ impl EntryService {
         transaction: &DesktopAccountTransaction,
     ) -> Result<StepUpPoll> {
         let challenge = flow.challenge.as_ref().ok_or_else(|| {
-            entry_error("pairing_state_invalid", "No issued challenge is bound to this flow.")
+            entry_error(
+                "pairing_state_invalid",
+                "No issued challenge is bound to this flow.",
+            )
         })?;
         let client = self.account_client.as_ref().ok_or_else(|| {
             entry_error("account_origin_missing", "No account origin is configured.")
@@ -666,14 +728,19 @@ impl EntryService {
                 let target = target.ok_or_else(mismatch)?;
                 if canonical_account_action_target(&target)
                     != canonical_account_action_target(&challenge.target)
-                    || crate::canonical::canonical_json(&serde_json::to_value(&account).unwrap_or(Value::Null))
-                        != crate::canonical::canonical_json(
-                            &serde_json::to_value(&flow.bootstrap_account).unwrap_or(Value::Null),
-                        )
+                    || crate::canonical::canonical_json(
+                        &serde_json::to_value(&account).unwrap_or(Value::Null),
+                    ) != crate::canonical::canonical_json(
+                        &serde_json::to_value(&flow.bootstrap_account).unwrap_or(Value::Null),
+                    )
                 {
                     return Err(mismatch());
                 }
-                Ok(StepUpPoll::Complete { account, permit_id, target })
+                Ok(StepUpPoll::Complete {
+                    account,
+                    permit_id,
+                    target,
+                })
             }
         }
     }
@@ -689,28 +756,42 @@ impl EntryService {
         target: &AccountActionTarget,
     ) -> Result<StoredConnection> {
         let challenge = flow.challenge.clone().ok_or_else(|| {
-            entry_error("pairing_state_invalid", "No issued challenge is bound to this flow.")
+            entry_error(
+                "pairing_state_invalid",
+                "No issued challenge is bound to this flow.",
+            )
         })?;
-        let keypair = load_device_keypair(&*self.custody, None, &flow.device.device_id)?.ok_or_else(|| {
-            entry_error("custody_unavailable", "The paired device key is not in custody.")
-        })?;
+        let keypair = load_device_keypair(&*self.custody, None, &flow.device.device_id)?
+            .ok_or_else(|| {
+                entry_error(
+                    "custody_unavailable",
+                    "The paired device key is not in custody.",
+                )
+            })?;
         // Provision the route-bound Signal peer identity before signing — the
         // public descriptor is part of the signed completion transcript, so a
         // later store corruption changes the signature, not just the payload.
         let entry_peer_identity = self.prepare_pairing_peer_identity(flow)?;
-        let entry_peer_identity_json = serde_json::to_value(&entry_peer_identity)
-            .map_err(|_| entry_error("peer_state_invalid", "The peer identity descriptor cannot be encoded."))?;
-        let signature = crate::b64::b64u_encode(&keypair.sign(
-            crate::transcripts::pairing_proof_transcript(
-                &challenge.challenge_id,
-                &flow.invite.invite_id,
-                &flow.invite.endpoint_route_id,
-                &flow.device.device_id,
-                &flow.device.public_key,
-                Some(&entry_peer_identity_json),
-            )
-            .as_bytes(),
-        ));
+        let entry_peer_identity_json =
+            serde_json::to_value(&entry_peer_identity).map_err(|_| {
+                entry_error(
+                    "peer_state_invalid",
+                    "The peer identity descriptor cannot be encoded.",
+                )
+            })?;
+        let signature = crate::b64::b64u_encode(
+            &keypair.sign(
+                crate::transcripts::pairing_proof_transcript(
+                    &challenge.challenge_id,
+                    &flow.invite.invite_id,
+                    &flow.invite.endpoint_route_id,
+                    &flow.device.device_id,
+                    &flow.device.public_key,
+                    Some(&entry_peer_identity_json),
+                )
+                .as_bytes(),
+            ),
+        );
         let completion = PairingCompletionRequest {
             invite: flow.invite.to_json(),
             challenge_id: challenge.challenge_id.clone(),
@@ -727,7 +808,8 @@ impl EntryService {
         // Checkpoint the exact signed operation in custody before dispatch.
         let checkpoint_ref = format!("entry-gui.pairing.completion.{}", hex_32());
         let completion_json = serde_json::to_vec(&completion)?;
-        self.custody.store_secret(&checkpoint_ref, &completion_json)?;
+        self.custody
+            .store_secret(&checkpoint_ref, &completion_json)?;
         let result = flow.channel.complete_pairing(&completion).await;
         match result {
             Ok(CompleteOutcomeRaw::Refused(refusal)) => {
@@ -746,10 +828,13 @@ impl EntryService {
                 // keep its connection id and custody slot so per-connection
                 // peer state stays anchored instead of accumulating twins.
                 let existing = {
-                    self.store.lock().unwrap().config().connections.iter()
-                        .find(|c| {
-                            c.endpoint_principal_ref == flow.invite.endpoint_principal_ref
-                        })
+                    self.store
+                        .lock()
+                        .unwrap()
+                        .config()
+                        .connections
+                        .iter()
+                        .find(|c| c.endpoint_principal_ref == flow.invite.endpoint_principal_ref)
                         .map(|c| (c.connection_id.clone(), c.relay_credential_ref.clone()))
                 };
                 let (connection_id, credential_ref) = existing.unwrap_or_else(|| {
@@ -802,9 +887,9 @@ impl EntryService {
                 };
                 let stored = connection.clone();
                 self.store.lock().unwrap().update(|config| {
-                    config.connections.retain(|c| {
-                        c.endpoint_principal_ref != connection.endpoint_principal_ref
-                    });
+                    config
+                        .connections
+                        .retain(|c| c.endpoint_principal_ref != connection.endpoint_principal_ref);
                     config.connections.push(connection);
                     if config.pending_pairing_device_id.as_deref()
                         == Some(flow.device.device_id.as_str())
@@ -843,7 +928,12 @@ impl EntryService {
         .ok_or_else(|| entry_error("connection_not_found", "The connection is not enrolled."))?;
         let cert_der = {
             let keypair = load_device_keypair(&*self.custody, None, &connection.device_id)?
-                .ok_or_else(|| entry_error("custody_unavailable", "The paired device key is not in custody."))?;
+                .ok_or_else(|| {
+                    entry_error(
+                        "custody_unavailable",
+                        "The paired device key is not in custody.",
+                    )
+                })?;
             crate::cert::device_certificate_for_keypair(&keypair)?.cert_der
         };
         let key_der = custody_pkcs8(&*self.custody, &connection.device_id)?;
@@ -945,7 +1035,10 @@ impl EntryService {
                             .find(|c| c.connection_id == cid)
                             .is_some_and(|c| {
                                 !c.re_pair_required
-                                    && !c.route_revocation.as_ref().is_some_and(|r| r.authority_revoked)
+                                    && !c
+                                        .route_revocation
+                                        .as_ref()
+                                        .is_some_and(|r| r.authority_revoked)
                                     && c.account_binding.is_some()
                                     && c.endpoint_peer_identity.is_some()
                                     && c.endpoint_device_id.as_deref() == Some(endpoint.as_str())
@@ -1032,7 +1125,11 @@ impl EntryService {
 
     /// Run the recovery bootstrap for one connection: recovery text →
     /// recover_device channel → fresh device key → enrolled admission.
-    pub async fn recover_connection(&self, connection_id: &str, recovery_text: &str) -> Result<String> {
+    pub async fn recover_connection(
+        &self,
+        connection_id: &str,
+        recovery_text: &str,
+    ) -> Result<String> {
         let connection = {
             let store = self.store.lock().unwrap();
             store
@@ -1045,7 +1142,10 @@ impl EntryService {
         .ok_or_else(|| entry_error("connection_not_found", "The connection is not enrolled."))?;
         let material = parse_recovery_text(recovery_text)?;
         let vault_id = connection.vault_id.clone().ok_or_else(|| {
-            entry_error("recovery_vault_missing", "The connection has no recovery vault.")
+            entry_error(
+                "recovery_vault_missing",
+                "The connection has no recovery vault.",
+            )
         })?;
         if material.vault_id != vault_id {
             return Err(entry_error(
@@ -1125,7 +1225,7 @@ impl EntryService {
         }
     }
 
-    /* ---------- peer + application surface (ACP conversation layer) -------- */
+    /* --------- peer + application surface (A4AA/AwP execution layer) ------- */
 
     /// The route-bound application address for one enrolled connection.
     fn peer_connection_address(&self, connection_id: &str) -> Result<PeerApplicationAddress> {
@@ -1135,9 +1235,14 @@ impl EntryService {
             .connections
             .iter()
             .find(|c| c.connection_id == connection_id)
-            .ok_or_else(|| entry_error("connection_not_found", "The connection is not enrolled."))?;
+            .ok_or_else(|| {
+                entry_error("connection_not_found", "The connection is not enrolled.")
+            })?;
         let endpoint = connection.endpoint_device_id.clone().ok_or_else(|| {
-            entry_error("peer_unavailable", "The connection has no paired endpoint device.")
+            entry_error(
+                "peer_unavailable",
+                "The connection has no paired endpoint device.",
+            )
         })?;
         Ok(PeerApplicationAddress {
             tenant_id: connection.tenant_id.clone(),
@@ -1157,7 +1262,12 @@ impl EntryService {
     ) -> Result<crate::peer::client_store::StoredOutboxEntry> {
         let address = self.peer_connection_address(connection_id)?;
         self.peer_host()?
-            .peer_send(connection_id, &address.peer_device_id, plaintext, message_id)
+            .peer_send(
+                connection_id,
+                &address.peer_device_id,
+                plaintext,
+                message_id,
+            )
             .await
     }
 
@@ -1179,6 +1289,7 @@ impl EntryService {
         target_agent_id: &str,
         prompt: &str,
         model: Option<String>,
+        effort: Option<String>,
     ) -> Result<PeerApplicationRecord> {
         let address = self.peer_connection_address(connection_id)?;
         self.peer_host()?
@@ -1189,6 +1300,7 @@ impl EntryService {
                 target_agent_id.to_string(),
                 prompt.to_string(),
                 model,
+                effort,
             )
             .await
     }
@@ -1200,7 +1312,9 @@ impl EntryService {
         request_id: Option<String>,
     ) -> Result<PeerApplicationDiscoveryRecord> {
         let address = self.peer_connection_address(connection_id)?;
-        self.peer_host()?.application_discover(address, request_id).await
+        self.peer_host()?
+            .application_discover(address, request_id)
+            .await
     }
 
     /// Cancel one application operation — propagates to the receiver's
@@ -1235,41 +1349,63 @@ impl EntryService {
         self.peer_host()?.get_operation(operation_id).await
     }
 
-    /// Local ACP agents registered for inbound execution.
+    /// Local AwP profiles exposed to paired peers as selectable Agents.
     pub async fn local_agents(&self) -> Result<Vec<crate::peer::AcpAgentSummary>> {
         self.peer_host()?.local_agents().await
     }
 
-    /// The remote Agent catalog for one connection (last discovery result).
+    /// A4AA base-agent descriptors available for profile configuration.
+    pub async fn agent_specs(&self) -> Result<Vec<a4aa::AgentSpec>> {
+        self.peer_host()?.agent_specs().await
+    }
+
+    /// Read-only A4AA descriptor availability, separate from enrolled data.
+    pub async fn agent_cards(&self) -> Result<Vec<crate::agent::registry::AgentCardAvailability>> {
+        self.peer_host()?.agent_cards().await
+    }
+
+    /// Behavior profiles resolved and validated by AwP.
+    pub async fn profiles(&self) -> Result<Vec<awp::Profile>> {
+        self.peer_host()?.profiles().await
+    }
+
+    /// Explicitly materialize one A4AA card as a saved AgentSpec and profile.
+    pub async fn profile_enroll(&self, card_id: &str) -> Result<awp::Profile> {
+        self.peer_host()?.profile_enroll(card_id).await
+    }
+
+    /// Create or update a behavior profile through AwP's patch semantics.
+    pub async fn profile_upsert(&self, id: &str, patch: awp::ProfilePatch) -> Result<awp::Profile> {
+        self.peer_host()?.profile_upsert(id, patch).await
+    }
+
+    /// Remove one behavior profile.
+    pub async fn profile_remove(&self, id: &str) -> Result<bool> {
+        self.peer_host()?.profile_remove(id).await
+    }
+
+    /// Change Meshrix display/enable metadata for a behavior profile.
+    pub async fn profile_set_enabled(&self, id: &str, enabled: bool) -> Result<bool> {
+        self.peer_host()?.profile_set_enabled(id, enabled).await
+    }
+
+    /// Register or update a base AgentSpec through A4AA/AwP storage.
+    pub async fn agent_upsert(&self, spec: a4aa::AgentSpec) -> Result<()> {
+        self.peer_host()?.agent_upsert(spec).await
+    }
+
+    /// Remove one base AgentSpec; AwP rejects removal while profiles refer to it.
+    pub async fn agent_remove(&self, id: &str) -> Result<bool> {
+        self.peer_host()?.agent_remove(id).await
+    }
+
+    /// The remote profile catalog for one connection (last discovery result).
     pub async fn remote_agents(
         &self,
         connection_id: &str,
     ) -> Result<Vec<crate::peer::AcpAgentSummary>> {
         let address = self.peer_connection_address(connection_id)?;
         self.peer_host()?.remote_agents(address).await
-    }
-
-    /// Register a local ACP agent definition (command + env; secret values
-    /// stay as custody references, never serialized).
-    pub async fn agent_register(
-        &self,
-        input: crate::agent::registry::AcpAgentDefinitionInput,
-    ) -> Result<crate::peer::AcpAgentSummary> {
-        self.peer_host()?.agent_register(input).await
-    }
-
-    /// Update a local ACP agent definition in place.
-    pub async fn agent_update(
-        &self,
-        id: &str,
-        input: crate::agent::registry::AcpAgentDefinitionInput,
-    ) -> Result<crate::peer::AcpAgentSummary> {
-        self.peer_host()?.agent_update(id, input).await
-    }
-
-    /// Remove a local ACP agent definition.
-    pub async fn agent_remove(&self, id: &str) -> Result<bool> {
-        self.peer_host()?.agent_remove(id).await
     }
 
     /// Remove a paired connection record and its custody-held secrets. The
@@ -1314,16 +1450,12 @@ impl EntryService {
         let options = PersonalEndpointRuntimeOptions {
             data_dir: self.data_dir.clone(),
             custody: self.custody.clone(),
-            relay_service: self
-                .config
-                .default_relay_service
-                .clone()
-                .ok_or_else(|| entry_error("relay_service_missing", "No relay service is configured."))?,
-            account_origin: self
-                .config
-                .account_origin
-                .clone()
-                .ok_or_else(|| entry_error("account_origin_missing", "No account origin is configured."))?,
+            relay_service: self.config.default_relay_service.clone().ok_or_else(|| {
+                entry_error("relay_service_missing", "No relay service is configured.")
+            })?,
+            account_origin: self.config.account_origin.clone().ok_or_else(|| {
+                entry_error("account_origin_missing", "No account origin is configured.")
+            })?,
             account_access: self.config.account_access.clone(),
             allow_insecure_loopback: self.config.allow_insecure_loopback,
             on_state: None,
@@ -1337,13 +1469,17 @@ impl EntryService {
     ) -> Result<PersonalEndpointEnrollmentInput> {
         let (auth, _credential_ref) = self.desktop_auth()?;
         let device = self.account_device_identity()?;
-        let keypair = load_device_keypair(&*self.custody, Some("entry.account.desktop"), &device.device_id)?
-            .ok_or_else(|| {
-                entry_error(
-                    "account_custody_required",
-                    "The desktop account signing key is unavailable in OS custody.",
-                )
-            })?;
+        let keypair = load_device_keypair(
+            &*self.custody,
+            Some("entry.account.desktop"),
+            &device.device_id,
+        )?
+        .ok_or_else(|| {
+            entry_error(
+                "account_custody_required",
+                "The desktop account signing key is unavailable in OS custody.",
+            )
+        })?;
         Ok(PersonalEndpointEnrollmentInput {
             account: auth.account,
             account_credential: auth.credential,
@@ -1494,7 +1630,10 @@ impl EntryService {
         .ok_or_else(|| entry_error("connection_not_found", "The connection is not enrolled."))?;
         let auth = self.desktop_auth()?.0;
         let stored_binding = current.account_binding.clone().ok_or_else(|| {
-            entry_error("account_binding_mismatch", "This connection is not bound to an account.")
+            entry_error(
+                "account_binding_mismatch",
+                "This connection is not bound to an account.",
+            )
         })?;
         if auth.account.account_id != stored_binding.account_id {
             return Err(entry_error(
@@ -1505,7 +1644,10 @@ impl EntryService {
         let (client_public_key, signer) = self.account_signer()?;
         if current.route_revocation.is_none() {
             let revocation = crate::store::StoredRouteRevocation {
-                operation_id: format!("device-revoke.{}", crate::b64::b64u_encode(&crate::keys::random_bytes(18))),
+                operation_id: format!(
+                    "device-revoke.{}",
+                    crate::b64::b64u_encode(&crate::keys::random_bytes(18))
+                ),
                 target: "device".to_string(),
                 authority_revoked: false,
                 enforcement: "pending".to_string(),
@@ -1571,11 +1713,8 @@ impl EntryService {
 
     /// `mcpSnippet` — the stdio `mcpServers` block for local MCP clients.
     pub fn mcp_snippet(&self) -> Value {
-        let snippet = crate::mcp::build_mcp_stdio_snippet(
-            "meshrix-entry",
-            "meshrix-entry",
-            &["--mcp-stdio"],
-        );
+        let snippet =
+            crate::mcp::build_mcp_stdio_snippet("meshrix-entry", "meshrix-entry", &["--mcp-stdio"]);
         let managed_path = crate::mcp::managed_mcp_config_path(&self.data_dir);
         json!({
             "snippet": snippet,
@@ -1611,9 +1750,11 @@ impl EntryService {
             entry_error("account_origin_missing", "No account origin is configured.")
         })?;
         let (auth, _credential_ref) = self.desktop_auth()?;
-        if crate::canonical::canonical_json(&serde_json::to_value(&auth.account).unwrap_or(Value::Null))
-            != crate::canonical::canonical_json(&serde_json::to_value(&request.account).unwrap_or(Value::Null))
-        {
+        if crate::canonical::canonical_json(
+            &serde_json::to_value(&auth.account).unwrap_or(Value::Null),
+        ) != crate::canonical::canonical_json(
+            &serde_json::to_value(&request.account).unwrap_or(Value::Null),
+        ) {
             return Err(entry_error(
                 "account_binding_mismatch",
                 "The local account session changed before this authorization began.",
@@ -1669,15 +1810,21 @@ impl EntryService {
                 let target = target.ok_or_else(mismatch)?;
                 if canonical_account_action_target(&target)
                     != canonical_account_action_target(&request.target)
-                    || crate::canonical::canonical_json(&serde_json::to_value(&account).unwrap_or(Value::Null))
-                        != crate::canonical::canonical_json(
-                            &serde_json::to_value(&request.account).unwrap_or(Value::Null),
-                        )
+                    || crate::canonical::canonical_json(
+                        &serde_json::to_value(&account).unwrap_or(Value::Null),
+                    ) != crate::canonical::canonical_json(
+                        &serde_json::to_value(&request.account).unwrap_or(Value::Null),
+                    )
                 {
                     return Err(mismatch());
                 }
-                let _ = client.acknowledge_transaction(&transaction.transaction_id, &transaction.verifier);
-                Ok(StepUpPoll::Complete { account, permit_id, target })
+                let _ = client
+                    .acknowledge_transaction(&transaction.transaction_id, &transaction.verifier);
+                Ok(StepUpPoll::Complete {
+                    account,
+                    permit_id,
+                    target,
+                })
             }
         }
     }
@@ -1696,56 +1843,67 @@ fn generate_suffix() -> String {
 }
 
 fn hex_32() -> String {
-    crate::keys::random_bytes(16).iter().map(|b| format!("{b:02x}")).collect()
+    crate::keys::random_bytes(16)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Load the custody-held PKCS#8 seed for the desktop account device key —
 /// custodied under the `entry.account.desktop` prefix — and derive a signer.
-fn account_signer_for(custody: &dyn CustodyAdapter, device_id: &str) -> Result<impl Fn(&[u8]) -> Vec<u8>> {
-    let keypair = load_device_keypair(custody, Some("entry.account.desktop"), device_id)?.ok_or_else(|| {
-        entry_error("custody_unavailable", "The desktop account key is not in custody.")
-    })?;
+fn account_signer_for(
+    custody: &dyn CustodyAdapter,
+    device_id: &str,
+) -> Result<impl Fn(&[u8]) -> Vec<u8>> {
+    let keypair = load_device_keypair(custody, Some("entry.account.desktop"), device_id)?
+        .ok_or_else(|| {
+            entry_error(
+                "custody_unavailable",
+                "The desktop account key is not in custody.",
+            )
+        })?;
     Ok(move |message: &[u8]| keypair.sign(message))
 }
 
 fn custody_pkcs8(custody: &dyn CustodyAdapter, device_id: &str) -> Result<Vec<u8>> {
     let keypair = load_device_keypair(custody, None, device_id)?.ok_or_else(|| {
-        entry_error("custody_unavailable", "The paired device key is not in custody.")
+        entry_error(
+            "custody_unavailable",
+            "The paired device key is not in custody.",
+        )
     })?;
     Ok(crate::keys::ed25519_pkcs8_der(&keypair.signing_key))
 }
 
-
-
 fn recovery_bearer(custody: &dyn CustodyAdapter, credential_ref: &str) -> Result<String> {
     let bytes = custody.load_secret(credential_ref)?.ok_or_else(|| {
-        entry_error("custody_unavailable", "The relay bearer credential is not in custody.")
+        entry_error(
+            "custody_unavailable",
+            "The relay bearer credential is not in custody.",
+        )
     })?;
-    String::from_utf8(bytes)
-        .map_err(|_| entry_error("custody_unavailable", "The relay bearer credential is unreadable."))
+    String::from_utf8(bytes).map_err(|_| {
+        entry_error(
+            "custody_unavailable",
+            "The relay bearer credential is unreadable.",
+        )
+    })
 }
 
-/// `AcpAgentSecretResolver` backed by custody — an agent env
-/// `secret_reference` resolves to the custody-held value at launch time and
-/// is never persisted in the registry document.
+/// A4AA secret references resolve through custody only at launch time; values
+/// are never persisted in the AwP registry document.
 struct CustodySecretResolver {
     custody: Arc<dyn CustodyAdapter>,
 }
 
-impl crate::agent::registry::AcpAgentSecretResolver for CustodySecretResolver {
-    fn resolve(
-        &self,
-        reference: &str,
-    ) -> futures_util::future::LocalBoxFuture<'static, Option<String>> {
-        let custody = self.custody.clone();
-        let reference = reference.to_string();
-        Box::pin(async move {
-            custody
-                .load_secret(&reference)
-                .ok()
-                .flatten()
-                .and_then(|b| String::from_utf8(b).ok())
-        })
+#[async_trait::async_trait]
+impl a4aa::SecretResolver for CustodySecretResolver {
+    async fn resolve(&self, reference: &str) -> Option<String> {
+        self.custody
+            .load_secret(reference)
+            .ok()
+            .flatten()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
     }
 }
 
@@ -1914,7 +2072,13 @@ fn now_iso() -> String {
 fn custody_recovery_ref(vault_id: &str) -> String {
     let safe: String = vault_id
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c.to_ascii_lowercase() } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect();
     format!("entry.recovery.{safe}")
 }
@@ -1922,7 +2086,13 @@ fn custody_recovery_ref(vault_id: &str) -> String {
 fn custody_recovery_key_ref(vault_id: &str, key_id: &str) -> String {
     let safe: String = key_id
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c.to_ascii_lowercase() } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect();
     custody_recovery_ref(vault_id)
         .split_at(custody_recovery_ref(vault_id).len().min(128))
@@ -2019,7 +2189,10 @@ pub enum VaultWriterStepUpPoll {
     /// No pending writer operation is waiting for authorization.
     Idle,
     /// The browser transaction is still open.
-    Pending { browser_url: String, user_code: String },
+    Pending {
+        browser_url: String,
+        user_code: String,
+    },
     /// The transaction expired; retry prepares a fresh target.
     Expired,
     /// The transaction was consumed without completing.
@@ -2036,15 +2209,20 @@ impl EntryService {
             .recovery
             .as_ref()
             .is_some_and(|r| r.vault_id == vault_id && r.account_writer_state != "unmanaged")
-            || config.connections.iter().any(|c| {
-                c.vault_id.as_deref() == Some(vault_id) && c.account_binding.is_some()
-            })
+            || config
+                .connections
+                .iter()
+                .any(|c| c.vault_id.as_deref() == Some(vault_id) && c.account_binding.is_some())
     }
 
     fn account_managed_connection(&self, vault_id: &str) -> Option<StoredConnection> {
         let store = self.store.lock().unwrap();
         let config = store.config();
-        if config.account.as_ref().and_then(|a| a.account_id.clone()).is_none()
+        if config
+            .account
+            .as_ref()
+            .and_then(|a| a.account_id.clone())
+            .is_none()
             || config.account.as_ref().and_then(|a| a.auth_epoch).is_none()
         {
             return None;
@@ -2052,7 +2230,11 @@ impl EntryService {
         config
             .connections
             .iter()
-            .find(|c| c.vault_id.as_deref() == Some(vault_id) && c.account_binding.is_some() && !c.re_pair_required)
+            .find(|c| {
+                c.vault_id.as_deref() == Some(vault_id)
+                    && c.account_binding.is_some()
+                    && !c.re_pair_required
+            })
             .cloned()
     }
 
@@ -2089,7 +2271,10 @@ impl EntryService {
                 "No endpoint service address is known for the recovery vault.",
             )
         })?;
-        crate::relay::address::relay_http_base(&first.relay_service, self.config.allow_insecure_loopback)
+        crate::relay::address::relay_http_base(
+            &first.relay_service,
+            self.config.allow_insecure_loopback,
+        )
     }
 
     fn rotation_manager(
@@ -2217,9 +2402,7 @@ impl EntryService {
 
     fn discard_expired_recovery_candidate(&self) {
         let mut guard = self.pending_recovery.lock().unwrap();
-        let expired = guard
-            .as_ref()
-            .is_some_and(|p| p.expires_at_ms <= now_ms());
+        let expired = guard.as_ref().is_some_and(|p| p.expires_at_ms <= now_ms());
         if expired {
             let pending = guard.take().unwrap();
             drop(guard);
@@ -2263,7 +2446,9 @@ impl EntryService {
             config
                 .connections
                 .iter()
-                .find(|c| c.vault_id.is_some() && c.account_binding.is_some() && !c.re_pair_required)
+                .find(|c| {
+                    c.vault_id.is_some() && c.account_binding.is_some() && !c.re_pair_required
+                })
                 .or_else(|| config.connections.iter().find(|c| c.vault_id.is_some()))
                 .and_then(|c| c.vault_id.clone())
                 .unwrap_or_else(|| {
@@ -2406,11 +2591,7 @@ impl EntryService {
             // Endpoints that acknowledged before publication still count.
             let rotation = manager.get(&rotation_id);
             if let Some(rotation) = rotation {
-                if rotation
-                    .endpoints
-                    .iter()
-                    .all(|e| e.state == "acknowledged")
-                {
+                if rotation.endpoints.iter().all(|e| e.state == "acknowledged") {
                     if let Some(first) = rotation.endpoints.first() {
                         let _ = manager.mark_endpoint(
                             &rotation_id,
@@ -2448,7 +2629,9 @@ impl EntryService {
         }
         let (auth, _credential_ref) = self.desktop_auth()?;
         if let Some(bound) = &connection.account_binding {
-            if bound.account_id != auth.account.account_id || bound.auth_epoch != auth.account.auth_epoch {
+            if bound.account_id != auth.account.account_id
+                || bound.auth_epoch != auth.account.auth_epoch
+            {
                 return Err(entry_error(
                     "account_binding_mismatch",
                     "The local account session changed before this authorization began.",
@@ -2457,11 +2640,11 @@ impl EntryService {
         }
         let identity = device_identity_from_custody(&*self.custody, None, &connection.device_id)?
             .ok_or_else(|| {
-                entry_error(
-                    "custody_unavailable",
-                    "The current Entry device signing key is unavailable in OS custody.",
-                )
-            })?;
+            entry_error(
+                "custody_unavailable",
+                "The current Entry device signing key is unavailable in OS custody.",
+            )
+        })?;
         let entry_key = load_device_keypair(&*self.custody, None, &connection.device_id)?
             .ok_or_else(|| {
                 entry_error(
@@ -2478,7 +2661,10 @@ impl EntryService {
             "vault-writer-{}",
             crate::b64::b64u_encode(&crate::keys::random_bytes(24))
         );
-        let flow_ref = format!("entry.account.vault-writer.{}", hex_32().chars().take(36).collect::<String>());
+        let flow_ref = format!(
+            "entry.account.vault-writer.{}",
+            hex_32().chars().take(36).collect::<String>()
+        );
         let writers = vec![crate::wire::account::AccountManagedVaultWriterKey {
             key_id: candidate.material.writer.key_id.clone(),
             algorithm: "Ed25519".into(),
@@ -2520,8 +2706,7 @@ impl EntryService {
             signature: String::new(),
         };
         device_proof.signature = crate::b64::b64u_encode(
-            &entry_key
-                .sign(account_device_authority_transcript(&device_proof).as_bytes()),
+            &entry_key.sign(account_device_authority_transcript(&device_proof).as_bytes()),
         );
         let (client_public_key, signer) = self.account_signer()?;
         let desktop_body = json!({
@@ -2578,7 +2763,9 @@ impl EntryService {
                 "The exact pending prepare request is unavailable.",
             )
         })?;
-        if request.get("operationId").and_then(|v| v.as_str()) != Some(pending.operation_id.as_str()) {
+        if request.get("operationId").and_then(|v| v.as_str())
+            != Some(pending.operation_id.as_str())
+        {
             return Err(entry_error(
                 "account_vault_rotation_invalid",
                 "The exact pending prepare request is unavailable.",
@@ -2589,15 +2776,14 @@ impl EntryService {
         })?;
         let response = client.prepare_vault_writer_rotation(&request)?;
         self.assert_vault_writer_target(pending, &response)?;
-        let target: AccountActionTarget = serde_json::from_value(
-            response.get("target").cloned().unwrap_or(Value::Null),
-        )
-        .map_err(|_| {
-            entry_error(
-                "account_vault_rotation_invalid",
-                "The account service returned an unparseable writer target.",
-            )
-        })?;
+        let target: AccountActionTarget =
+            serde_json::from_value(response.get("target").cloned().unwrap_or(Value::Null))
+                .map_err(|_| {
+                    entry_error(
+                        "account_vault_rotation_invalid",
+                        "The account service returned an unparseable writer target.",
+                    )
+                })?;
         let mut updated = pending.clone();
         updated.state = "authorization_required".into();
         updated.flow.prepare_request = None;
@@ -2612,7 +2798,11 @@ impl EntryService {
         Ok(())
     }
 
-    fn assert_vault_writer_target(&self, pending: &PendingVaultWriter, response: &Value) -> Result<()> {
+    fn assert_vault_writer_target(
+        &self,
+        pending: &PendingVaultWriter,
+        response: &Value,
+    ) -> Result<()> {
         let connection = {
             let store = self.store.lock().unwrap();
             store
@@ -2623,12 +2813,15 @@ impl EntryService {
                 .cloned()
         }
         .ok_or_else(|| entry_error("connection_not_found", "The connection is not enrolled."))?;
-        let material_bytes = self.custody.load_secret(&pending.material_ref)?.ok_or_else(|| {
-            entry_error(
-                "custody_unavailable",
-                "The saved candidate keys are unavailable for exact target comparison.",
-            )
-        })?;
+        let material_bytes = self
+            .custody
+            .load_secret(&pending.material_ref)?
+            .ok_or_else(|| {
+                entry_error(
+                    "custody_unavailable",
+                    "The saved candidate keys are unavailable for exact target comparison.",
+                )
+            })?;
         let material = crate::recovery::crypto::deserialize_recovery_material(&material_bytes)?;
         let identity = device_identity_from_custody(&*self.custody, None, &connection.device_id)?;
         let expected_rotation = json!({
@@ -2654,17 +2847,27 @@ impl EntryService {
             });
         let target = response.get("target");
         let target_rotation = target.and_then(|t| t.get("vaultWriterRotation"));
-        let ok = response.get("operationId").and_then(|v| v.as_str()) == Some(pending.operation_id.as_str())
+        let ok = response.get("operationId").and_then(|v| v.as_str())
+            == Some(pending.operation_id.as_str())
             && account_ok
-            && target.and_then(|t| t.get("tenantId")).and_then(|v| v.as_str()) == Some(connection.tenant_id.as_str())
-            && target.and_then(|t| t.get("routeId")).and_then(|v| v.as_str()) == Some(connection.route_id.as_str())
-            && target.and_then(|t| t.get("deviceId")).and_then(|v| v.as_str()) == Some(connection.device_id.as_str())
-            && identity
-                .as_ref()
-                .is_some_and(|i| {
-                    target.and_then(|t| t.get("devicePublicKey")).and_then(|v| v.as_str())
-                        == Some(i.public_key.as_str())
-                })
+            && target
+                .and_then(|t| t.get("tenantId"))
+                .and_then(|v| v.as_str())
+                == Some(connection.tenant_id.as_str())
+            && target
+                .and_then(|t| t.get("routeId"))
+                .and_then(|v| v.as_str())
+                == Some(connection.route_id.as_str())
+            && target
+                .and_then(|t| t.get("deviceId"))
+                .and_then(|v| v.as_str())
+                == Some(connection.device_id.as_str())
+            && identity.as_ref().is_some_and(|i| {
+                target
+                    .and_then(|t| t.get("devicePublicKey"))
+                    .and_then(|v| v.as_str())
+                    == Some(i.public_key.as_str())
+            })
             && target_rotation.is_some()
             && crate::canonical::canonical_json(target_rotation.unwrap())
                 == crate::canonical::canonical_json(&expected_rotation);
@@ -2679,7 +2882,10 @@ impl EntryService {
 
     /// `startVaultWriterStepUp` — create the grant_access browser
     /// transaction and persist it into the custody-held flow.
-    async fn start_vault_writer_step_up(&self, pending: &PendingVaultWriter) -> Result<DesktopAccountTransaction> {
+    async fn start_vault_writer_step_up(
+        &self,
+        pending: &PendingVaultWriter,
+    ) -> Result<DesktopAccountTransaction> {
         let target = pending.flow.target.clone().ok_or_else(|| {
             entry_error(
                 "grant_target_expired",
@@ -2767,7 +2973,8 @@ impl EntryService {
                 {
                     return Err(mismatch());
                 }
-                self.complete_vault_writer_rotation(&pending, &permit_id).await?;
+                self.complete_vault_writer_rotation(&pending, &permit_id)
+                    .await?;
                 Ok(VaultWriterStepUpPoll::Complete)
             }
         }
@@ -2791,7 +2998,9 @@ impl EntryService {
                     .find(|c| c.connection_id == pending.connection_id)
                     .cloned()
             }
-            .ok_or_else(|| entry_error("connection_not_found", "The connection is not enrolled."))?;
+            .ok_or_else(|| {
+                entry_error("connection_not_found", "The connection is not enrolled.")
+            })?;
             if connection.re_pair_required || connection.account_binding.is_none() {
                 return Err(entry_error(
                     "account_repair_required",
@@ -2807,7 +3016,10 @@ impl EntryService {
                 })?;
             let (client_public_key, signer) = self.account_signer()?;
             let target = pending.flow.target.clone().ok_or_else(|| {
-                entry_error("account_vault_rotation_invalid", "The stored writer target is missing.")
+                entry_error(
+                    "account_vault_rotation_invalid",
+                    "The stored writer target is missing.",
+                )
             })?;
             let target_digest = crate::b64::b64u_encode(
                 &Sha256::digest(canonical_account_action_target(&target).as_bytes())[..],
@@ -2832,8 +3044,7 @@ impl EntryService {
                 signature: String::new(),
             };
             device_proof.signature = crate::b64::b64u_encode(
-                &entry_key
-                    .sign(account_device_authority_transcript(&device_proof).as_bytes()),
+                &entry_key.sign(account_device_authority_transcript(&device_proof).as_bytes()),
             );
             let (auth, _credential_ref) = self.desktop_auth()?;
             let desktop_body = json!({
@@ -2930,7 +3141,9 @@ impl EntryService {
             let store = self.store.lock().unwrap();
             store.config().recovery.clone()
         };
-        let retained: Vec<String> = if prior.as_ref().is_some_and(|p| p.vault_id == pending.vault_id)
+        let retained: Vec<String> = if prior
+            .as_ref()
+            .is_some_and(|p| p.vault_id == pending.vault_id)
         {
             let mut refs: Vec<String> = prior
                 .as_ref()
@@ -2950,7 +3163,9 @@ impl EntryService {
         };
         let snapshot_source = match &prior {
             Some(p) if p.vault_id != pending.vault_id => None,
-            Some(p) if p.material_ref == pending.material_ref => p.snapshot_source_material_ref.clone(),
+            Some(p) if p.material_ref == pending.material_ref => {
+                p.snapshot_source_material_ref.clone()
+            }
             Some(p) => Some(p.material_ref.clone()),
             None => None,
         };
@@ -3155,7 +3370,8 @@ impl EntryService {
     fn ack_vault_writer_transaction(&self, pending: &PendingVaultWriter) {
         if let Some(transaction) = &pending.flow.browser_transaction {
             if let Some(client) = &self.account_client {
-                let _ = client.acknowledge_transaction(&transaction.transaction_id, &transaction.verifier);
+                let _ = client
+                    .acknowledge_transaction(&transaction.transaction_id, &transaction.verifier);
             }
         }
     }
@@ -3164,7 +3380,11 @@ impl EntryService {
         self.custody.store_secret(
             &pending.flow_ref,
             &serde_json::to_vec(&pending.flow).map_err(|e| {
-                entry_error("account_vault_rotation_invalid", "The writer flow could not be serialized.").caused_by(e)
+                entry_error(
+                    "account_vault_rotation_invalid",
+                    "The writer flow could not be serialized.",
+                )
+                .caused_by(e)
             })?,
         )?;
         self.store.lock().unwrap().update(|c| {
@@ -3196,18 +3416,12 @@ impl EntryService {
             Ok(f) => f,
             Err(_) => return Ok(()),
         };
-        if flow
-            .prepare_request
-            .as_ref()
-            .is_some_and(|r| r.get("operationId").and_then(|v| v.as_str()) != Some(stored.operation_id.as_str()))
-            || flow
-                .complete_request
-                .as_ref()
-                .is_some_and(|r| {
-                    r.get("operationId").and_then(|v| v.as_str()) != Some(stored.operation_id.as_str())
-                        || r.get("keyCustodyConfirmed") != Some(&Value::Bool(true))
-                })
-        {
+        if flow.prepare_request.as_ref().is_some_and(|r| {
+            r.get("operationId").and_then(|v| v.as_str()) != Some(stored.operation_id.as_str())
+        }) || flow.complete_request.as_ref().is_some_and(|r| {
+            r.get("operationId").and_then(|v| v.as_str()) != Some(stored.operation_id.as_str())
+                || r.get("keyCustodyConfirmed") != Some(&Value::Bool(true))
+        }) {
             return Ok(());
         }
         *self.pending_vault_writer.lock().unwrap() = Some(PendingVaultWriter {
@@ -3226,7 +3440,9 @@ impl EntryService {
 
     fn clear_vault_writer_rotation(&self) -> Result<()> {
         let pending = self.pending_vault_writer.lock().unwrap().take();
-        let Some(pending) = pending else { return Ok(()) };
+        let Some(pending) = pending else {
+            return Ok(());
+        };
         self.store
             .lock()
             .unwrap()
@@ -3238,12 +3454,17 @@ impl EntryService {
     /// `retryVaultWriterRegistration` — resume whichever phase the durable
     /// record reached; the exact stored request is replayed, never rebuilt.
     pub async fn retry_vault_writer_registration(&self) -> Result<Value> {
-        let pending = self.pending_vault_writer.lock().unwrap().clone().ok_or_else(|| {
-            entry_error(
-                "account_vault_rotation_invalid",
-                "No account vault writer registration is waiting.",
-            )
-        })?;
+        let pending = self
+            .pending_vault_writer
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| {
+                entry_error(
+                    "account_vault_rotation_invalid",
+                    "No account vault writer registration is waiting.",
+                )
+            })?;
         if pending.flow.complete_request.is_some() {
             self.submit_vault_writer_completion(&pending).await?;
             return Ok(self.recovery_view());
@@ -3455,7 +3676,10 @@ impl EntryService {
             recovery.generation,
             &principal_ref,
             &recovery.vault_id,
-            &connections.iter().map(|c| c.route_id.clone()).collect::<Vec<_>>(),
+            &connections
+                .iter()
+                .map(|c| c.route_id.clone())
+                .collect::<Vec<_>>(),
             None,
         )?;
         *self.pending_recovery.lock().unwrap() = Some(PendingRecoverySecret {
@@ -3482,12 +3706,8 @@ impl EntryService {
                 );
                 continue;
             };
-            self.deliver_rotation_message(
-                &staged.rotation.rotation_id,
-                &stored,
-                &outbound.message,
-            )
-            .await;
+            self.deliver_rotation_message(&staged.rotation.rotation_id, &stored, &outbound.message)
+                .await;
         }
         Ok(self.recovery_view())
     }
@@ -3528,7 +3748,8 @@ impl EntryService {
                 let parsed = crate::wire::recovery::parse_rotation_state(&reply);
                 if let Some(state) = parsed {
                     if state.acknowledged.iter().any(|r| r == &stored.route_id) {
-                        let _ = manager.mark_endpoint(rotation_id, &stored.route_id, "acknowledged");
+                        let _ =
+                            manager.mark_endpoint(rotation_id, &stored.route_id, "acknowledged");
                     } else {
                         let _ = manager.mark_endpoint(rotation_id, &stored.route_id, "staged");
                     }
@@ -3544,10 +3765,12 @@ impl EntryService {
     /// `retryRotationDelivery` — re-deliver only the un-acknowledged
     /// endpoints; acknowledged ones are never replayed.
     pub async fn retry_rotation_delivery(&self) -> Result<Value> {
-        let active = self.open_rotation().ok_or_else(|| {
-            entry_error("rotation_state_invalid", "No rotation is in flight.")
-        })?;
-        let owed = self.rotation_manager().pending_outbound(&active.rotation_id)?;
+        let active = self
+            .open_rotation()
+            .ok_or_else(|| entry_error("rotation_state_invalid", "No rotation is in flight."))?;
+        let owed = self
+            .rotation_manager()
+            .pending_outbound(&active.rotation_id)?;
         let connections = {
             let store = self.store.lock().unwrap();
             store.config().connections.clone()
@@ -3559,12 +3782,8 @@ impl EntryService {
                 .cloned();
             match stored {
                 Some(stored) => {
-                    self.deliver_rotation_message(
-                        &active.rotation_id,
-                        &stored,
-                        &target.message,
-                    )
-                    .await;
+                    self.deliver_rotation_message(&active.rotation_id, &stored, &target.message)
+                        .await;
                 }
                 None => {
                     let _ = self.rotation_manager().mark_endpoint(
@@ -3581,9 +3800,9 @@ impl EntryService {
     /// Abort the in-flight rotation for this install — endpoints keep the
     /// incumbent key; the candidate secret is dropped.
     pub fn abort_rotation(&self) -> Result<Value> {
-        let active = self.open_rotation().ok_or_else(|| {
-            entry_error("rotation_state_invalid", "No rotation is in flight.")
-        })?;
+        let active = self
+            .open_rotation()
+            .ok_or_else(|| entry_error("rotation_state_invalid", "No rotation is in flight."))?;
         self.rotation_manager().abort(&active.rotation_id)?;
         // A pending candidate bound to this rotation dies with it.
         let bound = self
@@ -3598,7 +3817,6 @@ impl EntryService {
         Ok(self.recovery_view())
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // Fresh-profile import — `importRecoveryText`. The recovery text alone is the
@@ -3682,8 +3900,14 @@ impl EntryService {
                 ));
             }
         };
-        let (fresh_device_id, relay_credential, tenant_id, route_id, admission_generation, revocation_revision) =
-            access;
+        let (
+            fresh_device_id,
+            relay_credential,
+            tenant_id,
+            route_id,
+            admission_generation,
+            revocation_revision,
+        ) = access;
         let admission = crate::wire::session::RelayAdmission {
             tenant_id: tenant_id.clone(),
             device_id: fresh_device_id.clone(),
@@ -3701,8 +3925,7 @@ impl EntryService {
         )
         .await?;
         let outcome = {
-            let endpoint =
-                crate::recovery::service::RecoveryChannelEndpoint::new(&channel);
+            let endpoint = crate::recovery::service::RecoveryChannelEndpoint::new(&channel);
             let vault = crate::recovery::vault::RecoveryVaultClient::new(
                 crate::recovery::vault::HttpsVaultTransport::new(&service_base)?,
             );
@@ -3747,13 +3970,15 @@ impl EntryService {
                         .map(|c| if c.is_ascii_alphanumeric() { c } else { '.' })
                         .collect::<String>()
                 );
-                let relay_credential_ref =
-                    format!("entry.relay.credential.{}", generate_suffix());
+                let relay_credential_ref = format!("entry.relay.credential.{}", generate_suffix());
                 self.custody
                     .store_secret(&relay_credential_ref, relay_credential.as_bytes())?;
                 let stored = StoredConnection {
                     connection_id: connection_id.clone(),
-                    display_label: format!("{} @ {}", connection.principal_ref, connection.route_id),
+                    display_label: format!(
+                        "{} @ {}",
+                        connection.principal_ref, connection.route_id
+                    ),
                     tenant_id: connection.tenant_id.clone(),
                     route_id: connection.route_id.clone(),
                     mode: connection.mode.clone(),
@@ -3782,8 +4007,7 @@ impl EntryService {
                     re_pair_required: false,
                     pairing_completion_checkpoint_ref: None,
                 };
-                let material =
-                    crate::recovery::crypto::derive_recovery_material(&parsed.secret)?;
+                let material = crate::recovery::crypto::derive_recovery_material(&parsed.secret)?;
                 let material_ref =
                     custody_recovery_key_ref(&connection.vault_id, &material.signing.key_id);
                 self.custody.store_secret(
@@ -3796,7 +4020,9 @@ impl EntryService {
                 let mut store = self.store.lock().unwrap();
                 let stored_clone = stored.clone();
                 store.update(|draft| {
-                    draft.connections.retain(|e| e.connection_id != connection_id);
+                    draft
+                        .connections
+                        .retain(|e| e.connection_id != connection_id);
                     draft.connections.push(stored_clone);
                     draft.recovery = Some(StoredRecovery {
                         vault_id,
@@ -3823,7 +4049,6 @@ impl EntryService {
         }
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // Grant catalog / grant access — `loadGrantCatalog`, `requestGrantAccess`,
@@ -3861,10 +4086,9 @@ struct PendingGrant {
 fn is_scope_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
-        && value
-            .chars()
-            .enumerate()
-            .all(|(i, c)| c.is_ascii_alphanumeric() || (i > 0 && matches!(c, '.' | '_' | ':' | '/' | '-')))
+        && value.chars().enumerate().all(|(i, c)| {
+            c.is_ascii_alphanumeric() || (i > 0 && matches!(c, '.' | '_' | ':' | '/' | '-'))
+        })
 }
 
 fn grant_catalog_request() -> Value {
@@ -3879,10 +4103,9 @@ fn grant_catalog_request() -> Value {
 fn is_operation_id(value: &str) -> bool {
     value.len() >= 2
         && value.len() <= 127
-        && value
-            .chars()
-            .enumerate()
-            .all(|(i, c)| c.is_ascii_alphanumeric() || (i > 0 && matches!(c, '.' | '_' | ':' | '-')))
+        && value.chars().enumerate().all(|(i, c)| {
+            c.is_ascii_alphanumeric() || (i > 0 && matches!(c, '.' | '_' | ':' | '-'))
+        })
 }
 
 impl EntryService {
@@ -3942,7 +4165,10 @@ impl EntryService {
             && !available.is_empty()
             || response.get("outcome").and_then(|v| v.as_str()) == Some("grant_catalog")
                 && available.is_empty();
-        let all_scopes = available.iter().filter_map(|v| v.as_str()).all(is_scope_name)
+        let all_scopes = available
+            .iter()
+            .filter_map(|v| v.as_str())
+            .all(is_scope_name)
             && available.len() == available.iter().filter(|v| v.is_string()).count();
         if !valid || !all_scopes {
             return Err(entry_error(
@@ -4004,7 +4230,11 @@ impl EntryService {
         let available: Vec<String> = catalog
             .get("availableScopes")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
             .unwrap_or_default();
         let catalog_ok = catalog.get("outcome").and_then(|v| v.as_str()) == Some("grant_catalog")
             && catalog
@@ -4086,10 +4316,17 @@ impl EntryService {
                 "The endpoint returned a grant target that does not match the selected route and scopes.",
             ));
         }
-        let device = crate::identity::device_identity_from_custody(&*self.custody, None, &connection.device_id)?
-            .ok_or_else(|| {
-                entry_error("custody_unavailable", "The Entry device signing key is unavailable in OS custody.")
-            })?;
+        let device = crate::identity::device_identity_from_custody(
+            &*self.custody,
+            None,
+            &connection.device_id,
+        )?
+        .ok_or_else(|| {
+            entry_error(
+                "custody_unavailable",
+                "The Entry device signing key is unavailable in OS custody.",
+            )
+        })?;
         if device.public_key != target.device_public_key {
             return Err(entry_error(
                 "grant_device_mismatch",
@@ -4098,9 +4335,19 @@ impl EntryService {
         }
         *self.pending_grant.lock().unwrap() = Some(PendingGrant {
             connection_id: connection_id.to_string(),
-            operation_id: answer.get("operationId").unwrap().as_str().unwrap().to_string(),
+            operation_id: answer
+                .get("operationId")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
             target: target.clone(),
-            expires_at: answer.get("expiresAt").unwrap().as_str().unwrap().to_string(),
+            expires_at: answer
+                .get("expiresAt")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string(),
         });
         let client = self.account_client.as_ref().ok_or_else(|| {
             entry_error("account_origin_missing", "No account origin is configured.")
@@ -4148,10 +4395,7 @@ impl EntryService {
             ..
         } = poll
         else {
-            let non_terminal = matches!(
-                poll,
-                TransactionPoll::Pending
-            );
+            let non_terminal = matches!(poll, TransactionPoll::Pending);
             if !non_terminal {
                 *self.pending_grant.lock().unwrap() = None;
                 return Ok(match poll {
@@ -4170,7 +4414,10 @@ impl EntryService {
             ));
         }
         let pending = self.pending_grant.lock().unwrap().take().ok_or_else(|| {
-            entry_error("grant_state_invalid", "No grant request is waiting for its permit.")
+            entry_error(
+                "grant_state_invalid",
+                "No grant request is waiting for its permit.",
+            )
         })?;
         if chrono::DateTime::parse_from_rfc3339(&pending.expires_at)
             .map(|d| d.timestamp_millis() <= chrono::Utc::now().timestamp_millis())
@@ -4200,7 +4447,10 @@ impl EntryService {
             }
         }
         let permit_id = permit_id.ok_or_else(|| {
-            entry_error("account_step_up_mismatch", "The transaction completed without a permit.")
+            entry_error(
+                "account_step_up_mismatch",
+                "The transaction completed without a permit.",
+            )
         })?;
         let transcript = crate::canonical::canonical_json(&json!({
             "account": {
@@ -4241,7 +4491,11 @@ impl EntryService {
         let authorized: Vec<String> = answer
             .get("authorizedScopes")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
             .unwrap_or_default();
         let granted = answer.get("outcome").and_then(|v| v.as_str()) == Some("granted")
             && answer.get("capabilityGrantRef").and_then(|v| v.as_str())

@@ -20,9 +20,9 @@ use crate::error::{entry_error, EntryError, Result};
 use super::application::*;
 use super::application_journal::PeerApplicationJournal;
 use super::client::{PeerInboundOutcome, PEER_CLIENT_MAX_PLAINTEXT_BYTES};
-use crate::b64::b64u_encode;
 use super::client_store::StoredOutboxEntry;
 use super::types::is_peer_client_error_kind;
+use crate::b64::b64u_encode;
 
 const MAX_CONCURRENT_EXECUTIONS: usize = 2;
 const MAX_QUEUED_EXECUTIONS: usize = 32;
@@ -75,7 +75,7 @@ pub trait PeerApplicationPeerPort {
     ) -> LocalBoxFuture<'a, Result<()>>;
 }
 
-/// Handlers the engine passes to a local ACP execution. `before_prompt` must
+/// Handlers the engine passes to a local A4AA execution. `before_prompt` must
 /// commit the durable prompt reservation before the adapter writes
 /// session/prompt.
 pub struct PeerApplicationExecutionHandlers {
@@ -100,7 +100,7 @@ pub struct PeerApplicationExecutionResult {
     pub text: String,
 }
 
-/// One running local ACP execution. `result` is a one-shot channel — the
+/// One running local Agent execution. `result` is a one-shot channel — the
 /// engine awaits it inside `execute`; `cancel` stays callable while running.
 pub struct PeerApplicationExecution {
     pub cancel: Rc<dyn Fn() -> LocalBoxFuture<'static, ()>>,
@@ -114,6 +114,7 @@ pub trait PeerApplicationAgentExecutor {
         operation_id: &str,
         prompt: &str,
         model: Option<String>,
+        effort: Option<String>,
         handlers: PeerApplicationExecutionHandlers,
     ) -> PeerApplicationExecution;
 }
@@ -156,6 +157,7 @@ fn make_operation_record(input: OperationRecordSeed) -> PeerApplicationRecord {
         request_digest: input.request_digest,
         prompt: input.prompt,
         model: input.model,
+        effort: input.effort,
         status: input.status.clone(),
         prompt_reserved: false,
         prompt_execution_id: None,
@@ -188,6 +190,7 @@ struct OperationRecordSeed {
     request_digest: String,
     prompt: String,
     model: Option<String>,
+    effort: Option<String>,
     status: String,
     inbound_message_id: Option<String>,
 }
@@ -300,7 +303,7 @@ pub struct PeerApplicationEngine {
     listeners: RefCell<Vec<ChangeListener>>,
     key_locks: RefCell<HashMap<String, Rc<tokio::sync::Mutex<()>>>>,
     deferred_routes: RefCell<HashMap<String, PeerApplicationAddress>>,
-    /// key → cancel handle of a live ACP execution.
+    /// key → cancel handle of a live A4AA execution.
     running: RefCell<HashMap<String, Rc<dyn Fn() -> LocalBoxFuture<'static, ()>>>>,
     started: RefCell<HashSet<String>>,
     execution_queue: RefCell<Vec<String>>,
@@ -371,7 +374,10 @@ impl PeerApplicationEngine {
         }
     }
 
-    fn defer_recovery(self: &Rc<Self>, task: impl FnOnce(Rc<Self>) -> LocalBoxFuture<'static, Result<()>> + 'static) {
+    fn defer_recovery(
+        self: &Rc<Self>,
+        task: impl FnOnce(Rc<Self>) -> LocalBoxFuture<'static, Result<()>> + 'static,
+    ) {
         let this = Rc::clone(self);
         tokio::task::spawn_local(async move {
             if task(this.clone()).await.is_err() {
@@ -416,8 +422,12 @@ impl PeerApplicationEngine {
         if self.disposed.get() {
             return;
         }
-        let routes: Vec<PeerApplicationAddress> =
-            self.deferred_routes.borrow_mut().drain().map(|(_, v)| v).collect();
+        let routes: Vec<PeerApplicationAddress> = self
+            .deferred_routes
+            .borrow_mut()
+            .drain()
+            .map(|(_, v)| v)
+            .collect();
         for address in routes {
             let this = Rc::clone(self);
             tokio::task::spawn_local(async move {
@@ -445,7 +455,10 @@ impl PeerApplicationEngine {
         Ok(())
     }
 
-    async fn clear_operation_recovery(&self, recovery: &PeerApplicationOperationRecovery) -> Result<bool> {
+    async fn clear_operation_recovery(
+        &self,
+        recovery: &PeerApplicationOperationRecovery,
+    ) -> Result<bool> {
         self.with_key_lock(&recovery.key, || async {
             self.journal
                 .clear_pending_operation_recovery(&recovery.key, Some(recovery.state_revision))
@@ -453,7 +466,10 @@ impl PeerApplicationEngine {
         .await
     }
 
-    async fn clear_discovery_recovery(&self, recovery: &PeerApplicationDiscoveryRecovery) -> Result<bool> {
+    async fn clear_discovery_recovery(
+        &self,
+        recovery: &PeerApplicationDiscoveryRecovery,
+    ) -> Result<bool> {
         self.with_key_lock(&format!("discovery:{}", recovery.key), || async {
             self.journal
                 .clear_pending_discovery_recovery(&recovery.key, Some(&recovery.action))
@@ -465,12 +481,17 @@ impl PeerApplicationEngine {
         let records = self.records_for_operation_id(operation_id).await?;
         let matches: Vec<_> = records.into_iter().filter(|r| r.role == "caller").collect();
         if matches.len() > 1 {
-            return Err(app_error("The caller operation id is already bound to multiple requests."));
+            return Err(app_error(
+                "The caller operation id is already bound to multiple requests.",
+            ));
         }
         Ok(matches.into_iter().next())
     }
 
-    async fn records_for_operation_id(&self, operation_id: &str) -> Result<Vec<PeerApplicationRecord>> {
+    async fn records_for_operation_id(
+        &self,
+        operation_id: &str,
+    ) -> Result<Vec<PeerApplicationRecord>> {
         let keys = self.journal.find_operation_keys_by_id(operation_id)?;
         let mut records = Vec::new();
         for key in keys {
@@ -481,18 +502,28 @@ impl PeerApplicationEngine {
         Ok(records)
     }
 
-    async fn get_by_operation_id(&self, operation_id: &str) -> Result<Option<PeerApplicationRecord>> {
+    async fn get_by_operation_id(
+        &self,
+        operation_id: &str,
+    ) -> Result<Option<PeerApplicationRecord>> {
         let records = self.records_for_operation_id(operation_id).await?;
         let caller: Vec<_> = records.iter().filter(|r| r.role == "caller").collect();
         if caller.len() > 1 {
-            return Err(app_error("The caller operation id is already bound to multiple requests."));
+            return Err(app_error(
+                "The caller operation id is already bound to multiple requests.",
+            ));
         }
         if let Some(record) = caller.into_iter().next() {
             return Ok(Some(record.clone()));
         }
-        let receivers: Vec<_> = records.into_iter().filter(|r| r.role == "receiver").collect();
+        let receivers: Vec<_> = records
+            .into_iter()
+            .filter(|r| r.role == "receiver")
+            .collect();
         if receivers.len() > 1 {
-            return Err(app_error("The operation id is ambiguous across paired routes."));
+            return Err(app_error(
+                "The operation id is ambiguous across paired routes.",
+            ));
         }
         Ok(receivers.into_iter().next())
     }
@@ -538,6 +569,7 @@ impl PeerApplicationEngine {
         target_agent_id: String,
         prompt: String,
         model: Option<String>,
+        effort: Option<String>,
     ) -> Result<PeerApplicationRecord> {
         let operation_id = match operation_id {
             Some(id) => assert_peer_client_opaque_id(&id, "operationId")?,
@@ -550,12 +582,17 @@ impl PeerApplicationEngine {
             .transpose()?;
         let prompt = {
             if prompt.is_empty() || prompt.len() > 32_000 {
-                return Err(app_error("Peer application prompt is empty or exceeds its bound."));
+                return Err(app_error(
+                    "Peer application prompt is empty or exceeds its bound.",
+                ));
             }
             prompt
         };
         let model = model
             .map(|m| assert_peer_application_string(&Value::String(m), "model", 128))
+            .transpose()?;
+        let effort = effort
+            .map(|value| assert_peer_application_string(&Value::String(value), "effort", 128))
             .transpose()?;
         let digest = peer_application_request_digest(
             &route_address,
@@ -563,6 +600,7 @@ impl PeerApplicationEngine {
             &target_agent_id,
             &prompt,
             model.as_deref(),
+            effort.as_deref(),
         );
         let key = peer_application_operation_key(&route_address, &operation_id);
         let lock = self.key_lock(&format!("caller-operation:{operation_id}"));
@@ -570,9 +608,12 @@ impl PeerApplicationEngine {
         if let Some(existing) = self.caller_operation(&operation_id).await? {
             if existing.request_digest != digest
                 || existing.origin_address != route_address
+                || existing.route_address != route_address
                 || existing.caller_agent_id != caller_agent_id
                 || existing.target_agent_id != target_agent_id
                 || existing.prompt != prompt
+                || existing.model != model
+                || existing.effort != effort
             {
                 return Err(app_error(
                     "This operation id is already bound to different immutable request data.",
@@ -594,6 +635,7 @@ impl PeerApplicationEngine {
             "targetAgentId": target_agent_id,
             "prompt": prompt,
             "model": model,
+            "effort": effort,
             "requestDigest": digest,
             "deliveryId": "request"
         });
@@ -610,13 +652,15 @@ impl PeerApplicationEngine {
             request_digest: digest,
             prompt,
             model,
+            effort,
             status: "delivery_pending".to_string(),
             inbound_message_id: None,
         });
         let accepted2 = accepted.clone();
-        self.with_key_lock(&key, || async move {
-            self.save_operation(&accepted2).await
-        })
+        self.with_key_lock(
+            &key,
+            || async move { self.save_operation(&accepted2).await },
+        )
         .await?;
         let accepted3 = accepted.clone();
         self.defer_recovery(move |this| {
@@ -658,12 +702,13 @@ impl PeerApplicationEngine {
             created_at: timestamp.clone(),
             updated_at: timestamp,
         };
-        self.journal.save_pending_discovery_recovery(&PeerApplicationDiscoveryRecovery {
-            key: record.key.clone(),
-            address: record.address.clone(),
-            request_id: record.request_id.clone(),
-            action: "request".to_string(),
-        })?;
+        self.journal
+            .save_pending_discovery_recovery(&PeerApplicationDiscoveryRecovery {
+                key: record.key.clone(),
+                address: record.address.clone(),
+                request_id: record.request_id.clone(),
+                action: "request".to_string(),
+            })?;
         self.journal.save_discovery(&record)?;
         self.emit(PeerApplicationChange::Discovery(record.clone()));
         let record2 = record.clone();
@@ -680,11 +725,15 @@ impl PeerApplicationEngine {
     ) -> Result<Option<PeerApplicationDiscoveryRecord>> {
         let route = assert_address(address)?;
         let id = assert_peer_client_opaque_id(request_id, "requestId")?;
-        self.journal.get_discovery(&peer_application_discovery_key(&route, &id))
+        self.journal
+            .get_discovery(&peer_application_discovery_key(&route, &id))
     }
 
     /// Latest completed remote agent list for this route.
-    pub async fn remote_agents(&self, address: &PeerApplicationAddress) -> Result<Vec<AcpAgentSummary>> {
+    pub async fn remote_agents(
+        &self,
+        address: &PeerApplicationAddress,
+    ) -> Result<Vec<AcpAgentSummary>> {
         let route = assert_address(address)?;
         let mut rows: Vec<PeerApplicationDiscoveryRecord> = self
             .journal
@@ -707,12 +756,15 @@ impl PeerApplicationEngine {
             if status_terminal(&current.status) {
                 return Ok(current);
             }
-            let cancelled = update_record(&current, RecordPatch {
-                cancel_requested: Some(true),
-                status: Some("cancel_requested".to_string()),
-                last_error: Some(None),
-                ..Default::default()
-            });
+            let cancelled = update_record(
+                &current,
+                RecordPatch {
+                    cancel_requested: Some(true),
+                    status: Some("cancel_requested".to_string()),
+                    last_error: Some(None),
+                    ..Default::default()
+                },
+            );
             self.save_operation(&cancelled).await?;
             Ok(cancelled)
         })
@@ -751,85 +803,98 @@ impl PeerApplicationEngine {
         if record.role != "receiver" {
             return Err(app_error("The local permission request does not exist."));
         }
-        let updated = self.with_key_lock(&record.key, || async {
-            let Some(current) = self.journal.get_operation(&record.key)? else {
-                return Err(app_error("The permission request is no longer pending."));
-            };
-            let permission = current.permission.clone().unwrap_or_else(|| PeerApplicationPermissionRecord {
-                id: String::new(),
-                status: "pending".to_string(),
-                request: AcpPermissionPrompt {
-                    session_id: String::new(),
-                    tool_call: AcpPermissionToolCall {
-                        tool_call_id: String::new(),
-                        title: String::new(),
-                        name: None,
-                        kind: None,
-                        status: None,
-                        content: Vec::new(),
-                        raw_input: None,
-                        locations: Vec::new(),
-                    },
-                    options: Vec::new(),
-                },
-                selected_option_id: None,
-                updated_at: now_iso(),
-            });
-            if permission.id != permission_id || permission.status != "pending" {
-                return Err(app_error("The permission request is no longer pending."));
-            }
-            if !self.permission_waiters.borrow().contains_key(&record.key) {
-                return Err(app_error(
-                    "The local ACP process is no longer waiting for this permission.",
-                ));
-            }
-            let mut selected_option_id: Option<String> = None;
-            if let AcpPermissionResolution::Selected { option_id } = &resolution {
-                let option_id = assert_peer_client_opaque_id(option_id, "permission.optionId")?;
-                if !permission.request.options.iter().any(|o| o.option_id == option_id) {
+        let updated = self
+            .with_key_lock(&record.key, || async {
+                let Some(current) = self.journal.get_operation(&record.key)? else {
+                    return Err(app_error("The permission request is no longer pending."));
+                };
+                let permission =
+                    current
+                        .permission
+                        .clone()
+                        .unwrap_or_else(|| PeerApplicationPermissionRecord {
+                            id: String::new(),
+                            status: "pending".to_string(),
+                            request: AcpPermissionPrompt {
+                                session_id: String::new(),
+                                tool_call: AcpPermissionToolCall {
+                                    tool_call_id: String::new(),
+                                    title: String::new(),
+                                    name: None,
+                                    kind: None,
+                                    status: None,
+                                    content: Vec::new(),
+                                    raw_input: None,
+                                    locations: Vec::new(),
+                                },
+                                options: Vec::new(),
+                            },
+                            selected_option_id: None,
+                            updated_at: now_iso(),
+                        });
+                if permission.id != permission_id || permission.status != "pending" {
+                    return Err(app_error("The permission request is no longer pending."));
+                }
+                if !self.permission_waiters.borrow().contains_key(&record.key) {
                     return Err(app_error(
-                        "The selected permission option does not belong to this request.",
+                        "The local Agent session is no longer waiting for this permission.",
                     ));
                 }
-                selected_option_id = Some(option_id);
-            }
-            let updated_at = now_iso();
-            let updated = update_record(&current, RecordPatch {
-                permission: Some(Some(PeerApplicationPermissionRecord {
-                    status: "resolved".to_string(),
-                    selected_option_id: selected_option_id.clone(),
-                    updated_at: updated_at.clone(),
-                    ..permission.clone()
-                })),
-                permission_history: Some(
-                    current
-                        .permission_history
+                let mut selected_option_id: Option<String> = None;
+                if let AcpPermissionResolution::Selected { option_id } = &resolution {
+                    let option_id = assert_peer_client_opaque_id(option_id, "permission.optionId")?;
+                    if !permission
+                        .request
+                        .options
                         .iter()
-                        .map(|p| {
-                            if p.id == permission_id {
-                                PeerApplicationPermissionRecord {
-                                    status: "resolved".to_string(),
-                                    selected_option_id: selected_option_id.clone(),
-                                    updated_at: updated_at.clone(),
-                                    ..p.clone()
-                                }
-                            } else {
-                                p.clone()
-                            }
-                        })
-                        .collect(),
-                ),
-                status: Some(if current.cancel_requested {
-                    "cancel_requested".to_string()
-                } else {
-                    "running".to_string()
-                }),
-                ..Default::default()
-            });
-            self.save_operation(&updated).await?;
-            Ok(updated)
-        })
-        .await?;
+                        .any(|o| o.option_id == option_id)
+                    {
+                        return Err(app_error(
+                            "The selected permission option does not belong to this request.",
+                        ));
+                    }
+                    selected_option_id = Some(option_id);
+                }
+                let updated_at = now_iso();
+                let updated = update_record(
+                    &current,
+                    RecordPatch {
+                        permission: Some(Some(PeerApplicationPermissionRecord {
+                            status: "resolved".to_string(),
+                            selected_option_id: selected_option_id.clone(),
+                            updated_at: updated_at.clone(),
+                            ..permission.clone()
+                        })),
+                        permission_history: Some(
+                            current
+                                .permission_history
+                                .iter()
+                                .map(|p| {
+                                    if p.id == permission_id {
+                                        PeerApplicationPermissionRecord {
+                                            status: "resolved".to_string(),
+                                            selected_option_id: selected_option_id.clone(),
+                                            updated_at: updated_at.clone(),
+                                            ..p.clone()
+                                        }
+                                    } else {
+                                        p.clone()
+                                    }
+                                })
+                                .collect(),
+                        ),
+                        status: Some(if current.cancel_requested {
+                            "cancel_requested".to_string()
+                        } else {
+                            "running".to_string()
+                        }),
+                        ..Default::default()
+                    },
+                );
+                self.save_operation(&updated).await?;
+                Ok(updated)
+            })
+            .await?;
         if updated.role == "receiver" {
             let updated2 = updated.clone();
             self.defer_recovery(move |this| {
@@ -848,9 +913,10 @@ impl PeerApplicationEngine {
         let mut operations: Vec<PeerApplicationOperationRecovery> = Vec::new();
         let mut cursor: Option<String> = None;
         loop {
-            let page = self
-                .journal
-                .list_pending_operation_recovery_page(cursor.as_deref(), APPLICATION_RECOVERY_PAGE_SIZE)?;
+            let page = self.journal.list_pending_operation_recovery_page(
+                cursor.as_deref(),
+                APPLICATION_RECOVERY_PAGE_SIZE,
+            )?;
             operations.extend(page.items);
             match page.next_after_key {
                 Some(k) => cursor = Some(k),
@@ -875,9 +941,10 @@ impl PeerApplicationEngine {
         let mut discoveries: Vec<PeerApplicationDiscoveryRecovery> = Vec::new();
         let mut cursor: Option<String> = None;
         loop {
-            let page = self
-                .journal
-                .list_pending_discovery_recovery_page(cursor.as_deref(), APPLICATION_RECOVERY_PAGE_SIZE)?;
+            let page = self.journal.list_pending_discovery_recovery_page(
+                cursor.as_deref(),
+                APPLICATION_RECOVERY_PAGE_SIZE,
+            )?;
             discoveries.extend(page.items);
             match page.next_after_key {
                 Some(k) => cursor = Some(k),
@@ -941,7 +1008,10 @@ impl PeerApplicationEngine {
             {
                 let mut rr = this.recovery_retry.borrow_mut();
                 rr.timer = None;
-                if rr.operation_cursor.is_none() && rr.discovery_cursor.is_none() && rr.handoff_cursor.is_none() {
+                if rr.operation_cursor.is_none()
+                    && rr.discovery_cursor.is_none()
+                    && rr.handoff_cursor.is_none()
+                {
                     rr.sweep_failed = false;
                 }
                 rr.running = true;
@@ -989,10 +1059,10 @@ impl PeerApplicationEngine {
         let mut more = false;
         {
             let cursor = self.recovery_retry.borrow().operation_cursor.clone();
-            match self
-                .journal
-                .list_pending_operation_recovery_page(cursor.as_deref(), APPLICATION_RECOVERY_PAGE_SIZE)
-            {
+            match self.journal.list_pending_operation_recovery_page(
+                cursor.as_deref(),
+                APPLICATION_RECOVERY_PAGE_SIZE,
+            ) {
                 Ok(page) => {
                     for recovery in &page.items {
                         if self.resume_operation_recovery(recovery).await.is_err() {
@@ -1010,10 +1080,10 @@ impl PeerApplicationEngine {
         }
         {
             let cursor = self.recovery_retry.borrow().discovery_cursor.clone();
-            match self
-                .journal
-                .list_pending_discovery_recovery_page(cursor.as_deref(), APPLICATION_RECOVERY_PAGE_SIZE)
-            {
+            match self.journal.list_pending_discovery_recovery_page(
+                cursor.as_deref(),
+                APPLICATION_RECOVERY_PAGE_SIZE,
+            ) {
                 Ok(page) => {
                     for recovery in &page.items {
                         if self.resume_discovery_recovery(recovery).await.is_err() {
@@ -1083,7 +1153,10 @@ impl PeerApplicationEngine {
 
     /* ------------------------------ resume paths --------------------------- */
 
-    async fn resume_operation_recovery(self: &Rc<Self>, recovery: &PeerApplicationOperationRecovery) -> Result<()> {
+    async fn resume_operation_recovery(
+        self: &Rc<Self>,
+        recovery: &PeerApplicationOperationRecovery,
+    ) -> Result<()> {
         if recovery.terminal
             && recovery.role == "receiver"
             && !recovery.terminal_prepared
@@ -1104,9 +1177,14 @@ impl PeerApplicationEngine {
                 0,
                 0,
             );
-            let request_state = self.peer.get_send_state(&recovery.route_address, &request_id).await?;
+            let request_state = self
+                .peer
+                .get_send_state(&recovery.route_address, &request_id)
+                .await?;
             if request_state.as_deref() == Some("conflict") {
-                return Err(app_error("A Peer operation request id has a sender-scope conflict."));
+                return Err(app_error(
+                    "A Peer operation request id has a sender-scope conflict.",
+                ));
             }
             if request_state.is_some() {
                 if recovery.cancel_requested {
@@ -1117,9 +1195,14 @@ impl PeerApplicationEngine {
                         0,
                         0,
                     );
-                    let cancel_state = self.peer.get_send_state(&recovery.route_address, &cancel_id).await?;
+                    let cancel_state = self
+                        .peer
+                        .get_send_state(&recovery.route_address, &cancel_id)
+                        .await?;
                     if cancel_state.as_deref() == Some("conflict") {
-                        return Err(app_error("A Peer cancellation id has a sender-scope conflict."));
+                        return Err(app_error(
+                            "A Peer cancellation id has a sender-scope conflict.",
+                        ));
                     }
                     if cancel_state.is_some() {
                         self.clear_operation_recovery(recovery).await?;
@@ -1152,10 +1235,21 @@ impl PeerApplicationEngine {
             }
         } else if recovery.result_part_count.is_some()
             && !recovery.terminal_prepared
-            && self.result_handoffs_durable(&recovery.key, &recovery.route_address, recovery.result_part_count).await?
+            && self
+                .result_handoffs_durable(
+                    &recovery.key,
+                    &recovery.route_address,
+                    recovery.result_part_count,
+                )
+                .await?
         {
             self.clear_operation_recovery(recovery).await?;
-            self.clear_result_handoff_plans(&recovery.key, &recovery.route_address, recovery.result_part_count).await?;
+            self.clear_result_handoff_plans(
+                &recovery.key,
+                &recovery.route_address,
+                recovery.result_part_count,
+            )
+            .await?;
             self.journal.clear_partial_result_chunks(&recovery.key)?;
             self.wake_deferred_routes();
             return Ok(());
@@ -1168,8 +1262,10 @@ impl PeerApplicationEngine {
                 match self.journal.get_operation(&key)? {
                     Some(current) => Ok(Some(current)),
                     None => {
-                        self.journal
-                            .clear_pending_operation_recovery(&key, Some(recovery2.state_revision))?;
+                        self.journal.clear_pending_operation_recovery(
+                            &key,
+                            Some(recovery2.state_revision),
+                        )?;
                         Ok(None)
                     }
                 }
@@ -1183,7 +1279,10 @@ impl PeerApplicationEngine {
         }
     }
 
-    async fn resume_discovery_recovery(self: &Rc<Self>, recovery: &PeerApplicationDiscoveryRecovery) -> Result<()> {
+    async fn resume_discovery_recovery(
+        self: &Rc<Self>,
+        recovery: &PeerApplicationDiscoveryRecovery,
+    ) -> Result<()> {
         let logical_id = if recovery.action == "request" {
             "catalog:request"
         } else {
@@ -1212,7 +1311,9 @@ impl PeerApplicationEngine {
         if plan.is_none() {
             let state = self.peer.get_send_state(&address, &message_id).await?;
             if state.as_deref() == Some("conflict") {
-                return Err(app_error("A Peer catalog message id has a sender-scope conflict."));
+                return Err(app_error(
+                    "A Peer catalog message id has a sender-scope conflict.",
+                ));
             }
             if state.is_some() {
                 self.clear_discovery_recovery(recovery).await?;
@@ -1245,7 +1346,10 @@ impl PeerApplicationEngine {
         let mut failed = false;
         let mut cursor: Option<String> = None;
         loop {
-            let page = match self.journal.list_pending_handoff_page(cursor.as_deref(), 32) {
+            let page = match self
+                .journal
+                .list_pending_handoff_page(cursor.as_deref(), 32)
+            {
                 Ok(p) => p,
                 Err(_) => return false,
             };
@@ -1283,11 +1387,19 @@ impl PeerApplicationEngine {
                     "targetAgentId": cur.target_agent_id,
                     "prompt": cur.prompt,
                     "model": cur.model,
+                    "effort": cur.effort,
                     "requestDigest": cur.request_digest,
                     "deliveryId": "request"
                 });
-                self.send_operation_event(cur, "request", "operation_request", &request, None, false)
-                    .await?;
+                self.send_operation_event(
+                    cur,
+                    "request",
+                    "operation_request",
+                    &request,
+                    None,
+                    false,
+                )
+                .await?;
             }
         }
         current = self.journal.get_operation(&record.key)?;
@@ -1324,9 +1436,14 @@ impl PeerApplicationEngine {
                     0,
                     0,
                 );
-                let state = self.peer.get_send_state(&latest.route_address, &cancel_id).await?;
+                let state = self
+                    .peer
+                    .get_send_state(&latest.route_address, &cancel_id)
+                    .await?;
                 if state.as_deref() == Some("conflict") {
-                    return Err(app_error("A Peer transport cancellation id has a sender-scope conflict."));
+                    return Err(app_error(
+                        "A Peer transport cancellation id has a sender-scope conflict.",
+                    ));
                 }
                 if state.is_none() {
                     return Ok(());
@@ -1341,7 +1458,9 @@ impl PeerApplicationEngine {
 
     async fn resume_receiver(self: &Rc<Self>, record: &PeerApplicationRecord) -> Result<()> {
         let mut current = self.journal.get_operation(&record.key)?;
-        let Some(mut cur) = current.clone() else { return Ok(()) };
+        let Some(mut cur) = current.clone() else {
+            return Ok(());
+        };
         if cur.terminal_prepared {
             self.complete_prepared_terminal(&cur).await?;
             current = self.journal.get_operation(&record.key)?;
@@ -1355,10 +1474,22 @@ impl PeerApplicationEngine {
                 } else {
                     saved_parts
                 };
-                let partial = partial_chunks.iter().map(|p| p.text.as_str()).collect::<String>();
-                self.set_terminal(&cur, "unknown", Some("execution_outcome_unknown"), &partial, None)
-                    .await?;
-            } else if matches!(cur.status.as_str(), "accepted" | "running" | "awaiting_permission") {
+                let partial = partial_chunks
+                    .iter()
+                    .map(|p| p.text.as_str())
+                    .collect::<String>();
+                self.set_terminal(
+                    &cur,
+                    "unknown",
+                    Some("execution_outcome_unknown"),
+                    &partial,
+                    None,
+                )
+                .await?;
+            } else if matches!(
+                cur.status.as_str(),
+                "accepted" | "running" | "awaiting_permission"
+            ) {
                 if !cur.prompt_reserved {
                     self.schedule_execution(&cur.key);
                 }
@@ -1366,7 +1497,9 @@ impl PeerApplicationEngine {
                 self.schedule_execution(&cur.key);
             }
         }
-        let Some(cur) = self.journal.get_operation(&record.key)? else { return Ok(()) };
+        let Some(cur) = self.journal.get_operation(&record.key)? else {
+            return Ok(());
+        };
         if status_terminal(&cur.status) {
             self.send_stored_result(&cur, true).await?;
             self.journal.clear_partial_result_chunks(&cur.key)?;
@@ -1376,7 +1509,10 @@ impl PeerApplicationEngine {
         Ok(())
     }
 
-    async fn resume_discovery(self: &Rc<Self>, record: &PeerApplicationDiscoveryRecord) -> Result<()> {
+    async fn resume_discovery(
+        self: &Rc<Self>,
+        record: &PeerApplicationDiscoveryRecord,
+    ) -> Result<()> {
         let envelope = json!({
             "version": PEER_APPLICATION_PROTOCOL_VERSION,
             "kind": "catalog_request",
@@ -1384,7 +1520,8 @@ impl PeerApplicationEngine {
             "address": record.address,
             "deliveryId": "catalog:request"
         });
-        self.send_discovery_event(record, &envelope, false, false).await?;
+        self.send_discovery_event(record, &envelope, false, false)
+            .await?;
         self.clear_discovery_recovery(&PeerApplicationDiscoveryRecovery {
             key: record.key.clone(),
             address: record.address.clone(),
@@ -1395,13 +1532,17 @@ impl PeerApplicationEngine {
         Ok(())
     }
 
-    async fn resume_catalog_response(self: &Rc<Self>, record: &PeerApplicationDiscoveryRecord) -> Result<()> {
-        self.journal.save_pending_discovery_recovery(&PeerApplicationDiscoveryRecovery {
-            key: record.key.clone(),
-            address: record.address.clone(),
-            request_id: record.request_id.clone(),
-            action: "response".to_string(),
-        })?;
+    async fn resume_catalog_response(
+        self: &Rc<Self>,
+        record: &PeerApplicationDiscoveryRecord,
+    ) -> Result<()> {
+        self.journal
+            .save_pending_discovery_recovery(&PeerApplicationDiscoveryRecovery {
+                key: record.key.clone(),
+                address: record.address.clone(),
+                request_id: record.request_id.clone(),
+                action: "response".to_string(),
+            })?;
         let envelope = json!({
             "version": PEER_APPLICATION_PROTOCOL_VERSION,
             "kind": "catalog_response",
@@ -1410,7 +1551,8 @@ impl PeerApplicationEngine {
             "agents": record.agents,
             "deliveryId": "catalog:response"
         });
-        self.send_discovery_event(record, &envelope, true, false).await?;
+        self.send_discovery_event(record, &envelope, true, false)
+            .await?;
         self.clear_discovery_recovery(&PeerApplicationDiscoveryRecovery {
             key: record.key.clone(),
             address: record.address.clone(),
@@ -1452,7 +1594,11 @@ impl PeerApplicationEngine {
         response: bool,
         retain_plan: bool,
     ) -> Result<()> {
-        let logical_id = if response { "catalog:response" } else { "catalog:request" };
+        let logical_id = if response {
+            "catalog:response"
+        } else {
+            "catalog:request"
+        };
         let address = if response {
             reverse_peer_application_address(&record.address)
         } else {
@@ -1481,7 +1627,9 @@ impl PeerApplicationEngine {
         );
         let state = self.peer.get_send_state(input.address, &message_id).await?;
         if state.as_deref() == Some("conflict") {
-            return Err(app_error("A Peer transport message id has a sender-scope conflict."));
+            return Err(app_error(
+                "A Peer transport message id has a sender-scope conflict.",
+            ));
         }
         if matches!(state.as_deref(), Some("delivered") | Some("pending")) {
             if !input.retain_plan {
@@ -1509,21 +1657,30 @@ impl PeerApplicationEngine {
         for fragment in fragment_logical_envelope(&message_id, input.kind, &plaintext)? {
             if !saved_plan {
                 part_count = fragment.part_count;
-                self.journal
-                    .save_pending_handoff(&self.handoff_plan(&input, &message_id, part_count))?;
+                self.journal.save_pending_handoff(&self.handoff_plan(
+                    &input,
+                    &message_id,
+                    part_count,
+                ))?;
                 saved_plan = true;
             } else if part_count != fragment.part_count {
                 return Err(app_error(
                     "A Peer application fragment count changed during one logical handoff.",
                 ));
             }
-            let fragment_state = self.peer.get_send_state(input.address, &fragment.message_id).await?;
+            let fragment_state = self
+                .peer
+                .get_send_state(input.address, &fragment.message_id)
+                .await?;
             if fragment_state.as_deref() == Some("conflict") {
                 return Err(app_error(
                     "A Peer application fragment id has a sender-scope conflict.",
                 ));
             }
-            if matches!(fragment_state.as_deref(), Some("delivered") | Some("pending")) {
+            if matches!(
+                fragment_state.as_deref(),
+                Some("delivered") | Some("pending")
+            ) {
                 continue;
             }
             self.peer
@@ -1531,7 +1688,9 @@ impl PeerApplicationEngine {
                 .await?;
         }
         if !saved_plan {
-            return Err(app_error("A Peer application envelope produced no transport fragments."));
+            return Err(app_error(
+                "A Peer application envelope produced no transport fragments.",
+            ));
         }
         if !input.retain_plan {
             self.journal.clear_pending_handoff(&message_id)?;
@@ -1539,7 +1698,12 @@ impl PeerApplicationEngine {
         Ok(())
     }
 
-    fn handoff_plan(&self, input: &SendLogical<'_>, message_id: &str, part_count: u64) -> PeerApplicationHandoffPlan {
+    fn handoff_plan(
+        &self,
+        input: &SendLogical<'_>,
+        message_id: &str,
+        part_count: u64,
+    ) -> PeerApplicationHandoffPlan {
         PeerApplicationHandoffPlan {
             key: message_id.to_string(),
             source_kind: input.source_kind.to_string(),
@@ -1559,18 +1723,31 @@ impl PeerApplicationEngine {
         }
         if plan.source_kind == "operation" {
             let Some(record) = self.journal.get_operation(&plan.source_key)? else {
-                return Err(app_error("A pending Peer handoff has no matching durable operation source."));
+                return Err(app_error(
+                    "A pending Peer handoff has no matching durable operation source.",
+                ));
             };
             if record.route_address != plan.address {
-                return Err(app_error("A pending Peer handoff has no matching durable operation source."));
+                return Err(app_error(
+                    "A pending Peer handoff has no matching durable operation source.",
+                ));
             }
             let envelope = self.operation_envelope_for_handoff(&record, plan)?;
-            self.send_operation_event(&record, &plan.logical_id, &plan.message_kind, &envelope, None, false)
-                .await?;
+            self.send_operation_event(
+                &record,
+                &plan.logical_id,
+                &plan.message_kind,
+                &envelope,
+                None,
+                false,
+            )
+            .await?;
             return Ok(());
         }
         let Some(record) = self.journal.get_discovery(&plan.source_key)? else {
-            return Err(app_error("A pending Peer handoff has no matching durable discovery source."));
+            return Err(app_error(
+                "A pending Peer handoff has no matching durable discovery source.",
+            ));
         };
         let response = plan.message_kind == "catalog_response";
         let expected_address = if response {
@@ -1579,7 +1756,9 @@ impl PeerApplicationEngine {
             record.address.clone()
         };
         if expected_address != plan.address {
-            return Err(app_error("A pending Peer catalog handoff has a mismatched route."));
+            return Err(app_error(
+                "A pending Peer catalog handoff has a mismatched route.",
+            ));
         }
         let envelope = if response {
             json!({
@@ -1599,7 +1778,8 @@ impl PeerApplicationEngine {
                 "deliveryId": "catalog:request"
             })
         };
-        self.send_discovery_event(&record, &envelope, response, false).await
+        self.send_discovery_event(&record, &envelope, response, false)
+            .await
     }
 
     async fn handoff_is_durable(&self, plan: &PeerApplicationHandoffPlan) -> Result<bool> {
@@ -1607,7 +1787,9 @@ impl PeerApplicationEngine {
             vec![plan.message_id.clone()]
         } else {
             (0..plan.part_count)
-                .map(|i| peer_application_fragment_message_id(&plan.message_id, i).unwrap_or_default())
+                .map(|i| {
+                    peer_application_fragment_message_id(&plan.message_id, i).unwrap_or_default()
+                })
                 .collect()
         };
         for id in &transport_ids {
@@ -1638,13 +1820,17 @@ impl PeerApplicationEngine {
             "originAddress": record.origin_address,
             "requestDigest": record.request_digest
         });
-        if plan.message_kind == "operation_request" && plan.logical_id == "request" && record.role == "caller" {
+        if plan.message_kind == "operation_request"
+            && plan.logical_id == "request"
+            && record.role == "caller"
+        {
             let mut v = base.as_object().unwrap().clone();
             v.insert("kind".into(), json!("operation_request"));
             v.insert("callerAgentId".into(), json!(record.caller_agent_id));
             v.insert("targetAgentId".into(), json!(record.target_agent_id));
             v.insert("prompt".into(), json!(record.prompt));
             v.insert("model".into(), json!(record.model));
+            v.insert("effort".into(), json!(record.effort));
             v.insert("deliveryId".into(), json!("request"));
             return Ok(Value::Object(v));
         }
@@ -1669,11 +1855,15 @@ impl PeerApplicationEngine {
                 .logical_id
                 .strip_prefix("result:part:")
                 .and_then(|s| s.parse::<u64>().ok())
-                .ok_or_else(|| app_error("A pending Peer result handoff has an invalid part index."))?;
+                .ok_or_else(|| {
+                    app_error("A pending Peer result handoff has an invalid part index.")
+                })?;
             let part = self
                 .journal
                 .get_result_part(&record.key, index)?
-                .ok_or_else(|| app_error("A pending Peer result handoff has no matching durable result part."))?;
+                .ok_or_else(|| {
+                    app_error("A pending Peer result handoff has no matching durable result part.")
+                })?;
             let mut v = base.as_object().unwrap().clone();
             v.insert("kind".into(), json!("operation_result_part"));
             v.insert("index".into(), json!(part.index));
@@ -1696,18 +1886,27 @@ impl PeerApplicationEngine {
             v.insert("deliveryId".into(), json!("result:end"));
             return Ok(Value::Object(v));
         }
-        Err(app_error("A pending Peer operation handoff has no matching durable event source."))
+        Err(app_error(
+            "A pending Peer operation handoff has no matching durable event source.",
+        ))
     }
 
     /* ------------------------------- inbound -------------------------------- */
 
-    async fn handle_inbound(self: &Rc<Self>, delivery: PeerApplicationInbound) -> PeerInboundOutcome {
+    async fn handle_inbound(
+        self: &Rc<Self>,
+        delivery: PeerApplicationInbound,
+    ) -> PeerInboundOutcome {
         if self.disposed.get() {
-            return PeerInboundOutcome::Deferred { detail: event_detail("engine_disposed") };
+            return PeerInboundOutcome::Deferred {
+                detail: event_detail("engine_disposed"),
+            };
         }
         let message = &delivery.message;
         if message.sender_device_id != delivery.address.peer_device_id {
-            return PeerInboundOutcome::Rejected { detail: event_detail("sender_mismatch") };
+            return PeerInboundOutcome::Rejected {
+                detail: event_detail("sender_mismatch"),
+            };
         }
         let result = self.handle_inbound_inner(&delivery).await;
         match result {
@@ -1730,23 +1929,34 @@ impl PeerApplicationEngine {
         }
     }
 
-    async fn handle_inbound_inner(self: &Rc<Self>, delivery: &PeerApplicationInbound) -> Result<PeerInboundOutcome> {
+    async fn handle_inbound_inner(
+        self: &Rc<Self>,
+        delivery: &PeerApplicationInbound,
+    ) -> Result<PeerInboundOutcome> {
         let parsed = parse_application_envelope(&delivery.message.plaintext)
             .ok_or_else(|| app_error("invalid_application_envelope"))?;
         let mut envelope = parsed;
         let mut fragment_message_id: Option<String> = None;
         if envelope.get("kind").and_then(Value::as_str) == Some("application_fragment") {
             let mid = assert_peer_client_opaque_id(
-                envelope.get("messageId").and_then(Value::as_str).unwrap_or(""),
+                envelope
+                    .get("messageId")
+                    .and_then(Value::as_str)
+                    .unwrap_or(""),
                 "fragment.messageId",
             )?;
             fragment_message_id = Some(mid.clone());
-            match self.receive_application_fragment(delivery, &envelope).await? {
+            match self
+                .receive_application_fragment(delivery, &envelope)
+                .await?
+            {
                 FragmentAssembly::Backpressured => {
                     self.deferred_routes
                         .borrow_mut()
                         .insert(Self::route_key(&delivery.address), delivery.address.clone());
-                    return Ok(PeerInboundOutcome::Deferred { detail: event_detail("backpressured") });
+                    return Ok(PeerInboundOutcome::Deferred {
+                        detail: event_detail("backpressured"),
+                    });
                 }
                 FragmentAssembly::Applied | FragmentAssembly::Incomplete => {
                     return Ok(PeerInboundOutcome::AcceptedByAgent)
@@ -1770,26 +1980,32 @@ impl PeerApplicationEngine {
         Ok(PeerInboundOutcome::AcceptedByAgent)
     }
 
-    async fn dispatch_inbound_envelope(self: &Rc<Self>, delivery: &PeerApplicationInbound, envelope: &Value) -> Result<()> {
+    async fn dispatch_inbound_envelope(
+        self: &Rc<Self>,
+        delivery: &PeerApplicationInbound,
+        envelope: &Value,
+    ) -> Result<()> {
         match envelope.get("kind").and_then(Value::as_str).unwrap_or("") {
-            "operation_request" => {
-                match self.receive_request(delivery, envelope).await? {
-                    RequestAdmission::Deferred => {
-                        self.deferred_routes
-                            .borrow_mut()
-                            .insert(Self::route_key(&delivery.address), delivery.address.clone());
-                        return Err(deferred_dispatch());
-                    }
-                    _ => {}
+            "operation_request" => match self.receive_request(delivery, envelope).await? {
+                RequestAdmission::Deferred => {
+                    self.deferred_routes
+                        .borrow_mut()
+                        .insert(Self::route_key(&delivery.address), delivery.address.clone());
+                    return Err(deferred_dispatch());
                 }
-            }
+                _ => {}
+            },
             "operation_state" => self.receive_state(delivery, envelope).await?,
             "operation_result_part" => self.receive_result_part(delivery, envelope).await?,
             "operation_result_end" => self.receive_result_end(delivery, envelope).await?,
             "operation_cancel" => self.receive_cancel(delivery, envelope).await?,
             "catalog_request" => self.receive_catalog_request(delivery, envelope).await?,
             "catalog_response" => self.receive_catalog_response(delivery, envelope).await?,
-            _ => return Err(app_error("The Peer application message kind is unsupported.")),
+            _ => {
+                return Err(app_error(
+                    "The Peer application message kind is unsupported.",
+                ))
+            }
         }
         Ok(())
     }
@@ -1800,7 +2016,10 @@ impl PeerApplicationEngine {
         envelope: &Value,
     ) -> Result<FragmentAssembly> {
         let message_id = assert_peer_client_opaque_id(
-            envelope.get("messageId").and_then(Value::as_str).unwrap_or(""),
+            envelope
+                .get("messageId")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
             "fragment.messageId",
         )?;
         let message_kind = assert_peer_application_string(
@@ -1814,15 +2033,23 @@ impl PeerApplicationEngine {
         let data = envelope.get("data").and_then(Value::as_str).unwrap_or("");
         let (part_index, part_count, total_bytes) = match (part_index, part_count, total_bytes) {
             (Some(i), Some(c), Some(t)) if c >= 1 && i < c && t >= 1 => (i, c, t),
-            _ => return Err(app_error("The Peer application fragment declaration is malformed.")),
+            _ => {
+                return Err(app_error(
+                    "The Peer application fragment declaration is malformed.",
+                ))
+            }
         };
         // Canonical base64url data.
         let decoded = crate::b64::b64u_decode(data, usize::MAX)
             .map_err(|_| app_error("The Peer application fragment data is malformed."))?;
         if decoded.is_empty() || b64u_encode(&decoded) != data {
-            return Err(app_error("The Peer application fragment data is malformed."));
+            return Err(app_error(
+                "The Peer application fragment data is malformed.",
+            ));
         }
-        if delivery.message.message_id != peer_application_fragment_message_id(&message_id, part_index)? {
+        if delivery.message.message_id
+            != peer_application_fragment_message_id(&message_id, part_index)?
+        {
             return Err(app_error(
                 "The Peer application fragment transport id does not match its part index.",
             ));
@@ -1838,10 +2065,14 @@ impl PeerApplicationEngine {
         };
         let saved = self.journal.save_application_fragment(&fragment)?;
         match saved.status {
-            PeerApplicationFragmentSaveStatus::Backpressured => return Ok(FragmentAssembly::Backpressured),
+            PeerApplicationFragmentSaveStatus::Backpressured => {
+                return Ok(FragmentAssembly::Backpressured)
+            }
             PeerApplicationFragmentSaveStatus::Conflict => return Ok(FragmentAssembly::Conflict),
             PeerApplicationFragmentSaveStatus::Applied => return Ok(FragmentAssembly::Applied),
-            PeerApplicationFragmentSaveStatus::Incomplete => return Ok(FragmentAssembly::Incomplete),
+            PeerApplicationFragmentSaveStatus::Incomplete => {
+                return Ok(FragmentAssembly::Incomplete)
+            }
             PeerApplicationFragmentSaveStatus::Complete => {}
         }
         let Some(bytes) = self
@@ -1851,10 +2082,14 @@ impl PeerApplicationEngine {
             return Err(deferred_dispatch());
         };
         let Some(logical) = parse_application_envelope(&bytes) else {
-            return Err(app_error("The completed Peer application fragments do not form their declared envelope."));
+            return Err(app_error(
+                "The completed Peer application fragments do not form their declared envelope.",
+            ));
         };
         if logical.get("kind").and_then(Value::as_str) != Some(message_kind.as_str()) {
-            return Err(app_error("The completed Peer application fragments do not form their declared envelope."));
+            return Err(app_error(
+                "The completed Peer application fragments do not form their declared envelope.",
+            ));
         }
         let expected = self.expected_logical_message_id(delivery, &logical)?;
         if expected.as_deref() != Some(message_id.as_str()) {
@@ -1867,13 +2102,20 @@ impl PeerApplicationEngine {
 
     /// `#expectedLogicalMessageId` — bind a reassembled envelope to the exact
     /// transport identity its authenticated content requires.
-    fn expected_logical_message_id(&self, delivery: &PeerApplicationInbound, envelope: &Value) -> Result<Option<String>> {
+    fn expected_logical_message_id(
+        &self,
+        delivery: &PeerApplicationInbound,
+        envelope: &Value,
+    ) -> Result<Option<String>> {
         let sender_device_id = &delivery.address.peer_device_id;
         match envelope.get("kind").and_then(Value::as_str) {
             Some("operation_request") => {
                 let origin = self.read_address(envelope.get("originAddress"))?;
                 let operation_id = assert_peer_client_opaque_id(
-                    envelope.get("operationId").and_then(Value::as_str).unwrap_or(""),
+                    envelope
+                        .get("operationId")
+                        .and_then(Value::as_str)
+                        .unwrap_or(""),
                     "operationId",
                 )?;
                 if envelope.get("deliveryId").and_then(Value::as_str) != Some("request") {
@@ -1887,11 +2129,16 @@ impl PeerApplicationEngine {
                     0,
                 )))
             }
-            Some("operation_state") | Some("operation_result_part") | Some("operation_result_end")
+            Some("operation_state")
+            | Some("operation_result_part")
+            | Some("operation_result_end")
             | Some("operation_cancel") => {
                 let origin = self.read_address(envelope.get("originAddress"))?;
                 let operation_id = assert_peer_client_opaque_id(
-                    envelope.get("operationId").and_then(Value::as_str).unwrap_or(""),
+                    envelope
+                        .get("operationId")
+                        .and_then(Value::as_str)
+                        .unwrap_or(""),
                     "operationId",
                 )?;
                 let Some(delivery_id) = envelope.get("deliveryId").and_then(Value::as_str) else {
@@ -1908,14 +2155,18 @@ impl PeerApplicationEngine {
             Some("catalog_request") | Some("catalog_response") => {
                 let address = self.read_address(envelope.get("address"))?;
                 let request_id = assert_peer_client_opaque_id(
-                    envelope.get("requestId").and_then(Value::as_str).unwrap_or(""),
+                    envelope
+                        .get("requestId")
+                        .and_then(Value::as_str)
+                        .unwrap_or(""),
                     "requestId",
                 )?;
-                let expected = if envelope.get("kind").and_then(Value::as_str) == Some("catalog_request") {
-                    "catalog:request"
-                } else {
-                    "catalog:response"
-                };
+                let expected =
+                    if envelope.get("kind").and_then(Value::as_str) == Some("catalog_request") {
+                        "catalog:request"
+                    } else {
+                        "catalog:response"
+                    };
                 if envelope.get("deliveryId").and_then(Value::as_str) != Some(expected) {
                     return Ok(None);
                 }
@@ -1933,17 +2184,27 @@ impl PeerApplicationEngine {
 
     /* ------------------------------ receivers ------------------------------ */
 
-    async fn receive_request(self: &Rc<Self>, inbound: &PeerApplicationInbound, envelope: &Value) -> Result<RequestAdmission> {
+    async fn receive_request(
+        self: &Rc<Self>,
+        inbound: &PeerApplicationInbound,
+        envelope: &Value,
+    ) -> Result<RequestAdmission> {
         let origin_address = self.read_address(envelope.get("originAddress"))?;
         if origin_address != reverse_peer_application_address(&inbound.address) {
             return Err(app_error("The operation request route is out of scope."));
         }
         let operation_id = assert_peer_client_opaque_id(
-            envelope.get("operationId").and_then(Value::as_str).unwrap_or(""),
+            envelope
+                .get("operationId")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
             "operationId",
         )?;
         let target_agent_id = assert_peer_client_opaque_id(
-            envelope.get("targetAgentId").and_then(Value::as_str).unwrap_or(""),
+            envelope
+                .get("targetAgentId")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
             "targetAgentId",
         )?;
         let caller_agent_id = match envelope.get("callerAgentId") {
@@ -1962,6 +2223,10 @@ impl PeerApplicationEngine {
             Some(Value::Null) | None => None,
             Some(v) => Some(assert_peer_application_string(v, "model", 128)?),
         };
+        let effort = match envelope.get("effort") {
+            Some(Value::Null) | None => None,
+            Some(v) => Some(assert_peer_application_string(v, "effort", 128)?),
+        };
         let digest = assert_peer_application_string(
             envelope.get("requestDigest").unwrap_or(&Value::Null),
             "requestDigest",
@@ -1973,25 +2238,36 @@ impl PeerApplicationEngine {
             &target_agent_id,
             &prompt,
             model.as_deref(),
+            effort.as_deref(),
         );
-        if digest != expected_digest || envelope.get("deliveryId").and_then(Value::as_str) != Some("request") {
-            return Err(app_error("The operation request is immutable or malformed."));
+        if digest != expected_digest
+            || envelope.get("deliveryId").and_then(Value::as_str) != Some("request")
+        {
+            return Err(app_error(
+                "The operation request is immutable or malformed.",
+            ));
         }
         let key = peer_application_operation_key(&origin_address, &operation_id);
 
-        let validate_existing = |existing: Option<PeerApplicationRecord>| -> Result<Option<PeerApplicationRecord>> {
-            if let Some(existing) = &existing {
-                if existing.request_digest != digest
-                    || existing.origin_address != origin_address
-                    || existing.route_address != inbound.address
-                {
-                    return Err(app_error(
-                        "The operation id is already bound to different request data.",
-                    ));
+        let validate_existing =
+            |existing: Option<PeerApplicationRecord>| -> Result<Option<PeerApplicationRecord>> {
+                if let Some(existing) = &existing {
+                    if existing.request_digest != digest
+                        || existing.origin_address != origin_address
+                        || existing.route_address != inbound.address
+                        || existing.caller_agent_id != caller_agent_id
+                        || existing.target_agent_id != target_agent_id
+                        || existing.prompt != prompt
+                        || existing.model != model
+                        || existing.effort != effort
+                    {
+                        return Err(app_error(
+                            "The operation id is already bound to different request data.",
+                        ));
+                    }
                 }
-            }
-            Ok(existing)
-        };
+                Ok(existing)
+            };
 
         // Re-delivery of accepted work is not a new admission; check the
         // journal before consulting live authority.
@@ -2044,11 +2320,12 @@ impl PeerApplicationEngine {
                     origin_address: origin2.clone(),
                     route_address: inbound_address.clone(),
                     role: "receiver".to_string(),
-                    caller_agent_id,
+                    caller_agent_id: caller_agent_id.clone(),
                     target_agent_id: target_agent_id.clone(),
                     request_digest: digest2.clone(),
                     prompt: prompt.clone(),
                     model: model.clone(),
+                    effort: effort.clone(),
                     status: "accepted".to_string(),
                     inbound_message_id: Some(message_id),
                 });
@@ -2118,8 +2395,14 @@ impl PeerApplicationEngine {
             .await
     }
 
-    async fn receive_state(&self, inbound: &PeerApplicationInbound, envelope: &Value) -> Result<()> {
-        let record = self.find_matching_operation(inbound, envelope, "caller").await?;
+    async fn receive_state(
+        &self,
+        inbound: &PeerApplicationInbound,
+        envelope: &Value,
+    ) -> Result<()> {
+        let record = self
+            .find_matching_operation(inbound, envelope, "caller")
+            .await?;
         let status = envelope.get("status").and_then(Value::as_str).unwrap_or("");
         if !status_valid(status) || status == "delivery_pending" || status_terminal(status) {
             return Err(app_error("The remote operation state is invalid."));
@@ -2128,7 +2411,10 @@ impl PeerApplicationEngine {
         let Some(revision) = revision else {
             return Err(app_error("The remote operation state revision is invalid."));
         };
-        if revision < 1 || envelope.get("deliveryId").and_then(Value::as_str) != Some(format!("state:{revision}:{status}").as_str()) {
+        if revision < 1
+            || envelope.get("deliveryId").and_then(Value::as_str)
+                != Some(format!("state:{revision}:{status}").as_str())
+        {
             return Err(app_error("The remote operation state revision is invalid."));
         }
         self.with_key_lock(&record.key, || async {
@@ -2150,34 +2436,54 @@ impl PeerApplicationEngine {
                 return Ok(());
             }
             if !can_follow_operation_state(&current.status, status) {
-                return Err(app_error("The remote operation state transition is invalid."));
+                return Err(app_error(
+                    "The remote operation state transition is invalid.",
+                ));
             }
-            self.save_operation(&update_record(&current, RecordPatch {
-                status: Some(status.to_string()),
-                state_revision: Some(revision),
-                ..Default::default()
-            }))
+            self.save_operation(&update_record(
+                &current,
+                RecordPatch {
+                    status: Some(status.to_string()),
+                    state_revision: Some(revision),
+                    ..Default::default()
+                },
+            ))
             .await
         })
         .await
     }
 
-    async fn receive_result_part(&self, inbound: &PeerApplicationInbound, envelope: &Value) -> Result<()> {
-        let record = self.find_matching_operation(inbound, envelope, "caller").await?;
+    async fn receive_result_part(
+        &self,
+        inbound: &PeerApplicationInbound,
+        envelope: &Value,
+    ) -> Result<()> {
+        let record = self
+            .find_matching_operation(inbound, envelope, "caller")
+            .await?;
         let index = envelope.get("index").and_then(Value::as_u64);
         let text = envelope.get("text").and_then(Value::as_str);
         let (index, text) = match (index, text) {
             (Some(i), Some(t)) => (i, t),
             _ => return Err(app_error("The operation result part is invalid.")),
         };
-        self.journal.save_result_part(&record.key, &PeerApplicationResultPart {
-            index,
-            text: text.to_string(),
-        })
+        self.journal.save_result_part(
+            &record.key,
+            &PeerApplicationResultPart {
+                index,
+                text: text.to_string(),
+            },
+        )
     }
 
-    async fn receive_result_end(&self, inbound: &PeerApplicationInbound, envelope: &Value) -> Result<()> {
-        let record = self.find_matching_operation(inbound, envelope, "caller").await?;
+    async fn receive_result_end(
+        &self,
+        inbound: &PeerApplicationInbound,
+        envelope: &Value,
+    ) -> Result<()> {
+        let record = self
+            .find_matching_operation(inbound, envelope, "caller")
+            .await?;
         let status = envelope.get("status").and_then(Value::as_str).unwrap_or("");
         let digest = assert_peer_application_string(
             envelope.get("resultDigest").unwrap_or(&Value::Null),
@@ -2201,7 +2507,9 @@ impl PeerApplicationEngine {
         }
         let parts = self.journal.list_result_parts(&record.key)?;
         if parts.len() as u64 > part_count || parts.iter().any(|p| p.index >= part_count) {
-            return Err(app_error("The operation result contains parts outside its declared range."));
+            return Err(app_error(
+                "The operation result contains parts outside its declared range.",
+            ));
         }
         if parts.len() as u64 != part_count {
             return Err(deferred_dispatch());
@@ -2223,31 +2531,42 @@ impl PeerApplicationEngine {
             };
             if status_terminal(&current.status) {
                 if current.result_digest.as_deref() != Some(digest.as_str()) {
-                    return Err(app_error("A terminal result conflicts with durable content."));
+                    return Err(app_error(
+                        "A terminal result conflicts with durable content.",
+                    ));
                 }
                 return Ok(());
             }
-            self.save_operation(&update_record(&current, RecordPatch {
-                status: Some(status.to_string()),
-                result_text: Some(Some(text.clone())),
-                result_digest: Some(Some(digest.clone())),
-                result_stop_reason: Some(stop_reason.clone()),
-                result_status: Some(Some(status.to_string())),
-                result_part_count: Some(Some(part_count)),
-                last_error: Some(if status == "unknown" {
-                    Some("execution_outcome_unknown".to_string())
-                } else {
-                    None
-                }),
-                ..Default::default()
-            }))
+            self.save_operation(&update_record(
+                &current,
+                RecordPatch {
+                    status: Some(status.to_string()),
+                    result_text: Some(Some(text.clone())),
+                    result_digest: Some(Some(digest.clone())),
+                    result_stop_reason: Some(stop_reason.clone()),
+                    result_status: Some(Some(status.to_string())),
+                    result_part_count: Some(Some(part_count)),
+                    last_error: Some(if status == "unknown" {
+                        Some("execution_outcome_unknown".to_string())
+                    } else {
+                        None
+                    }),
+                    ..Default::default()
+                },
+            ))
             .await
         })
         .await
     }
 
-    async fn receive_cancel(self: &Rc<Self>, inbound: &PeerApplicationInbound, envelope: &Value) -> Result<()> {
-        let record = self.find_matching_operation(inbound, envelope, "receiver").await?;
+    async fn receive_cancel(
+        self: &Rc<Self>,
+        inbound: &PeerApplicationInbound,
+        envelope: &Value,
+    ) -> Result<()> {
+        let record = self
+            .find_matching_operation(inbound, envelope, "receiver")
+            .await?;
         if envelope.get("deliveryId").and_then(Value::as_str) != Some("cancel") {
             return Err(app_error("The operation cancellation id is invalid."));
         }
@@ -2259,39 +2578,58 @@ impl PeerApplicationEngine {
                 if status_terminal(&current.status) {
                     return Ok(None);
                 }
-                let updated = update_record(&current, RecordPatch {
-                    cancel_requested: Some(true),
-                    status: Some("cancel_requested".to_string()),
-                    ..Default::default()
-                });
+                let updated = update_record(
+                    &current,
+                    RecordPatch {
+                        cancel_requested: Some(true),
+                        status: Some("cancel_requested".to_string()),
+                        ..Default::default()
+                    },
+                );
                 self.save_operation(&updated).await?;
                 self.resolve_permission_waiter(&record.key, AcpPermissionResolution::Cancelled);
                 let running = self.running.borrow().get(&record.key).cloned();
                 if let Some(cancel) = running {
                     tokio::task::spawn_local(async move { cancel().await });
                 }
-                Ok(if current.prompt_reserved { None } else { Some(updated) })
+                Ok(if current.prompt_reserved {
+                    None
+                } else {
+                    Some(updated)
+                })
             })
             .await?;
         if let Some(current) = self.journal.get_operation(&record.key)? {
             if current.status == "cancel_requested" {
                 let this = Rc::clone(self);
                 let c = current.clone();
-                self.defer_recovery(move |_| Box::pin(async move { this.publish_receiver_state(&c).await }));
+                self.defer_recovery(move |_| {
+                    Box::pin(async move { this.publish_receiver_state(&c).await })
+                });
             }
         }
         if let Some(cancelled) = cancelled_before_prompt {
             let this = Rc::clone(self);
             self.defer_recovery(move |_| {
-                Box::pin(async move { this.set_terminal(&cancelled, "cancelled", None, "", Some("cancelled")).await })
+                Box::pin(async move {
+                    this.set_terminal(&cancelled, "cancelled", None, "", Some("cancelled"))
+                        .await
+                })
             });
         }
         Ok(())
     }
 
-    async fn receive_catalog_request(self: &Rc<Self>, inbound: &PeerApplicationInbound, envelope: &Value) -> Result<()> {
+    async fn receive_catalog_request(
+        self: &Rc<Self>,
+        inbound: &PeerApplicationInbound,
+        envelope: &Value,
+    ) -> Result<()> {
         let request_id = assert_peer_client_opaque_id(
-            envelope.get("requestId").and_then(Value::as_str).unwrap_or(""),
+            envelope
+                .get("requestId")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
             "requestId",
         )?;
         let origin = self.read_address(envelope.get("address"))?;
@@ -2301,43 +2639,51 @@ impl PeerApplicationEngine {
             return Err(app_error("The Agent catalog request route is invalid."));
         }
         let key = peer_application_discovery_key(&origin, &request_id);
-        let response_record = self.with_key_lock(&format!("discovery:{key}"), || async {
-            let existing = self.journal.get_discovery(&key)?;
-            if let Some(existing) = &existing {
-                if existing.status == "completed" {
-                    self.journal.save_pending_discovery_recovery(&PeerApplicationDiscoveryRecovery {
-                        key: existing.key.clone(),
-                        address: existing.address.clone(),
-                        request_id: existing.request_id.clone(),
-                        action: "response".to_string(),
-                    })?;
-                    return Ok(Some(existing.clone()));
+        let response_record = self
+            .with_key_lock(&format!("discovery:{key}"), || async {
+                let existing = self.journal.get_discovery(&key)?;
+                if let Some(existing) = &existing {
+                    if existing.status == "completed" {
+                        self.journal.save_pending_discovery_recovery(
+                            &PeerApplicationDiscoveryRecovery {
+                                key: existing.key.clone(),
+                                address: existing.address.clone(),
+                                request_id: existing.request_id.clone(),
+                                action: "response".to_string(),
+                            },
+                        )?;
+                        return Ok(Some(existing.clone()));
+                    }
                 }
-            }
-            let agents = self.agents.list().await?;
-            let timestamp = now_iso();
-            let record = PeerApplicationDiscoveryRecord {
-                version: PEER_APPLICATION_PROTOCOL_VERSION,
-                key: key.clone(),
-                request_id: request_id.clone(),
-                address: origin.clone(),
-                status: "completed".to_string(),
-                agents,
-                last_error: None,
-                created_at: existing.as_ref().map(|e| e.created_at.clone()).unwrap_or_else(|| timestamp.clone()),
-                updated_at: timestamp,
-            };
-            self.journal.save_pending_discovery_recovery(&PeerApplicationDiscoveryRecovery {
-                key: record.key.clone(),
-                address: record.address.clone(),
-                request_id: record.request_id.clone(),
-                action: "response".to_string(),
-            })?;
-            self.journal.save_discovery(&record)?;
-            self.emit(PeerApplicationChange::Discovery(record.clone()));
-            Ok(Some(record))
-        })
-        .await?;
+                let agents = self.agents.list().await?;
+                let timestamp = now_iso();
+                let record = PeerApplicationDiscoveryRecord {
+                    version: PEER_APPLICATION_PROTOCOL_VERSION,
+                    key: key.clone(),
+                    request_id: request_id.clone(),
+                    address: origin.clone(),
+                    status: "completed".to_string(),
+                    agents,
+                    last_error: None,
+                    created_at: existing
+                        .as_ref()
+                        .map(|e| e.created_at.clone())
+                        .unwrap_or_else(|| timestamp.clone()),
+                    updated_at: timestamp,
+                };
+                self.journal.save_pending_discovery_recovery(
+                    &PeerApplicationDiscoveryRecovery {
+                        key: record.key.clone(),
+                        address: record.address.clone(),
+                        request_id: record.request_id.clone(),
+                        action: "response".to_string(),
+                    },
+                )?;
+                self.journal.save_discovery(&record)?;
+                self.emit(PeerApplicationChange::Discovery(record.clone()));
+                Ok(Some(record))
+            })
+            .await?;
         if let Some(record) = response_record {
             self.defer_recovery(move |this| {
                 Box::pin(async move { this.resume_catalog_response(&record).await })
@@ -2346,26 +2692,37 @@ impl PeerApplicationEngine {
         Ok(())
     }
 
-    async fn receive_catalog_response(&self, inbound: &PeerApplicationInbound, envelope: &Value) -> Result<()> {
+    async fn receive_catalog_response(
+        &self,
+        inbound: &PeerApplicationInbound,
+        envelope: &Value,
+    ) -> Result<()> {
         let request_id = assert_peer_client_opaque_id(
-            envelope.get("requestId").and_then(Value::as_str).unwrap_or(""),
+            envelope
+                .get("requestId")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
             "requestId",
         )?;
         let origin = self.read_address(envelope.get("address"))?;
         if origin != inbound.address
-            || !envelope.get("agents").map(|a| a.is_array()).unwrap_or(false)
+            || !envelope
+                .get("agents")
+                .map(|a| a.is_array())
+                .unwrap_or(false)
             || envelope.get("deliveryId").and_then(Value::as_str) != Some("catalog:response")
         {
             return Err(app_error("The Agent catalog response route is invalid."));
         }
-        let agents: Vec<AcpAgentSummary> = serde_json::from_value(
-            envelope.get("agents").cloned().unwrap_or(Value::Null),
-        )
-        .map_err(|_| app_error("The Agent catalog response contains an invalid item."))?;
+        let agents: Vec<AcpAgentSummary> =
+            serde_json::from_value(envelope.get("agents").cloned().unwrap_or(Value::Null))
+                .map_err(|_| app_error("The Agent catalog response contains an invalid item."))?;
         let key = peer_application_discovery_key(&origin, &request_id);
         self.with_key_lock(&format!("discovery:{key}"), || async {
             let Some(current) = self.journal.get_discovery(&key)? else {
-                return Err(app_error("The Agent catalog response has no matching request."));
+                return Err(app_error(
+                    "The Agent catalog response has no matching request.",
+                ));
             };
             let mut updated = current.clone();
             updated.status = "completed".to_string();
@@ -2387,7 +2744,10 @@ impl PeerApplicationEngine {
     ) -> Result<PeerApplicationRecord> {
         let origin_address = self.read_address(envelope.get("originAddress"))?;
         let operation_id = assert_peer_client_opaque_id(
-            envelope.get("operationId").and_then(Value::as_str).unwrap_or(""),
+            envelope
+                .get("operationId")
+                .and_then(Value::as_str)
+                .unwrap_or(""),
             "operationId",
         )?;
         let digest = assert_peer_application_string(
@@ -2396,26 +2756,44 @@ impl PeerApplicationEngine {
             128,
         )?;
         let record = if role == "caller" {
-            self.caller_operation_for_address(&operation_id, &origin_address, &inbound.address, &digest)
-                .await?
+            self.caller_operation_for_address(
+                &operation_id,
+                &origin_address,
+                &inbound.address,
+                &digest,
+            )
+            .await?
         } else {
             self.journal
-                .get_operation(&peer_application_operation_key(&origin_address, &operation_id))?
-                .ok_or_else(|| app_error("The application message has no matching durable operation."))?
+                .get_operation(&peer_application_operation_key(
+                    &origin_address,
+                    &operation_id,
+                ))?
+                .ok_or_else(|| {
+                    app_error("The application message has no matching durable operation.")
+                })?
         };
         if record.request_digest != digest {
-            return Err(app_error("The application message has no matching durable operation."));
+            return Err(app_error(
+                "The application message has no matching durable operation.",
+            ));
         }
         if record.role != role {
-            return Err(app_error("The application message has the wrong operation role."));
+            return Err(app_error(
+                "The application message has the wrong operation role.",
+            ));
         }
         let expected_route = if record.role == "caller" {
             record.origin_address.clone()
         } else {
             reverse_peer_application_address(&record.origin_address)
         };
-        if inbound.address != expected_route || inbound.message.sender_device_id != inbound.address.peer_device_id {
-            return Err(app_error("The application message does not match its authenticated route."));
+        if inbound.address != expected_route
+            || inbound.message.sender_device_id != inbound.address.peer_device_id
+        {
+            return Err(app_error(
+                "The application message does not match its authenticated route.",
+            ));
         }
         Ok(record)
     }
@@ -2429,14 +2807,21 @@ impl PeerApplicationEngine {
     ) -> Result<PeerApplicationRecord> {
         let record = self
             .journal
-            .get_operation(&peer_application_operation_key(origin_address, operation_id))?
-            .ok_or_else(|| app_error("The application message has no matching durable caller operation."))?;
+            .get_operation(&peer_application_operation_key(
+                origin_address,
+                operation_id,
+            ))?
+            .ok_or_else(|| {
+                app_error("The application message has no matching durable caller operation.")
+            })?;
         if record.role != "caller"
             || record.request_digest != request_digest
             || record.origin_address != *origin_address
             || *inbound_address != record.origin_address
         {
-            return Err(app_error("The application message has no matching durable caller operation."));
+            return Err(app_error(
+                "The application message has no matching durable caller operation.",
+            ));
         }
         Ok(record)
     }
@@ -2521,16 +2906,25 @@ impl PeerApplicationEngine {
             return Ok(());
         }
         if record.cancel_requested {
-            return self.set_terminal(&record, "cancelled", None, "", Some("cancelled")).await;
+            return self
+                .set_terminal(&record, "cancelled", None, "", Some("cancelled"))
+                .await;
         }
-        let authority = self.resolve_execution_authority(&record.route_address).await;
+        let authority = self
+            .resolve_execution_authority(&record.route_address)
+            .await;
         if authority == PeerApplicationRouteAuthority::Unavailable {
             return Ok(());
         }
         if authority == PeerApplicationRouteAuthority::Revoked {
             return self
-                .set_terminal(&record, "refused", Some("peer_route_revoked"),
-                    "The paired route was revoked before Agent execution.", Some("refusal"))
+                .set_terminal(
+                    &record,
+                    "refused",
+                    Some("peer_route_revoked"),
+                    "The paired route was revoked before Agent execution.",
+                    Some("refusal"),
+                )
                 .await;
         }
         let agent = match self.agents.list().await {
@@ -2539,10 +2933,15 @@ impl PeerApplicationEngine {
         };
         let Some(agent) = agent else {
             return self
-                .finish(&record, &PeerApplicationExecutionResult {
-                    stop_reason: "refusal".to_string(),
-                    text: String::new(),
-                }, "refused", Some("agent_unavailable"))
+                .finish(
+                    &record,
+                    &PeerApplicationExecutionResult {
+                        stop_reason: "refusal".to_string(),
+                        text: String::new(),
+                    },
+                    "refused",
+                    Some("agent_unavailable"),
+                )
                 .await;
         };
         let key2 = key.to_string();
@@ -2555,7 +2954,9 @@ impl PeerApplicationEngine {
                     let record = record.clone();
                     let key2 = key2.clone();
                     Box::pin(async move {
-                        let current_authority = this.resolve_execution_authority(&record.route_address).await;
+                        let current_authority = this
+                            .resolve_execution_authority(&record.route_address)
+                            .await;
                         match current_authority {
                             PeerApplicationRouteAuthority::Unavailable => {
                                 return Err(entry_error(
@@ -2573,24 +2974,31 @@ impl PeerApplicationEngine {
                         }
                         this.with_key_lock(&key2, || async {
                             let Some(current) = this.journal.get_operation(&key2)? else {
-                                return Err(app_error("The durable ACP prompt reservation is no longer available."));
+                                return Err(app_error(
+                                    "The durable ACP prompt reservation is no longer available.",
+                                ));
                             };
                             if current.prompt_reserved
                                 || status_terminal(&current.status)
                                 || current.cancel_requested
                             {
-                                return Err(app_error("The durable ACP prompt reservation is no longer available."));
+                                return Err(app_error(
+                                    "The durable ACP prompt reservation is no longer available.",
+                                ));
                             }
-                            let reserved = update_record(&current, RecordPatch {
-                                prompt_reserved: Some(true),
-                                prompt_execution_id: Some(Some(this.execution_id.clone())),
-                                status: Some(if current.cancel_requested {
-                                    "cancel_requested".to_string()
-                                } else {
-                                    "running".to_string()
-                                }),
-                                ..Default::default()
-                            });
+                            let reserved = update_record(
+                                &current,
+                                RecordPatch {
+                                    prompt_reserved: Some(true),
+                                    prompt_execution_id: Some(Some(this.execution_id.clone())),
+                                    status: Some(if current.cancel_requested {
+                                        "cancel_requested".to_string()
+                                    } else {
+                                        "running".to_string()
+                                    }),
+                                    ..Default::default()
+                                },
+                            );
                             this.save_operation(&reserved).await?;
                             let r2 = reserved.clone();
                             this.defer_recovery(move |t| {
@@ -2624,7 +3032,13 @@ impl PeerApplicationEngine {
             },
         };
         let execution = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            agent.start(&record.operation_id, &record.prompt, record.model.clone(), handlers)
+            agent.start(
+                &record.operation_id,
+                &record.prompt,
+                record.model.clone(),
+                record.effort.clone(),
+                handlers,
+            )
         }));
         let mut execution = match execution {
             Ok(e) => e,
@@ -2635,7 +3049,9 @@ impl PeerApplicationEngine {
             }
         };
         // Keep the cancel handle reachable while the result is awaited.
-        self.running.borrow_mut().insert(key.to_string(), execution.cancel.clone());
+        self.running
+            .borrow_mut()
+            .insert(key.to_string(), execution.cancel.clone());
         let result = (&mut execution.result).await;
         self.running.borrow_mut().remove(key);
         self.resolve_permission_waiter(key, AcpPermissionResolution::Cancelled);
@@ -2650,7 +3066,10 @@ impl PeerApplicationEngine {
                 self.finish(&record, &result, status, None).await
             }
             Ok(Err(error)) => self.execute_failed(key, &error).await,
-            Err(_) => self.execute_failed(key, &app_error("peer_application_failed")).await,
+            Err(_) => {
+                self.execute_failed(key, &app_error("peer_application_failed"))
+                    .await
+            }
         }
     }
 
@@ -2670,13 +3089,24 @@ impl PeerApplicationEngine {
             } else {
                 saved_parts
             };
-            let partial = partial_chunks.iter().map(|p| p.text.as_str()).collect::<String>();
+            let partial = partial_chunks
+                .iter()
+                .map(|p| p.text.as_str())
+                .collect::<String>();
             return self
-                .set_terminal(&current, "unknown", Some("execution_outcome_unknown"), &partial, None)
+                .set_terminal(
+                    &current,
+                    "unknown",
+                    Some("execution_outcome_unknown"),
+                    &partial,
+                    None,
+                )
                 .await;
         }
         if current.cancel_requested {
-            return self.set_terminal(&current, "cancelled", None, "", Some("cancelled")).await;
+            return self
+                .set_terminal(&current, "cancelled", None, "", Some("cancelled"))
+                .await;
         }
         let code = safe_error_code(error);
         if code == "peer_application_authority_unavailable" {
@@ -2686,21 +3116,38 @@ impl PeerApplicationEngine {
         }
         if code == "peer_application_route_revoked" {
             return self
-                .set_terminal(&current, "refused", Some("peer_route_revoked"),
-                    "The paired route was revoked before Agent execution.", Some("refusal"))
+                .set_terminal(
+                    &current,
+                    "refused",
+                    Some("peer_route_revoked"),
+                    "The paired route was revoked before Agent execution.",
+                    Some("refusal"),
+                )
                 .await;
         }
-        self.set_terminal(&current, "failed", Some(&code), "", None).await
+        self.set_terminal(&current, "failed", Some(&code), "", None)
+            .await
     }
 
-    async fn resolve_execution_authority(&self, address: &PeerApplicationAddress) -> PeerApplicationRouteAuthority {
+    async fn resolve_execution_authority(
+        &self,
+        address: &PeerApplicationAddress,
+    ) -> PeerApplicationRouteAuthority {
         match self.peer.resolve_peer_authority(address).await {
-            Ok(a @ (PeerApplicationRouteAuthority::Current | PeerApplicationRouteAuthority::Revoked)) => a,
+            Ok(
+                a @ (PeerApplicationRouteAuthority::Current
+                | PeerApplicationRouteAuthority::Revoked),
+            ) => a,
             _ => PeerApplicationRouteAuthority::Unavailable,
         }
     }
 
-    async fn record_progress(&self, key: &str, kind: PeerApplicationProgressKind, text: &str) -> Result<()> {
+    async fn record_progress(
+        &self,
+        key: &str,
+        kind: PeerApplicationProgressKind,
+        text: &str,
+    ) -> Result<()> {
         if kind != PeerApplicationProgressKind::Message || text.is_empty() {
             return Ok(());
         }
@@ -2725,7 +3172,9 @@ impl PeerApplicationEngine {
             };
             drop(counts);
             self.journal.save_partial_result_chunk(key, index, text)?;
-            self.partial_result_chunk_counts.borrow_mut().insert(key.to_string(), index + 1);
+            self.partial_result_chunk_counts
+                .borrow_mut()
+                .insert(key.to_string(), index + 1);
             Ok(())
         })
         .await
@@ -2733,7 +3182,11 @@ impl PeerApplicationEngine {
 
     /* ------------------------------ permission ------------------------------ */
 
-    async fn request_permission(self: &Rc<Self>, key: &str, request: AcpPermissionPrompt) -> AcpPermissionResolution {
+    async fn request_permission(
+        self: &Rc<Self>,
+        key: &str,
+        request: AcpPermissionPrompt,
+    ) -> AcpPermissionResolution {
         let lock = self.permission_lock(key);
         let _guard = lock.lock().await;
         let permission_id = format!("permission.{}", uuid_simple_pub());
@@ -2756,22 +3209,24 @@ impl PeerApplicationEngine {
                 };
                 let mut history = current.permission_history.clone();
                 history.push(permission.clone());
-                let updated = update_record(&current, RecordPatch {
-                    status: Some(if current.cancel_requested {
-                        "cancel_requested".to_string()
-                    } else {
-                        "awaiting_permission".to_string()
-                    }),
-                    permission: Some(Some(permission)),
-                    permission_history: Some(history),
-                    ..Default::default()
-                });
+                let updated = update_record(
+                    &current,
+                    RecordPatch {
+                        status: Some(if current.cancel_requested {
+                            "cancel_requested".to_string()
+                        } else {
+                            "awaiting_permission".to_string()
+                        }),
+                        permission: Some(Some(permission)),
+                        permission_history: Some(history),
+                        ..Default::default()
+                    },
+                );
                 self.save_operation(&updated).await?;
                 state_to_send = Some(updated);
-                self.permission_waiters.borrow_mut().insert(
-                    key.to_string(),
-                    PendingPermission { resolve: tx },
-                );
+                self.permission_waiters
+                    .borrow_mut()
+                    .insert(key.to_string(), PendingPermission { resolve: tx });
                 Ok(true)
             })
             .await;
@@ -2809,8 +3264,14 @@ impl PeerApplicationEngine {
         if current.status == "unknown" {
             return Ok(());
         }
-        self.set_terminal(&current, status, error_code, &result.text, Some(&result.stop_reason))
-            .await
+        self.set_terminal(
+            &current,
+            status,
+            error_code,
+            &result.text,
+            Some(&result.stop_reason),
+        )
+        .await
     }
 
     /// `#setTerminal` — prepare durable result parts before the terminal state
@@ -2824,7 +3285,12 @@ impl PeerApplicationEngine {
         stop_reason: Option<&str>,
     ) -> Result<()> {
         let digest = peer_application_text_digest(result_text);
-        let parts = result_parts(result_text, &record.operation_id, &record.origin_address, &record.request_digest)?;
+        let parts = result_parts(
+            result_text,
+            &record.operation_id,
+            &record.origin_address,
+            &record.request_digest,
+        )?;
         let status_string = status.to_string();
         let prepared = self
             .with_key_lock(&record.key, || async {
@@ -2838,20 +3304,25 @@ impl PeerApplicationEngine {
                     if current.result_digest.as_deref() != Some(digest.as_str())
                         || current.result_status.as_deref() != Some(status_string.as_str())
                     {
-                        return Err(app_error("A prepared application result conflicts with the durable result."));
+                        return Err(app_error(
+                            "A prepared application result conflicts with the durable result.",
+                        ));
                     }
                     return Ok(Some(current));
                 }
-                let updated = update_record(&current, RecordPatch {
-                    terminal_prepared: Some(true),
-                    result_status: Some(Some(status_string.clone())),
-                    result_text: Some(Some(result_text.to_string())),
-                    result_digest: Some(Some(digest.clone())),
-                    result_stop_reason: Some(stop_reason.map(|s| s.to_string())),
-                    result_part_count: Some(Some(parts.len() as u64)),
-                    last_error: Some(error_code.map(|s| s.to_string())),
-                    ..Default::default()
-                });
+                let updated = update_record(
+                    &current,
+                    RecordPatch {
+                        terminal_prepared: Some(true),
+                        result_status: Some(Some(status_string.clone())),
+                        result_text: Some(Some(result_text.to_string())),
+                        result_digest: Some(Some(digest.clone())),
+                        result_stop_reason: Some(stop_reason.map(|s| s.to_string())),
+                        result_part_count: Some(Some(parts.len() as u64)),
+                        last_error: Some(error_code.map(|s| s.to_string())),
+                        ..Default::default()
+                    },
+                );
                 self.save_operation(&updated).await?;
                 Ok(Some(updated))
             })
@@ -2862,7 +3333,10 @@ impl PeerApplicationEngine {
         Ok(())
     }
 
-    async fn complete_prepared_terminal(self: &Rc<Self>, record: &PeerApplicationRecord) -> Result<()> {
+    async fn complete_prepared_terminal(
+        self: &Rc<Self>,
+        record: &PeerApplicationRecord,
+    ) -> Result<()> {
         if !record.terminal_prepared
             || record.result_text.is_none()
             || record.result_digest.is_none()
@@ -2873,7 +3347,12 @@ impl PeerApplicationEngine {
         }
         let text = record.result_text.clone().unwrap_or_default();
         let digest = peer_application_text_digest(&text);
-        let parts = result_parts(&text, &record.operation_id, &record.origin_address, &record.request_digest)?;
+        let parts = result_parts(
+            &text,
+            &record.operation_id,
+            &record.origin_address,
+            &record.request_digest,
+        )?;
         if Some(digest.as_str()) != record.result_digest.as_deref()
             || Some(parts.len() as u64) != record.result_part_count
         {
@@ -2890,44 +3369,49 @@ impl PeerApplicationEngine {
                 return Ok(());
             }
             let updated_at = now_iso();
-            let updated = update_record(&current, RecordPatch {
-                status: current.result_status.clone(),
-                terminal_prepared: Some(false),
-                permission: Some(current.permission.clone().map(|p| {
-                    if p.status == "pending" {
-                        PeerApplicationPermissionRecord {
-                            status: "unavailable".to_string(),
-                            updated_at: updated_at.clone(),
-                            ..p
-                        }
-                    } else {
-                        p
-                    }
-                })),
-                permission_history: Some(
-                    current
-                        .permission_history
-                        .iter()
-                        .map(|p| {
-                            if p.status == "pending" {
-                                PeerApplicationPermissionRecord {
-                                    status: "unavailable".to_string(),
-                                    updated_at: updated_at.clone(),
-                                    ..p.clone()
-                                }
-                            } else {
-                                p.clone()
+            let updated = update_record(
+                &current,
+                RecordPatch {
+                    status: current.result_status.clone(),
+                    terminal_prepared: Some(false),
+                    permission: Some(current.permission.clone().map(|p| {
+                        if p.status == "pending" {
+                            PeerApplicationPermissionRecord {
+                                status: "unavailable".to_string(),
+                                updated_at: updated_at.clone(),
+                                ..p
                             }
-                        })
-                        .collect(),
-                ),
-                ..Default::default()
-            });
+                        } else {
+                            p
+                        }
+                    })),
+                    permission_history: Some(
+                        current
+                            .permission_history
+                            .iter()
+                            .map(|p| {
+                                if p.status == "pending" {
+                                    PeerApplicationPermissionRecord {
+                                        status: "unavailable".to_string(),
+                                        updated_at: updated_at.clone(),
+                                        ..p.clone()
+                                    }
+                                } else {
+                                    p.clone()
+                                }
+                            })
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+            );
             self.save_operation(&updated).await
         })
         .await?;
         self.journal.clear_partial_result_chunks(&record.key)?;
-        self.partial_result_chunk_counts.borrow_mut().remove(&record.key);
+        self.partial_result_chunk_counts
+            .borrow_mut()
+            .remove(&record.key);
         if let Some(completed) = self.journal.get_operation(&record.key)? {
             let c = completed.clone();
             self.defer_recovery(move |this| {
@@ -2938,8 +3422,15 @@ impl PeerApplicationEngine {
         Ok(())
     }
 
-    async fn send_stored_result(self: &Rc<Self>, record: &PeerApplicationRecord, _recovery: bool) -> Result<()> {
-        if record.result_status.is_none() || record.result_part_count.is_none() || record.result_digest.is_none() {
+    async fn send_stored_result(
+        self: &Rc<Self>,
+        record: &PeerApplicationRecord,
+        _recovery: bool,
+    ) -> Result<()> {
+        if record.result_status.is_none()
+            || record.result_part_count.is_none()
+            || record.result_digest.is_none()
+        {
             return Ok(());
         }
         self.journal.save_pending_operation_recovery(record)?;
@@ -2963,8 +3454,15 @@ impl PeerApplicationEngine {
                 "text": part.text,
                 "deliveryId": logical_id
             });
-            self.send_operation_event(record, &logical_id, "operation_result_part", &envelope, None, true)
-                .await?;
+            self.send_operation_event(
+                record,
+                &logical_id,
+                "operation_result_part",
+                &envelope,
+                None,
+                true,
+            )
+            .await?;
         }
         let end = json!({
             "version": PEER_APPLICATION_PROTOCOL_VERSION,
@@ -2978,8 +3476,15 @@ impl PeerApplicationEngine {
             "resultDigest": record.result_digest,
             "deliveryId": "result:end"
         });
-        self.send_operation_event(record, "result:end", "operation_result_end", &end, None, true)
-            .await?;
+        self.send_operation_event(
+            record,
+            "result:end",
+            "operation_result_end",
+            &end,
+            None,
+            true,
+        )
+        .await?;
         self.finish_result_handoff(record).await
     }
 
@@ -3004,7 +3509,9 @@ impl PeerApplicationEngine {
             let plan = self.journal.get_pending_handoff(&message_id)?;
             let ids: Vec<String> = match &plan {
                 Some(p) if p.part_count > 0 => (0..p.part_count)
-                    .map(|i| peer_application_fragment_message_id(&message_id, i).unwrap_or_default())
+                    .map(|i| {
+                        peer_application_fragment_message_id(&message_id, i).unwrap_or_default()
+                    })
                     .collect(),
                 _ => vec![message_id],
             };
@@ -3052,8 +3559,12 @@ impl PeerApplicationEngine {
             Ok(())
         })
         .await?;
-        self.clear_result_handoff_plans(&record.key, &record.route_address, record.result_part_count)
-            .await?;
+        self.clear_result_handoff_plans(
+            &record.key,
+            &record.route_address,
+            record.result_part_count,
+        )
+        .await?;
         self.wake_deferred_routes();
         Ok(())
     }
@@ -3069,21 +3580,23 @@ impl PeerApplicationEngine {
         };
         for index in 0..part_count {
             let logical_id = format!("result:part:{index}");
-            self.journal.clear_pending_handoff(&peer_application_transport_message_id(
+            self.journal
+                .clear_pending_handoff(&peer_application_transport_message_id(
+                    &route_address.local_device_id,
+                    key,
+                    &logical_id,
+                    0,
+                    0,
+                ))?;
+        }
+        self.journal
+            .clear_pending_handoff(&peer_application_transport_message_id(
                 &route_address.local_device_id,
                 key,
-                &logical_id,
+                "result:end",
                 0,
                 0,
-            ))?;
-        }
-        self.journal.clear_pending_handoff(&peer_application_transport_message_id(
-            &route_address.local_device_id,
-            key,
-            "result:end",
-            0,
-            0,
-        ))
+            ))
     }
 }
 
@@ -3124,17 +3637,21 @@ impl RequestAdmission {
 
 fn parse_state_logical_id(logical_id: &str) -> Result<(u64, String)> {
     // `state:<revision>:<status>` — revision digits then a snake_case status.
-    let rest = logical_id.strip_prefix("state:").ok_or_else(|| {
-        app_error("A pending Peer state handoff has an invalid revision.")
-    })?;
-    let (digits, status) = rest.split_once(':').ok_or_else(|| {
-        app_error("A pending Peer state handoff has an invalid revision.")
-    })?;
-    let revision: u64 = digits.parse().ok().filter(|r| *r >= 1).ok_or_else(|| {
-        app_error("A pending Peer state handoff has an invalid revision.")
-    })?;
+    let rest = logical_id
+        .strip_prefix("state:")
+        .ok_or_else(|| app_error("A pending Peer state handoff has an invalid revision."))?;
+    let (digits, status) = rest
+        .split_once(':')
+        .ok_or_else(|| app_error("A pending Peer state handoff has an invalid revision."))?;
+    let revision: u64 = digits
+        .parse()
+        .ok()
+        .filter(|r| *r >= 1)
+        .ok_or_else(|| app_error("A pending Peer state handoff has an invalid revision."))?;
     if !status_valid(status) || logical_id != format!("state:{revision}:{status}") {
-        return Err(app_error("A pending Peer state handoff has an invalid revision."));
+        return Err(app_error(
+            "A pending Peer state handoff has an invalid revision.",
+        ));
     }
     Ok((revision, status.to_string()))
 }

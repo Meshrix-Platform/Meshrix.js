@@ -7,11 +7,14 @@
 use std::sync::Arc;
 
 use eframe::egui;
+use meshrix_entry_core::agent::registry::AgentCardAvailability;
 use meshrix_entry_core::custody::CustodyPreference;
 use meshrix_entry_core::endpoint::runtime::{
     PersonalEndpointSnapshot, PersonalEndpointStepUpResult, StepUpDriver,
 };
-use meshrix_entry_core::peer::{AcpAgentSummary, AcpPermissionResolution, PeerApplicationRecord, PeerHostEvent};
+use meshrix_entry_core::peer::{
+    AcpAgentSummary, AcpPermissionResolution, PeerApplicationRecord, PeerHostEvent,
+};
 use meshrix_entry_core::relay::EntrySessionEvent;
 use meshrix_entry_core::service::{
     EntryService, FileCustodyOpts, ServiceConfig, ServiceState, StepUpPoll,
@@ -56,6 +59,20 @@ enum Action {
         resolution: AcpPermissionResolution,
     },
     RefreshAgents,
+    ProfileEnroll {
+        card_id: String,
+    },
+    ProfileUpsert {
+        id: String,
+        patch: awp::ProfilePatch,
+    },
+    ProfileRemove {
+        id: String,
+    },
+    ProfileSetEnabled {
+        id: String,
+        enabled: bool,
+    },
     EndpointRefresh,
     EndpointEnroll,
     EndpointStart,
@@ -109,18 +126,36 @@ enum Event {
     Operation(Box<PeerApplicationRecord>),
     /// Full local agent list.
     LocalAgents(Vec<AcpAgentSummary>),
+    /// Read-only installed and supported A4AA card catalog.
+    AgentCards(Vec<AgentCardAvailability>),
+    /// User-enrolled A4AA base AgentSpecs only.
+    AgentSpecs(Vec<a4aa::AgentSpec>),
+    /// Persisted AwP behavior profiles only.
+    LocalProfiles(Vec<awp::Profile>),
+    /// A profile save was accepted by the AwP-backed registry.
+    ProfileSaved(String),
     /// Personal endpoint snapshot after attach/start/stop/enroll.
     Endpoint(Box<PersonalEndpointSnapshot>),
     /// The enrollment step-up produced a browser approval URL.
-    EndpointApprovalUrl { url: String, code: String },
+    EndpointApprovalUrl {
+        url: String,
+        code: String,
+    },
     /// A fresh invite is ready to share.
-    EndpointInviteReady { text: String },
+    EndpointInviteReady {
+        text: String,
+    },
     /// Redacted recovery view (`GuiRecoveryView` equivalent).
     Recovery(serde_json::Value),
     /// The one-shot recovery text reveal — shown in the sheet, never stored.
-    RecoveryReveal { text: String },
+    RecoveryReveal {
+        text: String,
+    },
     /// The writer step-up browser approval URL.
-    WriterApprovalUrl { url: String, code: String },
+    WriterApprovalUrl {
+        url: String,
+        code: String,
+    },
 }
 
 struct Bridge {
@@ -348,8 +383,117 @@ fn spawn_worker(service: EntryService) -> (Bridge, tokio::runtime::Runtime) {
                     }
                     Action::RefreshAgents => {
                         tokio::spawn(async move {
+                            if let Ok(cards) = service.agent_cards().await {
+                                let _ = tx.send(Event::AgentCards(cards));
+                            }
+                            if let Ok(specs) = service.agent_specs().await {
+                                let _ = tx.send(Event::AgentSpecs(specs));
+                            }
+                            if let Ok(profiles) = service.profiles().await {
+                                let _ = tx.send(Event::LocalProfiles(profiles));
+                            }
                             if let Ok(agents) = service.local_agents().await {
                                 let _ = tx.send(Event::LocalAgents(agents));
+                            }
+                        });
+                    }
+                    Action::ProfileEnroll { card_id } => {
+                        tokio::spawn(async move {
+                            match service.profile_enroll(&card_id).await {
+                                Ok(profile) => {
+                                    let _ = tx.send(Event::Log(format!(
+                                        "enrolled profile {}",
+                                        profile.id
+                                    )));
+                                    if let Ok(profiles) = service.profiles().await {
+                                        let _ = tx.send(Event::LocalProfiles(profiles));
+                                    }
+                                    if let Ok(agents) = service.local_agents().await {
+                                        let _ = tx.send(Event::LocalAgents(agents));
+                                    }
+                                    if let Ok(cards) = service.agent_cards().await {
+                                        let _ = tx.send(Event::AgentCards(cards));
+                                    }
+                                    if let Ok(specs) = service.agent_specs().await {
+                                        let _ = tx.send(Event::AgentSpecs(specs));
+                                    }
+                                }
+                                Err(error) => {
+                                    let _ = tx.send(Event::Error(format!(
+                                        "profile enrollment failed: {error}"
+                                    )));
+                                }
+                            }
+                        });
+                    }
+                    Action::ProfileUpsert { id, patch } => {
+                        tokio::spawn(async move {
+                            match service.profile_upsert(&id, patch).await {
+                                Ok(profile) => {
+                                    let _ = tx.send(Event::ProfileSaved(profile.id.clone()));
+                                    let _ = tx.send(Event::Log(format!(
+                                        "saved profile {}",
+                                        profile.id
+                                    )));
+                                    if let Ok(profiles) = service.profiles().await {
+                                        let _ = tx.send(Event::LocalProfiles(profiles));
+                                    }
+                                    if let Ok(agents) = service.local_agents().await {
+                                        let _ = tx.send(Event::LocalAgents(agents));
+                                    }
+                                    if let Ok(cards) = service.agent_cards().await {
+                                        let _ = tx.send(Event::AgentCards(cards));
+                                    }
+                                }
+                                Err(error) => {
+                                    let _ = tx.send(Event::Error(format!(
+                                        "profile save failed: {error}"
+                                    )));
+                                }
+                            }
+                        });
+                    }
+                    Action::ProfileRemove { id } => {
+                        tokio::spawn(async move {
+                            match service.profile_remove(&id).await {
+                                Ok(removed) => {
+                                    let _ = tx.send(Event::Log(format!(
+                                        "profile {id} removed: {removed}"
+                                    )));
+                                    if let Ok(profiles) = service.profiles().await {
+                                        let _ = tx.send(Event::LocalProfiles(profiles));
+                                    }
+                                    if let Ok(agents) = service.local_agents().await {
+                                        let _ = tx.send(Event::LocalAgents(agents));
+                                    }
+                                    if let Ok(cards) = service.agent_cards().await {
+                                        let _ = tx.send(Event::AgentCards(cards));
+                                    }
+                                }
+                                Err(error) => {
+                                    let _ = tx.send(Event::Error(format!(
+                                        "profile remove failed: {error}"
+                                    )));
+                                }
+                            }
+                        });
+                    }
+                    Action::ProfileSetEnabled { id, enabled } => {
+                        tokio::spawn(async move {
+                            match service.profile_set_enabled(&id, enabled).await {
+                                Ok(updated) => {
+                                    let _ = tx.send(Event::Log(format!(
+                                        "profile {id} enabled={enabled}: {updated}"
+                                    )));
+                                    if let Ok(agents) = service.local_agents().await {
+                                        let _ = tx.send(Event::LocalAgents(agents));
+                                    }
+                                }
+                                Err(error) => {
+                                    let _ = tx.send(Event::Error(format!(
+                                        "profile status update failed: {error}"
+                                    )));
+                                }
                             }
                         });
                     }
@@ -803,8 +947,8 @@ async fn connect_flow(
 
 use theme::Role;
 use theme::{
-    banner_frame, button, disclosure, grow, iconbtn, label, link_btn, rt,
-    section_label, srow, status_pill, Btn, Icon, Lead,
+    banner_frame, button, disclosure, grow, iconbtn, label, link_btn, rt, section_label, srow,
+    status_pill, Btn, Icon, Lead,
 };
 
 /// Right-pane routing — the sidebar is a pure index; every row selects a page.
@@ -836,7 +980,22 @@ struct App {
     remote_agents: std::collections::HashMap<String, Vec<AcpAgentSummary>>,
     /// Durable operation records keyed by operation_id (latest revision).
     operations: std::collections::HashMap<String, PeerApplicationRecord>,
+    /// A4AA cards and detection metadata, separate from enrolled user state.
+    agent_cards: Vec<AgentCardAvailability>,
+    /// Persisted A4AA base AgentSpecs only.
+    agent_specs: Vec<a4aa::AgentSpec>,
+    /// Persisted AwP behavior profiles only.
+    local_profiles: Vec<awp::Profile>,
     local_agents: Vec<AcpAgentSummary>,
+    profile_id: String,
+    profile_edit_id: Option<String>,
+    profile_name: String,
+    profile_agent: String,
+    profile_model: String,
+    profile_effort: String,
+    profile_instructions: String,
+    profile_patch_json: String,
+    profile_error: Option<String>,
     /// Personal endpoint snapshot (this device hosting paired peers).
     endpoint: Option<PersonalEndpointSnapshot>,
     /// Fresh invite text awaiting copy.
@@ -882,7 +1041,19 @@ impl App {
             last_error: None,
             remote_agents: Default::default(),
             operations: Default::default(),
+            agent_cards: Vec::new(),
+            agent_specs: Vec::new(),
+            local_profiles: Vec::new(),
             local_agents: Vec::new(),
+            profile_id: String::new(),
+            profile_edit_id: None,
+            profile_name: String::new(),
+            profile_agent: String::new(),
+            profile_model: String::new(),
+            profile_effort: String::new(),
+            profile_instructions: String::new(),
+            profile_patch_json: String::new(),
+            profile_error: None,
             endpoint: None,
             endpoint_invite: None,
             recovery: None,
@@ -947,7 +1118,9 @@ impl App {
                 Event::PairingUrl { url, code } => {
                     self.pairing_url = Some(url.clone());
                     self.pairing_code = Some(code.clone());
-                    self.push_log(format!("approve device pairing in the browser (code {code})"));
+                    self.push_log(format!(
+                        "approve device pairing in the browser (code {code})"
+                    ));
                     let _ = open_url(&url);
                 }
                 Event::PairingDone { connection_id } => {
@@ -1013,13 +1186,29 @@ impl App {
                 Event::LocalAgents(agents) => {
                     self.local_agents = agents;
                 }
+                Event::AgentCards(cards) => {
+                    self.agent_cards = cards;
+                }
+                Event::AgentSpecs(specs) => {
+                    self.agent_specs = specs;
+                }
+                Event::LocalProfiles(profiles) => {
+                    self.local_profiles = profiles;
+                }
+                Event::ProfileSaved(id) => {
+                    self.profile_id = id.clone();
+                    self.profile_edit_id = Some(id);
+                    self.profile_error = None;
+                }
                 Event::Endpoint(snapshot) => {
                     self.endpoint = Some(*snapshot);
                 }
                 Event::EndpointApprovalUrl { url, code } => {
                     self.pairing_url = Some(url.clone());
                     self.pairing_code = Some(code.clone());
-                    self.push_log(format!("approve the personal route in the browser (code {code})"));
+                    self.push_log(format!(
+                        "approve the personal route in the browser (code {code})"
+                    ));
                     let _ = open_url(&url);
                 }
                 Event::EndpointInviteReady { text } => {
@@ -1034,7 +1223,9 @@ impl App {
                 Event::WriterApprovalUrl { url, code } => {
                     self.pairing_url = Some(url.clone());
                     self.pairing_code = Some(code.clone());
-                    self.push_log(format!("approve the vault writer in the browser (code {code})"));
+                    self.push_log(format!(
+                        "approve the vault writer in the browser (code {code})"
+                    ));
                     let _ = open_url(&url);
                 }
             }
@@ -1275,7 +1466,13 @@ impl App {
             "Not Signed In".to_owned()
         };
         let (sub, sub_col) = if pending_url.is_some() {
-            (self.login_code.clone().map(|c| format!("Code {c}")).unwrap_or_else(|| "Approve in browser…".into()), t.accent)
+            (
+                self.login_code
+                    .clone()
+                    .map(|c| format!("Code {c}"))
+                    .unwrap_or_else(|| "Approve in browser…".into()),
+                t.accent,
+            )
         } else if signed_in {
             let device = self
                 .state
@@ -1287,7 +1484,11 @@ impl App {
         } else {
             ("Sign in".to_owned(), t.tertiary_label)
         };
-        let letter_src = if signed_in { email.as_deref().unwrap_or(&profile) } else { &profile };
+        let letter_src = if signed_in {
+            email.as_deref().unwrap_or(&profile)
+        } else {
+            &profile
+        };
         let letter = letter_src
             .chars()
             .next()
@@ -1305,11 +1506,7 @@ impl App {
         let p = ui.painter();
         let cy = rect.center().y;
         let avatar_c = egui::Pos2::new(rect.left() + 22.0, cy);
-        p.circle_filled(
-            avatar_c,
-            14.0,
-            if signed_in { t.accent } else { t.neutral },
-        );
+        p.circle_filled(avatar_c, 14.0, if signed_in { t.accent } else { t.neutral });
         p.text(
             avatar_c,
             egui::Align2::CENTER_CENTER,
@@ -1371,8 +1568,8 @@ impl App {
             ui.add_space(4.0);
         }
         for c in connections {
-            let selected =
-                self.page == Page::Connection && self.selected_connection.as_deref() == Some(&c.connection_id);
+            let selected = self.page == Page::Connection
+                && self.selected_connection.as_deref() == Some(&c.connection_id);
             let tone = session_tone(c.session_state.as_deref(), c.re_pair_required, t);
             let row = srow(
                 ui,
@@ -1703,7 +1900,11 @@ impl App {
                         ui,
                         &a.display_name,
                         Role::BodyMedium,
-                        if a.enabled { t.label } else { t.secondary_label },
+                        if a.enabled {
+                            t.label
+                        } else {
+                            t.secondary_label
+                        },
                     );
                     ui.add_space(10.0);
                     let desc = a.description.clone().unwrap_or_else(|| a.id.clone());
@@ -1712,12 +1913,8 @@ impl App {
                     } else {
                         format!("{desc} · disabled")
                     };
-                    let desc = theme::ellipsize(
-                        ui,
-                        &desc,
-                        Role::Footnote,
-                        ui.available_width().max(24.0),
-                    );
+                    let desc =
+                        theme::ellipsize(ui, &desc, Role::Footnote, ui.available_width().max(24.0));
                     label(ui, desc, Role::Footnote, t.tertiary_label);
                 });
             }
@@ -1816,8 +2013,7 @@ impl App {
             sep.center().y,
             egui::Stroke::new(1.0, t.hairline),
         );
-        let (rect, resp) =
-            ui.allocate_exact_size(egui::Vec2::new(w, 30.0), egui::Sense::click());
+        let (rect, resp) = ui.allocate_exact_size(egui::Vec2::new(w, 30.0), egui::Sense::click());
         if resp.hovered() {
             ui.painter()
                 .rect_filled(rect, egui::CornerRadius::ZERO, t.hover_fill);
@@ -1842,7 +2038,9 @@ impl App {
         op: &PeerApplicationRecord,
         count: usize,
     ) {
-        let Some(permission) = &op.permission else { return };
+        let Some(permission) = &op.permission else {
+            return;
+        };
         let agent = self
             .remote_agents
             .values()
@@ -1857,8 +2055,7 @@ impl App {
 
         banner_frame(t).show(ui, |ui| {
             ui.horizontal(|ui| {
-                let (r, _) =
-                    ui.allocate_exact_size(egui::Vec2::splat(22.0), egui::Sense::hover());
+                let (r, _) = ui.allocate_exact_size(egui::Vec2::splat(22.0), egui::Sense::hover());
                 ui.painter().rect_filled(
                     r,
                     egui::CornerRadius::same(6),
@@ -1916,131 +2113,336 @@ impl App {
     }
 
     fn agents_page(&mut self, ui: &mut egui::Ui, t: &theme::Tokens) {
-        label(ui, "Local Agents", Role::Title2, t.label);
+        label(ui, "Agent Profiles", Role::Title2, t.label);
         ui.add_space(5.0);
         label(
             ui,
-            "Detected on this device — PATH CLIs and installed apps. ACP agents are callable by paired endpoints.",
+            "A4AA cards describe supported adapters. Enrolling a card explicitly saves its AgentSpec and AwP profile for Peer selection.",
             Role::Callout,
             t.secondary_label,
         );
         ui.add_space(14.0);
-        if button(ui, t, "Rescan", Btn::Bordered, self.busy.is_none()).clicked() {
+        if button(ui, t, "Refresh", Btn::Bordered, self.busy.is_none()).clicked() {
             self.send(Action::RefreshAgents);
         }
         ui.add_space(16.0);
-        let agents = self.local_agents.clone();
+        let cards = self.agent_cards.clone();
+        let profiles = self.local_profiles.clone();
+        let agent_specs = self.agent_specs.clone();
+        let summaries = self.local_agents.clone();
+
+        label(ui, "Available A4AA cards", Role::Headline, t.label);
+        ui.add_space(6.0);
         theme::group(ui, t, |ui| {
-            if agents.is_empty() {
+            if cards.is_empty() {
                 grow(ui, t, true, |ui| {
-                    label(ui, "No agents detected.", Role::Callout, t.tertiary_label);
+                    label(
+                        ui,
+                        "No A4AA cards are available.",
+                        Role::Callout,
+                        t.tertiary_label,
+                    );
                 });
             }
-            if !agents.is_empty() {
-                // Painted rows — the layout-stack variant (`grow` + nested
-                // horizontal + `with_layout`) inflates row height; fixed
-                // rects match the sidebar row treatment.
-                let row_h = 40.0;
-                let w = ui.available_width();
-                let (rect, _) = ui.allocate_exact_size(
-                    egui::Vec2::new(w, row_h * agents.len() as f32),
-                    egui::Sense::hover(),
-                );
-                let p = ui.painter();
-                for (i, a) in agents.iter().enumerate() {
-                    let callable = a.transport.as_deref() == Some("acp");
-                    let dot_tone = if a.enabled && callable {
-                        t.green
-                    } else if a.enabled {
-                        t.orange
-                    } else {
-                        t.tertiary_label
-                    };
-                    let (pill_text, pill_tone) = if callable && a.enabled {
-                        ("acp", t.green)
-                    } else if a.detected.is_some() {
-                        ("detected", t.neutral)
-                    } else if a.enabled {
-                        ("enabled", t.green)
-                    } else {
-                        ("disabled", t.neutral)
-                    };
-                    let source = match a.detected.as_deref() {
-                        Some("cli") => "CLI",
-                        Some("desktop") => "App",
-                        Some("cli+desktop") => "CLI + App",
-                        Some(_) => "Detected",
-                        None => "Registered",
-                    };
-                    let top = rect.top() + i as f32 * row_h;
-                    let cy = top + row_h * 0.5;
-                    if i > 0 {
-                        p.hline(
-                            rect.left() + 14.0..=rect.right(),
-                            top,
-                            egui::Stroke::new(1.0, t.hairline),
-                        );
+            for card in &cards {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(&card.display_name);
+                    ui.weak(format!(
+                        "{} · {}",
+                        card.id,
+                        card.transport.as_deref().unwrap_or("unsupported")
+                    ));
+                    ui.weak(card.detected.as_deref().unwrap_or("not detected"));
+                    if !card.callable {
+                        ui.weak("not callable");
                     }
-                    p.circle_filled(egui::Pos2::new(rect.left() + 18.0, cy), 3.5, dot_tone);
-                    let name_tone = if a.enabled { t.label } else { t.secondary_label };
-                    let pg = p.layout_no_wrap(
-                        pill_text.to_string(),
-                        Role::Caption.font(),
-                        pill_tone,
-                    );
-                    let pw = pg.size().x + 20.0;
-                    let ph = pg.size().y + 6.0;
-                    let pr = egui::Rect::from_min_size(
-                        egui::Pos2::new(rect.right() - 14.0 - pw, cy - ph * 0.5),
-                        egui::Vec2::new(pw, ph),
-                    );
-                    let mut x = rect.left() + 32.0;
-                    let name_budget = (pr.left() - 8.0 - x).max(24.0);
-                    let name_g = p.layout_no_wrap(
-                        theme::ellipsize(
-                            ui,
-                            &a.display_name,
-                            Role::BodyMedium,
-                            name_budget,
-                        ),
-                        Role::BodyMedium.font(),
-                        name_tone,
-                    );
-                    p.galley(
-                        egui::Pos2::new(x, cy - name_g.size().y * 0.5),
-                        name_g.clone(),
-                        name_tone,
-                    );
-                    x += name_g.size().x + 8.0;
-                    let src_g = p.layout_no_wrap(
-                        theme::ellipsize(
-                            ui,
-                            source,
-                            Role::Caption,
-                            (pr.left() - 8.0 - x).max(0.0),
-                        ),
-                        Role::Caption.font(),
-                        t.tertiary_label,
-                    );
-                    p.galley(
-                        egui::Pos2::new(x, cy - src_g.size().y * 0.5),
-                        src_g,
-                        t.tertiary_label,
-                    );
-                    p.rect_filled(
-                        pr,
-                        egui::CornerRadius::same((ph * 0.5).round() as u8),
-                        theme::soft(pill_tone),
-                    );
-                    p.circle_filled(egui::Pos2::new(pr.left() + 9.0, cy), 2.5, pill_tone);
-                    p.galley(
-                        egui::Pos2::new(pr.left() + 15.0, cy - pg.size().y * 0.5),
-                        pg,
-                        pill_tone,
-                    );
-                }
+                    if !card.supports_permission {
+                        ui.weak("per-turn permission modes unsupported");
+                    } else {
+                        ui.weak(format!("permission: {}", card.permission_modes.join(", ")));
+                    }
+                    if let Some(default) = card.permission_default.as_deref() {
+                        ui.weak(format!("default: {default}"));
+                    }
+                    if card.supports_effort {
+                        ui.weak("effort supported");
+                    } else {
+                        ui.weak("effort unsupported");
+                    }
+                    if card.supports_execution_mode && !card.execution_modes.is_empty() {
+                        ui.weak(format!("mode: {}", card.execution_modes.join(", ")));
+                    } else if !card.supports_execution_mode {
+                        ui.weak("mode unsupported");
+                    }
+                    if !card.supports_model {
+                        ui.weak("model selection unsupported");
+                    }
+                    if card.enrolled {
+                        ui.weak(format!("saved as {}", card.profile_id));
+                    } else if !card.callable {
+                        ui.weak("cannot enroll: no supported A4AA lane");
+                    } else if button(ui, t, "Enroll profile", Btn::Quiet, self.busy.is_none())
+                        .clicked()
+                    {
+                        self.send(Action::ProfileEnroll {
+                            card_id: card.id.clone(),
+                        });
+                    }
+                });
+                ui.separator();
             }
         });
+
+        ui.add_space(16.0);
+        ui.horizontal_wrapped(|ui| {
+            label(ui, "Saved profiles", Role::Headline, t.label);
+            if button(ui, t, "New profile", Btn::Primary, self.busy.is_none()).clicked() {
+                self.profile_id.clear();
+                self.profile_edit_id = Some(String::new());
+                self.profile_name.clear();
+                self.profile_agent.clear();
+                self.profile_model.clear();
+                self.profile_effort.clear();
+                self.profile_instructions.clear();
+                self.profile_patch_json.clear();
+                self.profile_error = None;
+            }
+        });
+        ui.add_space(6.0);
+        theme::group(ui, t, |ui| {
+            if profiles.is_empty() {
+                grow(ui, t, true, |ui| {
+                    label(
+                        ui,
+                        "No behavior profiles configured.",
+                        Role::Callout,
+                        t.tertiary_label,
+                    );
+                });
+            }
+            for profile in &profiles {
+                let enabled = summaries
+                    .iter()
+                    .find(|summary| summary.id == profile.id)
+                    .is_some_and(|summary| summary.enabled);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(if profile.name.trim().is_empty() {
+                        profile.id.as_str()
+                    } else {
+                        profile.name.as_str()
+                    });
+                    ui.weak(format!("{} · {}", profile.id, profile.agent));
+                    if let Some(model) = profile.model.as_deref() {
+                        ui.weak(model);
+                    }
+                    if let Some(effort) = profile.effort.as_deref() {
+                        ui.weak(effort);
+                    }
+                    if button(
+                        ui,
+                        t,
+                        if enabled { "Disable" } else { "Enable" },
+                        Btn::Quiet,
+                        self.busy.is_none(),
+                    )
+                    .clicked()
+                    {
+                        self.send(Action::ProfileSetEnabled {
+                            id: profile.id.clone(),
+                            enabled: !enabled,
+                        });
+                    }
+                    if button(ui, t, "Edit", Btn::Bordered, self.busy.is_none()).clicked() {
+                        self.profile_id = profile.id.clone();
+                        self.profile_edit_id = Some(profile.id.clone());
+                        self.profile_name = profile.name.clone();
+                        self.profile_agent = profile.agent.clone();
+                        self.profile_model = profile.model.clone().unwrap_or_default();
+                        self.profile_effort = profile.effort.clone().unwrap_or_default();
+                        self.profile_instructions =
+                            profile.instructions.clone().unwrap_or_default();
+                        self.profile_patch_json.clear();
+                        self.profile_error = None;
+                    }
+                    if button(ui, t, "Remove", Btn::Destructive, self.busy.is_none()).clicked() {
+                        self.send(Action::ProfileRemove {
+                            id: profile.id.clone(),
+                        });
+                    }
+                });
+                if let Some(instructions) = profile.instructions.as_deref() {
+                    if !instructions.trim().is_empty() {
+                        let width = ui.available_width();
+                        let preview = theme::ellipsize(ui, instructions, Role::Caption, width);
+                        ui.small(preview);
+                    }
+                }
+                ui.separator();
+            }
+        });
+
+        if let Some(id) = self.profile_edit_id.clone() {
+            ui.add_space(16.0);
+            let creating = id.is_empty();
+            label(
+                ui,
+                if creating {
+                    "Create profile"
+                } else {
+                    "Edit profile"
+                },
+                Role::Headline,
+                t.label,
+            );
+            theme::group(ui, t, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if creating {
+                        ui.label("Profile ID");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.profile_id)
+                                .desired_width(180.0)
+                                .hint_text("profile ID"),
+                        );
+                    } else {
+                        ui.weak(format!("Profile ID · {id}"));
+                    }
+                    ui.label("Name");
+                    ui.add(egui::TextEdit::singleline(&mut self.profile_name).desired_width(180.0));
+                    ui.label("Agent");
+                    egui::ComboBox::from_id_salt("profile-agent")
+                        .selected_text(if self.profile_agent.is_empty() {
+                            "Select an Agent"
+                        } else {
+                            &self.profile_agent
+                        })
+                        .show_ui(ui, |ui| {
+                            for spec in &agent_specs {
+                                ui.selectable_value(
+                                    &mut self.profile_agent,
+                                    spec.id.clone(),
+                                    spec.id.clone(),
+                                );
+                            }
+                        });
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Model");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.profile_model).desired_width(180.0),
+                    );
+                    ui.label("Effort");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.profile_effort).desired_width(120.0),
+                    );
+                });
+                ui.label("Instructions · blank optional values remain unchanged");
+                if let Some(card) = self
+                    .agent_cards
+                    .iter()
+                    .find(|card| card.id == self.profile_agent)
+                {
+                    if !card.supports_permission {
+                        label(
+                            ui,
+                            "This adapter does not support profile permission modes; unapproved requests are denied.",
+                            Role::Footnote,
+                            t.orange,
+                        );
+                    }
+                }
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.profile_instructions)
+                        .desired_rows(3)
+                        .desired_width(f32::INFINITY),
+                );
+                ui.horizontal(|ui| {
+                    if button(ui, t, "Save fields", Btn::Primary, self.busy.is_none()).clicked() {
+                        let target_id = if creating {
+                            self.profile_id.trim().to_owned()
+                        } else {
+                            id.clone()
+                        };
+                        if target_id.is_empty() {
+                            self.profile_error = Some("Enter a profile ID.".to_owned());
+                        } else if self.profile_name.trim().is_empty() {
+                            self.profile_error = Some("Enter a profile name.".to_owned());
+                        } else if self.profile_agent.trim().is_empty() {
+                            self.profile_error = Some("Select an Agent.".to_owned());
+                        } else {
+                            self.profile_error = None;
+                            self.send(Action::ProfileUpsert {
+                                id: target_id,
+                                patch: awp::ProfilePatch {
+                                    name: Some(self.profile_name.trim().to_owned()),
+                                    agent: Some(self.profile_agent.trim().to_owned()),
+                                    model: (!self.profile_model.trim().is_empty())
+                                        .then(|| self.profile_model.clone()),
+                                    effort: (!self.profile_effort.trim().is_empty())
+                                        .then(|| self.profile_effort.clone()),
+                                    instructions: (!self.profile_instructions.trim().is_empty())
+                                        .then(|| self.profile_instructions.clone()),
+                                    ..Default::default()
+                                },
+                            });
+                        }
+                    }
+                    if button(ui, t, "Close", Btn::Quiet, true).clicked() {
+                        self.profile_id.clear();
+                        self.profile_edit_id = None;
+                        self.profile_patch_json.clear();
+                        self.profile_error = None;
+                    }
+                });
+                ui.add_space(8.0);
+                ui.label("Advanced AwP patch JSON · unsupported fields are rejected before save");
+                label(
+                    ui,
+                    "Applied: instructions, instruction mode, model, effort, cwd, env and ACP MCP. Mode/permission follow card support. Context/capability/skill/state/extension fields are metadata; mechanisms are rejected.",
+                    Role::Footnote,
+                    t.secondary_label,
+                );
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.profile_patch_json)
+                        .code_editor()
+                        .desired_rows(5)
+                        .desired_width(f32::INFINITY),
+                );
+                if button(
+                    ui,
+                    t,
+                    "Apply AwP patch",
+                    Btn::Bordered,
+                    self.busy.is_none() && !self.profile_patch_json.trim().is_empty(),
+                )
+                .clicked()
+                {
+                    match serde_json::from_str::<awp::ProfilePatch>(&self.profile_patch_json) {
+                        Ok(patch) => {
+                            let target_id = if creating {
+                                self.profile_id.trim().to_owned()
+                            } else {
+                                id.clone()
+                            };
+                            if target_id.is_empty() {
+                                self.profile_error = Some("Enter a profile ID.".to_owned());
+                            } else {
+                                self.profile_error = None;
+                                self.send(Action::ProfileUpsert {
+                                    id: target_id,
+                                    patch,
+                                });
+                            }
+                        }
+                        Err(error) => {
+                            self.profile_error = Some(format!("Invalid AwP patch JSON: {error}"));
+                        }
+                    }
+                }
+                if let Some(error) = &self.profile_error {
+                    label(ui, error, Role::Footnote, t.red);
+                }
+            });
+        }
     }
 
     fn endpoint_page(&mut self, ui: &mut egui::Ui, t: &theme::Tokens) {
@@ -2072,37 +2474,34 @@ impl App {
             t.secondary_label,
         );
         ui.add_space(14.0);
-        ui.horizontal(|ui| {
-            match &snap {
-                None => {
-                    if button(ui, t, "Load", Btn::Primary, self.busy.is_none()).clicked() {
-                        self.send(Action::EndpointRefresh);
+        ui.horizontal(|ui| match &snap {
+            None => {
+                if button(ui, t, "Load", Btn::Primary, self.busy.is_none()).clicked() {
+                    self.send(Action::EndpointRefresh);
+                }
+            }
+            Some(s) => {
+                let enabled = self.busy.is_none();
+                match s.state.as_str() {
+                    "unregistered" | "revoked" => {
+                        if button(ui, t, "Enroll…", Btn::Primary, enabled).clicked() {
+                            self.send(Action::EndpointEnroll);
+                        }
+                    }
+                    _ => {
+                        if s.accepts_new_work {
+                            if button(ui, t, "Stop", Btn::Bordered, enabled).clicked() {
+                                self.send(Action::EndpointStop);
+                            }
+                        } else if button(ui, t, "Start", Btn::Primary, enabled).clicked() {
+                            self.send(Action::EndpointStart);
+                        }
                     }
                 }
-                Some(s) => {
-                    let enabled = self.busy.is_none();
-                    match s.state.as_str() {
-                        "unregistered" | "revoked" => {
-                            if button(ui, t, "Enroll…", Btn::Primary, enabled).clicked() {
-                                self.send(Action::EndpointEnroll);
-                            }
-                        }
-                        _ => {
-                            if s.accepts_new_work {
-                                if button(ui, t, "Stop", Btn::Bordered, enabled).clicked() {
-                                    self.send(Action::EndpointStop);
-                                }
-                            } else if button(ui, t, "Start", Btn::Primary, enabled).clicked()
-                            {
-                                self.send(Action::EndpointStart);
-                            }
-                        }
-                    }
-                    if s.state != "unregistered"
-                        && button(ui, t, "Invite…", Btn::Quiet, enabled).clicked()
-                    {
-                        self.send(Action::EndpointInvite);
-                    }
+                if s.state != "unregistered"
+                    && button(ui, t, "Invite…", Btn::Quiet, enabled).clicked()
+                {
+                    self.send(Action::EndpointInvite);
                 }
             }
         });
@@ -2198,20 +2597,15 @@ impl App {
                         .get("keyRevealed")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
-                    if !revealed
-                        && button(ui, t, "Reveal key", Btn::Primary, enabled).clicked()
-                    {
+                    if !revealed && button(ui, t, "Reveal key", Btn::Primary, enabled).clicked() {
                         self.send(Action::RecoveryReveal);
                     }
-                    if revealed
-                        && button(ui, t, "I saved it", Btn::Primary, enabled).clicked()
-                    {
+                    if revealed && button(ui, t, "I saved it", Btn::Primary, enabled).clicked() {
                         self.send(Action::RecoveryConfirm);
                     }
                 }
                 "account_authorization_required" | "account_writer_pending" => {
-                    if button(ui, t, "Check authorization", Btn::Bordered, enabled).clicked()
-                    {
+                    if button(ui, t, "Check authorization", Btn::Bordered, enabled).clicked() {
                         self.send(Action::RecoveryPollWriter);
                     }
                     if button(ui, t, "Retry", Btn::Quiet, enabled).clicked() {
@@ -2351,10 +2745,8 @@ impl App {
                     ui.set_width(320.0);
                     ui.vertical_centered(|ui| {
                         ui.add_space(6.0);
-                        let (rect, _) = ui.allocate_exact_size(
-                            egui::Vec2::splat(56.0),
-                            egui::Sense::hover(),
-                        );
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::Vec2::splat(56.0), egui::Sense::hover());
                         ui.painter().circle_filled(rect.center(), 28.0, t.accent);
                         ui.painter().text(
                             rect.center(),
@@ -2374,7 +2766,12 @@ impl App {
                             label(ui, &profile, Role::Footnote, t.tertiary_label);
                         }
                         ui.add_space(18.0);
-                        fn btn_w(ui: &egui::Ui, s: &str, font: egui::FontId, c: egui::Color32) -> f32 {
+                        fn btn_w(
+                            ui: &egui::Ui,
+                            s: &str,
+                            font: egui::FontId,
+                            c: egui::Color32,
+                        ) -> f32 {
                             ui.fonts(|f| f.layout_no_wrap(s.to_owned(), font, c).size().x) + 28.0
                         }
                         let total = btn_w(ui, "Sign Out", Role::BodyMedium.font(), t.label)
@@ -2382,7 +2779,9 @@ impl App {
                             + ui.spacing().item_spacing.x;
                         ui.horizontal(|ui| {
                             ui.add_space(((ui.available_width() - total) / 2.0).max(0.0));
-                            if button(ui, t, "Sign Out", Btn::Destructive, self.busy.is_none()).clicked() {
+                            if button(ui, t, "Sign Out", Btn::Destructive, self.busy.is_none())
+                                .clicked()
+                            {
                                 self.send(Action::SignOut);
                                 open = false;
                             }
@@ -2435,10 +2834,7 @@ impl App {
                                         .font(egui::FontId::new(20.0, egui::FontFamily::Monospace))
                                         .color(t.accent),
                                 );
-                                if ui
-                                    .link(rt("Copy", Role::Footnote, t.accent))
-                                    .clicked()
-                                {
+                                if ui.link(rt("Copy", Role::Footnote, t.accent)).clicked() {
                                     ui.ctx().copy_text(code);
                                 }
                             });
@@ -2454,24 +2850,28 @@ impl App {
                         });
                     }
                     ui.add_space(12.0);
-                    ui.allocate_ui_with_layout(egui::Vec2::new(ui.available_width(), 26.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let can = !self.invite.trim().is_empty()
-                            && self.busy.is_none()
-                            && self
-                                .state
-                                .as_ref()
-                                .map(|s| s.account_signed_in)
-                                .unwrap_or(false);
-                        if button(ui, t, "Pair", Btn::Primary, can).clicked() {
-                            self.pairing_url = None;
-                            self.send(Action::Pair {
-                                invite: self.invite.trim().to_string(),
-                            });
-                        }
-                        if button(ui, t, "Cancel", Btn::Quiet, true).clicked() {
-                            open = false;
-                        }
-                    });
+                    ui.allocate_ui_with_layout(
+                        egui::Vec2::new(ui.available_width(), 26.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            let can = !self.invite.trim().is_empty()
+                                && self.busy.is_none()
+                                && self
+                                    .state
+                                    .as_ref()
+                                    .map(|s| s.account_signed_in)
+                                    .unwrap_or(false);
+                            if button(ui, t, "Pair", Btn::Primary, can).clicked() {
+                                self.pairing_url = None;
+                                self.send(Action::Pair {
+                                    invite: self.invite.trim().to_string(),
+                                });
+                            }
+                            if button(ui, t, "Cancel", Btn::Quiet, true).clicked() {
+                                open = false;
+                            }
+                        },
+                    );
                     if !self
                         .state
                         .as_ref()
@@ -2526,20 +2926,24 @@ impl App {
                         );
                     });
                     ui.add_space(12.0);
-                    ui.allocate_ui_with_layout(egui::Vec2::new(ui.available_width(), 26.0), egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let can = !self.recovery_text.trim().is_empty() && self.busy.is_none();
-                        if button(ui, t, "Run Recovery", Btn::Primary, can).clicked() {
-                            self.send(Action::Recover {
-                                connection_id: target.clone(),
-                                text: self.recovery_text.trim().to_string(),
-                            });
-                            self.recovery_text.clear();
-                            open = false;
-                        }
-                        if button(ui, t, "Cancel", Btn::Quiet, true).clicked() {
-                            open = false;
-                        }
-                    });
+                    ui.allocate_ui_with_layout(
+                        egui::Vec2::new(ui.available_width(), 26.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            let can = !self.recovery_text.trim().is_empty() && self.busy.is_none();
+                            if button(ui, t, "Run Recovery", Btn::Primary, can).clicked() {
+                                self.send(Action::Recover {
+                                    connection_id: target.clone(),
+                                    text: self.recovery_text.trim().to_string(),
+                                });
+                                self.recovery_text.clear();
+                                open = false;
+                            }
+                            if button(ui, t, "Cancel", Btn::Quiet, true).clicked() {
+                                open = false;
+                            }
+                        },
+                    );
                 });
             if modal.should_close() {
                 open = false;
@@ -2647,6 +3051,20 @@ impl App {
 // ── boot ────────────────────────────────────────────────────────────────────
 
 fn main() -> eframe::Result<()> {
+    if let Some(command) = metadata_command(std::env::args().skip(1)) {
+        match command {
+            MetadataCommand::Version => {
+                println!("meshrix-entry-gui {}", env!("CARGO_PKG_VERSION"));
+            }
+            MetadataCommand::Help => {
+                println!(
+                    "Meshrix Entry desktop client\n\nUsage: meshrix-entry-gui [--help|--version]"
+                );
+            }
+        }
+        return Ok(());
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .with_writer(std::io::stderr)
@@ -2682,7 +3100,10 @@ fn main() -> eframe::Result<()> {
         std::env::var("MESHRIX_ACCOUNT_ACCESS_SECRET").ok(),
     ) {
         (Some(client_id), Some(client_secret)) => {
-            Some(meshrix_entry_core::account::AccessServiceToken { client_id, client_secret })
+            Some(meshrix_entry_core::account::AccessServiceToken {
+                client_id,
+                client_secret,
+            })
         }
         _ => None,
     };
@@ -2736,4 +3157,36 @@ fn main() -> eframe::Result<()> {
     drop(result);
     runtime.shutdown_background();
     Ok(())
+}
+
+enum MetadataCommand {
+    Help,
+    Version,
+}
+
+fn metadata_command(args: impl IntoIterator<Item = String>) -> Option<MetadataCommand> {
+    let mut args = args.into_iter();
+    match (args.next().as_deref(), args.next()) {
+        (Some("--help" | "-h"), None) => Some(MetadataCommand::Help),
+        (Some("--version" | "-V"), None) => Some(MetadataCommand::Version),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod metadata_tests {
+    use super::{metadata_command, MetadataCommand};
+
+    #[test]
+    fn metadata_flags_exit_before_gui_startup() {
+        assert!(matches!(
+            metadata_command(["--version".to_owned()]),
+            Some(MetadataCommand::Version)
+        ));
+        assert!(matches!(
+            metadata_command(["--help".to_owned()]),
+            Some(MetadataCommand::Help)
+        ));
+        assert!(metadata_command(["--version".to_owned(), "unexpected".to_owned()]).is_none());
+    }
 }
