@@ -293,7 +293,7 @@
       "entityType": "operation",
       "version": "v0.0.1:state-machine:operation-narrow-1",
       "path": "packages/foundation/src/workflow/state-machine/definitions/operation.narrow.json",
-      "canonicalSha256": "sha256:b8b9c2e58678a125db10910688bebcb26aa903dd1579807a64225ea411ba6986",
+      "canonicalSha256": "sha256:149514d98ac98cde1cb1ebc33c1e7aa1ed3680ed9baf324f419eb0559e5e6efe",
       "stateCount": 10,
       "eventCount": 9,
       "matrixCellCount": 90,

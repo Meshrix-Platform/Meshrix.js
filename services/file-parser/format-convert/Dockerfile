@@ -1,4 +1,4 @@
-FROM golang:1.26.6-alpine AS builder
+FROM docker.io/library/golang:1.26.6-alpine@sha256:3889b425f035be855a72fb4755265311293b6d414521f0a519d819df32222d83 AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/format-convert ./cmd/format-convert
 
-FROM debian:bookworm-slim AS runtime
+FROM docker.io/library/debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/Meshrix-Platform/Meshrix.js" \
       org.opencontainers.image.licenses="Apache-2.0"
