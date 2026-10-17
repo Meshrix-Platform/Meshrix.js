@@ -110,6 +110,3 @@ CLAUDE.md
 
 # Test-only placeholder data roots must never become repository content.
 /<user-data>/
-
-# Private local audit evidence
-/.general-auditor/local/
