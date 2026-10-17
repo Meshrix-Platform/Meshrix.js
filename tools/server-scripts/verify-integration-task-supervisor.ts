@@ -8,7 +8,7 @@ import path from "node:path";
 
 import {
   LOCAL_SECRET_MASTER_KEY_FILE_ENV
-} from "../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+} from "../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import {
   INTEGRATION_TASK_SUPERVISOR_PROTOCOL_VERSION,

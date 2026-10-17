@@ -5,7 +5,7 @@ import path from "node:path";
 
 import {
   LOCAL_SECRET_MASTER_KEY_FILE_ENV
-} from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+} from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 
 export async function provisionVerifierLocalSecretKey() : Promise<any> {
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-verifier-key-"));

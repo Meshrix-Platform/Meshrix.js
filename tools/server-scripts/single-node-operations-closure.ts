@@ -17,8 +17,8 @@ import { fileURLToPath } from "node:url";
 import {
   initializeLocalSecret,
   rotateLocalSecretMasterKey
-} from "../../packages/foundation/src/security/secrets/local-secret-store.ts";
-import { createMemoryLocalSecretKeyProvider } from "../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+} from "../../packages/foundation/src/security/secret-store/local-secret-store.ts";
+import { createMemoryLocalSecretKeyProvider } from "../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 import { createStorageBackup } from "../../packages/foundation/src/storage/backup-snapshot.ts";
 import { restoreStorageBackup } from "../../packages/foundation/src/storage/restore-execution.ts";
 import {

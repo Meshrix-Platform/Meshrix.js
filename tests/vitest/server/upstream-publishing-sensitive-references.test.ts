@@ -18,7 +18,7 @@ const secretResolution: any = vi.hoisted(() : any => ({
   }))
 }));
 
-vi.mock("@meshrix/foundation/security/secrets/local-secret-store", () : any => ({
+vi.mock("@meshrix/foundation/security/secret-store/local-secret-store", () : any => ({
   resolveLocalSecretPayload: secretResolution.resolve
 }));
 

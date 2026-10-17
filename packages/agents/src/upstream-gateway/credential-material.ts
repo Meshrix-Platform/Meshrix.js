@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { resolveUpstreamCredentialMaterial } from "@meshrix/contracts/upstream-service-publishing";
-import { resolveLocalSecretPayload } from "@meshrix/foundation/security/secrets/local-secret-store";
-import type { LocalSecretKeyProvider } from "@meshrix/foundation/security/secrets/local-secret-key-provider";
+import { resolveLocalSecretPayload } from "@meshrix/foundation/security/secret-store/local-secret-store";
+import type { LocalSecretKeyProvider } from "@meshrix/foundation/security/secret-store/local-secret-key-provider";
 import {
   asArray,
   mcpServiceConfig,

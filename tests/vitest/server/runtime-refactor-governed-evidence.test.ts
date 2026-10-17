@@ -104,7 +104,7 @@ const AUTHORIZED_SESSION: Readonly<Record<string, any>> = Object.freeze({
 
 describe("runtime refactor governed proof and reference-based audit lifecycle", () : any => {
   it("stores one authorization decision and one reference-only denial row per denial", async () : any => {
-    const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-store-");
+    const userDataPath: any = await temporaryUserDataPath("mjs-governed-evidence-store-");
     const store: any = createAuthorizationStore({ userDataPath });
     try {
       const denied: any = await store.appendDecision({
@@ -175,7 +175,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
   });
 
   it("transactionally deduplicates legacy denial rows and converts verified copies to references", async () : any => {
-    const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-migration-");
+    const userDataPath: any = await temporaryUserDataPath("mjs-governed-evidence-migration-");
     let store: any = createAuthorizationStore({ userDataPath });
     let decisionId: any = "";
     let canonicalDecisionJson: any = "";
@@ -256,7 +256,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
   });
 
   it("retains audit-unique fields, stores decision and proof references, and sheds duplicated terminal errors", async () : any => {
-    const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-audit-");
+    const userDataPath: any = await temporaryUserDataPath("mjs-governed-evidence-audit-");
     const projectionOptions: any = operationAuditTestProjectionOptions(userDataPath);
     const store: any = createOperationAuditStore({ userDataPath, ...projectionOptions });
     try {
@@ -323,7 +323,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
   });
 
   it("writes one decision, one proof settlement, and one reference-bound audit row for an allowed governed execution", async () : any => {
-    const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-dispatch-");
+    const userDataPath: any = await temporaryUserDataPath("mjs-governed-evidence-dispatch-");
     const authorizationStore: any = createAuthorizationStore({ userDataPath });
     const projectionOptions: any = operationAuditTestProjectionOptions(userDataPath);
     const auditStore: any = createOperationAuditStore({ userDataPath, ...projectionOptions });
@@ -404,7 +404,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
   });
 
   it("binds a denied admission to its canonical decision and reference-only denied row", async () : any => {
-    const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-denied-");
+    const userDataPath: any = await temporaryUserDataPath("mjs-governed-evidence-denied-");
     const authorizationStore: any = createAuthorizationStore({ userDataPath });
     const projectionOptions: any = operationAuditTestProjectionOptions(userDataPath);
     const auditStore: any = createOperationAuditStore({ userDataPath, ...projectionOptions });
@@ -494,7 +494,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
   });
 
   it("denies before any protected effect when mandatory proof preparation fails", async () : any => {
-    const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-prepare-");
+    const userDataPath: any = await temporaryUserDataPath("mjs-governed-evidence-prepare-");
     const auditStore: any = createOperationAuditStore({ userDataPath, ...operationAuditTestProjectionOptions(userDataPath) });
     const response: any = createResponse();
     const handler: any = vi.fn(({ response: innerResponse }: Record<string, any>) : any => {
@@ -544,7 +544,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
   });
 
   it("settles a post-effect settlement failure as in doubt without blind retry", async () : any => {
-    const userDataPath: any = await temporaryUserDataPath("***REMOVED***verned-evidence-indoubt-");
+    const userDataPath: any = await temporaryUserDataPath("mjs-governed-evidence-indoubt-");
     const auditStore: any = createOperationAuditStore({ userDataPath, ...operationAuditTestProjectionOptions(userDataPath) });
     const response: any = createResponse();
     const handler: any = vi.fn(({ response: innerResponse }: Record<string, any>) : any => {

@@ -6,7 +6,7 @@ import {
   LOCAL_SECRET_STORE_VERSION,
   revokeLocalSecret,
   rotateLocalSecret
-} from "@meshrix/foundation/security/secrets/local-secret-store";
+} from "@meshrix/foundation/security/secret-store/local-secret-store";
 import {
   parseJsonText,
   trimOneTrailingNewline,

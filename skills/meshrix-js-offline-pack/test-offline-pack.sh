@@ -91,7 +91,7 @@ make_fake_export() {
   printf 'library\n' >"$destination/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
   printf 'library\n' >"$destination/usr/lib/aarch64-linux-gnu/libstdc++.so.6"
   printf '{"name":"example"}\n' >"$destination/app/node_modules/example/package.json"
-  printf 'export const preserved = "Valorius x-valorius-operation";\n' >"$destination/app/node_modules/example/index.js"
+  printf 'export const preserved = "fixture-payload";\n' >"$destination/app/node_modules/example/index.js"
   ln -s "index.js" "$destination/app/node_modules/example/runtime.js"
   ln -s "../../plugins/agents/unshipped" "$destination/app/node_modules/@meshrix/unshipped-agent"
   printf '{"name":"better-sqlite3"}\n' >"$destination/app/node_modules/better-sqlite3/package.json"

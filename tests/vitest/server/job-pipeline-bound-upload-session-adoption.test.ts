@@ -34,7 +34,7 @@ vi.mock("#meshrix/product-api", async (importOriginal?: any) : Promise<any> => (
 }));
 
 import { serverToken } from "#meshrix/client-strings";
-import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 import {
   createServerCompositionRoot
 } from "#meshrix/server-runtime/composition/composition-root";

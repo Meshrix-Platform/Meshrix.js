@@ -2,7 +2,7 @@
   "machineId": "operation.narrow",
   "entityType": "operation",
   "version": "v0.0.1:state-machine:operation-narrow-1",
-  "description": "Narrow path state machine for ***REMOVED***.",
+  "description": "Narrow path state machine for the operations of Meshrix.js.",
   "initialState": "received",
   "states": [
     {

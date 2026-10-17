@@ -15,8 +15,8 @@ import {
   initializeLocalSecret,
   listLocalSecretEntries,
   resolveLocalSecretPayload
-} from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
-import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+} from "../../../packages/foundation/src/security/secret-store/local-secret-store.ts";
+import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 import {

@@ -21,7 +21,7 @@ implementation, verification, release, support, or hosted operation.
 | **Protected sink** | The final boundary that can read a protected resource or cause an external or durable effect and therefore must consume the exact execution permit. |
 | **Governed execution** | The complete path from current identity and authority through admission, exact effect, outcome classification, and minimum evidence. |
 | **Upstream service** | An operator-configured HTTP or MCP service reached through a governed Meshrix.js operation. |
-| **Downstream client** | A client that discovers or invokes ***REMOVED*** through a published protocol boundary. Client implementation and product support remain independently owned. |
+| **Downstream client** | A client that discovers or invokes operations exposed by Meshrix.js through a published protocol boundary. Client implementation and product support remain independently owned. |
 | **Plugin** | An optional package admitted through Meshrix.js Host contracts without becoming Meshrix.js policy authority. |
 | **Workspace asset** | A resource held inside a workspace boundary and accessed only through its owning Meshrix.js capabilities. |
 | **Governance evidence** | The bounded facts required to prove the decision, effect, and terminal outcome of a governed execution. |

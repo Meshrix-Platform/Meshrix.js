@@ -159,13 +159,13 @@
       "source": "./packages/foundation/src/security/production-ingress-contract.ts",
       "default": "@meshrix/foundation/security/production-ingress-contract"
     },
-    "#meshrix/foundation/security/secrets/local-secret-key-provider": {
-      "source": "./packages/foundation/src/security/secrets/local-secret-key-provider.ts",
-      "default": "@meshrix/foundation/security/secrets/local-secret-key-provider"
+    "#meshrix/foundation/security/secret-store/local-secret-key-provider": {
+      "source": "./packages/foundation/src/security/secret-store/local-secret-key-provider.ts",
+      "default": "@meshrix/foundation/security/secret-store/local-secret-key-provider"
     },
-    "#meshrix/foundation/security/secrets/local-secret-store": {
-      "source": "./packages/foundation/src/security/secrets/local-secret-store.ts",
-      "default": "@meshrix/foundation/security/secrets/local-secret-store"
+    "#meshrix/foundation/security/secret-store/local-secret-store": {
+      "source": "./packages/foundation/src/security/secret-store/local-secret-store.ts",
+      "default": "@meshrix/foundation/security/secret-store/local-secret-store"
     },
     "#meshrix/foundation/storage/backup-contract": {
       "source": "./packages/foundation/src/storage/backup-contract.ts",

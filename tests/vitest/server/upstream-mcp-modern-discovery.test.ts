@@ -5,8 +5,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
-import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
-import { initializeLocalSecret, rotateLocalSecret } from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
+import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
+import { initializeLocalSecret, rotateLocalSecret } from "../../../packages/foundation/src/security/secret-store/local-secret-store.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 

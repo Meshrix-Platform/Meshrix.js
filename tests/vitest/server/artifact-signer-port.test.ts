@@ -8,10 +8,10 @@ import { createArtifactSignerPort } from "../../../packages/foundation/src/secur
 import {
   initializeLocalSecret,
   revokeLocalSecret
-} from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
+} from "../../../packages/foundation/src/security/secret-store/local-secret-store.ts";
 import {
   createMemoryLocalSecretKeyProvider
-} from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+} from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 
 const roots: any[] = [];
 const secretRef: any = "secret://fixture/artifact-signing";

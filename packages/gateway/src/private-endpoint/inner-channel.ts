@@ -108,6 +108,9 @@ export function createInnerTlsEndpoint(options: {
     minVersion: "TLSv1.3",
     maxVersion: "TLSv1.3",
     requestCert: true,
+    // gv-allow:runtime/tls-verification-disabled — CA rejection is off by
+    // design: peer authentication is SPKI pinning via attachPinCheck, which
+    // destroys the socket on an unpinned peer (stricter than CA trust).
     rejectUnauthorized: false,
     enableTrace: false
   });
@@ -149,6 +152,8 @@ export function createInnerTlsClient(options: {
     ca: options.ca,
     minVersion: "TLSv1.3",
     maxVersion: "TLSv1.3",
+    // gv-allow:runtime/tls-verification-disabled — peer identity is the
+    // pinned SPKI fingerprint, enforced by attachPinCheck after `secure`.
     rejectUnauthorized: false,
     servername: "meshrix-private-endpoint"
   }) as TLSSocket;

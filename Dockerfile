@@ -1,8 +1,6 @@
 # Meshrix.js server container.
 # Deployment preset index: packages/foundation/config/deployment/index.json
-ARG NODE_BASE_IMAGE=docker.io/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203
-
-FROM ${NODE_BASE_IMAGE} AS deps
+FROM docker.io/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203 AS deps
 
 ARG ROOTFS=/
 WORKDIR app
@@ -85,7 +83,7 @@ COPY docs ./docs
 RUN npm run build && rm -f tools/server-scripts/benchmark-gateway.ts
 RUN npm prune --omit=dev
 
-FROM ${NODE_BASE_IMAGE} AS runtime
+FROM docker.io/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203 AS runtime
 
 ARG ROOTFS=/
 ARG MESHRIX_SOURCE_REPOSITORY
@@ -135,8 +133,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
 CMD ["node", "dist/tools/server-scripts/start-server.js", "--host", "0.0.0.0", "--port", "7228", "--data-dir", "data", "--allow-public-console"]
 
 FROM runtime AS runtime-ui
-
-USER root
 
 COPY --chown=meshrix:meshrix --from=build-ui app/build/dist ./build/dist
 

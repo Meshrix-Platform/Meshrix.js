@@ -12,7 +12,7 @@ import {
 import { ServerConfig } from "#meshrix/server-config";
 import {
   LOCAL_SECRET_MASTER_KEY_FILE_ENV
-} from "#meshrix/foundation/security/secrets/local-secret-key-provider";
+} from "#meshrix/foundation/security/secret-store/local-secret-key-provider";
 import {
   OPERATION_PROOF_SIGNER_SECRET_FILE_ENV
 } from "#meshrix/foundation/proof/proof-substrate/index";

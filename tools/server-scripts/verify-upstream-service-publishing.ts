@@ -16,7 +16,7 @@ import {
   CONSOLE_ROLES,
   createConsoleAuth
 } from "../../packages/foundation/src/security/auth/console-auth.ts";
-import { initializeLocalSecret } from "../../packages/foundation/src/security/secrets/local-secret-store.ts";
+import { initializeLocalSecret } from "../../packages/foundation/src/security/secret-store/local-secret-store.ts";
 import { createStorageProvider } from "../../packages/foundation/src/storage/storage-provider.ts";
 import { createTagStoreAdapter } from "../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";

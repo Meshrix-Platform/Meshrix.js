@@ -15,7 +15,7 @@ import { stableId } from "../../../packages/agents/src/agent-workspace/agent-wor
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { canonicalJson } from "../../../packages/contracts/src/serialization/canonical-json.ts";
 import { MemoryLockManager } from "../../../packages/foundation/src/concurrency/lock-manager.ts";
-import { createFileLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+import { createFileLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 import {
   CONSOLE_CSRF_COOKIE,
   CONSOLE_SESSION_COOKIE

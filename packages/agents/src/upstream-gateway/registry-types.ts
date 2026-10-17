@@ -1,6 +1,6 @@
 import type { TagRecordInput } from "@meshrix/foundation/security/authorization/tag-tree";
 import type { ClaimFinalProtectedSinkAttemptOptions } from "@meshrix/foundation/security/final-protected-sink-permit";
-import type { LocalSecretKeyProvider } from "@meshrix/foundation/security/secrets/local-secret-key-provider";
+import type { LocalSecretKeyProvider } from "@meshrix/foundation/security/secret-store/local-secret-key-provider";
 import type {
   UpstreamRequestRepresentationMode,
   UpstreamResponseRepresentationMode

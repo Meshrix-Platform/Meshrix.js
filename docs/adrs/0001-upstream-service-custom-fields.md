@@ -14,7 +14,7 @@ and absent from the MCP descriptor allowlist.
 
 That blanket ban blocked legitimate, declarative service configuration. A
 remote MCP service may require request context headers (for example
-`x-valorius-project` on the ***REMOVED*** service), which are plain
+`x-project-id` on an internal upstream service), which are plain
 data, not executable configuration. The runtime already consumed
 `mcp.headers` (`normalizeMcpConfig`), but the publish validation rejected it,
 so a valid runtime capability was unpublishable.

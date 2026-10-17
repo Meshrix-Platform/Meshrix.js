@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { createServerCompositionRoot } from "../../../packages/server-runtime/src/composition/composition-root.ts";
-import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 import {
   DEPLOYMENT_PROFILE_ID_CONFIG_PATH,
   ENABLED_PLUGINS_CONFIG_PATH,

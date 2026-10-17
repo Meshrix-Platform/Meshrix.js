@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.ts";
 import { SERVICE_MANIFEST_SCHEMA_VERSION } from "../../../packages/foundation/src/storage/storage-ports.ts";
-import { initializeLocalSecret } from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
+import { initializeLocalSecret } from "../../../packages/foundation/src/security/secret-store/local-secret-store.ts";
 import { createUpstreamManifestObserver } from "../../../packages/agents/src/upstream-gateway/manifest-observer.ts";
 
 function digest(value?: any) : any {

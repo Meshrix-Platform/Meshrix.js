@@ -23,7 +23,7 @@ export const TYPING_SUBSTRATE_OWNED_PATHS: readonly string[] = Object.freeze([
   "packages/contracts/src/plugins/plugin-package-state.ts",
   "packages/contracts/src/plugins/verified-plugin-package.ts",
   "packages/foundation/src/security/auth",
-  "packages/foundation/src/security/secrets",
+  "packages/foundation/src/security/secret-store",
   "packages/foundation/src/security/risk-control",
   "packages/foundation/src/security/redaction",
   "packages/foundation/src/security/process-identity",

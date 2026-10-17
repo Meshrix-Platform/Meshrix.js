@@ -20,7 +20,7 @@
     "#meshrix/foundation/observability/trace-context": "@meshrix/foundation/observability/trace-context",
     "#meshrix/foundation/proof/proof-substrate/index": "@meshrix/foundation/proof/proof-substrate/index",
     "#meshrix/foundation/security/production-ingress-contract": "@meshrix/foundation/security/production-ingress-contract",
-    "#meshrix/foundation/security/secrets/local-secret-key-provider": "@meshrix/foundation/security/secrets/local-secret-key-provider",
+    "#meshrix/foundation/security/secret-store/local-secret-key-provider": "@meshrix/foundation/security/secret-store/local-secret-key-provider",
     "#meshrix/foundation/storage/backup-contract": "@meshrix/foundation/storage/backup-contract",
     "#meshrix/http-utils": "@meshrix/protocols/http/http-utils",
     "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",

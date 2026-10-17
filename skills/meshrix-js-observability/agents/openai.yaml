@@ -1,4 +1,4 @@
 interface:
-  display_name: "***REMOVED*** Observability"
+  display_name: "Meshrix.js Observability"
   short_description: "Guide bounded telemetry, alert lifecycle, and readiness evidence"
-  default_prompt: "Use $***REMOVED***-observability to design, implement, or verify the operations-observability capability flow."
+  default_prompt: "Use $meshrix-js-observability to design, implement, or verify the operations-observability capability flow."

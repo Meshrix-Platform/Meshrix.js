@@ -396,7 +396,7 @@ data, backups, and runtime home on separate writable volumes:
 ```bash
 candidate='registry.example/meshrix-js/runtime@sha256:<manifest-digest>'
 public_base_url='https://meshrix.example.com'
-key_source='/etc/meshrix/secrets/local-secret-master-key'
+key_source='/etc/meshrix/secret-store/local-secret-master-key'
 proof_signer_source='/etc/meshrix/secrets/operation-proof-signer-secret'
 trusted_proxy='<trusted-proxy-ip>'
 install -d -m 0700 /etc/meshrix/secrets

@@ -41,7 +41,7 @@ import { createProtocolEventBus } from "../../../packages/protocols/pubsub/event
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { createOperationProofSubstrate } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
 import { createOperationAuditStore } from "../../../packages/foundation/src/security/operation-audit.ts";
-import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 import { operationAuditTestProjectionOptions } from "./support/operation-audit-test-key.ts";
 import { RELEASE_JOURNEY_FIXTURE_BYTES } from "../../../tools/server-scripts/lib/release-journey-fixture.ts";
 

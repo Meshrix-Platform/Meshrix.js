@@ -444,20 +444,20 @@
       "types": "./dist/security/risk-control/index.d.ts",
       "default": "./dist/security/risk-control/index.js"
     },
-    "./security/secrets/local-secret-key-provider": {
-      "source": "./src/security/secrets/local-secret-key-provider.ts",
-      "types": "./dist/security/secrets/local-secret-key-provider.d.ts",
-      "default": "./dist/security/secrets/local-secret-key-provider.js"
+    "./security/secret-store/local-secret-key-provider": {
+      "source": "./src/security/secret-store/local-secret-key-provider.ts",
+      "types": "./dist/security/secret-store/local-secret-key-provider.d.ts",
+      "default": "./dist/security/secret-store/local-secret-key-provider.js"
     },
-    "./security/secrets/local-secret-envelope": {
-      "source": "./src/security/secrets/local-secret-envelope.ts",
-      "types": "./dist/security/secrets/local-secret-envelope.d.ts",
-      "default": "./dist/security/secrets/local-secret-envelope.js"
+    "./security/secret-store/local-secret-envelope": {
+      "source": "./src/security/secret-store/local-secret-envelope.ts",
+      "types": "./dist/security/secret-store/local-secret-envelope.d.ts",
+      "default": "./dist/security/secret-store/local-secret-envelope.js"
     },
-    "./security/secrets/local-secret-store": {
-      "source": "./src/security/secrets/local-secret-store.ts",
-      "types": "./dist/security/secrets/local-secret-store.d.ts",
-      "default": "./dist/security/secrets/local-secret-store.js"
+    "./security/secret-store/local-secret-store": {
+      "source": "./src/security/secret-store/local-secret-store.ts",
+      "types": "./dist/security/secret-store/local-secret-store.d.ts",
+      "default": "./dist/security/secret-store/local-secret-store.js"
     },
     "./security/security-alerts": {
       "source": "./src/security/security-alerts.ts",

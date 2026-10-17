@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 let failLockAssertion: any = false;
 
-vi.mock("../../../packages/foundation/src/security/secrets/local-secret-storage.ts", async (importOriginal?: any) : Promise<any> => {
+vi.mock("../../../packages/foundation/src/security/secret-store/local-secret-storage.ts", async (importOriginal?: any) : Promise<any> => {
   const actual: any = await importOriginal();
   return {
     ...actual,
@@ -24,10 +24,10 @@ import {
   initializeLocalSecret,
   resolveLocalSecretPayload,
   rotateLocalSecret
-} from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
+} from "../../../packages/foundation/src/security/secret-store/local-secret-store.ts";
 import {
   createMemoryLocalSecretKeyProvider
-} from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+} from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 
 const roots: any[] = [];
 const target: Readonly<Record<string, any>> = Object.freeze({

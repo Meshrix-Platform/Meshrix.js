@@ -268,7 +268,7 @@ function assertNoReportLeak(report?: any) : any {
 }
 
 async function verifyLayeredApprovalModel() : Promise<any> {
-  const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "***REMOVED***vernance-layers-"));
+  const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "mjs-governance-layers-"));
   const tagManagementStore: any = createTagStoreAdapter({ userDataPath });
   const governance: any = createAuthorizationGovernanceStore({
     userDataPath,

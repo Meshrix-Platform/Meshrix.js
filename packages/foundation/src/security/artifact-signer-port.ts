@@ -2,8 +2,8 @@ import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/ca
 import { createHash, createPrivateKey, createPublicKey, sign } from "node:crypto";
 import type { JsonWebKey, JsonWebKeyInput, KeyObject } from "node:crypto";
 
-import { resolveLocalSecretPayload } from "./secrets/local-secret-store.ts";
-import type { LocalSecretKeyProvider } from "./secrets/local-secret-key-provider.ts";
+import { resolveLocalSecretPayload } from "./secret-store/local-secret-store.ts";
+import type { LocalSecretKeyProvider } from "./secret-store/local-secret-key-provider.ts";
 
 export const ARTIFACT_SIGNER_PORT_ID = "ArtifactSignerPort";
 export const ARTIFACT_SIGNER_ALGORITHM = "ed25519";

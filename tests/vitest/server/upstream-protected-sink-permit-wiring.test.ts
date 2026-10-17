@@ -9,10 +9,10 @@ import { createUpstreamGatewayRegistry } from "#meshrix/agents/upstream-gateway/
 import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
 import {
   createMemoryLocalSecretKeyProvider
-} from "#meshrix/foundation/security/secrets/local-secret-key-provider";
+} from "#meshrix/foundation/security/secret-store/local-secret-key-provider";
 import {
   initializeLocalSecret
-} from "#meshrix/foundation/security/secrets/local-secret-store";
+} from "#meshrix/foundation/security/secret-store/local-secret-store";
 import {
   createSystemControllerFoundationHandlers
 } from "#meshrix/protocols/http/controllers/system-controller-foundation-handlers";

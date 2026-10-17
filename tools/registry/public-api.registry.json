@@ -598,15 +598,15 @@
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/foundation/security/secrets/local-secret-key-provider",
-      "targetPath": "./packages/foundation/src/security/secrets/local-secret-key-provider.ts",
+      "alias": "#meshrix/foundation/security/secret-store/local-secret-key-provider",
+      "targetPath": "./packages/foundation/src/security/secret-store/local-secret-key-provider.ts",
       "status": "active",
       "domainPackage": "foundation",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/foundation/security/secrets/local-secret-store",
-      "targetPath": "./packages/foundation/src/security/secrets/local-secret-store.ts",
+      "alias": "#meshrix/foundation/security/secret-store/local-secret-store",
+      "targetPath": "./packages/foundation/src/security/secret-store/local-secret-store.ts",
       "status": "active",
       "domainPackage": "foundation",
       "owner": "platform"

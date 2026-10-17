@@ -19,8 +19,8 @@ import {
   resolveLocalSecretPayload,
   revokeLocalSecret,
   rotateLocalSecret
-} from "@meshrix/foundation/security/secrets/local-secret-store";
-import type { LocalSecretKeyProvider } from "@meshrix/foundation/security/secrets/local-secret-key-provider";
+} from "@meshrix/foundation/security/secret-store/local-secret-store";
+import type { LocalSecretKeyProvider } from "@meshrix/foundation/security/secret-store/local-secret-key-provider";
 
 const CONFIG_DIRECTORY = "upstream-config";
 const CONFIG_FILENAME = "services.json";

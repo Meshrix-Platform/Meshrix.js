@@ -42,7 +42,7 @@ Route specialized work to:
 - The standalone Model Gateway Service documentation for configured model calls, provider routing, and circuit behavior.
 - `$meshrix-js-strategy-management` for deterministic, non-mutating policy preview.
 - The independently started Agent self-maintenance plugin for local maintenance scheduling and execution.
-- `$***REMOVED***-observability` for telemetry, alerts, diagnostics, reports, and readiness evidence.
+- `$meshrix-js-observability` for telemetry, alerts, diagnostics, reports, and readiness evidence.
 - `$meshrix-js-performance-load-testing` for bounded load, capacity, latency, saturation, and performance-regression evidence.
 - `$meshrix-js-protocol-gateway` for downstream or upstream protocol boundaries.
 - `$meshrix-js-operation-permission` for governed operation catalogs, grants, and policy.

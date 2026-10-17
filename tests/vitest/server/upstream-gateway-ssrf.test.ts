@@ -19,10 +19,10 @@ import { createPluginContributionController } from "../../../packages/server-run
 import { createCapturedResponse, parseCapturedResult } from "../../../packages/server-runtime/src/composition/dispatch-operation-captured-response.ts";
 import {
   initializeLocalSecret
-} from "../../../packages/foundation/src/security/secrets/local-secret-store.ts";
+} from "../../../packages/foundation/src/security/secret-store/local-secret-store.ts";
 import {
   createMemoryLocalSecretKeyProvider
-} from "../../../packages/foundation/src/security/secrets/local-secret-key-provider.ts";
+} from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 import {
   createFinalProtectedSinkAttempt,
   digestFinalProtectedSinkInput

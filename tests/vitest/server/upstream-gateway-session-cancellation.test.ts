@@ -8,7 +8,7 @@ const secretMaterial: any = vi.hoisted(() : any => ({
   value: "private-secret-generation-one"
 }));
 
-vi.mock("@meshrix/foundation/security/secrets/local-secret-store", () : any => ({
+vi.mock("@meshrix/foundation/security/secret-store/local-secret-store", () : any => ({
   resolveLocalSecretPayload: vi.fn(async ({ secretRef }: Record<string, any>) : Promise<any> => ({
     secretRef,
     revision: secretMaterial.revision,

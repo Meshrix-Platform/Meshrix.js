@@ -20,11 +20,11 @@ import {
   createOperationAuditStore,
   inspectOperationAuditProjection
 } from "#meshrix/foundation/security/operation-audit";
-import { ensureOperationAuditProjectionKey } from "@meshrix/foundation/security/secrets/local-secret-store";
+import { ensureOperationAuditProjectionKey } from "@meshrix/foundation/security/secret-store/local-secret-store";
 import {
   createFileLocalSecretKeyProvider,
   type LocalSecretKeyProvider
-} from "@meshrix/foundation/security/secrets/local-secret-key-provider";
+} from "@meshrix/foundation/security/secret-store/local-secret-key-provider";
 import { createProcessIdentityService } from "#meshrix/foundation/security/process-identity/index";
 import { registerSecurityPlatformServices } from "#meshrix/foundation/security/register";
 import { createSecurityPermissionsProvider } from "#meshrix/foundation/security/security-permissions-provider";
