@@ -18,29 +18,29 @@ const EXPECTED = Object.freeze([
   Object.freeze({ component: "gui", arch: "x86_64", rustTarget: "x86_64-unknown-linux-gnu", libc: "gnu", binary: "bin/meshrix-entry-gui", buildBinary: "bin/x86_64/meshrix-entry-gui" }),
   Object.freeze({ component: "gui", arch: "aarch64", rustTarget: "aarch64-unknown-linux-gnu", libc: "gnu", binary: "bin/meshrix-entry-gui", buildBinary: "bin/aarch64/meshrix-entry-gui" })
 ]);
-const ALPINE_IMAGES = Object.freeze({
+const ALPINE_IMAGES: any = Object.freeze({
   x86_64: "docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764",
   aarch64: "docker.io/library/alpine@sha256:2e1a7aa4cbc4e9e5222bb4c24a839aa1a6170ea5492d644777ce7b178824e44f"
 });
-const MANYLINUX_IMAGES = Object.freeze({
+const MANYLINUX_IMAGES: any = Object.freeze({
   x86_64: "quay.io/pypa/manylinux_2_28_x86_64:latest",
   aarch64: "quay.io/pypa/manylinux_2_28_aarch64:latest"
 });
 const SYNTHETIC_CUSTODY_SECRET = "0000000000000000000000000000000000000000000000000000000000000000";
 
-function fail(code) {
+function fail(code: any): never {
   throw new Error(code);
 }
 
-function run(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
+function run(command: any, args: any, options: any = {}) {
+  return new Promise<any>((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd ?? REPO_ROOT,
       env: options.env ?? process.env,
       stdio: ["ignore", "pipe", "pipe"]
     });
-    const stdout = [];
-    const stderr = [];
+    const stdout: any[] = [];
+    const stderr: any[] = [];
     child.stdout.on("data", (chunk) => stdout.push(chunk));
     child.stderr.on("data", (chunk) => stderr.push(chunk));
     child.once("error", () => reject(new Error(`${command}_unavailable`)));
@@ -55,25 +55,25 @@ function run(command, args, options = {}) {
   });
 }
 
-async function checked(command, args, options = {}) {
+async function checked(command: any, args: any, options: any = {}) {
   const result = await run(command, args, options);
   if (result.code !== 0) fail(`${options.failureCode ?? `${command}_failed`}:${result.code}`);
   return result.stdout;
 }
 
-function sortUnique(values) {
+function sortUnique(values: any[]) {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function compareAbiVersions(left, right) {
+function compareAbiVersions(left: any, right: any) {
   return left.split("_")[0].localeCompare(right.split("_")[0]) || compareVersions(left, right);
 }
 
-function sortUniqueVersions(values) {
+function sortUniqueVersions(values: any[]) {
   return [...new Set(values)].sort(compareAbiVersions);
 }
 
-function compareVersions(left, right) {
+function compareVersions(left: any, right: any) {
   const leftParts = left.split("_").at(-1).split(".").map(Number);
   const rightParts = right.split("_").at(-1).split(".").map(Number);
   for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
@@ -83,7 +83,7 @@ function compareVersions(left, right) {
   return 0;
 }
 
-function highestVersion(values, prefix) {
+function highestVersion(values: any[], prefix: any) {
   return values.filter((value) => value.startsWith(prefix)).sort(compareVersions).at(-1) ?? null;
 }
 
@@ -102,7 +102,7 @@ async function findReadelf() {
   fail("readelf_or_llvm_readelf_required");
 }
 
-async function inspectElf(binary, readelf, expectedArch) {
+async function inspectElf(binary: any, readelf: any, expectedArch: any) {
   const output = await checked(readelf, [
     "--wide", "--file-header", "--program-headers", "--dynamic", "--version-info", binary
   ], { failureCode: "elf_inspection_failed" });
@@ -133,23 +133,23 @@ async function inspectElf(binary, readelf, expectedArch) {
   });
 }
 
-function equalJson(left, right) {
+function equalJson(left: any, right: any) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function assertStringArray(actual, expected, code) {
+function assertStringArray(actual: any, expected: any, code: any) {
   if (!Array.isArray(actual) || !actual.every((value) => typeof value === "string")) fail(code);
   if (!equalJson(actual, sortUnique(actual))) fail(`${code}:not_sorted_unique`);
   if (!equalJson(actual, expected)) fail(`${code}:values_mismatch`);
 }
 
-function assertVersionArray(actual, expected, code) {
+function assertVersionArray(actual: any, expected: any, code: any) {
   if (!Array.isArray(actual) || !actual.every((value) => typeof value === "string")) fail(code);
   if (!equalJson(actual, sortUniqueVersions(actual))) fail(`${code}:not_sorted_unique`);
   if (!equalJson(actual, expected)) fail(`${code}:values_mismatch`);
 }
 
-function validateTarget(actual, expected, code) {
+function validateTarget(actual: any, expected: any, code: any) {
   if (!actual || typeof actual !== "object"
     || actual.component !== expected.component
     || actual.arch !== expected.arch
@@ -159,14 +159,14 @@ function validateTarget(actual, expected, code) {
   }
 }
 
-function validateBuildManifest(manifest) {
+function validateBuildManifest(manifest: any) {
   if (!manifest || manifest.schemaVersion !== 1 || !Array.isArray(manifest.artifacts) || manifest.artifacts.length !== EXPECTED.length) {
     fail("build_manifest_invalid");
   }
   const seen = new Set();
   const entries = new Map();
   for (const expected of EXPECTED) {
-    const matches = manifest.artifacts.filter((entry) => entry?.component === expected.component && entry?.arch === expected.arch);
+    const matches = manifest.artifacts.filter((entry: any) => entry?.component === expected.component && entry?.arch === expected.arch);
     if (matches.length !== 1) fail("build_manifest_target_missing_or_duplicate");
     const entry = matches[0];
     validateTarget(entry, expected, "build_manifest");
@@ -180,7 +180,7 @@ function validateBuildManifest(manifest) {
   return entries;
 }
 
-function workspaceVersion(cargoToml) {
+function workspaceVersion(cargoToml: any) {
   const header = "[workspace.package]";
   const headerOffset = cargoToml.indexOf(header);
   if (headerOffset < 0) fail("native_workspace_version_missing");
@@ -192,40 +192,40 @@ function workspaceVersion(cargoToml) {
   return version;
 }
 
-function requireLinuxDisplayFeatures(cargoToml) {
+function requireLinuxDisplayFeatures(cargoToml: any) {
   const eframe = cargoToml.match(/^eframe\s*=\s*\{([^}]*)\}/mu)?.[1] ?? "";
   const featureText = eframe.match(/features\s*=\s*\[([^\]]*)\]/u)?.[1] ?? "";
   const features = new Set([...featureText.matchAll(/"([^"]+)"/gu)].map((match) => match[1]));
   if (!features.has("x11") || !features.has("wayland")) fail("gui_linux_display_features_missing");
 }
 
-function packageName(entry, version) {
+function packageName(entry: any, version: any) {
   const product = entry.component === "gui" ? "meshrix-entry-gui" : "meshrix-entry";
   return `${product}-${version}-linux-${entry.arch}-${entry.libc}.tar.gz`;
 }
 
-function archivePath(root, relative) {
+function archivePath(root: any, relative: any) {
   if (typeof relative !== "string" || relative.length === 0 || path.posix.isAbsolute(relative) || relative.includes("\\")) {
     fail("archive_path_invalid");
   }
   const parts = relative.split("/");
-  if (parts.some((part) => part === ".." || part === "")) fail("archive_path_invalid");
+  if (parts.some((part: any) => part === ".." || part === "")) fail("archive_path_invalid");
   const resolved = path.resolve(root, ...parts);
   if (path.relative(root, resolved).startsWith("..") || path.isAbsolute(path.relative(root, resolved))) fail("archive_path_escape");
   return resolved;
 }
 
-function normalizeArchiveName(name) {
+function normalizeArchiveName(name: any) {
   let normalized = name.replace(/\/$/u, "");
   while (normalized.startsWith("./")) normalized = normalized.slice(2);
   if (!normalized || path.posix.isAbsolute(normalized) || normalized.includes("\\")
-    || normalized.split("/").some((part) => part === ".." || part === "")) {
+    || normalized.split("/").some((part: any) => part === ".." || part === "")) {
     fail("archive_contains_unsafe_path");
   }
   return normalized;
 }
 
-async function listArchive(archive) {
+async function listArchive(archive: any) {
   const names = (await checked("tar", ["-tzf", archive], { failureCode: "archive_listing_failed" }))
     .split(/\r?\n/u)
     .filter(Boolean)
@@ -234,7 +234,7 @@ async function listArchive(archive) {
   return names;
 }
 
-function compareElfMetadata(metadata, actual, expected, code, sharedLibrary = false) {
+function compareElfMetadata(metadata: any, actual: any, expected: any, code: any, sharedLibrary = false) {
   if (!metadata || typeof metadata !== "object") fail(`${code}:missing`);
   for (const field of ["class", "machine", "interpreter", "highestGlibcRequirement", "runpath"]) {
     if (metadata[field] !== actual[field]) fail(`${code}:${field}_mismatch`);
@@ -260,7 +260,7 @@ function compareElfMetadata(metadata, actual, expected, code, sharedLibrary = fa
   }
 }
 
-async function fileExists(file) {
+async function fileExists(file: any) {
   try {
     await lstat(file);
     return true;
@@ -269,13 +269,13 @@ async function fileExists(file) {
   }
 }
 
-async function requireRegularFile(file, code) {
+async function requireRegularFile(file: any, code: any) {
   const stat = await lstat(file).catch(() => null);
   if (!stat?.isFile() || stat.isSymbolicLink()) fail(code);
   return stat;
 }
 
-async function verifyBundleClosure(root, entry, expected, readelf) {
+async function verifyBundleClosure(root: any, entry: any, expected: any, readelf: any) {
   const elf = entry.elf;
   if (expected.component !== "gui") {
     if (elf.bundledLibraries?.length || elf.hostLibraries?.length || elf.bundledLibraryFacts?.length) {
@@ -291,20 +291,20 @@ async function verifyBundleClosure(root, entry, expected, readelf) {
   assertStringArray(elf.bundledLibraries, sortUnique(elf.bundledLibraries), "gui_bundled_library_list");
   assertStringArray(elf.hostLibraries, sortUnique(elf.hostLibraries), "gui_host_library_list");
   assertStringArray(elf.dlopenCandidates, sortUnique(elf.dlopenCandidates ?? []), "gui_dlopen_candidate_list");
-  if (elf.bundledLibraries.some((name) => elf.hostLibraries.includes(name))) fail("gui_library_classification_overlap");
+  if (elf.bundledLibraries.some((name: any) => elf.hostLibraries.includes(name))) fail("gui_library_classification_overlap");
   const bundled = new Set(elf.bundledLibraries);
   const host = new Set(elf.hostLibraries);
   const dlopenCandidates = new Set(elf.dlopenCandidates);
   for (const candidate of dlopenCandidates) {
     if (!bundled.has(candidate) && !host.has(candidate)) fail("source_confirmed_dlopen_dependency_unclassified");
   }
-  const isOrdinaryDisplayClientLibrary = (name) => /^(?:libwayland-(?:client|cursor|egl)|libxkbcommon(?:-x11)?|libX[^/]+|libxcb(?:-[^/]+)?)\.so/u.test(name);
+  const isOrdinaryDisplayClientLibrary = (name: any) => /^(?:libwayland-(?:client|cursor|egl)|libxkbcommon(?:-x11)?|libX[^/]+|libxcb(?:-[^/]+)?)\.so/u.test(name);
   if ([...host].some(isOrdinaryDisplayClientLibrary)) fail("ordinary_display_client_library_not_bundled");
   if ([...dlopenCandidates].some((name) => isOrdinaryDisplayClientLibrary(name) && !bundled.has(name))) {
     fail("ordinary_dlopen_display_library_not_bundled");
   }
   const inspected = new Map();
-  const queue = [...entry.elf.neededLibraries, ...elf.bundledLibraries.filter((name) => dlopenCandidates.has(name))];
+  const queue = [...entry.elf.neededLibraries, ...elf.bundledLibraries.filter((name: any) => dlopenCandidates.has(name))];
   const visited = new Set();
   const discoveredHost = new Set();
   for (const candidate of dlopenCandidates) {
@@ -339,7 +339,7 @@ async function verifyBundleClosure(root, entry, expected, readelf) {
   if (!equalJson(sortUnique([...visited].filter((name) => bundled.has(name))), sortUnique([...bundled]))) {
     fail("gui_bundle_contains_unreachable_library");
   }
-  const factsByName = new Map(elf.bundledLibraryFacts.map((fact) => [fact?.soname, fact]));
+  const factsByName = new Map<any, any>(elf.bundledLibraryFacts.map((fact: any): [any, any] => [fact?.soname, fact]));
   if (factsByName.size !== bundled.size) fail("bundled_library_facts_count_mismatch");
   for (const [soname, actual] of inspected) {
     const fact = factsByName.get(soname);
@@ -361,7 +361,7 @@ async function verifyBundleClosure(root, entry, expected, readelf) {
   await verifyRuntimePackageLicenses(root, entry, factsByName);
 }
 
-async function verifyRuntimePackageLicenses(root, entry, factsByName) {
+async function verifyRuntimePackageLicenses(root: any, entry: any, factsByName: any) {
   if (!Array.isArray(entry.runtimePackages)) fail("gui_runtime_package_inventory_missing");
   const packages = new Map();
   const libraryPackages = new Set([...factsByName.values()].map((fact) => fact.licensePackage));
@@ -389,7 +389,7 @@ async function verifyRuntimePackageLicenses(root, entry, factsByName) {
       const sourceId = `${source.name}@${source.version}`;
       sources.add(sourceId);
       if (source.sourceUrl) {
-        let parsed;
+        let parsed: any;
         try { parsed = new URL(source.sourceUrl); } catch { fail("gui_runtime_license_source_url_invalid"); }
         if (parsed.protocol !== "https:" || !parsed.hostname) fail("gui_runtime_license_source_url_invalid");
       }
@@ -425,17 +425,17 @@ async function verifyRuntimePackageLicenses(root, entry, factsByName) {
   }
 }
 
-function assertNoLocalPaths(value, code) {
+function assertNoLocalPaths(value: any, code: any) {
   const text = JSON.stringify(value);
   if (/(?:\/Users\/|\/home\/|\/private\/|\/tmp\/|\/dependency-snapshot\/|[A-Za-z]:\\Users\\)/u.test(text)) {
     fail(code);
   }
 }
 
-async function filesBelow(directory) {
+async function filesBelow(directory: any) {
   if (!(await fileExists(directory))) return [];
-  const result = [];
-  async function visit(current) {
+  const result: any[] = [];
+  async function visit(current: any) {
     for (const child of await readdir(current, { withFileTypes: true })) {
       const file = path.join(current, child.name);
       if (child.isDirectory()) await visit(file);
@@ -447,7 +447,7 @@ async function filesBelow(directory) {
   return result;
 }
 
-async function verifyLicenses(root, entry, archiveNames, expected) {
+async function verifyLicenses(root: any, entry: any, archiveNames: any, expected: any) {
   for (const required of [entry.binary, "README.md", "LICENSE", "artifact.json", "THIRD_PARTY_LICENSES.md"]) {
     if (!archiveNames.includes(required)) fail("archive_required_file_missing");
     await requireRegularFile(path.join(root, ...required.split("/")), "archive_required_file_not_regular");
@@ -471,15 +471,15 @@ async function verifyLicenses(root, entry, archiveNames, expected) {
   if (cmp.code !== 0) fail("project_license_mismatch");
 }
 
-function assertArchiveFileSet(names, expected) {
+function assertArchiveFileSet(names: any, expected: any) {
   const rootFiles = new Set(["README.md", "LICENSE", "artifact.json", "THIRD_PARTY_LICENSES.md"]);
   const required = [expected.binary, ...rootFiles];
   if (expected.component === "gui") required.push("lib");
-  const normalized = names.map((name) => name.replace(/\/$/u, ""));
+  const normalized = names.map((name: any) => name.replace(/\/$/u, ""));
   for (const file of required) {
     if (!normalized.includes(file) && file !== "lib") fail("archive_required_entry_missing");
   }
-  if (!normalized.some((name) => name === "licenses" || name.startsWith("licenses/"))) fail("archive_license_tree_missing");
+  if (!normalized.some((name: any) => name === "licenses" || name.startsWith("licenses/"))) fail("archive_license_tree_missing");
   for (const name of normalized) {
     if (rootFiles.has(name) || name === expected.binary || name === "licenses" || name.startsWith("licenses/")) continue;
     if (name === "bin" || name === path.posix.dirname(expected.binary) || (expected.component === "gui" && (name === "lib" || name.startsWith("lib/")))) continue;
@@ -487,11 +487,11 @@ function assertArchiveFileSet(names, expected) {
   }
 }
 
-async function extractArchive(archive, output) {
+async function extractArchive(archive: any, output: any) {
   await mkdir(output, { recursive: true });
   await checked("tar", ["-xzf", archive, "-C", output, "--no-same-owner"], { failureCode: "archive_extraction_failed" });
   const root = await realpath(output);
-  async function inspect(directory) {
+  async function inspect(directory: any) {
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
       const file = path.join(directory, entry.name);
@@ -508,7 +508,7 @@ async function extractArchive(archive, output) {
   await inspect(root);
 }
 
-async function verifyArchive(entry, buildEntry, expected, version, readelf, tempRoot) {
+async function verifyArchive(entry: any, buildEntry: any, expected: any, version: any, readelf: any, tempRoot: any) {
   validateTarget(entry, expected, "package_manifest");
   const archiveNameValue = packageName(expected, version);
   if (entry.archive !== archiveNameValue || entry.binary !== expected.binary || entry.entrypoint !== `./${expected.binary}`
@@ -557,7 +557,7 @@ async function verifyArchive(entry, buildEntry, expected, version, readelf, temp
   return Object.freeze({ entry, archive, extracted, binary: archivedBinary, elf: actualElf });
 }
 
-function dockerPlatform(arch) {
+function dockerPlatform(arch: any) {
   return arch === "x86_64" ? "linux/amd64" : "linux/arm64";
 }
 
@@ -574,16 +574,16 @@ async function dockerLocalContext() {
   return Object.freeze({ daemonArch, daemonDescription: info[1] });
 }
 
-function executionMode(targetArch, daemonArch) {
+function executionMode(targetArch: any, daemonArch: any) {
   if (targetArch !== daemonArch) return "emulated-container";
   return process.platform === "linux" ? "native-linux-host" : "native-ISA-virtualized-container";
 }
 
-function runtimeImage(component, arch) {
+function runtimeImage(component: any, arch: any) {
   return component === "cli-tui" ? ALPINE_IMAGES[arch] : MANYLINUX_IMAGES[arch];
 }
 
-async function probeContainerArchitecture(image, arch, component) {
+async function probeContainerArchitecture(image: any, arch: any, component: any) {
   const command = component === "cli-tui" ? "/bin/uname" : "/usr/bin/uname";
   const output = await checked("docker", [
     "run", "--rm", "--pull=never", "--network=none", `--platform=${dockerPlatform(arch)}`,
@@ -594,7 +594,7 @@ async function probeContainerArchitecture(image, arch, component) {
   if (!expected.test(output.trim())) fail("runtime_container_architecture_mismatch");
 }
 
-async function inspectRuntimeImage(image, arch) {
+async function inspectRuntimeImage(image: any, arch: any) {
   const output = (await checked("docker", [
     "image", "inspect", "--format", "{{.Os}}|{{.Architecture}}|{{.Id}}", image
   ], { failureCode: "runtime_image_missing" })).trim().split("|");
@@ -605,7 +605,7 @@ async function inspectRuntimeImage(image, arch) {
   return output[2];
 }
 
-async function runtimeRun(image, arch, bundleRoot, stateRoot, binary, args, env = []) {
+async function runtimeRun(image: any, arch: any, bundleRoot: any, stateRoot: any, binary: any, args: any, env: any = []) {
   const dockerArgs = [
     "run", "--rm", "--pull=never", "--network=none", `--platform=${dockerPlatform(arch)}`,
     "--read-only", "--user=65534:65534", "--cap-drop=ALL", "--security-opt=no-new-privileges",
@@ -631,7 +631,7 @@ async function runtimeRun(image, arch, bundleRoot, stateRoot, binary, args, env 
   return result.stdout;
 }
 
-function parseJsonOutput(output, code) {
+function parseJsonOutput(output: any, code: any) {
   try {
     return JSON.parse(output);
   } catch {
@@ -639,7 +639,7 @@ function parseJsonOutput(output, code) {
   }
 }
 
-async function writableState(tempRoot, name) {
+async function writableState(tempRoot: any, name: any) {
   const state = path.join(tempRoot, name);
   await mkdir(path.join(state, "home"), { recursive: true });
   await mkdir(path.join(state, "data"), { recursive: true });
@@ -649,11 +649,11 @@ async function writableState(tempRoot, name) {
   return state;
 }
 
-async function verifyRuntime(probes, daemon, version, tempRoot) {
+async function verifyRuntime(probes: any, daemon: any, version: any, tempRoot: any) {
   const modes = new Set();
   for (const probe of probes) {
     const { entry, extracted, binary, elf } = probe;
-    const expected = EXPECTED.find((item) => item.component === entry.component && item.arch === entry.arch);
+    const expected: any = EXPECTED.find((item) => item.component === entry.component && item.arch === entry.arch);
     const image = runtimeImage(expected.component, expected.arch);
     const mode = executionMode(expected.arch, daemon.daemonArch);
     modes.add(mode);
@@ -714,10 +714,10 @@ async function main() {
   const readelf = await findReadelf();
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "meshrix-linux-artifact-check-"));
   try {
-    const probes = [];
+    const probes: any[] = [];
     for (const expected of EXPECTED) {
       const buildEntry = buildEntries.get(`${expected.component}\0${expected.arch}`);
-      const entries = packageManifest.artifacts.filter((entry) => entry?.component === expected.component && entry?.arch === expected.arch);
+      const entries = packageManifest.artifacts.filter((entry: any) => entry?.component === expected.component && entry?.arch === expected.arch);
       if (entries.length !== 1) fail("package_manifest_target_missing_or_duplicate");
       probes.push(await verifyArchive(entries[0], buildEntry, expected, version, readelf, tempRoot));
     }

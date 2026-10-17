@@ -27,6 +27,7 @@ const EXCLUDED_SEGMENTS: any = new Set<any>([
   "dist",
   "meshrix-data",
   "node_modules",
+  "target",
   "vendor"
 ]);
 const BUILTINS: any = new Set<any>([
