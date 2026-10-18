@@ -388,24 +388,85 @@ export function createAgentWorkspace({
   } = prepareAgentWorkspaceStatements(db);
   const selectWorkspaceRawStmt = db.prepare("SELECT * FROM aw_workspaces WHERE workspace_id = ?");
 
-  function workspaceSummary(workspaceId: string) {
-    const runCount = (db.prepare<[{ workspaceId: string }], { count: number }>("SELECT COUNT(*) AS count FROM aw_runs WHERE workspace_id = @workspaceId").get({ workspaceId })?.count || 0);
-    const submissionRows = db.prepare<[string], { status: string; count: number }>("SELECT status, COUNT(*) AS count FROM aw_submissions WHERE workspace_id = ? GROUP BY status").all(workspaceId);
-    const artifactCount = db.prepare<[string], { count: number }>("SELECT COUNT(*) AS count FROM aw_artifacts WHERE workspace_id = ?").get(workspaceId)?.count || 0;
-    const openIssueCount = db.prepare<[string], { count: number }>("SELECT COUNT(*) AS count FROM aw_issues WHERE workspace_id = ? AND status != 'resolved'").get(workspaceId)?.count || 0;
-    const activeLockCount = db.prepare<[string, string], { count: number }>("SELECT COUNT(*) AS count FROM aw_locks WHERE workspace_id = ? AND expires_at > ?").get(workspaceId, nowIso())?.count || 0;
-    const sessionCount = db.prepare<[string], { count: number }>("SELECT COUNT(*) AS count FROM aw_sessions WHERE workspace_id = ?").get(workspaceId)?.count || 0;
-    const submissionCounts: Record<string, number> = Object.fromEntries(submissionRows.map((row) => [row.status, Number(row.count || 0)]));
-    return {
-      runCount: Number(runCount),
-      submissionCount: Object.values(submissionCounts).reduce((sum, count) => sum + count, 0),
-      acceptedSubmissionCount: submissionCounts.accepted || 0,
-      reviewSubmissionCount: submissionCounts.needs_review || 0,
-      artifactCount: Number(artifactCount),
-      openIssueCount: Number(openIssueCount),
-      activeLockCount: Number(activeLockCount),
-      sessionCount: Number(sessionCount)
+  function workspaceSummaries(workspaceIds: readonly string[] = []) {
+    const ids = uniqueStrings(workspaceIds.map((id) => String(id || "").trim()));
+    const summaries = new Map<string, JsonRecord>();
+    for (const id of ids) {
+      summaries.set(id, {
+        runCount: 0,
+        submissionCount: 0,
+        acceptedSubmissionCount: 0,
+        reviewSubmissionCount: 0,
+        artifactCount: 0,
+        openIssueCount: 0,
+        activeLockCount: 0,
+        sessionCount: 0
+      });
+    }
+    if (ids.length === 0) {
+      return summaries;
+    }
+    const marks = ids.map(() => "?").join(",");
+    const counted = (
+      sql: string,
+      parameters: readonly unknown[],
+      apply: (summary: JsonRecord, count: number, row: { workspace_id: string; status?: string }) => void
+    ) => {
+      const rows = db.prepare(sql).all(...parameters) as { workspace_id: string; status?: string; count: number }[];
+      for (const row of rows) {
+        const summary = summaries.get(row.workspace_id);
+        if (summary) {
+          apply(summary, Number(row.count || 0), row);
+        }
+      }
     };
+    counted(
+      `SELECT workspace_id, COUNT(*) AS count FROM aw_runs WHERE workspace_id IN (${marks}) GROUP BY workspace_id`,
+      ids,
+      (summary, count) => { summary.runCount = count; }
+    );
+    const submissionRows = db.prepare(
+      `SELECT workspace_id, status, COUNT(*) AS count FROM aw_submissions WHERE workspace_id IN (${marks}) GROUP BY workspace_id, status`
+    ).all(...ids) as { workspace_id: string; status: string; count: number }[];
+    for (const row of submissionRows) {
+      const summary = summaries.get(row.workspace_id);
+      if (!summary) {
+        continue;
+      }
+      const count = Number(row.count || 0);
+      summary.submissionCount = Number(summary.submissionCount || 0) + count;
+      if (row.status === "accepted") {
+        summary.acceptedSubmissionCount = Number(summary.acceptedSubmissionCount || 0) + count;
+      }
+      if (row.status === "needs_review") {
+        summary.reviewSubmissionCount = Number(summary.reviewSubmissionCount || 0) + count;
+      }
+    }
+    counted(
+      `SELECT workspace_id, COUNT(*) AS count FROM aw_artifacts WHERE workspace_id IN (${marks}) GROUP BY workspace_id`,
+      ids,
+      (summary, count) => { summary.artifactCount = count; }
+    );
+    counted(
+      `SELECT workspace_id, COUNT(*) AS count FROM aw_issues WHERE workspace_id IN (${marks}) AND status != 'resolved' GROUP BY workspace_id`,
+      ids,
+      (summary, count) => { summary.openIssueCount = count; }
+    );
+    counted(
+      `SELECT workspace_id, COUNT(*) AS count FROM aw_locks WHERE workspace_id IN (${marks}) AND expires_at > ? GROUP BY workspace_id`,
+      [...ids, nowIso()],
+      (summary, count) => { summary.activeLockCount = count; }
+    );
+    counted(
+      `SELECT workspace_id, COUNT(*) AS count FROM aw_sessions WHERE workspace_id IN (${marks}) GROUP BY workspace_id`,
+      ids,
+      (summary, count) => { summary.sessionCount = count; }
+    );
+    return summaries;
+  }
+
+  function workspaceSummary(workspaceId: string) {
+    return workspaceSummaries([workspaceId]).get(workspaceId) || {};
   }
 
   function workspaceAccess(input: WorkspaceInput = {}) {
@@ -703,6 +764,7 @@ export function createAgentWorkspace({
     insertIssueStmt,
     insertDecisionStmt,
     workspaceSummary,
+    workspaceSummaries,
     workspaceAccess,
     canAccessWorkspace,
     canAccessWorkspaceId,

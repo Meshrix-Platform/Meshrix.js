@@ -5,9 +5,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createAgentWorkspace } from "../../../packages/agents/src/agent-workspace/index.ts";
 import {
+  AGENT_WORKSPACE_MIGRATIONS,
   ensureAgentWorkspaceSchema,
   prepareAgentWorkspaceStatements
 } from "../../../packages/agents/src/agent-workspace/agent-workspace-db.ts";
+import { runMigrations } from "../../../packages/foundation/src/storage/sqlite-migrations.ts";
 
 const CURRENT_WORKSPACE_COLUMNS: any[] = [
   "workspace_id",
@@ -46,7 +48,7 @@ describe("agent workspace schema", () : any => {
       ensureAgentWorkspaceSchema(db);
       ensureAgentWorkspaceSchema(db);
 
-      expect(db.pragma("user_version", { simple: true })).toBe(1);
+      expect(db.pragma("user_version", { simple: true })).toBe(2);
       expect(
         db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'aw_%' ORDER BY name")
           .all()
@@ -64,6 +66,43 @@ describe("agent workspace schema", () : any => {
         fs_path: "''"
       });
       expect(() : any => prepareAgentWorkspaceStatements(db)).not.toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("backfills a root session and its creation event for workspaces that predate session roots", () : any => {
+    const db: any = new Database(":memory:");
+    try {
+      const [initial, ...rest] = AGENT_WORKSPACE_MIGRATIONS;
+      runMigrations(db, [initial]);
+      db.prepare(
+        "INSERT INTO aw_workspaces (workspace_id, title, objective, status, owner_user_id, metadata_json, created_at, updated_at, fs_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run("ws-legacy", "Legacy workspace", "legacy objective", "active", "owner-1", "{}", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", "");
+
+      runMigrations(db, rest);
+
+      const session: any = db
+        .prepare("SELECT * FROM aw_sessions WHERE workspace_id = ? AND parent_session_id = ''")
+        .get("ws-legacy");
+      expect(session).toMatchObject({
+        title: "Legacy workspace / 主会话",
+        status: "active",
+        created_by: "owner-1",
+        event_count: 1
+      });
+      expect(JSON.parse(session.metadata_json)).toMatchObject({
+        rootSession: true,
+        generatedFromWorkspace: true
+      });
+      const event: any = db.prepare("SELECT * FROM aw_session_events WHERE session_id = ?").get(session.session_id);
+      expect(event).toMatchObject({ event_type: "session_created", sequence: 1 });
+      expect(session.last_event_id).toBe(event.event_id);
+      expect(
+        db.prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('idx_aw_artifacts_workspace', 'idx_aw_decisions_workspace')"
+        ).all()
+      ).toHaveLength(2);
     } finally {
       db.close();
     }

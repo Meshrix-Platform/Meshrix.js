@@ -88,6 +88,7 @@ interface RecordsDependencies {
   insertIssueStmt: SqlStatement;
   insertDecisionStmt: SqlStatement;
   workspaceSummary(workspaceId: string): DataRecord;
+  workspaceSummaries(workspaceIds: readonly string[]): Map<string, DataRecord>;
   workspaceAccess(input: DataRecord): WorkspaceAccess;
   canAccessWorkspace(workspace: Workspace, input: DataRecord): boolean;
   canAccessWorkspaceId(workspaceId: string, input: DataRecord): boolean;
@@ -141,6 +142,7 @@ export function createAgentWorkspaceRecordsApi({
   insertIssueStmt,
   insertDecisionStmt,
   workspaceSummary,
+  workspaceSummaries,
   workspaceAccess,
   canAccessWorkspace,
   canAccessWorkspaceId,
@@ -162,13 +164,16 @@ export function createAgentWorkspaceRecordsApi({
         (workspace): workspace is Workspace =>
           workspace !== null && canAccessWorkspace(workspace, input),
       );
+    const summaries = includeSummary
+      ? workspaceSummaries(workspaces.map((workspace) => workspace.workspaceId))
+      : new Map<string, DataRecord>();
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
       sharingMode: access.sharingMode,
       workspaces: workspaces.map((workspace) => ({
         ...projectWorkspace(workspace),
         summary: includeSummary
-          ? workspaceSummary(workspace.workspaceId)
+          ? summaries.get(workspace.workspaceId)
           : undefined,
       })),
       count: workspaces.length,

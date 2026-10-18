@@ -2,6 +2,13 @@ import {
   runMigrations,
   type SqliteMigration
 } from "@meshrix/foundation/storage/sqlite-migrations";
+import {
+  normalizeText,
+  nowIso,
+  stableId,
+  stringifyJson,
+  truncateText
+} from "./agent-workspace-support.ts";
 import type Database from "better-sqlite3";
 
 function createCurrentAgentWorkspaceSchema(db: Database.Database): void {
@@ -84,6 +91,7 @@ function createCurrentAgentWorkspaceSchema(db: Database.Database): void {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_aw_artifacts_run ON aw_artifacts(run_id, level, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_aw_artifacts_workspace ON aw_artifacts(workspace_id, updated_at DESC);
     CREATE TABLE IF NOT EXISTS aw_issues (
       issue_id TEXT PRIMARY KEY,
       workspace_id TEXT NOT NULL,
@@ -110,6 +118,7 @@ function createCurrentAgentWorkspaceSchema(db: Database.Database): void {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_aw_decisions_workspace ON aw_decisions(workspace_id, updated_at DESC);
     CREATE TABLE IF NOT EXISTS aw_locks (
       lock_id TEXT PRIMARY KEY,
       workspace_id TEXT NOT NULL,
@@ -161,10 +170,137 @@ function createCurrentAgentWorkspaceSchema(db: Database.Database): void {
   `);
 }
 
-const AGENT_WORKSPACE_MIGRATIONS: readonly SqliteMigration[] = Object.freeze([
+interface WorkspaceBackfillRow {
+  workspace_id: string;
+  title: string;
+  objective: string;
+  owner_user_id: string;
+  created_at: string;
+}
+
+/**
+ * Backfills the root session every workspace must own. Workspaces created
+ * before root sessions existed used to be seeded on the read path; the
+ * production creator (`ensureRootSessionForWorkspace` via `createSession`)
+ * is mirrored here so migrated rows are indistinguishable from live ones.
+ */
+function backfillRootSessions(db: Database.Database): void {
+  const missing = db
+    .prepare(
+      `SELECT workspace_id, title, objective, owner_user_id, created_at
+       FROM aw_workspaces w
+       WHERE NOT EXISTS (
+         SELECT 1 FROM aw_sessions s
+         WHERE s.workspace_id = w.workspace_id AND s.parent_session_id = ''
+       )`
+    )
+    .all() as WorkspaceBackfillRow[];
+  if (missing.length === 0) {
+    return;
+  }
+  const insertSession = db.prepare(
+    `INSERT OR REPLACE INTO aw_sessions (
+       session_id, workspace_id, title, objective, status, parent_session_id,
+       forked_from_event_id, branch_index, lineage_json, context_json,
+       metadata_json, created_by, created_at, updated_at, last_event_id,
+       event_count, append_only
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const insertEvent = db.prepare(
+    `INSERT OR IGNORE INTO aw_session_events (
+       event_id, session_id, workspace_id, parent_event_id, event_type, title,
+       summary, payload_json, created_by, created_at, sequence
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const updateSessionStats = db.prepare(
+    "UPDATE aw_sessions SET last_event_id = ?, event_count = ?, updated_at = ? WHERE session_id = ?"
+  );
+  const bumpWorkspace = db.prepare(
+    "UPDATE aw_workspaces SET updated_at = ? WHERE workspace_id = ?"
+  );
+  for (const workspace of missing) {
+    const timestamp = workspace.created_at || nowIso();
+    const sessionId = stableId("session", workspace.workspace_id, "root");
+    const title =
+      normalizeText(`${workspace.title || workspace.workspace_id} / 主会话`) ||
+      "工作会话";
+    insertSession.run(
+      sessionId,
+      workspace.workspace_id,
+      title,
+      normalizeText(workspace.objective || "").slice(0, 2000),
+      "active",
+      "",
+      "",
+      0,
+      "[]",
+      stringifyJson({ workspaceId: workspace.workspace_id }, {}),
+      stringifyJson(
+        { rootSession: true, generatedFromWorkspace: true, appendOnly: true },
+        {}
+      ),
+      workspace.owner_user_id || "",
+      timestamp,
+      timestamp,
+      "",
+      0,
+      1
+    );
+    const summary = truncateText(
+      workspace.objective || title,
+      2000
+    );
+    const eventId = stableId(
+      "session_event",
+      sessionId,
+      "session_created",
+      "会话创建",
+      summary,
+      1,
+      timestamp
+    );
+    insertEvent.run(
+      eventId,
+      sessionId,
+      workspace.workspace_id,
+      "",
+      "session_created",
+      normalizeText("会话创建").slice(0, 300),
+      summary,
+      stringifyJson(
+        {
+          workspaceId: workspace.workspace_id,
+          parentSessionId: "",
+          forkedFromEventId: "",
+          appendOnly: true
+        },
+        {}
+      ),
+      workspace.owner_user_id || "",
+      timestamp,
+      1
+    );
+    updateSessionStats.run(eventId, 1, timestamp, sessionId);
+    bumpWorkspace.run(timestamp, workspace.workspace_id);
+  }
+}
+
+export const AGENT_WORKSPACE_MIGRATIONS: readonly SqliteMigration[] = Object.freeze([
   Object.freeze({
     version: 1,
     up: createCurrentAgentWorkspaceSchema
+  }),
+  Object.freeze({
+    version: 2,
+    up: (db: Database.Database) => {
+      db.prepare(
+        "CREATE INDEX IF NOT EXISTS idx_aw_artifacts_workspace ON aw_artifacts(workspace_id, updated_at DESC)"
+      ).run();
+      db.prepare(
+        "CREATE INDEX IF NOT EXISTS idx_aw_decisions_workspace ON aw_decisions(workspace_id, updated_at DESC)"
+      ).run();
+      backfillRootSessions(db);
+    }
   })
 ]);
 

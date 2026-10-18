@@ -88,7 +88,7 @@ export function createAgentWorkspaceSessionApi(dependencies: unknown = {}) {
   const countChildSessionsStmt = statement<CountRow>(source.countChildSessionsStmt, "countChildSessionsStmt");
   const updateSessionStatusStmt = statement(source.updateSessionStatusStmt, "updateSessionStatusStmt");
   const canAccessWorkspaceId = provider<(workspaceId: string, context: AccessContext) => boolean>(source.canAccessWorkspaceId, "canAccessWorkspaceId");
-  const canAccessWorkspace = provider<(workspace: Workspace, context: AccessContext) => boolean>(source.canAccessWorkspace, "canAccessWorkspace");
+  const canAccessWorkspace = provider<(workspace: Workspace | null, context: AccessContext) => boolean>(source.canAccessWorkspace, "canAccessWorkspace");
   const getWorkspaceRow = provider<(workspaceId: string) => WorkspaceRow | undefined>(source.getWorkspaceRow, "getWorkspaceRow");
 
   function sessionWorkspaceSummary(workspaceId?: unknown) {
@@ -261,22 +261,8 @@ export function createAgentWorkspaceSessionApi(dependencies: unknown = {}) {
     return "session" in result ? result.session || null : null;
   }
 
-  function ensureRootSessionsForVisibleWorkspaces(value: unknown = {}): void {
-    const input = asObject(value);
-    if (input.ensureRoots === false || input.seedRoots === false) {
-      return;
-    }
-    const workspaceRows = db.prepare("SELECT * FROM aw_workspaces ORDER BY updated_at DESC LIMIT 500").all();
-    for (const workspace of workspaceRows.map((row) => hydrateWorkspace(row)).filter((item): item is Workspace => item !== null)) {
-      if (canAccessWorkspace(workspace, input)) {
-        ensureRootSessionForWorkspace(workspace);
-      }
-    }
-  }
-
   function listSessions(value: unknown = {}) {
     const input = asObject(value);
-    ensureRootSessionsForVisibleWorkspaces(input);
     const limit = Math.max(1, Math.min(Number(input.limit || 100), 500));
     const status = String(input.status || "").trim();
     const workspaceId = String(input.workspaceId || input.workspace_id || "").trim();
@@ -292,15 +278,55 @@ export function createAgentWorkspaceSessionApi(dependencies: unknown = {}) {
     }
     const sessions = rows
       .map(hydrateSession)
-      .filter((session): session is Session => session !== null && canAccessWorkspaceId(session.workspaceId, input))
-      .map((session) => sessionListItem(session, { includeLastEvent: input.includeLastEvent !== false }));
+      .filter((session): session is Session => session !== null);
+    const workspaceIds = [...new Set(sessions.map((session) => session.workspaceId).filter(Boolean))];
+    const workspacesById = new Map<string, Workspace>(
+      (workspaceIds.length
+        ? db.prepare(`SELECT * FROM aw_workspaces WHERE workspace_id IN (${workspaceIds.map(() => "?").join(",")})`).all(...workspaceIds)
+        : [])
+        .map((row) => hydrateWorkspace(row))
+        .filter((workspace): workspace is Workspace => workspace !== null)
+        .map((workspace) => [workspace.workspaceId, workspace])
+    );
+    const visible = sessions.filter((session) =>
+      canAccessWorkspace(workspacesById.get(session.workspaceId) || null, input)
+    );
+    const includeLastEvent = input.includeLastEvent !== false;
+    const eventIds = includeLastEvent
+      ? [...new Set(visible.map((session) => session.lastEventId).filter(Boolean))]
+      : [];
+    const eventsById = new Map<string, SessionEvent>(
+      (eventIds.length
+        ? (db.prepare(`SELECT * FROM aw_session_events WHERE event_id IN (${eventIds.map(() => "?").join(",")})`) as unknown as Statement<SessionEventRow>).all(...eventIds)
+        : [])
+        .map((row) => hydrateSessionEvent(row))
+        .filter((event): event is SessionEvent => event !== null)
+        .map((event) => [event.eventId, event])
+    );
+    const items = visible.map((session) => {
+      const workspace = workspacesById.get(session.workspaceId) || null;
+      const lastEvent = includeLastEvent && session.lastEventId
+        ? eventsById.get(session.lastEventId) || null
+        : null;
+      return {
+        ...session,
+        workspace: workspace
+          ? {
+              workspaceId: workspace.workspaceId,
+              title: workspace.title,
+              currentGeneration: workspace.currentGeneration
+            }
+          : null,
+        lastEvent: lastEvent ? compactSessionEvent(lastEvent) : null
+      };
+    });
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
       sessionProtocolVersion: AGENT_SESSION_THREAD_VERSION,
       sharingMode: "team-shared",
       appendOnly: true,
-      sessions,
-      count: sessions.length
+      sessions: items,
+      count: items.length
     };
   }
 
