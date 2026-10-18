@@ -1,6 +1,6 @@
 {
   "$schema": "./schema/repo-layout.schema.json",
-  "version": "v0.3.0",
+  "version": "v0.3.1",
   "entries": [
     {
       "name": ".dockerignore",
@@ -214,6 +214,96 @@
       "required": true,
       "generated": false,
       "packageIncluded": true
+    },
+    {
+      "name": ".oxlintrc.json",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": "AGENTS.md",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": "THIRD_PARTY_NOTICES.md",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "docker-compose.single-node.yml",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": "tsconfig.node.json",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "tsconfig.tests.json",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": "assets",
+      "kind": "source-root",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true,
+      "description": "Shared design-asset masters synced to product consumers."
+    },
+    {
+      "name": "demo",
+      "kind": "source-root",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false,
+      "description": "Demonstration material for manual evaluation."
+    },
+    {
+      "name": "docker",
+      "kind": "source-root",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false,
+      "description": "Container delivery and offline installation documents."
+    },
+    {
+      "name": "skills",
+      "kind": "source-root",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false,
+      "description": "Authoritative agent skill sources; installed distributions are generated projections."
+    },
+    {
+      "name": "vendor",
+      "kind": "source-root",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false,
+      "description": "Vendored third-party artifacts for reproducible offline use."
+    },
+    {
+      "name": "workflows",
+      "kind": "source-root",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false,
+      "description": "Workflow metadata catalog."
     }
   ],
   "rootHygiene": {
@@ -289,9 +379,9 @@
           "tools"
         ],
         "extensions": [
-        ".cjs",
-        ".js",
-        ".ts",
+          ".cjs",
+          ".js",
+          ".ts",
           ".tsx",
           ".vue"
         ],

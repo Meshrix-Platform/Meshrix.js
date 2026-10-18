@@ -28,7 +28,7 @@ Integrity registry: `tools/registry/state-machines/state-machine-integrity.regis
 - `upstream-service-publishing.json`: `acceptance.upstream-service-publishing` @ `sha256:e533580288ea55888ff32c0cdf232200219002c7134dee0bfff13514751dfaac`.
 - `alert.lifecycle.json`: `alert.lifecycle` @ `sha256:7caedde26a4e62a404a8e5414681f9d95e88aabd5b999db1c378710f63c77bfb`.
 - `deployment.lifecycle.json`: `deployment.lifecycle` @ `sha256:4390aa05debe6d6ab9db610158e1aa967e2fb9a9f3a7beaa0a0cf57dde296e5b`.
-- `operation.narrow.json`: `operation.narrow` @ `sha256:b8b9c2e58678a125db10910688bebcb26aa903dd1579807a64225ea411ba6986`.
+- `operation.narrow.json`: `operation.narrow` @ `sha256:149514d98ac98cde1cb1ebc33c1e7aa1ed3680ed9baf324f419eb0559e5e6efe`.
 - `production.readiness.lifecycle.json`: `production.readiness.lifecycle` @ `sha256:3f14e7a8684f2b84f7406ba79175151527a78360cafcde6f2b87c8f5b1f4d167`.
 - `storage.backup.lifecycle.json`: `storage.backup.lifecycle` @ `sha256:dd59a37c93ddb4e78bdfa0fd0d7b8a685a51ef1e4f6d78a945bb0c9b1c859aa6`.
 - `version.artifact.lifecycle.json`: `version.artifact.lifecycle` @ `sha256:e6c1107913ecef1e1f9e544b59d3d8cc33aea3dd5fc3228deb11cc198221c2fb`.

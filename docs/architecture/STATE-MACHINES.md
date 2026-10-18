@@ -4,7 +4,7 @@
 
 Projection schema: `v0.0.1:docs:state-machines-projection-1`
 Generated at: `1970-01-01T00:00:00.000Z`
-Integrity registry digest: `sha256:390f9fcbe6563a2d512da48112dc4047c04d6a6bc759a21193e1d12b4d271bc1`
+Integrity registry digest: `sha256:ed1f7b3dab2be7b29f2eb0520c6acfb6707aaf304b0fb01b96a88d8df7e14811`
 Authority: JSON definitions under `packages/foundation/src/workflow/state-machine/definitions/`. This markdown file is projection-only and must not be treated as an independent authority.
 
 Core state-machine definitions live under `packages/foundation/src/workflow/state-machine/definitions/`. Package-owned definitions are admitted from verified plugin bundles and are not compiled into Core documentation.
@@ -15,7 +15,7 @@ Core state-machine definitions live under `packages/foundation/src/workflow/stat
 | --- | --- | --- | --- |
 | `alert.lifecycle` | `sha256:7caedde26a4e62a404a8e5414681f9d95e88aabd5b999db1c378710f63c77bfb` | 7/6/42 | `packages/foundation/src/workflow/state-machine/definitions/alert.lifecycle.json` |
 | `deployment.lifecycle` | `sha256:4390aa05debe6d6ab9db610158e1aa967e2fb9a9f3a7beaa0a0cf57dde296e5b` | 9/8/72 | `packages/foundation/src/workflow/state-machine/definitions/deployment.lifecycle.json` |
-| `operation.narrow` | `sha256:b8b9c2e58678a125db10910688bebcb26aa903dd1579807a64225ea411ba6986` | 10/9/90 | `packages/foundation/src/workflow/state-machine/definitions/operation.narrow.json` |
+| `operation.narrow` | `sha256:149514d98ac98cde1cb1ebc33c1e7aa1ed3680ed9baf324f419eb0559e5e6efe` | 10/9/90 | `packages/foundation/src/workflow/state-machine/definitions/operation.narrow.json` |
 | `production.readiness.lifecycle` | `sha256:3f14e7a8684f2b84f7406ba79175151527a78360cafcde6f2b87c8f5b1f4d167` | 10/10/100 | `packages/foundation/src/workflow/state-machine/definitions/production.readiness.lifecycle.json` |
 | `storage.backup.lifecycle` | `sha256:dd59a37c93ddb4e78bdfa0fd0d7b8a685a51ef1e4f6d78a945bb0c9b1c859aa6` | 8/7/56 | `packages/foundation/src/workflow/state-machine/definitions/storage.backup.lifecycle.json` |
 | `version.artifact.lifecycle` | `sha256:e6c1107913ecef1e1f9e544b59d3d8cc33aea3dd5fc3228deb11cc198221c2fb` | 5/4/20 | `packages/foundation/src/workflow/state-machine/definitions/version.artifact.lifecycle.json` |

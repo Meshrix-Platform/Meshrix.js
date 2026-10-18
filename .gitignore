@@ -101,6 +101,9 @@ CLAUDE.md
 .impeccable/
 .github/skills/
 
+# Local toolchain overrides (may contain machine-local paths)
+.cargo/
+
 # Local process documents. Public documentation remains under docs/README.md,
 # docs/RUNBOOK.md, docs/COMPATIBILITY.md, docs/ENTITY-CONFIG-LAYOUT.md,
 # docs/architecture/, docs/functionality/, docs/protocols/, docs/examples/,

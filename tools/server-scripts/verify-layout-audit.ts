@@ -34,6 +34,7 @@
  * Adoption is incremental; new audit sections should include these fields.
  */
 
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -57,6 +58,64 @@ const ROOT_AUDIT_IGNORED_ENTRIES: any = new Set<any>([
   "build",
   "node_modules"
 ]);
+
+function gitIgnoredRootEntries(names: readonly string[]): Set<string> {
+  const ignored = new Set<string>();
+  if (names.length === 0) return ignored;
+  const result: any = spawnSync("git", ["check-ignore", "-z", "--stdin"], {
+    cwd: repoRoot,
+    input: names.join("\0") + "\0",
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024
+  });
+  for (const entry of String(result.stdout || "").split("\0")) {
+    if (entry) ignored.add(entry);
+  }
+  return ignored;
+}
+
+function gitTrackedRootEntries(): Set<string> {
+  const result: any = spawnSync("git", ["ls-files", "-z"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024
+  });
+  const tracked = new Set<string>();
+  for (const entry of String(result.stdout || "").split("\0")) {
+    if (!entry) continue;
+    const separator = entry.indexOf("/");
+    tracked.add(separator === -1 ? entry : entry.slice(0, separator));
+  }
+  return tracked;
+}
+
+async function collectWorkspaceImportSpecifiers(): Promise<Set<string>> {
+  const declared = new Set<string>();
+  const skippedDirectories = new Set(["node_modules", "dist", "build", ".vite"]);
+  const pending: string[] = ["apps", "packages", "plugins", "services", "tools"];
+  while (pending.length > 0) {
+    const directory = pending.pop()!;
+    let entries: any;
+    try {
+      entries = await fs.readdir(path.join(repoRoot, directory), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || skippedDirectories.has(entry.name) || ROOT_AUDIT_IGNORED_ENTRIES.has(entry.name)) continue;
+      const relative = `${directory}/${entry.name}`;
+      try {
+        const manifest: any = JSON.parse(await fs.readFile(path.join(repoRoot, relative, "package.json"), "utf8"));
+        for (const specifier of Object.keys(manifest.imports || {})) {
+          if (specifier.startsWith("#meshrix/")) declared.add(specifier);
+        }
+      } catch {
+        pending.push(relative);
+      }
+    }
+  }
+  return declared;
+}
 
 async function pathExists(relativePath?: any) : Promise<any> {
   try {
@@ -170,7 +229,16 @@ async function main() : Promise<any> {
       .filter((name?: any) : any => !ROOT_AUDIT_IGNORED_ENTRIES.has(name)));
     const allowedNames: any = new Set<any>(arch.ROOT_ALLOWED_ENTRIES);
 
-    const unclassified: any = [...actualNames].filter((n?: any) : any => !allowedNames.has(n));
+    const unregistered: any = [...actualNames].filter((n?: any) : any => !allowedNames.has(n));
+
+    // Git-ignored entries (tool state, caches, local output) can never enter
+    // the published tree and are not repository content. Only tracked or
+    // unignored entries must be classified in the layout registry.
+    const gitIgnored: any = gitIgnoredRootEntries(unregistered);
+    const tracked: any = gitTrackedRootEntries();
+    const unclassified: any = unregistered.filter(
+      (name?: any) : any => tracked.has(name) || !gitIgnored.has(name)
+    );
 
     report.sections.push({
       title: "Root directory classification",
@@ -235,14 +303,31 @@ async function main() : Promise<any> {
 
   // ── S4: Public facade imports ────────────────────────────────────────────
   {
+    // Root `imports` entries use conditional maps ({source, default}) so
+    // `--conditions=source` resolves to the target source file while the
+    // default condition keeps the published package specifier. A facade may
+    // also be declared by a consuming workspace package's own manifest; only
+    // aliases absent from every manifest are unresolvable via `#meshrix/`.
     const imports: any = packageJson.imports || {};
-    const missingImports: any[] = [];
+    const workspaceSpecifiers: any = await collectWorkspaceImportSpecifiers();
+    const mismatchedImports: any[] = [];
+    const undeclaredImports: any[] = [];
     const extraImports: any[] = [];
 
     for (const facade of arch.PUBLIC_FACADES) {
       const expected: any = `./${facade.facadePath}`;
-      if (imports[facade.importSpecifier] !== expected) {
-        missingImports.push({ specifier: facade.importSpecifier, expected, actual: imports[facade.importSpecifier] || "<missing>" });
+      const declared: any = imports[facade.importSpecifier];
+      if (declared !== undefined) {
+        const source: any = typeof declared === "string"
+          ? declared
+          : (declared && typeof declared === "object" ? declared.source : undefined);
+        if (source !== expected) {
+          mismatchedImports.push({ specifier: facade.importSpecifier, expected, actual: declared });
+        }
+        continue;
+      }
+      if (!workspaceSpecifiers.has(facade.importSpecifier)) {
+        undeclaredImports.push(facade.importSpecifier);
       }
     }
     for (const specifier of Object.keys(imports)) {
@@ -253,10 +338,20 @@ async function main() : Promise<any> {
 
     report.sections.push({
       title: "Public facade imports",
-      summary: { registered: arch.PUBLIC_FACADES.length, mismatched: missingImports.length, extra: extraImports.length },
+      summary: {
+        registered: arch.PUBLIC_FACADES.length,
+        mismatched: mismatchedImports.length,
+        undeclared: undeclaredImports.length,
+        extra: extraImports.length
+      },
     });
-    if (missingImports.length > 0) {
-      report.issues.severe.push(`${missingImports.length} facade import(s) mismatch package.json#imports`);
+    if (mismatchedImports.length > 0) {
+      report.issues.severe.push(`${mismatchedImports.length} facade import(s) mismatch package.json#imports`);
+    }
+    if (undeclaredImports.length > 0) {
+      report.issues.warning.push(
+        `${undeclaredImports.length} registered facade(s) not declared in any package.json#imports: ${undeclaredImports.join(", ")}`
+      );
     }
   }
 
@@ -325,9 +420,10 @@ async function main() : Promise<any> {
         continue;
       }
       if (suite.command.endsWith("npm") || suite.command.endsWith("npm.cmd")) {
-        const runIdx: any = suite.args.indexOf("run");
-        if (runIdx >= 0 && runIdx + 1 < suite.args.length) {
-          suiteScriptRefs.add(suite.args[runIdx + 1]);
+        // Only npm's own `run` subcommand names a package.json script; inside
+        // `npm exec ... vitest run <file>` the later `run` is vitest's own.
+        if (suite.args[0] === "run" && suite.args.length > 1) {
+          suiteScriptRefs.add(suite.args[1]);
         }
       }
     }
