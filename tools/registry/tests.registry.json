@@ -843,7 +843,6 @@
         "run",
         "tests/vitest/gateway/performance/benchmark.test.ts",
         "tests/vitest/gateway/performance/benchmark-boundary.test.ts",
-        "tests/vitest/gateway/performance/benchmark-package.test.ts",
         "tests/vitest/server/package-script-registry.test.ts",
         "--maxWorkers=2"
       ],

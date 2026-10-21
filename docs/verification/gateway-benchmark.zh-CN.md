@@ -1,8 +1,7 @@
 # 可选 Node 网关基准工具
 
-[English](gateway-benchmark.md)。独立私有工具位于兄弟仓库的
-`Meshrix.js-Benchmark/packages/node-benchmark`，不是 Meshrix.js 产品工作区、
-根依赖、部署阶段或发布门槛。
+[English](gateway-benchmark.md)。独立私有工具在其自有仓库中维护，不属于
+Meshrix.js 产品工作区、根依赖、部署阶段或发布门槛。
 
 ## 强制顺序：先确认 Meshrix 可用，再做基准与性能优化
 

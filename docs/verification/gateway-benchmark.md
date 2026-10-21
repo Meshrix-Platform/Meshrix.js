@@ -31,10 +31,10 @@ The commands below apply only after the functional prerequisite is satisfied.
 
 ## Explicit development installation and invocation
 
-The independent private `meshrix-node-benchmark` package is maintained only
-under `Meshrix.js-Benchmark/packages/node-benchmark` (outside this repository).
-Pack it explicitly from that directory, then install the resulting tarball in
-the ignored Meshrix development prefix:
+The independent private `meshrix-node-benchmark` package is maintained in its
+own repository outside this one. Pack it explicitly from that repository's
+package directory, then install the resulting tarball in the ignored Meshrix
+development prefix:
 
 ```sh
 npm pack --json --ignore-scripts --pack-destination <local-artifact-directory>

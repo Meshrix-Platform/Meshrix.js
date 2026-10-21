@@ -5,7 +5,7 @@ import path from "node:path";
 export function isPrivateRuntimePath(relativePath: string): boolean {
   const parts = relativePath.replaceAll("\\", "/").split("/");
   const name = parts.at(-1) || "";
-  if (parts.some((part) => [".wrangler", ".meshrix-server-data", ".meshrix-agent-history", "meshrix-data"].includes(part))) return true;
+  if (parts.some((part) => [".wrangler", ".meshrix-server-data", ".meshrix-data", ".meshrix-agent-history", "meshrix-data"].includes(part))) return true;
   if (/\.(?:log|sqlite3?|db|key|p12|pfx)$/iu.test(name)) return true;
   const envFile = name === ".env" || name.startsWith(".env.") || name === ".dev.vars" || name.startsWith(".dev.vars.");
   return envFile && !/\.(?:example|sample|template)$/u.test(name);

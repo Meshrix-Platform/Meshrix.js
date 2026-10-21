@@ -27,6 +27,7 @@ crash-*
 
 # App local data and generated workspace outputs
 .meshrix-server-data/
+.meshrix-data/
 /meshrix-data/
 /.meshrix-agent-history/
 /build/
@@ -60,6 +61,8 @@ client-gui/build/
 *.tar.gz
 *.tar.xz
 *.rar
+*.tgz
+!vendor/*.tgz
 
 # Local module runtimes and heavy assets
 packages/capabilities/runtime-modules/knowledge/runtime/jre/**
