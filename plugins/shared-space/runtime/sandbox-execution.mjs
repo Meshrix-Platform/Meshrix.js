@@ -231,7 +231,6 @@ async function readSnapshotEntry(agentWorkspace, workspaceId, entry, operationId
     ...(entry.mountRef ? { mountRef: entry.mountRef } : {}),
     path: entry.logicalPath,
     includeText: false,
-    includeHash: true,
     operationId
   });
   if (!read?.ok) {

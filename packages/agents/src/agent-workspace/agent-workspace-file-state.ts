@@ -687,7 +687,6 @@ export function createAgentWorkspaceFileStateApi({
       recursive: true,
       includeDirectories: false,
       includeFiles: true,
-      includeHash: true,
       limit: 5000,
       actorUserId: workspace.ownerUserId || "",
       adminUserIds: [workspace.ownerUserId].filter(Boolean),
