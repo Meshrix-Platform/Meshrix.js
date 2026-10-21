@@ -1,2 +1,46 @@
 **/node_modules/
 **/.vite/
+
+# A root .npmignore suppresses .gitignore during packing, so the same
+# local-data exclusions are restated here for whitelisted directories.
+
+# Local env / secrets
+**/.env
+**/.env.*
+!**/.env.example
+**/meshrix-cloud-init.yaml
+
+# Local runtime data and logs
+**/.meshrix-server-data/
+**/.meshrix-data/
+**/.meshrix-agent-history/
+**/meshrix-data/
+**/*.log
+**/logs/
+
+# Local test source data and browser/test artifacts
+/tests/fixtures/
+/tests/email-corpus/
+**/test-results/
+**/.playwright-cli/
+/output/
+**/.cache/
+
+# Local AI assistant skill/runtime artifacts
+**/CLAUDE.md
+**/.claude/
+**/.codex-research/
+**/.commandcode/
+**/.gemini/
+**/.impeccable/
+**/.github/skills/
+
+# Local toolchain overrides and caches
+**/.cargo/
+**/__pycache__/
+**/*.pyc
+/tmp/
+
+# Local process documents
+/docs/plans/
+/docs/reports/

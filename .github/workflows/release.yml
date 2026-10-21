@@ -17,13 +17,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Verify and publish release
+  # Runs dependency installation, repository build and tests without any
+  # OIDC token-request authority so arbitrary repo code cannot mint tokens.
+  verify:
+    name: Verify and qualify the release archives
     runs-on: macos-15
-    environment: release-candidate
     permissions:
-      contents: write
-      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -34,7 +34,6 @@ jobs:
         with:
           node-version: "24.21.0"
           cache: npm
-          registry-url: https://registry.npmjs.org
       - name: Provide the Go toolchain for service verification
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -56,23 +55,13 @@ jobs:
       - name: Build, test, and qualify the npm archives
         run: npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json
 
-      - name: Publish the qualified npm archives
-        env:
-          # Trusted Publishing through the workflow's OIDC identity
-          # (`id-token: write` above); no long-lived npm token is used.
-          NPM_CONFIG_PROVENANCE: "true"
-        run: npm run release:publish-npm -- --artifact-dir build/release/npm-set
-
-      - name: Create the GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "GitHub Release already exists for $RELEASE_TAG"
-          else
-            gh release create "$RELEASE_TAG" --title "Meshrix.js $RELEASE_TAG" --generate-notes
-          fi
+      - name: Retain the qualified npm archives for the publish job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-npm-set-${{ github.sha }}
+          path: build/release/npm-set/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Retain sanitized release diagnostics
         if: ${{ always() }}
@@ -87,3 +76,50 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
           overwrite: true
+
+  # Only this job holds OIDC token-request authority; it installs no
+  # dependencies and runs no repository build/test code.
+  publish:
+    name: Publish the verified release
+    needs: verify
+    runs-on: macos-15
+    environment: release-candidate
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.21.0"
+          registry-url: https://registry.npmjs.org
+      - name: Use the repository-configured npm CLI for Trusted Publishing
+        run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
+
+      - name: Restore the qualified npm archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-npm-set-${{ github.sha }}
+          path: build/release/npm-set/
+
+      - name: Publish the qualified npm archives
+        env:
+          # Trusted Publishing through this job's OIDC identity
+          # (`id-token: write` above); no long-lived npm token is used.
+          NPM_CONFIG_PROVENANCE: "true"
+        run: node tools/server-scripts/publish-release-set.ts --artifact-dir build/release/npm-set
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "GitHub Release already exists for $RELEASE_TAG"
+          else
+            gh release create "$RELEASE_TAG" --title "Meshrix.js $RELEASE_TAG" --generate-notes
+          fi

@@ -32,7 +32,8 @@ export async function issueApiKey(argv, { fetchImpl = globalThis.fetch, readPass
   }
   try {
     const url = new URL(options.origin);
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error();
+    const loopback = url.hostname === "localhost" || url.hostname.startsWith("127.") || url.hostname === "[::1]";
+    if (!["http:", "https:"].includes(url.protocol) || (url.protocol === "http:" && !loopback) || url.username || url.password || url.search || url.hash || url.pathname !== "/") throw new Error();
     origin = url.origin;
     request = JSON.parse(await readFile(options.request, "utf8"));
   } catch { throw new Error("invalid-origin-or-request-file"); }

@@ -22,17 +22,36 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain("ref: ${{ github.ref }}");
     expect(workflow).toContain("RELEASE_TAG: ${{ github.ref_name }}");
     expect(workflow).toContain(`node-version: "${definition.github.nodeVersion}"`);
-    expect(workflow).toContain("environment: release-candidate");
-    expect(workflow).toContain("contents: write");
-    expect(workflow).toContain("id-token: write");
     expect(workflow).toContain("registry-url: https://registry.npmjs.org");
     expect(workflow).toContain("Use the repository-configured npm CLI for Trusted Publishing");
     expect(workflow).toContain("release-definition.registry.json");
-    expect(workflow.indexOf("npm install --global")).toBeLessThan(workflow.indexOf("run: npm ci"));
-    expect(workflow).toContain("npm exec --offline -- playwright install --with-deps chromium");
-    expect(workflow).toContain("npm run release:prepare -- --check --tag \"$RELEASE_TAG\"");
-    expect(workflow).toContain("npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json");
-    expect(workflow).toContain("npm run release:publish-npm -- --artifact-dir build/release/npm-set");
+
+    // The release splits qualification from publication: the verify job runs
+    // dependency installation, build and tests without OIDC authority, while the
+    // publish job alone holds `id-token: write` and only publishes the archives
+    // the verify job qualified and retained.
+    const verifyStart = workflow.indexOf("  verify:");
+    const publishStart = workflow.indexOf("  publish:");
+    expect(verifyStart).toBeGreaterThanOrEqual(0);
+    expect(publishStart).toBeGreaterThan(verifyStart);
+    const verifySection = workflow.slice(verifyStart, publishStart);
+    const publishSection = workflow.slice(publishStart);
+
+    expect(verifySection).not.toContain("id-token: write");
+    expect(verifySection.indexOf("npm install --global")).toBeLessThan(verifySection.indexOf("run: npm ci"));
+    expect(verifySection).toContain("npm exec --offline -- playwright install --with-deps chromium");
+    expect(verifySection).toContain("npm run release:prepare -- --check --tag \"$RELEASE_TAG\"");
+    expect(verifySection).toContain("npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json");
+    expect(verifySection).toContain("release-npm-set-${{ github.sha }}");
+
+    expect(publishSection).toContain("needs: verify");
+    expect(publishSection).toContain("environment: release-candidate");
+    expect(publishSection).toContain("contents: write");
+    expect(publishSection).toContain("id-token: write");
+    expect(publishSection).not.toContain("run: npm ci");
+    expect(publishSection).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
+    expect(publishSection).toContain("release-npm-set-${{ github.sha }}");
+    expect(publishSection).toContain("node tools/server-scripts/publish-release-set.ts --artifact-dir build/release/npm-set");
     // Trusted Publishing: the release workflow publishes through its OIDC
     // identity and must not carry a long-lived npm token secret.
     expect(workflow).not.toContain("NPM_BOOTSTRAP_TOKEN");
