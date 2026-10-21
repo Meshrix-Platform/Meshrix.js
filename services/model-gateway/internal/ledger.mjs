@@ -21,14 +21,18 @@ export function createLedger({ dataRoot, state, responseCacheBounds = {}, bounds
         response TEXT, response_bytes INTEGER NOT NULL DEFAULT 0);
       CREATE UNIQUE INDEX IF NOT EXISTS call_idempotency ON calls(principal,idem) WHERE idem IS NOT NULL;
       CREATE INDEX IF NOT EXISTS call_pending ON calls(state);
-      CREATE INDEX IF NOT EXISTS call_window ON calls(created_at,principal);
-      CREATE INDEX IF NOT EXISTS call_subject_window ON calls(principal,created_at);
+      CREATE TABLE IF NOT EXISTS window_buckets (
+        scope TEXT NOT NULL, bucket INTEGER NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0, tokens REAL NOT NULL DEFAULT 0, cost REAL NOT NULL DEFAULT 0,
+        PRIMARY KEY(scope,bucket));
+      DROP INDEX IF EXISTS call_window;
+      DROP INDEX IF EXISTS call_subject_window;
       DROP INDEX IF EXISTS call_hot_response;`);
     for (const suffix of ["-wal", "-shm"]) chmodSync(filename + suffix, 0o600);
   } catch (error) { db.close(); throw error; }
   const limitEntries = responseCacheBounds.maxEntries || 512;
   const limitBytes = responseCacheBounds.maxBytes || 16 * 1024 * 1024;
-  const select = db.prepare("SELECT call_id,facts FROM calls WHERE call_id=?");
+  const select = db.prepare("SELECT call_id,facts,reserved_tokens,reserved_cost,created_at FROM calls WHERE call_id=?");
   const selectResponse = db.prepare("SELECT response FROM calls WHERE call_id=?");
   const unknownOwnerKey = db.prepare("SELECT call_id FROM calls WHERE principal='' AND idem=? LIMIT 1");
   const byKey = db.prepare("SELECT call_id,facts,fingerprint FROM calls WHERE principal=? AND idem=?");
@@ -37,10 +41,16 @@ export function createLedger({ dataRoot, state, responseCacheBounds = {}, bounds
     call_id,principal,idem,fingerprint,state,created_at,partition_key,
     reserved_tokens,reserved_cost,facts,response,response_bytes
   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
-  const totals = db.prepare(`SELECT count(*) AS count,total(reserved_tokens) AS tokens,
-    total(reserved_cost) AS cost FROM calls WHERE created_at>?`);
-  const subjectTotals = db.prepare(`SELECT count(*) AS count,total(reserved_tokens) AS tokens,
-    total(reserved_cost) AS cost FROM calls WHERE principal=? AND created_at>?`);
+  const BUCKET_MS = 1000;
+  const bucketOf = (ms) => Math.floor(ms / BUCKET_MS) * BUCKET_MS;
+  const addBucket = db.prepare(`INSERT INTO window_buckets(scope,bucket,count,tokens,cost) VALUES(?,?,1,?,?)
+    ON CONFLICT(scope,bucket) DO UPDATE SET count=count+1,tokens=tokens+excluded.tokens,cost=cost+excluded.cost`);
+  const bumpBucket = db.prepare(`INSERT INTO window_buckets(scope,bucket,count,tokens,cost) VALUES(?,?,0,?,?)
+    ON CONFLICT(scope,bucket) DO UPDATE SET tokens=tokens+excluded.tokens,cost=cost+excluded.cost`);
+  const bucketTotals = db.prepare(`SELECT coalesce(total(count),0) AS count,coalesce(total(tokens),0) AS tokens,
+    coalesce(total(cost),0) AS cost FROM window_buckets WHERE scope=? AND bucket>=?`);
+  const pruneBuckets = db.prepare("DELETE FROM window_buckets WHERE bucket<?");
+  const subjectScope = (principal) => `s:${principal}`;
   const readRate = db.prepare("SELECT tokens,refilled_at FROM effect_rates WHERE key=?");
   const writeRate = db.prepare("INSERT INTO effect_rates VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET tokens=excluded.tokens,refilled_at=excluded.refilled_at");
   const responseCache = new Map();
@@ -86,6 +96,19 @@ export function createLedger({ dataRoot, state, responseCacheBounds = {}, bounds
     }
   }); } catch (error) { db.close(); throw error; }
   delete state.ledger;
+  // Recalibrate the persistent window aggregates from the durable ledger on
+  // every open: only rows whose bucket is still inside the window can matter.
+  try { transaction(() => {
+    const cutoff = now() - windowMs;
+    const minBucket = bucketOf(cutoff);
+    db.exec("DELETE FROM window_buckets");
+    db.prepare(`INSERT INTO window_buckets(scope,bucket,count,tokens,cost)
+      SELECT 'g',(created_at/?)*?,count(*),total(reserved_tokens),total(reserved_cost)
+      FROM calls WHERE created_at>=? GROUP BY 2`).run(BUCKET_MS, BUCKET_MS, minBucket);
+    db.prepare(`INSERT INTO window_buckets(scope,bucket,count,tokens,cost)
+      SELECT 's:'||principal,(created_at/?)*?,count(*),total(reserved_tokens),total(reserved_cost)
+      FROM calls WHERE created_at>=? GROUP BY 1,2`).run(BUCKET_MS, BUCKET_MS, minBucket);
+  }); } catch (error) { db.close(); throw error; }
 
   function findIdempotency(principal, key, fingerprint) {
     if (!key) return null;
@@ -101,8 +124,10 @@ export function createLedger({ dataRoot, state, responseCacheBounds = {}, bounds
       if (duplicate) return { duplicate: true, ...duplicate };
       if (pending.get().count >= bounds.maxLedgerPendingEntries) return { denied: "budget_exceeded" };
       const cutoff = now() - windowMs;
-      const global = totals.get(cutoff);
-      const subject = subjectTotals.get(principalRef, cutoff);
+      const minBucket = bucketOf(cutoff);
+      pruneBuckets.run(minBucket);
+      const global = bucketTotals.get("g", minBucket);
+      const subject = bucketTotals.get(subjectScope(principalRef), minBucket);
       const tokens = inputTokens + requestedOutputTokens;
       const time = now();
       const rates = [["global", bounds.maxGlobalRatePerSecond], [JSON.stringify(["subject", principalRef]), bounds.maxSubjectRatePerSecond]]
@@ -122,14 +147,18 @@ export function createLedger({ dataRoot, state, responseCacheBounds = {}, bounds
         modelRef, pricingRevisionRef, currency, reservationRef, state: "in_doubt", attempts: 1,
         amount: { currency, units: 0, nanos: 0 }, inputTokens: 0, outputTokens: 0 };
       for (const rate of rates) writeRate.run(rate.key, rate.tokens - 1, time);
-      insert.run(callId, principalRef, idempotencyKey || null, requestFingerprint || null, "in_doubt", now(), partitionKey,
+      insert.run(callId, principalRef, idempotencyKey || null, requestFingerprint || null, "in_doubt", time, partitionKey,
         tokens, estimatedCostMicros, JSON.stringify(facts), null, 0);
+      const bucket = bucketOf(time);
+      addBucket.run("g", bucket, tokens, estimatedCostMicros);
+      addBucket.run(subjectScope(principalRef), bucket, tokens, estimatedCostMicros);
       return { duplicate: false, entry: { ...facts, response: null } };
     });
   }
   function markSettled(callId, { inputTokens, outputTokens, amount, response }) {
     const result = transaction(() => {
-      const entry = project(select.get(callId));
+      const row = select.get(callId);
+      const entry = project(row);
       if (!entry || entry.state === "settled") return { changed: false };
       const facts = { ...entry, inputTokens, outputTokens, amount, state: "settled" };
       delete facts.response;
@@ -138,6 +167,13 @@ export function createLedger({ dataRoot, state, responseCacheBounds = {}, bounds
       db.prepare(`UPDATE calls SET state='settled',facts=?,response=?,response_bytes=?,
         reserved_tokens=max(reserved_tokens,?),reserved_cost=max(reserved_cost,?) WHERE call_id=?`).run(
         JSON.stringify(facts), encoded, encoded ? Buffer.byteLength(encoded) : 0, inputTokens + outputTokens, cost, callId);
+      const deltaTokens = Math.max(0, inputTokens + outputTokens - row.reserved_tokens);
+      const deltaCost = Math.max(0, cost - row.reserved_cost);
+      const bucket = bucketOf(row.created_at);
+      if ((deltaTokens > 0 || deltaCost > 0) && bucket >= bucketOf(now() - windowMs)) {
+        bumpBucket.run("g", bucket, deltaTokens, deltaCost);
+        bumpBucket.run(subjectScope(String(entry.principalRef || "")), bucket, deltaTokens, deltaCost);
+      }
       return { changed: true };
     });
     if (result.changed) rememberResponse(callId, response == null ? null : JSON.stringify(response));
