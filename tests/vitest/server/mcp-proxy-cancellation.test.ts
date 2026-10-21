@@ -1,5 +1,7 @@
 import { EventEmitter } from "node:events";
 
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fetchJson } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/http-json-client.ts";
@@ -13,6 +15,79 @@ import {
 afterEach(() : any => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe("MCP stdio initialization", () => {
+  it.each(["2025-11-25", "unknown-version"])("offers its own protocol for %s without forwarding initialization", async (requested) => {
+    const writes: any[] = [];
+    const forwardMessage = vi.fn();
+    const transport = createProxyStdioTransport({ forwardMessage, writeMessage: (message: any) => { writes.push(message); } });
+    transport.push(encodeStdioJsonRpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: requested } }));
+    transport.push(encodeStdioJsonRpc({ jsonrpc: "2.0", method: "notifications/initialized" }));
+    await transport.close();
+    expect(forwardMessage).not.toHaveBeenCalled();
+    expect(writes).toEqual([{
+      jsonrpc: "2.0", id: 1,
+      result: {
+        protocolVersion: "2025-11-25",
+        capabilities: { tools: { listChanged: true } },
+        serverInfo: { name: "meshrix.js", version: expect.any(String) }
+      }
+    }]);
+  });
+
+  it("rejects initialization without a protocol version", async () => {
+    const writes: any[] = [];
+    const forwardMessage = vi.fn();
+    const transport = createProxyStdioTransport({ forwardMessage, writeMessage: (message: any) => { writes.push(message); } });
+    transport.push(encodeStdioJsonRpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }));
+    await transport.close();
+    expect(forwardMessage).not.toHaveBeenCalled();
+    expect(writes[0]).toMatchObject({ id: 1, error: { code: -32602 } });
+  });
+
+  it("connects a standard SDK client and forwards authorized tool work over modern HTTP", async () => {
+    const token = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
+    const requests: any[] = [];
+    let deny = false;
+    const fetchImpl = async (_url: any, options: any) => {
+      const message = JSON.parse(options.body);
+      requests.push(message);
+      expect(new Headers(options.headers).get("x-meshrix.js-api-key")).toBe(token);
+      expect(new Headers(options.headers).get("mcp-protocol-version")).toBe("2026-07-28");
+      expect(message.params._meta["io.modelcontextprotocol/protocolVersion"]).toBe("2026-07-28");
+      expect(options.signal.aborted).toBe(false);
+      if (deny) return Response.json({ error: { message: "Permission denied." } }, { status: 403 });
+      const result = message.method === "tools/list"
+        ? { resultType: "complete", tools: [{ name: "echo", description: "Echo fixture input.", inputSchema: { type: "object", properties: { text: { type: "string" } } } }] }
+        : { resultType: "complete", content: [{ type: "text", text: message.params.arguments.text }], isError: message.params.arguments.text === "failed" };
+      return Response.json({ jsonrpc: "2.0", id: message.id, result });
+    };
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const proxy = createProxyStdioTransport({
+      baseUrl: "https://gateway.invalid", token, target: "standard-client",
+      forwardMessage: (options: any) => forwardProxyMessage({ ...options, fetchImpl }),
+      writeMessage: (message: any) => { void serverTransport.send(message); }
+    });
+    serverTransport.onmessage = (message) => proxy.push(encodeStdioJsonRpc(message));
+    const client = new Client({ name: "standard-client", version: "1.0.0" });
+    try {
+      await serverTransport.start();
+      await client.connect(clientTransport);
+      expect(requests).toHaveLength(0);
+      expect((await client.listTools()).tools.map((tool) => tool.name)).toEqual(["echo"]);
+      expect(await client.callTool({ name: "echo", arguments: { text: "complete" } })).toMatchObject({ content: [{ type: "text", text: "complete" }], isError: false });
+      expect(await client.callTool({ name: "echo", arguments: { text: "failed" } })).toMatchObject({ isError: true });
+      deny = true;
+      await expect(client.listTools()).rejects.toThrow("Permission denied.");
+      expect(requests.map((message) => message.method)).toEqual(["tools/list", "tools/call", "tools/call", "tools/list"]);
+    } finally {
+      proxy.stop();
+      await proxy.close();
+      await client.close();
+      await serverTransport.close();
+    }
+  });
 });
 
 describe("MCP stdio proxy cancellation", () : any => {
@@ -134,7 +209,7 @@ describe("MCP stdio proxy cancellation", () : any => {
         method: "tools/call",
         params: { value: "x".repeat(128) }
       }),
-      encodeStdioJsonRpc({ jsonrpc: "2.0", method: "notifications/initialized" })
+      encodeStdioJsonRpc({ jsonrpc: "2.0", method: "notifications/progress" })
     ]));
     await jsonlTransport.close();
 
@@ -149,7 +224,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     }]);
     expect(forwardedMessages).toEqual([{
       jsonrpc: "2.0",
-      method: "notifications/initialized"
+      method: "notifications/progress"
     }]);
 
     const contentLengthWrites: any[] = [];

@@ -19,6 +19,9 @@ import {
   MCP_NPM_PACKAGE_VERSION
 } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 
+// The connector is the stdio MCP server; its initialization contract is
+// independent of the modern HTTP protocol used for upstream requests.
+export const MCP_STDIO_PROTOCOL_VERSION = "2025-11-25";
 export const MCP_STDIO_FRAMING_JSONL: any = "jsonl";
 export const MCP_STDIO_FRAMING_CONTENT_LENGTH: any = "content-length";
 export const MCP_STDIO_MAX_FRAME_BYTES: any = 8 * 1024 * 1024;
@@ -426,8 +429,26 @@ export function createProxyRequestDispatcher({
       releaseCancellationReservation(activeRequest);
       return;
     }
+    if (message?.method === "initialize" && hasJsonRpcRequestId(message)) {
+      if (typeof message.params?.protocolVersion !== "string") {
+        emitMessage({
+          jsonrpc: "2.0", id: message.id,
+          error: { code: -32602, message: "Initialization requires a protocol version." }
+        }, framing);
+        return;
+      }
+      emitMessage({
+        jsonrpc: "2.0", id: message.id,
+        result: {
+          protocolVersion: MCP_STDIO_PROTOCOL_VERSION,
+          capabilities: { tools: { listChanged: true } },
+          serverInfo: { name: MCP_NPM_PACKAGE_NAME, version: MCP_NPM_PACKAGE_VERSION }
+        }
+      }, framing);
+      return;
+    }
     if (!hasJsonRpcRequestId(message)) {
-      forwardNotification(message);
+      if (message?.method !== "notifications/initialized") forwardNotification(message);
       return;
     }
     dispatchRequest(message, framing);
