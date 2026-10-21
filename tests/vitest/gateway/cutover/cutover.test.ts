@@ -157,8 +157,11 @@ describe("default HTTP MCP gateway cutover", () => {
     expect(response.statusCode).toBe(202);
   });
 
-  it("keeps legacy GET/SSE admission out of the default /mcp route", async () => {
-    const handle = vi.fn();
+  it("delegates GET /mcp to the standard-profile adapter, not legacy SSE admission", async () => {
+    const handle = vi.fn(async () => ({
+      status: 400,
+      body: { jsonrpc: "2.0", id: null, error: { code: -32000, message: "Mcp-Session-Id is required." } }
+    }));
     const request: any = Readable.from([]);
     request.method = "GET";
     request.url = "/mcp";
@@ -168,9 +171,9 @@ describe("default HTTP MCP gateway cutover", () => {
 
     await handlerFor({ handle })(request, response);
 
-    expect(response.statusCode).toBe(405);
-    expect(response.headers.allow).toBe("POST");
-    expect(handle).not.toHaveBeenCalled();
+    expect(handle).toHaveBeenCalledOnce();
+    expect(handle.mock.calls[0]?.[0]?.method).toBe("GET");
+    expect(response.statusCode).toBe(400);
   });
 
   it("applies API-key authentication on the default /mcp route", async () => {

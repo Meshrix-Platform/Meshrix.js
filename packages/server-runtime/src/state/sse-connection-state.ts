@@ -3,8 +3,8 @@ import { normalizeMcpProxySessionId } from "#meshrix/contracts/mcp-catalog-deliv
 
 // Protocol-layer grant-session teardown is supplied by the composition boundary;
 // this state module never imports protocol implementations directly.
-let grantSessionsDisconnector: any = null;
-export function setMcpSseGrantSessionDisconnector(disconnect: any) : any {
+let grantSessionsDisconnector: ((grantId: string) => void) | null = null;
+export function setMcpSseGrantSessionDisconnector(disconnect: ((grantId: string) => void) | null | undefined): void {
   grantSessionsDisconnector = typeof disconnect === "function" ? disconnect : null;
 }
 

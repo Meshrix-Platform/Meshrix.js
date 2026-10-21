@@ -16,6 +16,7 @@ COPY apps/entry/package.json ./apps/entry/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY packages/agents/package.json ./packages/agents/package.json
 COPY packages/capabilities/package.json ./packages/capabilities/package.json
+COPY packages/client-adapter-kit/package.json ./packages/client-adapter-kit/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/entry-transport/package.json ./packages/entry-transport/package.json
 COPY packages/foundation/package.json ./packages/foundation/package.json
