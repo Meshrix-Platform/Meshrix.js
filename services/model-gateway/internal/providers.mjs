@@ -11,6 +11,10 @@ export class ProviderEgressError extends Error {
 }
 
 const MAX_PROVIDER_RESPONSE_BYTES = 8 * 1024 * 1024;
+// Aggregate bound on provider response bytes buffered concurrently across all
+// calls on one egress manager; calls beyond the envelope wait for capacity
+// instead of growing process memory past it.
+const MAX_AGGREGATE_RESPONSE_BUFFER_BYTES = 512 * 1024 * 1024;
 const PROVIDER_DISPATCHER_OPTIONS = Object.freeze({
   connectTimeout: 0,
   headersTimeout: 0,
@@ -131,11 +135,34 @@ function validateBaseUrl(baseUrl) {
   return url;
 }
 
-export function createProviderEgress({ fetchImpl, lookupImpl = dnsLookup, agentFactory = (options) => new Agent(options) } = {}) {
+export function createProviderEgress({ fetchImpl, lookupImpl = dnsLookup, agentFactory = (options) => new Agent(options), maxAggregateResponseBufferBytes = MAX_AGGREGATE_RESPONSE_BUFFER_BYTES } = {}) {
   const dispatchers = new Map();
   let accepting = true;
   const send = fetchImpl === undefined ? undiciFetch : fetchImpl;
   let closePromise = null;
+  const responseBufferLimit = Math.max(MAX_PROVIDER_RESPONSE_BYTES, Math.trunc(Number(maxAggregateResponseBufferBytes) || 0));
+  let inFlightResponseBytes = 0;
+  const responseBufferWaiters = [];
+
+  function drainResponseBuffer() {
+    while (responseBufferWaiters.length > 0) {
+      const next = responseBufferWaiters[0];
+      if (inFlightResponseBytes + next.bytes > responseBufferLimit) break;
+      inFlightResponseBytes += next.bytes;
+      responseBufferWaiters.shift().resolve();
+    }
+  }
+  function acquireResponseBuffer(bytes) {
+    if (inFlightResponseBytes + bytes <= responseBufferLimit) {
+      inFlightResponseBytes += bytes;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => responseBufferWaiters.push({ bytes, resolve }));
+  }
+  function releaseResponseBuffer(bytes) {
+    inFlightResponseBytes = Math.max(0, inFlightResponseBytes - bytes);
+    drainResponseBuffer();
+  }
 
   function forwardedHeaders(incoming, protocol) {
     const forwarded = {};
@@ -202,14 +229,23 @@ export function createProviderEgress({ fetchImpl, lookupImpl = dnsLookup, agentF
         status: 0
       });
     }
-    const text = await readBoundedResponse(response);
+    const declaredLength = Number(response.headers?.get?.("content-length"));
+    const reservation = Number.isSafeInteger(declaredLength) && declaredLength > 0
+      ? Math.min(declaredLength, MAX_PROVIDER_RESPONSE_BYTES)
+      : MAX_PROVIDER_RESPONSE_BYTES;
+    await acquireResponseBuffer(reservation);
     let parsed = null;
-    if (text.length > 0) {
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        throw new ProviderEgressError("Provider returned invalid JSON.", { status: response.status });
+    try {
+      const text = await readBoundedResponse(response);
+      if (text.length > 0) {
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new ProviderEgressError("Provider returned invalid JSON.", { status: response.status });
+        }
       }
+    } finally {
+      releaseResponseBuffer(reservation);
     }
     return { status: response.status, body: parsed };
   }

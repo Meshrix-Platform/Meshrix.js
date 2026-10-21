@@ -99,6 +99,7 @@ const DEFAULT_BOUNDS = Object.freeze({
   maxSubjectRequestBytes: 16 * 1024 * 1024,
   maxLedgerSettledEntries: 512,
   maxLedgerPendingEntries: 1024,
+  maxAggregateResponseBufferBytes: 512 * 1024 * 1024,
   maxSubjectRequestRatePerSecond: 100,
   maxGlobalRequestRatePerSecond: 400,
   maxLedgerResponseBytes: 16 * 1024 * 1024,
@@ -423,7 +424,7 @@ function validateBounds(bounds) {
     "maxSubjectRequestBytes",
     "maxLedgerSettledEntries",
     "maxLedgerResponseBytes",
-    "maxLedgerPendingEntries", "maxSubjectRequestRatePerSecond", "maxGlobalRequestRatePerSecond", "maxSubjectTotalTokenQuota", "maxGlobalTotalTokenQuota",
+    "maxLedgerPendingEntries", "maxAggregateResponseBufferBytes", "maxSubjectRequestRatePerSecond", "maxGlobalRequestRatePerSecond", "maxSubjectTotalTokenQuota", "maxGlobalTotalTokenQuota",
     "maxSubjectCostQuotaMicros", "maxGlobalCostQuotaMicros", "maxSubjectRatePerSecond", "maxGlobalRatePerSecond"
   ]) {
     if (!Number.isSafeInteger(merged[key]) || merged[key] < 1) {
@@ -511,7 +512,7 @@ async function createOwnedModelGatewayApplication(options, ownership) {
     windowMs,
     now
   });
-  const egress = createProviderEgress({ fetchImpl });
+  const egress = createProviderEgress({ fetchImpl, maxAggregateResponseBufferBytes: bounds.maxAggregateResponseBufferBytes });
   const inflight = new Map();
   const idempotencyClaims = new Map();
   const activeWork = new Set();

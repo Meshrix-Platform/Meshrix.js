@@ -64,6 +64,7 @@ const bounds = {
   maxSubjectRequestRatePerSecond: integerEnvironment("MODEL_GATEWAY_MAX_SUBJECT_REQUEST_RATE_PER_SECOND", 100, 1, 1_000_000),
   maxGlobalRequestRatePerSecond: integerEnvironment("MODEL_GATEWAY_MAX_GLOBAL_REQUEST_RATE_PER_SECOND", 400, 1, 1_000_000),
   maxLedgerPendingEntries: integerEnvironment("MODEL_GATEWAY_MAX_LEDGER_PENDING_ENTRIES", 1024, 1, 1_000_000),
+  maxAggregateResponseBufferBytes: integerEnvironment("MODEL_GATEWAY_MAX_AGGREGATE_RESPONSE_BUFFER_BYTES", 512 * 1024 * 1024, 1, 1 << 31),
   maxLedgerResponseBytes: integerEnvironment("MODEL_GATEWAY_MAX_LEDGER_RESPONSE_BYTES", 16 * 1024 * 1024, 1, 1 << 30),
   currency: String(process.env.MODEL_GATEWAY_CURRENCY || "USD").trim().toUpperCase()
 };

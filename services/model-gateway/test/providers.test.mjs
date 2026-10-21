@@ -254,3 +254,36 @@ test("the actual Undici consumer rejects a DNS answer set containing an unapprov
     assert.equal(resolutions, 1, "the complete answer set is denied before any connection or credential transmission");
   } finally { await egress.close(); }
 });
+
+test("concurrent provider responses stay inside the aggregate buffer budget", async () => {
+  const chunkBytes = 1024 * 1024;
+  const controllers = [];
+  let settled = 0;
+  const egress = createProviderEgress({
+    maxAggregateResponseBufferBytes: 2 * chunkBytes,
+    async fetchImpl() {
+      const stream = new ReadableStream({
+        start(controller) { controllers.push(controller); }
+      });
+      return new Response(stream, { status: 200, headers: { "content-length": String(chunkBytes) } });
+    }
+  });
+  const feed = (controller) => {
+    controller.enqueue(new TextEncoder().encode('{"pad":"' + "x".repeat(chunkBytes - 12) + '"}'));
+    controller.close();
+  };
+  const settleTick = () => new Promise((resolve) => setTimeout(resolve, 30));
+  try {
+    const calls = Array.from({ length: 4 }, () => egress.call({ protocol: "http", baseUrl: "https://synthetic.example", credential: "synthetic", body: {} }).then((result) => { settled++; return result; }));
+    while (controllers.length < 4) await new Promise((resolve) => setTimeout(resolve, 5));
+    await settleTick();
+    assert.equal(settled, 0);
+    feed(controllers[0]); feed(controllers[1]);
+    await settleTick();
+    assert.equal(settled, 2, "a third response only buffers once budget frees");
+    feed(controllers[2]); feed(controllers[3]);
+    const results = await Promise.all(calls);
+    for (const result of results) assert.equal(result.status, 200);
+    assert.equal(settled, 4);
+  } finally { await egress.close(); }
+});
