@@ -26,6 +26,7 @@ export function createLedger({ dataRoot, state, responseCacheBounds = {}, bounds
         scope TEXT NOT NULL, bucket INTEGER NOT NULL,
         count INTEGER NOT NULL DEFAULT 0, tokens REAL NOT NULL DEFAULT 0, cost REAL NOT NULL DEFAULT 0,
         PRIMARY KEY(scope,bucket));
+      CREATE INDEX IF NOT EXISTS window_bucket_expiry ON window_buckets(bucket);
       DROP INDEX IF EXISTS call_window;
       DROP INDEX IF EXISTS call_subject_window;
       DROP INDEX IF EXISTS call_hot_response;`);
