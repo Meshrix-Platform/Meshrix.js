@@ -4,7 +4,7 @@ import path from "node:path";
 import { readJson, repoRoot } from "./lib/repository.mjs";
 
 export const adapterTargets = Object.freeze(["antigravity", "claude-code", "codex", "kimi", "openclaw", "opencode", "pi"]);
-export const kitRoot = path.join(repoRoot, "plugins", "agents", "client-adapter-kit");
+export const kitRoot = path.join(repoRoot, "packages", "client-adapter-kit");
 
 export async function adapterDescriptors() {
   const registry = await readJson(path.join(repoRoot, "plugins", "registry", "plugins.json"));

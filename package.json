@@ -13,6 +13,7 @@
     "packages/peer-client",
     "packages/agents",
     "packages/capabilities",
+    "packages/client-adapter-kit",
     "packages/protocols",
     "packages/server-runtime",
     "packages/ui-console",

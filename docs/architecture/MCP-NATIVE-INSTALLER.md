@@ -22,7 +22,7 @@ only the reference, never the value. Protected requests use
 is not an authorization admission requirement.
 
 Supported reference formats and client-specific limitations are maintained in the
-[adapter kit contract](../../plugins/agents/client-adapter-kit/README.md).
+[adapter kit contract](../../packages/client-adapter-kit/README.md).
 Codex, Claude Code, OpenCode, Pi and OpenClaw have native header-reference paths.
 Kimi Code's verified bearer-only reference cannot express this authentication.
 Antigravity's protected static-key reference remains unqualified. Both fail before

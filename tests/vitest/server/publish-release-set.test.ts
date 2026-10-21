@@ -401,7 +401,6 @@ describe("npm release-set publication", () => {
       .toEqual([
         "plugins/agents/antigravity",
         "plugins/agents/claude-code",
-        "plugins/agents/client-adapter-kit",
         "plugins/agents/codex",
         "plugins/agents/kimi",
         "plugins/agents/meshrix-self-maintenance",

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { adapterError, clientCommand, readJson, registrationFrom, run, writeJson } from "./index.mjs";
+import { adapterError, clientCommand, readJson, registrationFrom, run, writeJson } from "./shared.mjs";
 
 export const API_KEY_HEADER = "X-Meshrix.js-Api-Key";
 export const NATIVE_AUTH_LIMITATIONS = Object.freeze({

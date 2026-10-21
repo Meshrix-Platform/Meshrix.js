@@ -242,7 +242,8 @@
       "directory": "packages/protocols",
       "allowedDependsOn": [
         "contracts",
-        "foundation"
+        "foundation",
+        "client-adapter-kit"
       ],
       "forbiddenDependsOn": [
         "gateway",
@@ -407,7 +408,8 @@
         "capabilities",
         "protocols",
         "server-runtime",
-        "ui-console"
+        "ui-console",
+        "client-adapter-kit"
       ],
       "forbiddenDependsOn": [
         "apps",
@@ -460,6 +462,35 @@
         "gateway-installer-app"
       ],
       "forbiddenDependsOn": []
+    },
+    {
+      "id": "client-adapter-kit",
+      "name": "Client Adapter Kit",
+      "directory": "packages/client-adapter-kit",
+      "allowedDependsOn": [],
+      "forbiddenDependsOn": [
+        "contracts",
+        "gateway",
+        "entry-transport",
+        "peer-crypto",
+        "peer-client",
+        "entry-app",
+        "model-gateway-contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "gateway-installer-app",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "plugins",
+        "skill-tools",
+        "tools"
+      ]
     }
   ],
   "constraints": [

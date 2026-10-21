@@ -6,7 +6,7 @@ editing it. Repository location does not merge its lifecycle with Core.
 | Task | Source and first read | Focused verification owner |
 | --- | --- | --- |
 | Native runtime plugin | `plugins/<plugin>/README.md`, `plugin.json`, and `docs/protocols/PLUGIN-IMPLEMENTATION-CONTRACT.md` | Current `verify:local-runtime-plugins` and `verify:local-extension-package-closure` scripts, narrowed to the changed component where supported |
-| Packaged Agent MCP adapter | `plugins/agents/<target>/adapter.mjs`, its README, and `plugins/agents/client-adapter-kit/` when the shared protocol changes | `verify:local-client-adapters` and the adapter's lifecycle tests |
+| Packaged Agent MCP adapter | `plugins/agents/<target>/adapter.mjs`, its README, and `packages/client-adapter-kit/` when the shared protocol changes | `verify:local-client-adapters` and the adapter's lifecycle tests |
 | Model Gateway Service | `services/model-gateway/README.md` and its package scripts | Service-owned tests and build |
 | Skill Hub Service | `services/skill-hub/README.md` and its package scripts | Service-owned tests |
 | Format conversion Service | `services/file-parser/format-convert/README.md`, `go.mod`, and `scripts/acceptance.py` within that service | Service-owned Go tests and the separately authorized acceptance program |

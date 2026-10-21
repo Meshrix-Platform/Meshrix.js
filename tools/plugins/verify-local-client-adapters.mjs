@@ -27,7 +27,7 @@ async function main() {
   }
   const failures = [];
   for (const args of [
-    ["--test", "plugins/agents/client-adapter-kit/test/native-registration.test.mjs", "tests/plugins/client-adapter-contract.test.mjs", "tests/plugins/client-adapters.test.mjs"],
+    ["--test", "packages/client-adapter-kit/test/native-registration.test.mjs", "tests/plugins/client-adapter-contract.test.mjs", "tests/plugins/client-adapters.test.mjs"],
     ["node_modules/vitest/vitest.mjs", "run", "--config", "vitest.config.ts", "tests/vitest/server/pi-adapter-installed-component.test.ts", "tests/vitest/server/client-adapter-runner.test.ts", "tests/vitest/server/mcp-installer-api-key-only.test.ts", "tests/vitest/server/mcp-installer-portability.test.ts", "tests/vitest/server/mcp-public-installer-command.test.ts"],
     ["tools/plugins/smoke-test-client-adapters.mjs"]
   ]) {

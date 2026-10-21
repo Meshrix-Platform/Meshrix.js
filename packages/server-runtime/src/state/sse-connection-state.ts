@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { normalizeMcpProxySessionId } from "#meshrix/contracts/mcp-catalog-delivery";
-import { disconnectMcpGrantSessions } from "#meshrix/protocols/mcp/notifications";
+
+// Protocol-layer grant-session teardown is supplied by the composition boundary;
+// this state module never imports protocol implementations directly.
+let grantSessionsDisconnector: any = null;
+export function setMcpSseGrantSessionDisconnector(disconnect: any) : any {
+  grantSessionsDisconnector = typeof disconnect === "function" ? disconnect : null;
+}
 
 interface SseLimits {
   total: number;
@@ -840,7 +846,7 @@ export function disconnectMcpSseConnectionsByGrant(grantId: unknown = "") {
     if (connection.grantId !== normalizedGrantId) continue;
     if (removeConnection(connection, { close: true })) disconnected += 1;
   }
-  disconnectMcpGrantSessions(normalizedGrantId);
+  grantSessionsDisconnector?.(normalizedGrantId);
   return Object.freeze({ disconnectedConnectionCount: disconnected });
 }
 
