@@ -21,6 +21,7 @@ export function createLedger({ dataRoot, state, responseCacheBounds = {}, bounds
         response TEXT, response_bytes INTEGER NOT NULL DEFAULT 0);
       CREATE UNIQUE INDEX IF NOT EXISTS call_idempotency ON calls(principal,idem) WHERE idem IS NOT NULL;
       CREATE INDEX IF NOT EXISTS call_pending ON calls(state);
+      CREATE INDEX IF NOT EXISTS call_created ON calls(created_at);
       CREATE TABLE IF NOT EXISTS window_buckets (
         scope TEXT NOT NULL, bucket INTEGER NOT NULL,
         count INTEGER NOT NULL DEFAULT 0, tokens REAL NOT NULL DEFAULT 0, cost REAL NOT NULL DEFAULT 0,

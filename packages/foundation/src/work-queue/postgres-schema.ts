@@ -13,7 +13,13 @@ export async function ensurePostgresWorkQueueSchema(pool?: PostgresSchemaPool): 
       version INTEGER PRIMARY KEY,
       applied_at_ms BIGINT NOT NULL
     );
-
+  `);
+  const applied = await pool.query(
+    `SELECT version FROM work_queue_schema_migrations WHERE version = ${POSTGRES_MIGRATION_REVISION}`
+  );
+  const appliedRows = (applied as { rows?: unknown[] } | null)?.rows;
+  if (Array.isArray(appliedRows) && appliedRows.length > 0) return;
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS queue_definitions (
       queue_definition_id TEXT NOT NULL,
       queue_definition_version INTEGER NOT NULL,
