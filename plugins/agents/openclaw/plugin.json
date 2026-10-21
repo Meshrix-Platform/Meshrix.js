@@ -23,7 +23,7 @@
     "secrets": [],
     "risk": "mixed",
     "notes": [
-      "Use secretRef for provider credentials.",
+      "Use the selected environment reference in native MCP headers; generic SecretRef header objects are not supported.",
       "Expose agent-facing calls through Operation Permission v1 after policy review.",
       "Do not commit provider runtime data or local operator paths."
     ]

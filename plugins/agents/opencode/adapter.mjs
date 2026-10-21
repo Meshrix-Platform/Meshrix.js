@@ -1,18 +1,24 @@
 #!/usr/bin/env node
+import fs from "node:fs/promises";
+import path from "node:path";
 import packageManifest from "./package.json" with { type: "json" };
-import {
-  MCP_SERVER_NAME, clientCommand, connectorFrom, descriptor, homePath, isDirectInvocation,
-  readJsonc, removeNamedEntry, run, runAdapterCli, writeJson
-} from "@meshrix/client-adapter-kit";
+import { adapterError, descriptor, homePath, isDirectInvocation, jsonRegistrationStore, nativeAdapter, readJsonc, runAdapterCli } from "@meshrix/client-adapter-kit";
 
-export const description = descriptor({ target: "opencode", label: "OpenCode", version: packageManifest.version, packageName: "@meshrix/agent-opencode-adapter", commandNames: ["opencode"], installMode: "external-client-adapter" });
-function configPath(request) { return String(request?.client?.configPath || homePath(".config", "opencode", "opencode.jsonc")); }
-async function installed(request) { const config = await readJsonc(configPath(request), {}); return Boolean(config?.mcp?.[MCP_SERVER_NAME]); }
-export const adapter = {
+export const description = descriptor({ target: "opencode", label: "OpenCode", version: packageManifest.version, packageName: "@meshrix/agent-opencode-adapter", commandNames: ["opencode"], installMode: "native-remote-mcp" });
+async function configPath(request) {
+  if (request.client?.configPath || process.env.OPENCODE_CONFIG) return request.client?.configPath || process.env.OPENCODE_CONFIG;
+  const root = request.client?.configRoot || path.join(process.env.XDG_CONFIG_HOME || homePath(".config"), "opencode");
+  const candidates = [path.join(root, "opencode.jsonc"), path.join(root, "opencode.json")];
+  const existing = [];
+  for (const file of candidates) {
+    try { await fs.access(file); existing.push(file); }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
+  }
+  if (existing.length > 1) throw adapterError("ambiguous_client_config", "Both OpenCode config files exist; select an explicit client.configPath rather than changing an ambiguous configuration.", 65);
+  return existing[0] || candidates[0];
+}
+export const adapter = nativeAdapter({
   description,
-  async scan(request) { const available = (await run(clientCommand(request, "opencode"), ["--version"], { allowFailure: true })).ok; return { available, installed: await installed(request) }; },
-  async install(request) { const connector = connectorFrom(request, "opencode"); const config = await readJsonc(configPath(request), {}); config.mcp = { ...(config.mcp || {}), [MCP_SERVER_NAME]: { type: "local", command: [connector.command, ...connector.args] } }; await writeJson(configPath(request), config); return { installed: true }; },
-  async verify(request) { return { installed: await installed(request) }; },
-  async uninstall(request) { const removed = await removeNamedEntry(configPath(request), "mcp"); return { removed, installed: await installed(request) }; }
-};
+  load: async (request, registration) => jsonRegistrationStore(await configPath(request), "mcp", registration.serverName, readJsonc)
+});
 if (isDirectInvocation(import.meta.url)) await runAdapterCli(adapter);

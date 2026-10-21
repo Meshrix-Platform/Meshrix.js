@@ -1,3 +1,4 @@
+import { nativeCapability } from "@meshrix/client-adapter-kit";
 import { MCP_NPM_PACKAGE_VERSION } from "../http-mcp-adapter-constants.ts";
 
 export const MCP_CLIENT_ADAPTER_PROTOCOL: any = "v0.0.1:meshrix:client-adapter-json-stdio-1";
@@ -19,7 +20,8 @@ function trustedAdapter(target?: any, label?: any) : any {
   return Object.freeze({
     target,
     label,
-    priority: true,
+    priority: nativeCapability(target).supported,
+    nativeRegistration: nativeCapability(target),
     locations: Object.freeze(["local"]),
     adapter: Object.freeze({
       packageName,
@@ -41,7 +43,7 @@ export const MCP_CLIENT_TARGETS: readonly any[] = Object.freeze([
   trustedAdapter("antigravity", "Antigravity"),
   trustedAdapter("opencode", "OpenCode"),
   trustedAdapter("pi", "Pi"),
-  trustedAdapter("kimi", "Kimi CLI")
+  trustedAdapter("kimi", "Kimi Code")
 ]);
 
 export const MCP_SUPPORTED_TARGETS: any = Object.freeze(MCP_CLIENT_TARGETS.map((item?: any) : any => item.target));
@@ -53,7 +55,7 @@ export const MCP_TARGET_LABELS: any = Object.freeze(Object.fromEntries(
   MCP_CLIENT_TARGETS.map((item?: any) : any => [item.target, item.label])
 ));
 export const MCP_TARGET_INSTALL_MODES: any = Object.freeze(Object.fromEntries(
-  MCP_CLIENT_TARGETS.map((item?: any) : any => [item.target, "external-client-adapter"])
+  MCP_CLIENT_TARGETS.map((item?: any) : any => [item.target, "native-remote-mcp"])
 ));
 export const MCP_TARGET_LOCATIONS: any = Object.freeze(Object.fromEntries(
   MCP_CLIENT_TARGETS.map((item?: any) : any => [item.target, item.locations])
@@ -64,22 +66,24 @@ export function mcpClientAdapterForTarget(target?: any) : any {
 }
 
 export function mcpSupportedTargetDetails() : any {
-  return MCP_CLIENT_TARGETS.map(({ target, label, priority, locations, adapter }: Record<string, any>) : any => ({
+  return MCP_CLIENT_TARGETS.map(({ target, label, priority, locations, adapter, nativeRegistration }: Record<string, any>) : any => ({
     target,
     label,
     priority,
-    installMode: "external-client-adapter",
+    installMode: "native-remote-mcp",
+    nativeRegistration,
     locations: [...locations],
     adapter: { ...adapter }
   }));
 }
 
 export function mcpPublicSupportedTargetDetails() : any {
-  return MCP_CLIENT_TARGETS.map(({ target, label, priority, locations }: Record<string, any>) : any => ({
+  return MCP_CLIENT_TARGETS.map(({ target, label, priority, locations, nativeRegistration }: Record<string, any>) : any => ({
     target,
     label,
     priority,
-    installMode: "external-client-adapter",
+    installMode: "native-remote-mcp",
+    nativeRegistration,
     locations: [...locations]
   }));
 }

@@ -1,302 +1,156 @@
 import {
-  DEFAULT_TOKEN_ENV,
-  packageInfo,
-  PRIORITY_INSTALL_TARGET,
-  PRIORITY_INSTALL_TARGETS,
-  SUPPORTED_TARGETS,
-  supportedTargetDetails
+  DEFAULT_TOKEN_ENV, packageInfo,
+  PRIORITY_INSTALL_TARGETS, SUPPORTED_TARGETS, supportedTargetDetails
 } from "./constants.ts";
+import { MCP_SERVER_NAME, nativeCapability } from "@meshrix/client-adapter-kit";
 import { normalizeBaseUrl, option } from "./basic-utils.ts";
 import { explicitBaseUrl } from "./discovery.ts";
 import { shellQuote } from "./connector-process.ts";
+
+const priorityTargets = PRIORITY_INSTALL_TARGETS.filter((target: string) => nativeCapability(target).supported);
 
 export function npmPackageCommand(command = ""): string {
   const executable = `npx --yes --package ${packageInfo.name}@${packageInfo.version} meshrix-mcp`;
   return command ? `${executable} ${command}` : executable;
 }
 
-export function shellCommandForInstall({
-  target = "codex",
-  includeUrl = false,
-  baseUrl = "http://127.0.0.1:7228",
-  includeToken = false,
-  tokenEnv = ""
-}: Record<string, any> = {}) : any {
-  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "install", "--target", target];
-  if (includeUrl) {
-    parts.push("--url", shellQuote(baseUrl));
-  }
-  if (tokenEnv && tokenEnv !== DEFAULT_TOKEN_ENV) {
-    parts.push("--token-env", shellQuote(tokenEnv));
-  }
-  if (includeToken) {
-    parts.push("--token-stdin");
-  }
-  parts.push("--json");
-  return parts.join(" ");
-}
-
-export function commandGuidanceBaseUrl(options: Record<string, any> = {}) : any {
+export function commandGuidanceBaseUrl(options: Record<string, any> = {}): string {
   return normalizeBaseUrl(option(options, "resolved-url", explicitBaseUrl(options)));
 }
 
-export function commandGuidanceContext(options: Record<string, any> = {}) : any {
+export function commandGuidanceContext(options: Record<string, any> = {}): Record<string, any> {
   return {
     baseUrl: commandGuidanceBaseUrl(options),
-    tokenEnv: String(option(options, "token-env", DEFAULT_TOKEN_ENV))
+    tokenEnv: String(option(options, "token-env", DEFAULT_TOKEN_ENV)),
+    serverName: String(option(options, "server-name", MCP_SERVER_NAME))
   };
 }
 
-export function appendGuidanceContextArgs(parts?: any, { baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV, includeUrl = false }: Record<string, any> = {}) : any {
-  const normalizedBaseUrl: any = normalizeBaseUrl(baseUrl);
-  if (includeUrl && normalizedBaseUrl) {
-    parts.push("--url", shellQuote(normalizedBaseUrl));
-  }
-  if (tokenEnv && tokenEnv !== DEFAULT_TOKEN_ENV) {
-    parts.push("--token-env", shellQuote(tokenEnv));
-  }
+export function appendGuidanceContextArgs(parts: string[], { baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV, serverName = MCP_SERVER_NAME, includeUrl = false }: Record<string, any> = {}): string[] {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  if (includeUrl && normalizedBaseUrl) parts.push("--url", shellQuote(normalizedBaseUrl));
+  if (tokenEnv) parts.push("--token-env", shellQuote(tokenEnv));
+  if (serverName !== MCP_SERVER_NAME) parts.push("--server-name", shellQuote(serverName));
   return parts;
 }
 
-export function shellCommandForScan({ includeUrl = false, baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV }: Record<string, any> = {}) : any {
-  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "scan"];
-  appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv });
+function contextualCommand(command: string, context: Record<string, any> = {}, args: string[] = []): string {
+  const parts = [npmPackageCommand(command), ...args];
+  appendGuidanceContextArgs(parts, context);
   parts.push("--json");
   return parts.join(" ");
 }
 
-export function shellCommandForDiscoverLocal({ includeUrl = false, baseUrl = "" }: Record<string, any> = {}) : any {
-  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "discover-local"];
-  appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv: DEFAULT_TOKEN_ENV });
-  parts.push("--json");
-  return parts.join(" ");
+export function shellCommandForInstall({ target = "codex", ...context }: Record<string, any> = {}): string {
+  return contextualCommand("install", context, ["--target", shellQuote(target)]);
 }
-
-export function shellCommandForDoctor({
-  includeToken = false,
-  includeUrl = false,
-  baseUrl = "",
-  tokenEnv = DEFAULT_TOKEN_ENV
-}: Record<string, any> = {}) : any {
-  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "doctor"];
-  appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv });
-  if (includeToken) {
-    parts.push("--token-stdin");
-  }
-  parts.push("--json");
-  return parts.join(" ");
+export function shellCommandForScan(context: Record<string, any> = {}): string {
+  return contextualCommand("scan", context);
 }
-
-export function shellCommandForUninstall({ target = "codex", includeUrl = false, baseUrl = "" }: Record<string, any> = {}) : any {
-  const parts: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "uninstall", "--target", target];
-  appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv: DEFAULT_TOKEN_ENV });
-  parts.push("--json");
-  return parts.join(" ");
+export function shellCommandForDiscoverLocal({ includeUrl = false, baseUrl = "" }: Record<string, any> = {}): string {
+  return contextualCommand("discover-local", { includeUrl, baseUrl, tokenEnv: "" });
 }
-
-export function shellCommandForServerConfig({ baseUrl = "http://127.0.0.1:7228" }: Record<string, any> = {}) : any {
+export function shellCommandForDoctor({ includeToken = false, ...context }: Record<string, any> = {}): string {
+  return contextualCommand("doctor", context, includeToken ? ["--token-stdin"] : []);
+}
+export function shellCommandForUninstall({ target = "codex", ...context }: Record<string, any> = {}): string {
+  return contextualCommand("uninstall", context, ["--target", shellQuote(target)]);
+}
+export function shellCommandForServerConfig({ baseUrl = "http://127.0.0.1:7228" }: Record<string, any> = {}): string {
   return npmPackageCommand(`server-config --set --url ${shellQuote(normalizeBaseUrl(baseUrl) || "http://127.0.0.1:7228")}`);
 }
 
-export function npmInstallGuidance({ includeUrl = false, baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV }: Record<string, any> = {}) : any {
-  const command: any = npmPackageCommand();
-  const contextArgs: any = [
-    includeUrl && baseUrl ? ` --url ${shellQuote(baseUrl)}` : "",
-    tokenEnv && tokenEnv !== DEFAULT_TOKEN_ENV ? ` --token-env ${shellQuote(tokenEnv)}` : ""
-  ].join("");
+export function npmInstallGuidance(context: Record<string, any> = {}): Record<string, any> {
+  const args = appendGuidanceContextArgs([], context).join(" ");
   return {
-    installCommand: contextArgs ? `${command} install${contextArgs}` : `${command} install`,
-    clientInstallJsonCommand: `${command} install --target codex${contextArgs} --json`,
-    autoInstallCommand: `${command} install --target auto${contextArgs} --json`,
-    priorityInstallCommand: `${command} install --target ${PRIORITY_INSTALL_TARGET}${contextArgs} --json`,
-    uninstallCommand: `${command} uninstall --target codex${contextArgs} --json`
+    installCommand: `${npmPackageCommand("install")}${args ? ` ${args}` : ""}`,
+    clientInstallJsonCommand: shellCommandForInstall({ ...context, target: "codex" }),
+    autoInstallCommand: shellCommandForInstall({ ...context, target: "auto" }),
+    priorityInstallCommand: shellCommandForInstall({ ...context, target: priorityTargets.join(",") }),
+    uninstallCommand: shellCommandForUninstall({ ...context, target: "codex" })
   };
 }
 
-export function installGuidanceMetadata({ includeUrl = false, baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV }: Record<string, any> = {}) : any {
-  const npmGuidance: any = npmInstallGuidance({ includeUrl, baseUrl, tokenEnv });
+export function installGuidanceMetadata(context: Record<string, any> = {}): Record<string, any> {
   return {
-    priorityTargets: [...PRIORITY_INSTALL_TARGETS],
-    supportedTargets: [...SUPPORTED_TARGETS],
-    supportedTargetDetails: supportedTargetDetails(),
-    ...npmGuidance,
-    discoverCommand: shellCommandForDiscoverLocal({ includeUrl, baseUrl }),
-    scanCommand: shellCommandForScan({ includeUrl, baseUrl, tokenEnv }),
-    doctorCommand: shellCommandForDoctor({ includeUrl, baseUrl, tokenEnv }),
-    clientInstallJsonCommand: shellCommandForInstall({ target: "<client>", includeUrl, baseUrl, tokenEnv }),
-    autoInstallCommand: shellCommandForInstall({ target: "auto", includeUrl, baseUrl, tokenEnv }),
-    priorityInstallCommand: shellCommandForInstall({
-      target: PRIORITY_INSTALL_TARGET,
-      includeUrl,
-      baseUrl,
-      tokenEnv
-    })
+    priorityTargets: [...priorityTargets],
+    supportedTargets: SUPPORTED_TARGETS.filter((target: string) => nativeCapability(target).supported),
+    supportedTargetDetails: supportedTargetDetails().map((detail: any) => ({ ...detail, nativeRegistration: nativeCapability(detail.target) })),
+    ...npmInstallGuidance(context),
+    discoverCommand: shellCommandForDiscoverLocal(context),
+    scanCommand: shellCommandForScan(context),
+    doctorCommand: shellCommandForDoctor(context),
+    clientInstallJsonCommand: shellCommandForInstall({ ...context, target: "<client>" })
   };
 }
 
-export function commandFailureGuidance({ command = "", message = "", options = {} }: Record<string, any> = {}) : any {
-  const normalized: any = String(message || "");
-  const lower: any = normalized.toLowerCase();
-  const { baseUrl, tokenEnv } = commandGuidanceContext(options);
-  const includeUrl: any = Boolean(baseUrl);
-  if (/unsupported install target/i.test(normalized)) {
-    const scanCommand: any = shellCommandForScan({ includeUrl, baseUrl, tokenEnv });
-    return {
-      errorCode: "UNSUPPORTED_TARGET",
-      nextCommand: scanCommand,
-      repairCommands: [
-        scanCommand,
-        shellCommandForInstall({ target: "auto", includeUrl, baseUrl, tokenEnv })
-      ],
-      ...installGuidanceMetadata({ includeUrl, baseUrl, tokenEnv })
-    };
+export function commandFailureGuidance({ command = "", message = "", options = {} }: Record<string, any> = {}): Record<string, any> {
+  const lower = String(message).toLowerCase();
+  const context = commandGuidanceContext(options);
+  context.includeUrl = Boolean(context.baseUrl);
+  const scan = shellCommandForScan(context);
+  const install = shellCommandForInstall({ ...context, target: String(option(options, "target", "auto")) });
+  const doctor = shellCommandForDoctor(context);
+  const metadata = installGuidanceMetadata(context);
+  if (lower.includes("unsupported install target")) return { ...metadata, errorCode: "UNSUPPORTED_TARGET", nextCommand: scan, repairCommands: [scan] };
+  if (/no signed meshrix(?:lite)? mcp hub was discovered/u.test(lower)) {
+    const discover = shellCommandForDiscoverLocal(context);
+    return { ...metadata, errorCode: "MESHRIX_HUB_NOT_DISCOVERED", nextCommand: discover, repairCommands: [discover, shellCommandForServerConfig({ baseUrl: context.baseUrl || "http://127.0.0.1:7228" })] };
   }
-	if (/no signed meshrix(?:lite)? mcp hub was discovered/.test(lower)) {
-    const discoverCommand: any = shellCommandForDiscoverLocal({ includeUrl, baseUrl });
-    const fallbackBaseUrl: any = baseUrl || "http://127.0.0.1:7228";
-    return {
-      errorCode: "MESHRIX_HUB_NOT_DISCOVERED",
-      nextCommand: discoverCommand,
-      repairCommands: [
-        discoverCommand,
-        shellCommandForServerConfig({ baseUrl: fallbackBaseUrl }),
-        shellCommandForInstall({ target: "auto", includeUrl: true, baseUrl: fallbackBaseUrl, tokenEnv })
-      ],
-      ...installGuidanceMetadata({ includeUrl: true, baseUrl: fallbackBaseUrl, tokenEnv })
-    };
-  }
-  if (lower.includes("missing api key")) {
-    const target: any = String(option(options, "target", "codex")) || "codex";
-    const urlArgs: any = baseUrl ? ` --url ${shellQuote(baseUrl)}` : "";
-    return {
-      errorCode: "MISSING_API_KEY",
-      nextCommand: shellCommandForInstall({ target, includeToken: true, includeUrl: Boolean(baseUrl), baseUrl, tokenEnv }),
-      repairCommands: [
-        shellCommandForInstall({ target, includeToken: true, includeUrl: Boolean(baseUrl), baseUrl, tokenEnv })
-      ],
-      ...installGuidanceMetadata({ includeUrl: Boolean(baseUrl), baseUrl, tokenEnv })
-    };
-  }
+  if (lower.includes("missing api key") || lower.includes("credential reference")) return {
+    ...metadata, errorCode: command === "install" ? "CREDENTIAL_REFERENCE_REQUIRED" : "MISSING_API_KEY",
+    nextCommand: command === "install" ? install : shellCommandForDoctor({ ...context, includeToken: true }),
+    repairCommands: command === "install" ? [install] : [doctor]
+  };
   if (lower.includes("interactive mode requires a tty")) {
-    const uninstallCommand: any = shellCommandForUninstall({ target: "codex", includeUrl, baseUrl });
-    return {
-      errorCode: "NON_INTERACTIVE_TARGET_REQUIRED",
-      nextCommand: uninstallCommand,
-      repairCommands: [
-        shellCommandForScan({ includeUrl, baseUrl, tokenEnv }),
-        uninstallCommand
-      ],
-      ...installGuidanceMetadata({ includeUrl, baseUrl, tokenEnv })
-    };
+    const uninstall = shellCommandForUninstall(context);
+    return { ...metadata, errorCode: "NON_INTERACTIVE_TARGET_REQUIRED", nextCommand: uninstall, repairCommands: [scan, uninstall] };
   }
-  return {
-    errorCode: "COMMAND_FAILED",
-    nextCommand: command === "install"
-      ? shellCommandForInstall({ target: "auto", includeUrl, baseUrl, tokenEnv })
-      : shellCommandForDoctor({ includeUrl, baseUrl, tokenEnv }),
-    repairCommands: [
-      shellCommandForDoctor({ includeUrl, baseUrl, tokenEnv }),
-      shellCommandForScan({ includeUrl, baseUrl, tokenEnv })
-    ],
-    ...installGuidanceMetadata({ includeUrl, baseUrl, tokenEnv })
-  };
+  return { ...metadata, errorCode: "COMMAND_FAILED", nextCommand: command === "install" ? install : doctor, repairCommands: [doctor, scan] };
 }
 
-export function commandOptionArgs(options: Record<string, any> = {}) : any {
-  const args: any[] = [];
-  for (const [key, value] of (Object.entries(options) as [string, any][])) {
-    if (key.startsWith("__") || key === "execution-location" || value === undefined || value === null || value === "") {
-      continue;
-    }
+export function commandOptionArgs(options: Record<string, any> = {}): string[] {
+  const args: string[] = [];
+  for (const [key, value] of Object.entries(options)) {
+    if (key.startsWith("__") || key === "execution-location" || value === undefined || value === null || value === "") continue;
     args.push(`--${key}`, shellQuote(value));
   }
   return args;
 }
 
-export function candidateInstallCommand(candidate?: any, settings?: any) : any {
-  const args: any[] = ["npx", "--yes", "--package", `${packageInfo.name}@${packageInfo.version}`, "meshrix-mcp", "install", "--target", candidate.target];
-  if (settings.baseUrl) {
-    args.push("--url", shellQuote(settings.baseUrl));
-  }
-  args.push(...commandOptionArgs(candidate.optionOverrides || {}));
-  if (settings.tokenEnv && settings.tokenEnv !== DEFAULT_TOKEN_ENV) {
-    args.push("--token-env", shellQuote(settings.tokenEnv));
-  }
-  args.push("--json");
-  return args.join(" ");
+export function candidateInstallCommand(candidate: any, settings: any): string {
+  return contextualCommand("install", { ...settings, includeUrl: Boolean(settings.baseUrl) }, ["--target", shellQuote(candidate.target), ...commandOptionArgs(candidate.optionOverrides || {})]);
 }
-
-export function candidateRepairCommand(candidate?: any, settings?: any) : any {
-  return shellCommandForInstall({
-    target: candidate.target,
-    includeUrl: Boolean(settings.baseUrl),
-    baseUrl: settings.baseUrl || "http://127.0.0.1:7228",
-    tokenEnv: settings.tokenEnv || DEFAULT_TOKEN_ENV
-  });
+export function candidateRepairCommand(candidate: any, settings: any): string {
+  return shellCommandForInstall({ ...settings, includeUrl: Boolean(settings.baseUrl), target: candidate.target });
 }
-
-export function candidateDoctorCommand(settings?: any) : any {
-  return shellCommandForDoctor({
-    includeUrl: Boolean(settings.baseUrl),
-    baseUrl: settings.baseUrl,
-    tokenEnv: settings.tokenEnv || DEFAULT_TOKEN_ENV
-  });
+export function candidateDoctorCommand(settings: any): string {
+  return shellCommandForDoctor({ ...settings, includeUrl: Boolean(settings.baseUrl) });
 }
-
-export function withInstallCandidateGuidance(candidate?: any, settings?: any) : any {
+export function withInstallCandidateGuidance(candidate: any, settings: any): Record<string, any> {
+  const supported = candidate.nativeRegistration?.supported === true;
   return {
     ...candidate,
-    installCommand: candidate.status === "detected" ? candidateInstallCommand(candidate, settings) : "",
-    repairCommand: candidate.status === "detected" ? "" : candidateRepairCommand(candidate, settings),
+    installCommand: candidate.status === "detected" && supported ? candidateInstallCommand(candidate, settings) : "",
+    repairCommand: candidate.status !== "detected" && supported ? candidateRepairCommand(candidate, settings) : "",
     doctorCommand: candidateDoctorCommand(settings)
   };
 }
 
-export function doctorGuidance(checks: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-  const installedTargets: any = checks.deviceManifest?.installedTargets || [];
-  const { baseUrl, tokenEnv } = commandGuidanceContext(options);
-  const includeUrl: any = Boolean(baseUrl);
-  const discoverCommand: any = shellCommandForDiscoverLocal({ includeUrl, baseUrl });
-  const scanCommand: any = shellCommandForScan({ includeUrl, baseUrl, tokenEnv });
-  const installAutoCommand: any = shellCommandForInstall({ target: "auto", includeUrl, baseUrl, tokenEnv });
-  const doctorWithTokenCommand: any = shellCommandForDoctor({ includeToken: true, includeUrl, baseUrl, tokenEnv });
+export function doctorGuidance(checks: Record<string, any> = {}, options: Record<string, any> = {}): Record<string, any> {
+  const context = commandGuidanceContext(options);
+  context.includeUrl = Boolean(context.baseUrl);
   if (!checks.signedDiscovery?.ok || !checks.discovery?.ok || !checks.discover?.ok) {
-    return {
-      nextCommand: discoverCommand,
-      repairCommands: [
-        discoverCommand,
-        shellCommandForServerConfig({ baseUrl: baseUrl || "http://127.0.0.1:7228" })
-      ]
-    };
+    const discover = shellCommandForDiscoverLocal(context);
+    return { nextCommand: discover, repairCommands: [discover, shellCommandForServerConfig({ baseUrl: context.baseUrl || "http://127.0.0.1:7228" })] };
   }
-  if (installedTargets.length === 0) {
-    return {
-      nextCommand: scanCommand,
-      repairCommands: [
-        scanCommand,
-        installAutoCommand
-      ]
-    };
+  if (!(checks.deviceManifest?.installedTargets || []).length) {
+    const scan = shellCommandForScan(context);
+    return { nextCommand: scan, repairCommands: [scan, shellCommandForInstall({ ...context, target: "auto" })] };
   }
-  if (checks.toolsList?.skipped || checks.systemHealth?.skipped) {
-    return {
-      nextCommand: doctorWithTokenCommand,
-      repairCommands: [
-        doctorWithTokenCommand
-      ]
-    };
+  if (checks.toolsList?.skipped || checks.systemHealth?.skipped || !checks.toolsList?.ok || !checks.systemHealth?.ok) {
+    const doctor = shellCommandForDoctor({ ...context, includeToken: true });
+    return { nextCommand: doctor, repairCommands: [doctor] };
   }
-  if (!checks.toolsList?.ok || !checks.systemHealth?.ok) {
-    return {
-      nextCommand: installAutoCommand,
-      repairCommands: [
-        installAutoCommand,
-        doctorWithTokenCommand
-      ]
-    };
-  }
-  return {
-    nextCommand: "",
-    repairCommands: []
-  };
+  return { nextCommand: "", repairCommands: [] };
 }

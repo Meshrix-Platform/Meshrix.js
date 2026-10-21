@@ -1071,7 +1071,7 @@
       "id": "regression.platform-client-adapters",
       "label": "Agent client adapter adaptation",
       "owner": "platform",
-      "package": "protocols",
+      "package": "repo",
       "level": "integration",
       "command": "npm",
       "args": [
@@ -1878,7 +1878,9 @@
         "tests/vitest/server/console-domain-operation-executor-auth.test.ts",
         "tests/vitest/server/api-key-distribution.test.ts",
         "tests/vitest/server/operation-permission-grant-security.test.ts",
-        "tests/vitest/server/http-server-routes-mcp-contract.test.ts"
+        "tests/vitest/server/http-server-routes-mcp-contract.test.ts",
+        "tests/vitest/server/mcp-native-http.test.ts",
+        "tests/vitest/server/catalog-convergence-partitions.test.ts"
       ],
       "sideEffects": "temp-files",
       "requiredServices": [],
@@ -1888,6 +1890,9 @@
       "triggerPaths": [
         "packages/server-runtime/src",
         "packages/protocols/http",
+        "packages/protocols/mcp/modern-downstream",
+        "packages/protocols/mcp/notifications.ts",
+        "apps/server/runtime",
         "packages/contracts/src",
         "tests/vitest/server",
         "docs/functionality/CORE-INGRESS-ADMISSION.md"
@@ -2226,7 +2231,7 @@
     },
     {
       "id": "gateway.mcp-session-lifecycle",
-      "label": "Managed upstream MCP session and cancellation contracts",
+      "label": "Native and modern downstream MCP, managed upstream sessions, and cancellation contracts",
       "owner": "platform",
       "package": "protocols",
       "level": "integration",
@@ -2236,6 +2241,8 @@
         "vitest",
         "--",
         "tests/vitest/gateway/modern-downstream/cancellation.test.ts",
+        "tests/vitest/gateway/modern-downstream/standard-http.test.ts",
+        "tests/vitest/gateway/modern-downstream/modern-downstream.test.ts",
         "tests/vitest/server/outbound-egress-policy.test.ts",
         "tests/vitest/server/upstream-mcp-session-manager.test.ts",
         "tests/vitest/server/upstream-endpoint-traffic-state.test.ts",
@@ -2795,7 +2802,7 @@
       "id": "downstream-mcp.installer-convergence",
       "label": "Downstream MCP installer and doctor convergence verifier",
       "owner": "platform",
-      "package": "protocols",
+      "package": "repo",
       "level": "integration",
       "command": "node",
       "args": [

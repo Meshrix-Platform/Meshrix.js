@@ -1318,12 +1318,16 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/plugins/client-adapter-components.mjs",
       "tools/plugins/smoke-test-client-adapters.mjs",
       "plugins/agents/**",
-      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts",
+      "packages/protocols/mcp/adapter/gateway-installer/lib/cli/**",
       "packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts",
       "tests/plugins/client-adapter-contract.test.mjs",
       "tests/plugins/client-adapters.test.mjs",
-      "tests/plugins/pi-extension.test.mjs",
-      "tests/vitest/server/pi-adapter-installed-component.test.ts"
+      "tests/vitest/server/pi-adapter-installed-component.test.ts",
+      "tests/vitest/server/client-adapter-runner.test.ts",
+      "tests/vitest/server/mcp-installer-api-key-only.test.ts",
+      "tests/vitest/server/mcp-installer-portability.test.ts",
+      "tests/vitest/server/mcp-public-installer-command.test.ts",
+      "packages/protocols/mcp/modern-downstream/discovery.ts"
     ], outputs: [],
   },
   "verify:local-extension-package-closure": {

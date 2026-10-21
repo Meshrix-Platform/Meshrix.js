@@ -1,8 +1,9 @@
+import { nativeCapability } from "@meshrix/client-adapter-kit";
 import { MCP_CLIENT_TARGETS } from "../../mcp-release-targets.ts";
 
 import { notDetectedTargetDetail, targetLabel } from "./basic-utils.ts";
 import {
-  clientAdapterConnectorRequest,
+  clientAdapterRegistrationRequest,
   describeClientAdapter,
   runClientAdapter
 } from "./client-adapter-runner.ts";
@@ -49,11 +50,16 @@ async function adapterDescriptor(target?: any) : Promise<any> {
 }
 
 export async function resolveClientAdapterForTarget(target?: any, settings?: any, requestedClient: Record<string, any> = {}) : Promise<any> {
-  if (requestedClient?.command) return { ...requestedClient };
+  const client: Record<string, any> = {
+    ...(settings.clientConfigPath ? { configPath: settings.clientConfigPath } : {}),
+    ...(settings.clientConfigRoot ? { configRoot: settings.clientConfigRoot } : {}),
+    ...requestedClient
+  };
+  if (client.command) return client;
   const described: any = await adapterDescriptor(target);
   for (const commandName of described.result.commandNames) {
     const paths: any = await detectLocalCommandPaths(commandName);
-    if (paths[0]) return { command: paths[0] };
+    if (paths[0]) return { ...client, command: paths[0] };
   }
   return {};
 }
@@ -62,11 +68,7 @@ async function verifyCandidate(settings?: any, target?: any, client?: any) : Pro
   const executed: any = await runClientAdapter({
     target,
     action: "verify",
-    request: clientAdapterConnectorRequest({
-      baseUrl: settings.baseUrl,
-      tokenEnv: settings.tokenEnv,
-      client
-    })
+    request: clientAdapterRegistrationRequest({ ...settings, client })
   });
   return executed.result.installed === true;
 }
@@ -92,15 +94,11 @@ async function scanTarget(settings?: any, target?: any, explicitClient: Record<s
     ? [explicitClient.command]
     : (await Promise.all(described.result.commandNames.map((name?: any) : any => detectLocalCommandPaths(name)))).flat();
   for (const command of [...new Set<any>(commands)]) {
-      const client: Record<string, any> = { command };
+      const client: Record<string, any> = { ...explicitClient, command };
       const scanned: any = await runClientAdapter({
         target,
         action: "scan",
-        request: clientAdapterConnectorRequest({
-          baseUrl: settings.baseUrl,
-          tokenEnv: settings.tokenEnv,
-          client
-        })
+        request: clientAdapterRegistrationRequest({ ...settings, client })
       });
       if (scanned.result.available === false) continue;
       candidates.push({
@@ -110,6 +108,8 @@ async function scanTarget(settings?: any, target?: any, explicitClient: Record<s
         status: "detected",
         detail: command,
         installed: scanned.result.installed === true,
+        nativeRegistration: described.result.nativeRegistration,
+        registrationStatus: scanned.result.status,
         adapterPackage: described.adapter.packageName,
         optionOverrides: {
           "execution-location": "local",
@@ -127,9 +127,11 @@ export async function scanInstallTargets(options: Record<string, any> = {}) : Pr
   if (!options["no-scan"]) {
     for (const { target } of MCP_CLIENT_TARGETS) {
       try {
-        const explicitClient: any = explicitTarget === target && settings.clientCommand
-          ? { command: settings.clientCommand }
-          : {};
+        const explicitClient: any = explicitTarget === target ? {
+          ...(settings.clientCommand ? { command: settings.clientCommand } : {}),
+          ...(settings.clientConfigPath ? { configPath: settings.clientConfigPath } : {}),
+          ...(settings.clientConfigRoot ? { configRoot: settings.clientConfigRoot } : {})
+        } : {};
         for (const candidate of await scanTarget(settings, target, explicitClient)) mergeInstallCandidate(candidates, candidate);
       } catch (error: any) {
         candidates.push({
@@ -162,6 +164,6 @@ export async function scanInstallTargets(options: Record<string, any> = {}) : Pr
     hostOs: settings.hostOs,
     baseUrl: settings.baseUrl,
     mcpUrl: settings.baseUrl ? `${settings.baseUrl}/mcp` : "",
-    candidates: candidates.map((candidate?: any) : any => withInstallCandidateGuidance(candidate, settings))
+    candidates: candidates.map((candidate?: any) : any => withInstallCandidateGuidance({ ...candidate, nativeRegistration: candidate.nativeRegistration || nativeCapability(candidate.target) }, settings))
   };
 }

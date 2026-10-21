@@ -38,15 +38,18 @@ export function usage() : any {
     `                                Supported targets: ${SUPPORTED_TARGETS.join(", ")}.`,
     "  --url URL                     Explicit Meshrix.js base URL. Still requires signed MCP handshake.",
     "  --scan-ports LIST            Local ports to scan when --url is omitted. Default: 7228-7237.",
-    "  --token-stdin                 Read a pre-issued API Key from protected stdin.",
-    "  --token-env NAME              API Key environment variable. Default: MESHRIX_MCP_TOKEN.",
-    "  --no-verify                   Skip post-install MCP HTTP verification.",
+    "  --token-stdin                 Protected stdin for diagnostics/proxy/fetch; no native install custody handoff.",
+    "  --token-env NAME              Native client environment reference; default input name: MESHRIX_MCP_TOKEN.",
+    "  --server-name NAME            Native registration identity. Default: lico; use another name for another authorization.",
+    "  --no-verify                   Skip the installer's service probe (not a native-client connectivity test).",
     "  --json                        Emit JSON.",
     "  --pretty                      Pretty-print JSON output.",
     "  --no-env                      Do not persist discovery environment variables during register.",
     "  --discovery-file PATH         Registry file used by register/discover-local. Default: ~/.meshrix/mcp/servers.json.",
-    "  --auto-update                 Enable automatic push updates when installing (non-interactive mode).",
+    "  Native install never provisions persistent environment variables or the optional proxy's update subscription.",
     "  --client-command COMMAND      Explicit local client command or path for one selected target.",
+    "  --client-config PATH          Explicit native configuration file for one --target.",
+    "  --client-config-root PATH     Explicit native configuration directory for one --target.",
     "  --artifact URL_OR_ID          Gateway artifact URL or id downloaded by fetch.",
     "  --out PATH                    Output file written by fetch. Must not already exist.",
     "",
@@ -65,7 +68,7 @@ export function parseArgs(argv?: any) : any {
     "auto-update", "set", "refresh", "reset", "list"
   ]);
   const valueOptions: any = new Set<any>([
-    "target", "url", "scan-ports", "token-env", "discovery-file", "client-command",
+    "target", "url", "scan-ports", "token-env", "server-name", "discovery-file", "client-command", "client-config", "client-config-root",
     "artifact", "out", "name", "switch", "execution-location", "remote-kind"
   ]);
   const options: Record<string, any> = {};

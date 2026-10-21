@@ -1,30 +1,20 @@
 # Codex Agent Adapter
 
-Plugin ID: `agent-codex`
+Bundled private component: `@meshrix/agent-codex-adapter` (`agent-codex`).
 
-Status: `stable`
+Configures `[mcp_servers.<name>]` in `$CODEX_HOME/config.toml` (default
+`~/.codex/config.toml`), with `url` and
+`env_http_headers = { "X-Meshrix.js-Api-Key" = "SELECTED_ENV" }`.
+`client.configPath` and `client.configRoot` explicitly override the destination.
+TOML is parsed structurally; unrelated settings and matching server policies remain.
 
-Internal component: `@meshrix/agent-codex-adapter`
+Normal registration does not create a marketplace plugin. A positively identified
+former generated `lico@meshrix-local` duplicate for the same binding is disabled,
+without deleting plugin assets or unrelated marketplace state.
 
-Group: `agents`
+No raw key, Bearer credential, proxy process or credential store is installed.
+Uninstall removes only a matching registration. Configuration, external credential
+readiness and client connectivity are separate outcomes; see the
+[shared contract](../client-adapter-kit/README.md).
 
-This private first-party module is bundled with `meshrix.js` and included in
-the portable connector runtime. Both consumers use standard Node package
-resolution and invoke it only for an explicit target action.
-
-Codex MCP client adapter with JSON-stdio discovery, installation, verification, and removal.
-
-## Boundary
-
-This repository-local optional adapter integrates only through public Meshrix
-extension boundaries.
-
-## Meshrix Integration
-
-- target agent peer plugin configuration
-
-## Security
-
-- Use `secretRef` for credentials.
-- Do not commit provider runtime data, local operator paths, private endpoints, or token plaintext.
-- Agent-facing operations must be exposed through Operation Permission v1 after policy review.
+Native format: [official Codex MCP documentation](https://developers.openai.com/codex/mcp/).

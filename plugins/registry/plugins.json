@@ -45,7 +45,7 @@
       "types": [
         "client-peer-plugin"
       ],
-      "summary": "Antigravity peer adapter plugin.",
+      "summary": "Antigravity capability assessment; protected Meshrix header references remain unqualified.",
       "runtime": false,
       "adapter": true,
       "release": false,
@@ -105,7 +105,7 @@
       "types": [
         "client-peer-plugin"
       ],
-      "summary": "Kimi CLI peer adapter plugin.",
+      "summary": "Kimi Code capability assessment; protected Meshrix header registration is unsupported.",
       "runtime": false,
       "adapter": true,
       "release": false,
@@ -165,7 +165,7 @@
       "types": [
         "client-peer-plugin"
       ],
-      "summary": "Official Pi extension package for the governed Meshrix MCP connector.",
+      "summary": "Native remote Pi MCP registration with an explicit protected credential reference.",
       "runtime": false,
       "adapter": true,
       "release": false,

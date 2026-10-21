@@ -7,7 +7,6 @@ import {
 } from "./constants.ts";
 import { MCP_META_SERVER_INFO } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
 import { normalizeTarget, option } from "./basic-utils.ts";
-import { loadMcpApiKeyCredential } from "./credential-store.ts";
 import { writeServerConfigProfile, serverConfigCommand } from "./device-config.ts";
 import {
   discardConfiguredApiKeyEnvironment,
@@ -56,7 +55,7 @@ export async function registerCommand(options?: any) : Promise<any> {
   const env: any = deviceDiscoveryEnv({ baseUrl: settings.baseUrl, primaryPath: discoveryManifest });
   const tokenEnv: any = profile.tokenEnv || settings.tokenEnv;
   const includeUrl: any = Boolean(settings.baseUrl);
-  const guidance: any = installGuidanceMetadata({ includeUrl, baseUrl: settings.baseUrl, tokenEnv });
+  const guidance: any = installGuidanceMetadata({ includeUrl, baseUrl: settings.baseUrl, tokenEnv, serverName: settings.serverName });
   return {
     ok: true,
     packageName: packageInfo.name,
@@ -150,7 +149,7 @@ export async function doctorCommand(options?: any) : Promise<any> {
   const settings: any = installerOptions(resolvedOptions);
   const discovered: any = resolvedOptions.__meshrixDiscovery || null;
   const target: any = normalizeTarget(option(resolvedOptions, "target", process.env.MESHRIX_MCP_TARGET || ""));
-  const token: any = providedToken || await loadMcpApiKeyCredential({ target, baseUrl: settings.baseUrl });
+  const token: any = providedToken;
   const deviceManifestPath: any = discoveryRegistryPath(resolvedOptions);
   const discovery: any = {
     ok: Boolean(discovered?.ok),
@@ -193,13 +192,13 @@ export async function doctorCommand(options?: any) : Promise<any> {
       skipped: true,
       toolCount: 0,
       stableOutletSet: false,
-      reason: "Install a target, set MESHRIX_MCP_TOKEN, or use --token-stdin to verify tools/list."
+      reason: "Provide the selected --token-env or --token-stdin value to verify tools/list; native registration does not store credentials."
     },
     systemHealth: {
       ok: false,
       skipped: true,
       healthy: false,
-      reason: "Install a target, set MESHRIX_MCP_TOKEN, or use --token-stdin to verify tools/call system.health."
+      reason: "Provide the selected --token-env or --token-stdin value to verify tools/call system.health; native registration does not store credentials."
     },
     deviceManifest: {
       ok: false,
@@ -249,7 +248,7 @@ export async function doctorCommand(options?: any) : Promise<any> {
 
   const manifest: any = await readJson(deviceManifestPath, null);
   if (manifest) {
-    const server: any = manifest.servers?.[MCP_SERVER_NAME] || {};
+    const server: any = manifest.servers?.[settings.serverName] || {};
     checks.deviceManifest = {
       ok: true,
       exists: true,
@@ -257,13 +256,13 @@ export async function doctorCommand(options?: any) : Promise<any> {
       httpUrl: server.httpUrl || "",
       connector: server.connector || null,
       installedTargets: (Object.entries(server.targets || {}) as [string, any][])
-        .filter(([, status]: any[]) : any => status?.status === "installed")
+        .filter(([, status]: any[]) : any => ["configured", "installed"].includes(status?.status))
         .map(([target]: any[]) : any => target)
     };
   }
 
   const guidance: any = doctorGuidance(checks, resolvedOptions);
-  const { baseUrl, tokenEnv } = commandGuidanceContext(resolvedOptions);
+  const { baseUrl, tokenEnv, serverName } = commandGuidanceContext(resolvedOptions);
   const includeUrl: any = Boolean(baseUrl);
   return {
     ok: checks.signedDiscovery.ok
@@ -273,7 +272,7 @@ export async function doctorCommand(options?: any) : Promise<any> {
     packageName: packageInfo.name,
     packageVersion: packageInfo.version,
     sharedHub: checks.discover.sharedHub,
-    ...installGuidanceMetadata({ includeUrl, baseUrl, tokenEnv }),
+    ...installGuidanceMetadata({ includeUrl, baseUrl, tokenEnv, serverName }),
     ...guidance,
     checks
   };

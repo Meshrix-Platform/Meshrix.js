@@ -1,30 +1,21 @@
 # Antigravity Agent Adapter
 
-Plugin ID: `agent-antigravity`
+Bundled private component: `@meshrix/agent-antigravity-adapter` (`agent-antigravity`).
 
-Status: `stable`
+Antigravity documents remote `mcpServers.<name>` entries with `serverUrl` and
+headers, not `url` or `httpUrl`. Its current documented configuration location is
+`~/.gemini/config/mcp_config.json`; `client.configPath`/`client.configRoot` may select
+another location explicitly.
 
-Internal component: `@meshrix/agent-antigravity-adapter`
+A protected reference for the selected static key in `X-Meshrix.js-Api-Key` has not
+been qualified. Native install therefore returns
+`unsupported_protected_header_reference` before configuration access. It does not
+guess interpolation syntax or substitute plaintext, Google ADC, OAuth, another
+identity, or a local proxy. Scan/verify cannot claim supported native configuration.
 
-Group: `agents`
+Removal only affects an exactly identified former generated proxy for the same
+binding in the explicitly selected file; credentials and unrelated entries remain.
+The former configuration location is not scanned or migrated implicitly.
 
-This private first-party module is bundled with `meshrix.js` and included in
-the portable connector runtime. Both consumers use standard Node package
-resolution and invoke it only for an explicit target action.
-
-Antigravity MCP client adapter with JSON-stdio discovery, installation, verification, and removal.
-
-## Boundary
-
-This repository-local optional adapter integrates only through public Meshrix
-extension boundaries.
-
-## Meshrix Integration
-
-- target agent peer plugin configuration
-
-## Security
-
-- Use `secretRef` for credentials.
-- Do not commit provider runtime data, local operator paths, private endpoints, or token plaintext.
-- Agent-facing operations must be exposed through Operation Permission v1 after policy review.
+See the [shared contract](../client-adapter-kit/README.md) and
+[official MCP documentation](https://antigravity.google/docs/mcp).

@@ -22,5 +22,5 @@
     "verify",
     "uninstall"
   ],
-  "installMode": "external-client-adapter"
+  "installMode": "native-remote-mcp"
 }

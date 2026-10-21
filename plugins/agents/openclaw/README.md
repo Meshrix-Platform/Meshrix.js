@@ -1,30 +1,22 @@
 # OpenClaw Agent Adapter
 
-Plugin ID: `agent-openclaw`
+Bundled private component: `@meshrix/agent-openclaw-adapter` (`agent-openclaw`).
 
-Status: `stable`
+Configures `mcp.servers.<name>` with `url`, `transport: "streamable-http"`, and
+`headers: { "X-Meshrix.js-Api-Key": "${SELECTED_ENV}" }`. Omitting the transport
+would select SSE. The qualified OpenClaw 2026.9.4 header schema accepts scalar
+values, not generic SecretRef objects. `ironclaw` and `zeroclaw` are not qualified
+aliases and are not selected by this adapter.
 
-Internal component: `@meshrix/agent-openclaw-adapter`
+The adapter reads authored definitions with `mcp show --json`, and writes one merged
+entry using `config set --batch-file` with a private temporary file removed in
+`finally`. Existing unrelated settings are not passed on the command line. Explicit
+`client.configPath`/`client.configRoot` map to OpenClaw's configuration/state overrides.
 
-Group: `agents`
+Uninstall first verifies the binding and rejects OAuth/conflicting entries before
+`mcp unset`; it does not remove independent native credentials. No Agent, connection
+probe, local proxy or persistent environment provisioner is launched.
 
-This private first-party module is bundled with `meshrix.js` and included in
-the portable connector runtime. Both consumers use standard Node package
-resolution and invoke it only for an explicit target action.
-
-OpenClaw MCP client adapter with JSON-stdio discovery, installation, verification, and removal.
-
-## Boundary
-
-This repository-local optional adapter integrates only through public Meshrix
-extension boundaries.
-
-## Meshrix Integration
-
-- target agent peer plugin configuration
-
-## Security
-
-- Use `secretRef` for credentials.
-- Do not commit provider runtime data, local operator paths, private endpoints, or token plaintext.
-- Agent-facing operations must be exposed through Operation Permission v1 after policy review.
+See the [shared contract](../client-adapter-kit/README.md),
+[registry documentation](https://docs.openclaw.ai/cli/mcp/registry) and
+[transport documentation](https://docs.openclaw.ai/cli/mcp/transports).

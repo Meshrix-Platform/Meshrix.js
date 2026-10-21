@@ -1,9 +1,9 @@
+import { nativeCapability } from "@meshrix/client-adapter-kit";
 import {
   DEFAULT_TOKEN_ENV,
   MCP_INTERFACE_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME,
-  PRIORITY_INSTALL_TARGET,
   PRIORITY_INSTALL_TARGETS,
   SUPPORTED_TARGETS,
   packageInfo,
@@ -27,6 +27,7 @@ import { shellQuote } from "./connector-process.ts";
 
 export function buildDeviceHubManifest({
   baseUrl,
+  serverName = MCP_SERVER_NAME,
   targets,
   tokenEnv = DEFAULT_TOKEN_ENV,
   discoveryPath = discoveryRegistryPath()
@@ -38,12 +39,13 @@ export function buildDeviceHubManifest({
   const env: any = deviceDiscoveryEnv({ baseUrl, primaryPath: discoveryPath });
   const packageExec: any = `npx --yes --package ${packageInfo.name}@${packageInfo.version} meshrix-mcp`;
   const urlArgs: any = ` --url ${shellQuote(baseUrl)}`;
-  const tokenEnvArgs: any = tokenEnv && tokenEnv !== DEFAULT_TOKEN_ENV ? ` --token-env ${shellQuote(tokenEnv)}` : "";
+  const tokenEnvArgs: any = ` --token-env ${shellQuote(tokenEnv)} --server-name ${shellQuote(serverName)}`;
   const discoverCommand: any = `${packageExec} discover-local${urlArgs} --json`;
   const interactiveInstallCommand: any = `${packageExec} install${urlArgs}${tokenEnvArgs}`;
   const clientInstallJsonCommand: any = `${packageExec} install --target <client>${urlArgs}${tokenEnvArgs} --json`;
   const autoInstallCommand: any = `${packageExec} install --target auto${urlArgs}${tokenEnvArgs} --json`;
-  const priorityInstallCommand: any = `${packageExec} install --target ${PRIORITY_INSTALL_TARGET}${urlArgs}${tokenEnvArgs} --json`;
+  const priorityTargets = PRIORITY_INSTALL_TARGETS.filter((target: string) => nativeCapability(target).supported);
+  const priorityInstallCommand: any = `${packageExec} install --target ${priorityTargets.join(",")}${urlArgs}${tokenEnvArgs} --json`;
   const scanCommand: any = `${packageExec} scan${urlArgs}${tokenEnvArgs} --json`;
   const doctorCommand: any = `${packageExec} doctor${urlArgs}${tokenEnvArgs} --json`;
   return {
@@ -71,7 +73,7 @@ export function buildDeviceHubManifest({
       ]
     },
     servers: {
-      [MCP_SERVER_NAME]: {
+      [serverName]: {
         name: "Meshrix.js",
         transport: "streamable-http",
         httpUrl: mcpUrl,
@@ -89,10 +91,10 @@ export function buildDeviceHubManifest({
           clientInstallJsonCommand,
           autoInstallCommand,
           priorityInstallCommand,
-          priorityTargets: [...PRIORITY_INSTALL_TARGETS],
-          supportedTargets: [...SUPPORTED_TARGETS],
-          supportedTargetDetails: supportedTargetDetails(),
-          uninstallCommand: `${packageExec} uninstall --target codex${urlArgs}`,
+          priorityTargets: [...priorityTargets],
+          supportedTargets: SUPPORTED_TARGETS.filter((target: string) => nativeCapability(target).supported),
+          supportedTargetDetails: supportedTargetDetails().map((detail: any) => ({ ...detail, nativeRegistration: nativeCapability(detail.target) })),
+          uninstallCommand: `${packageExec} uninstall --target codex${urlArgs}${tokenEnvArgs}`,
           discoverCommand,
           scanCommand,
           doctorCommand
@@ -104,12 +106,12 @@ export function buildDeviceHubManifest({
           clientInstallJsonCommand,
           autoInstallCommand,
           priorityInstallCommand,
-          priorityTargets: [...PRIORITY_INSTALL_TARGETS]
+          priorityTargets: [...priorityTargets]
         },
         auth: {
           type: "api-key",
-          input: "protected-stdin-or-environment",
-          acceptedHeaders: ["X-Meshrix.js-Api-Key", "X-Meshrix.js-MCP-Target"],
+          input: "client-environment-reference",
+          acceptedHeaders: ["X-Meshrix.js-Api-Key"],
           tokenEnv
         },
         targets
@@ -120,13 +122,20 @@ export function buildDeviceHubManifest({
 
 export async function publishDeviceHubManifest({
   baseUrl,
+  serverName = MCP_SERVER_NAME,
+  existingManifest,
   targets,
   tokenEnv = DEFAULT_TOKEN_ENV,
   publishEnv = true,
   discoveryPath = discoveryRegistryPath(),
   environmentPort = deviceEnvironmentPort
 }: Record<string, any> & { environmentPort?: DeviceEnvironmentPort }): Promise<any> {
-  const manifest: any = buildDeviceHubManifest({ baseUrl, targets, tokenEnv, discoveryPath });
+  const previous = existingManifest ?? await readJson(discoveryPath, {});
+  const next = buildDeviceHubManifest({ baseUrl, serverName, targets, tokenEnv, discoveryPath });
+  const manifest: any = { ...previous, ...next, servers: { ...previous.servers, [serverName]: {
+    ...previous.servers?.[serverName], ...next.servers[serverName],
+    targets: { ...previous.servers?.[serverName]?.targets, ...next.servers[serverName].targets }
+  } } };
   await writeJson(discoveryPath, manifest);
   const envPersistence = publishEnv
     ? await environmentPort.write(manifest.discovery.env)
@@ -141,10 +150,18 @@ export async function publishDeviceHubManifest({
   };
 }
 
-export async function writeDeviceDiscovery({ baseUrl, installed, tokenEnv = DEFAULT_TOKEN_ENV, publishEnv = true, discoveryPath = discoveryRegistryPath() }: Record<string, any>) : Promise<any> {
+export async function assertDeviceRegistrationBinding({ baseUrl, serverName, tokenEnv, discoveryPath }: Record<string, any>): Promise<void> {
+  const manifest = await readJson(discoveryPath, {});
+  const entry = manifest.servers?.[serverName];
+  if (entry && ((entry.httpUrl && entry.httpUrl !== `${baseUrl}/mcp`) || (entry.auth?.tokenEnv && entry.auth.tokenEnv !== tokenEnv))) {
+    throw Object.assign(new Error("The selected registration name is already recorded for a different endpoint or credential reference. Select another --server-name."), { code: "registration_conflict" });
+  }
+}
+
+export async function writeDeviceDiscovery({ baseUrl, serverName = MCP_SERVER_NAME, installed, tokenEnv = DEFAULT_TOKEN_ENV, publishEnv = false, discoveryPath = discoveryRegistryPath() }: Record<string, any>) : Promise<any> {
   const manifestPath: any = discoveryPath;
   const existingManifest: any = await readJson(manifestPath, {});
-  const existingServer: any = existingManifest?.servers?.[MCP_SERVER_NAME] || {};
+  const existingServer: any = existingManifest?.servers?.[serverName] || {};
   const existingTargets: any = existingServer.targets || {};
   const targetStatuses: any = Object.fromEntries(SUPPORTED_TARGETS.map((target?: any) : any => [
     target,
@@ -152,12 +169,16 @@ export async function writeDeviceDiscovery({ baseUrl, installed, tokenEnv = DEFA
       ? installed[target].ok === false
         ? {
             installMode: installed[target].installMode || targetInstallMode(target),
-            status: "failed",
-            error: installed[target].error || "Install failed."
+            ...existingTargets[target],
+            lastAttempt: { status: installed[target].status, errorCode: installed[target].errorCode },
+            status: existingTargets[target]?.status || "not-configured"
           }
         : {
           installMode: installed[target].installMode,
-          status: "installed"
+          status: "configured",
+          credentialRef: { kind: "env", name: tokenEnv },
+          credentialStatus: installed[target].credentialStatus,
+          connectivity: "not-run"
         }
       : existingTargets[target] || {
           installMode: "supported",
@@ -167,6 +188,7 @@ export async function writeDeviceDiscovery({ baseUrl, installed, tokenEnv = DEFA
   const published: any = await publishDeviceHubManifest({
     baseUrl,
     targets: targetStatuses,
+    serverName, existingManifest,
     tokenEnv,
     publishEnv,
     discoveryPath: manifestPath
@@ -174,10 +196,10 @@ export async function writeDeviceDiscovery({ baseUrl, installed, tokenEnv = DEFA
   return published.primaryPath;
 }
 
-export async function writeDeviceUninstall({ baseUrl, uninstalled, tokenEnv = DEFAULT_TOKEN_ENV, publishEnv = true, discoveryPath = discoveryRegistryPath() }: Record<string, any>) : Promise<any> {
+export async function writeDeviceUninstall({ baseUrl, serverName = MCP_SERVER_NAME, uninstalled, tokenEnv = DEFAULT_TOKEN_ENV, publishEnv = false, discoveryPath = discoveryRegistryPath() }: Record<string, any>) : Promise<any> {
   const manifestPath: any = discoveryPath;
   const existingManifest: any = await readJson(manifestPath, {});
-  const existingServer: any = existingManifest?.servers?.[MCP_SERVER_NAME] || {};
+  const existingServer: any = existingManifest?.servers?.[serverName] || {};
   const effectiveTokenEnv: any = tokenEnv || existingManifestTokenEnv(existingServer);
   const existingTargets: any = existingServer.targets || {};
   const targets: any = Object.fromEntries(SUPPORTED_TARGETS.map((target?: any) : any => [
@@ -186,8 +208,9 @@ export async function writeDeviceUninstall({ baseUrl, uninstalled, tokenEnv = DE
       ? uninstalled[target].ok === false
         ? {
             installMode: uninstalled[target].uninstallMode || targetInstallMode(target),
-            status: "failed",
-            error: uninstalled[target].error || "Uninstall failed."
+            ...existingTargets[target],
+            lastAttempt: { status: "failed", errorCode: uninstalled[target].errorCode },
+            status: existingTargets[target]?.status || "not-configured"
           }
         : {
           installMode: uninstalled[target].uninstallMode,
@@ -202,6 +225,7 @@ export async function writeDeviceUninstall({ baseUrl, uninstalled, tokenEnv = DE
     baseUrl,
     targets,
     tokenEnv: effectiveTokenEnv,
+    serverName, existingManifest,
     publishEnv,
     discoveryPath: manifestPath
   });

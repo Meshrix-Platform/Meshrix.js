@@ -6,11 +6,7 @@ import {
   MCP_CLIENT_ADAPTER_PROTOCOL,
   mcpClientAdapterForTarget
 } from "../../mcp-release-targets.ts";
-import { INSTALL_COMMAND_TIMEOUT_MS } from "./constants.ts";
-import {
-  connectorLaunchSpec,
-  runWithInput
-} from "./connector-process.ts";
+import { runWithInput } from "./connector-process.ts";
 import { redactSensitiveText } from "./installer-output-safety.ts";
 
 export const CLIENT_ADAPTER_DESCRIPTOR_SCHEMA: any = "v0.0.1:meshrix:client-adapter-descriptor-1";
@@ -159,31 +155,27 @@ export async function runClientAdapter({
     allowFailure: true,
     cleanEnv: true,
     maxOutputBytes: CLIENT_ADAPTER_MAX_MESSAGE_BYTES,
-    timeoutMs: INSTALL_COMMAND_TIMEOUT_MS
+    env: Object.fromEntries([
+      "CODEX_HOME", "CLAUDE_CONFIG_DIR", "PI_CODING_AGENT_DIR", "KIMI_CODE_HOME",
+      "OPENCODE_CONFIG", "OPENCLAW_CONFIG_PATH", "OPENCLAW_STATE_DIR"
+    ].flatMap((name) => process.env[name] ? [[name, process.env[name]]] : []))
   });
   if (executed.outputLimitExceeded) {
     throw adapterError("CLIENT_ADAPTER_RESPONSE_TOO_LARGE", "Client adapter response exceeded the protocol limit.");
   }
-  if (!executed.ok) {
-    throw adapterError("CLIENT_ADAPTER_PROCESS_FAILED", redactSensitiveText(executed.stderr || "Client adapter process failed."));
+  if (!executed.ok && !executed.stdout?.trim()) {
+    throw adapterError("CLIENT_ADAPTER_PROCESS_FAILED", "Client adapter process failed without a protocol response.");
   }
+  const result = parseAdapterResponse(executed.stdout);
+  if (!executed.ok) throw adapterError("CLIENT_ADAPTER_PROCESS_FAILED", "Client adapter exited unsuccessfully.");
   return {
-    result: parseAdapterResponse(executed.stdout),
+    result,
     adapter: installed.adapter
   };
 }
 
-export function clientAdapterConnectorRequest({ baseUrl, tokenEnv, client = {} }: Record<string, any> = {}) : any {
-  const connector: any = connectorLaunchSpec();
-  return {
-    baseUrl,
-    tokenEnv,
-    connector: {
-      command: connector.command,
-      args: [...connector.args]
-    },
-    client
-  };
+export function clientAdapterRegistrationRequest({ baseUrl, serverName, credentialRef, client = {} }: Record<string, any> = {}) : any {
+  return { baseUrl, serverName, credentialRef, client };
 }
 
 export async function describeClientAdapter(options: Record<string, any> = {}) : Promise<any> {

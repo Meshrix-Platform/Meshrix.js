@@ -1,24 +1,17 @@
 #!/usr/bin/env node
+import path from "node:path";
 import packageManifest from "./package.json" with { type: "json" };
-import { MCP_SERVER_NAME, clientCommand, connectorFrom, descriptor, isDirectInvocation, run, runAdapterCli } from "@meshrix/client-adapter-kit";
+import { descriptor, homePath, isDirectInvocation, jsonRegistrationStore, nativeAdapter, runAdapterCli } from "@meshrix/client-adapter-kit";
 
-export const description = descriptor({ target: "claude-code", label: "Claude Code", version: packageManifest.version, packageName: "@meshrix/agent-claude-code-adapter", commandNames: ["claude"], installMode: "external-client-adapter" });
-async function installed(command) {
-  const result = await run(command, ["mcp", "get", MCP_SERVER_NAME], { allowFailure: true });
-  return result.ok && /\blico\b/iu.test(result.stdout);
+export const description = descriptor({ target: "claude-code", label: "Claude Code", version: packageManifest.version, packageName: "@meshrix/agent-claude-code-adapter", commandNames: ["claude"], installMode: "native-remote-mcp" });
+function configPath(request) {
+  if (request.client?.configPath) return request.client.configPath;
+  const root = request.client?.configRoot || process.env.CLAUDE_CONFIG_DIR;
+  return root ? path.join(root, ".claude.json") : homePath(".claude.json");
 }
-export const adapter = {
+export const adapter = nativeAdapter({
   description,
-  async scan(request) { const command = clientCommand(request, "claude"); const available = (await run(command, ["--version"], { allowFailure: true })).ok; return { available, installed: available && await installed(command) }; },
-  async install(request) {
-    const command = clientCommand(request, "claude");
-    const connector = connectorFrom(request, "claude-code");
-    const config = { type: "stdio", command: connector.command, args: connector.args };
-    await run(command, ["mcp", "remove", MCP_SERVER_NAME], { allowFailure: true });
-    await run(command, ["mcp", "add-json", MCP_SERVER_NAME, JSON.stringify(config), "--scope", "user"]);
-    return { installed: await installed(command) };
-  },
-  async verify(request) { return { installed: await installed(clientCommand(request, "claude")) }; },
-  async uninstall(request) { const command = clientCommand(request, "claude"); const existed = await installed(command); await run(command, ["mcp", "remove", MCP_SERVER_NAME], { allowFailure: true }); return { removed: existed, installed: await installed(command) }; }
-};
+  load: (request, registration) => jsonRegistrationStore(configPath(request), "mcpServers", registration.serverName)
+});
+// Direct user-scope config updates avoid `mcp remove`, which also removes native OAuth data.
 if (isDirectInvocation(import.meta.url)) await runAdapterCli(adapter);

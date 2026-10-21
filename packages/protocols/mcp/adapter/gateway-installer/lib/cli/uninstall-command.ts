@@ -1,26 +1,29 @@
-import { MCP_SERVER_NAME, packageInfo } from "./constants.ts";
-import { option, parseTargets, targetInstallMode } from "./basic-utils.ts";
-import { clientAdapterConnectorRequest, runClientAdapter } from "./client-adapter-runner.ts";
-import { deleteMcpApiKeyCredential } from "./credential-store.ts";
-import { writeDeviceUninstall } from "./device-config.ts";
-import { discardConfiguredApiKeyEnvironment, explicitBaseUrl, registryBaseUrls } from "./discovery.ts";
+import { packageInfo } from "./constants.ts";
+import { option, parseTargets } from "./basic-utils.ts";
+import { clientAdapterRegistrationRequest, runClientAdapter } from "./client-adapter-runner.ts";
+import { assertDeviceRegistrationBinding, writeDeviceUninstall } from "./device-config.ts";
+import { discardConfiguredApiKeyEnvironment, explicitBaseUrl, baseUrlFromEndpoint } from "./discovery.ts";
 import {
   discoveryRegistryPath,
   readJson
 } from "./device-discovery-registry.ts";
 import { redactSensitiveText, sensitiveOptionValues } from "./installer-output-safety.ts";
-import { chooseUninstallCandidates } from "./interactive.ts";
+import { assertSupportedInstallLocation, chooseUninstallCandidates } from "./interactive.ts";
 import { canUseUninstallTui, installerOptions } from "./installer-options.ts";
 import { resolveClientAdapterForTarget, scanInstallTargets } from "./scan-candidates.ts";
 
 export async function optionsWithStoredBaseUrl(options: Record<string, any> = {}) : Promise<any> {
-  if (explicitBaseUrl(options) || option(options, "resolved-url", "")) {
-    return options;
-  }
-  const [storedBaseUrl] = await registryBaseUrls(options);
-  return storedBaseUrl
-    ? { ...options, "resolved-url": storedBaseUrl }
-    : options;
+  const settings = installerOptions(options);
+  const manifest = await readJson(discoveryRegistryPath(options), {});
+  const registration = manifest.servers?.[settings.serverName];
+  const selectedUrl = explicitBaseUrl(options) || option(options, "resolved-url", "");
+  const storedUrl = baseUrlFromEndpoint(registration?.httpUrl);
+  const sameRegistration = !selectedUrl || selectedUrl === storedUrl;
+  return {
+    ...options,
+    ...(!selectedUrl && storedUrl ? { "resolved-url": storedUrl } : {}),
+    ...(!Object.hasOwn(options, "token-env") && sameRegistration && registration?.auth?.tokenEnv ? { "token-env": registration.auth.tokenEnv } : {})
+  };
 }
 
 export async function uninstallTargets({ options, targets, optionOverrides = {} }: Record<string, any>) : Promise<any> {
@@ -29,6 +32,8 @@ export async function uninstallTargets({ options, targets, optionOverrides = {} 
     ...optionOverrides
   };
   const settings: any = installerOptions(mergedOptions);
+  assertSupportedInstallLocation(mergedOptions, targets);
+  if (settings.baseUrl) await assertDeviceRegistrationBinding({ ...settings, discoveryPath: discoveryRegistryPath(mergedOptions) });
   const uninstalled: Record<string, any> = {};
   for (const target of targets) {
     try {
@@ -40,17 +45,12 @@ export async function uninstallTargets({ options, targets, optionOverrides = {} 
       const adapterExecution: any = await runClientAdapter({
         target,
         action: "uninstall",
-        request: clientAdapterConnectorRequest({
-          baseUrl: settings.baseUrl,
-          tokenEnv: settings.tokenEnv,
-          client
-        })
+        request: clientAdapterRegistrationRequest({ ...settings, client })
       });
-      await deleteMcpApiKeyCredential({ target, baseUrl: settings.baseUrl });
       uninstalled[target] = {
         ok: true,
         status: "not-installed",
-        uninstallMode: "external-client-adapter",
+        uninstallMode: "native-remote-mcp",
         ...adapterExecution.result,
         adapterPackage: adapterExecution.adapter.packageName
       };
@@ -58,14 +58,17 @@ export async function uninstallTargets({ options, targets, optionOverrides = {} 
       uninstalled[target] = {
         ok: false,
         status: "failed",
-        uninstallMode: targetInstallMode(target),
+        uninstallMode: "native-remote-mcp",
+        errorCode: error?.code || "registration_removal_failed",
         error: redactSensitiveText(error?.message || String(error), sensitiveOptionValues(mergedOptions))
       };
     }
   }
-  const discoveryManifest: any = settings.baseUrl
+  const discoveryManifest: any = settings.baseUrl && Object.values(uninstalled).some((value) => value.ok && value.removed)
     ? await writeDeviceUninstall({
         baseUrl: settings.baseUrl,
+        serverName: settings.serverName,
+        publishEnv: false,
         uninstalled,
         tokenEnv: Object.hasOwn(mergedOptions, "token-env") ? settings.tokenEnv : "",
         discoveryPath: discoveryRegistryPath(mergedOptions)
@@ -151,9 +154,9 @@ export async function uninstallTuiCommand(options?: any) : Promise<any> {
   const manifest: any = await readJson(manifestPath, null);
   let installedTargets: any[] = [];
   if (manifest) {
-    const server: any = manifest.servers?.[MCP_SERVER_NAME] || {};
+    const server: any = manifest.servers?.[settings.serverName] || {};
     installedTargets = (Object.entries(server.targets || {}) as [string, any][])
-      .filter(([, status]: any[]) : any => status?.status === "installed")
+      .filter(([, status]: any[]) : any => ["configured", "installed"].includes(status?.status))
       .map(([target]: any[]) : any => target);
   }
 

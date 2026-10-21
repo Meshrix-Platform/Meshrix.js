@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   describeClientAdapter,
+  clientAdapterRegistrationRequest,
   runClientAdapter,
   resolveInstalledClientAdapter
 } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts";
@@ -21,6 +22,12 @@ afterEach(async () : Promise<void> => {
 });
 
 describe("installed first-party client adapter resolution", () : any => {
+  it("passes explicit native bindings and retains capability failures from nonzero adapter exits", async () => {
+    const request = clientAdapterRegistrationRequest({ baseUrl: "https://meshrix.invalid", serverName: "work", credentialRef: { kind: "env", name: "WORK_KEY" }, client: {} });
+    expect(request).toEqual({ baseUrl: "https://meshrix.invalid", serverName: "work", credentialRef: { kind: "env", name: "WORK_KEY" }, client: {} });
+    await expect(runClientAdapter({ target: "kimi", action: "install", request })).rejects.toMatchObject({ code: "unsupported_protected_header_reference" });
+  });
+
   it("resolves and validates each adapter shipped with the root product", async () : Promise<void> => {
     for (const target of MCP_SUPPORTED_TARGETS) {
       const resolved: any = await resolveInstalledClientAdapter({ target });

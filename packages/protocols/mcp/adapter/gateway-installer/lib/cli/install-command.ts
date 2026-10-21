@@ -1,12 +1,12 @@
 import { packageInfo, PRIORITY_INSTALL_TARGETS } from "./constants.ts";
-import { isAutoTargetRequest, option, parseTargets, targetInstallMode } from "./basic-utils.ts";
-import { clientAdapterConnectorRequest, runClientAdapter } from "./client-adapter-runner.ts";
-import { saveMcpApiKeyCredential } from "./credential-store.ts";
-import { writeDeviceDiscovery } from "./device-config.ts";
+import { isAutoTargetRequest, option, parseTargets } from "./basic-utils.ts";
+import { nativeCapability } from "@meshrix/client-adapter-kit";
+import { clientAdapterRegistrationRequest, runClientAdapter } from "./client-adapter-runner.ts";
+import { assertDeviceRegistrationBinding, writeDeviceDiscovery } from "./device-config.ts";
 import { ensureService, verifyMcpTools } from "./discovery.ts";
 import {
   assertSupportedInstallLocation,
-  chooseAutoUpdate,
+  assertNativeInstallOptions,
   chooseInstallCandidates,
   resolveHubForInstall,
   resolveInstallToken
@@ -22,20 +22,29 @@ import {
   shellCommandForScan
 } from "./guidance.ts";
 
-export async function installTargets({ options, targets, token, tokenInfo = null, optionOverrides = {} }: Record<string, any>) : Promise<any> {
+export async function installTargets({ options, targets, token, tokenInfo = null, optionOverrides = {}, serviceChecks = new Map() }: Record<string, any>) : Promise<any> {
   const mergedOptions: Record<string, any> = {
     ...options,
     ...optionOverrides
   };
+  assertNativeInstallOptions(mergedOptions);
+  if (tokenInfo?.source === "protected-stdin") throw Object.assign(new Error("Native registration requires a protected runtime reference, not a stdin-only credential."), { code: "credential_handoff_required" });
   assertSupportedInstallLocation(mergedOptions, targets);
   const settings: any = installerOptions(mergedOptions);
   const verify: any = !mergedOptions["no-verify"];
 
-  await ensureService(settings.baseUrl);
-
+  const serviceBinding = JSON.stringify([settings.baseUrl, settings.serverName, settings.tokenEnv, verify, discoveryRegistryPath(mergedOptions)]);
   const installed: Record<string, any> = {};
   for (const target of targets) {
     try {
+      const capability = nativeCapability(target);
+      if (!capability.supported) throw Object.assign(new Error(capability.reason), { code: capability.reasonCode });
+      if (!serviceChecks.has(serviceBinding)) serviceChecks.set(serviceBinding, (async () => {
+        await assertDeviceRegistrationBinding({ ...settings, discoveryPath: discoveryRegistryPath(mergedOptions) });
+        await ensureService(settings.baseUrl);
+        return verify && token ? verifyMcpTools({ baseUrl: settings.baseUrl, token }) : null;
+      })());
+      const serviceVerification = await serviceChecks.get(serviceBinding);
       const client: any = await resolveClientAdapterForTarget(
         target,
         settings,
@@ -47,60 +56,43 @@ export async function installTargets({ options, targets, token, tokenInfo = null
       const adapterExecution: any = await runClientAdapter({
         target,
         action: "install",
-        request: clientAdapterConnectorRequest({
-          baseUrl: settings.baseUrl,
-          tokenEnv: settings.tokenEnv,
-          client
-        })
+        request: clientAdapterRegistrationRequest({ ...settings, client })
       });
       const clientResult: Record<string, any> = {
-        installMode: "external-client-adapter",
+        installMode: "native-remote-mcp",
         ...adapterExecution.result,
         adapterPackage: adapterExecution.adapter.packageName
       };
-      const httpVerification: any = verify ? await verifyMcpTools({ baseUrl: settings.baseUrl, token, target }) : null;
-      const credential: any = await saveMcpApiKeyCredential({
-        target,
-        baseUrl: settings.baseUrl,
-        token,
-        autoUpdate: mergedOptions.__meshrixAutoUpdate === true
-      });
+      if (clientResult.installed !== true || clientResult.status !== "configured") throw new Error("The client adapter did not confirm the expected native registration.");
       installed[target] = {
+        ...clientResult,
         ok: true,
-        status: "installed",
-        tokenSource: tokenInfo?.source || "provided",
-        ...(clientResult || {}),
-        credentialStored: credential.stored === true,
-        httpVerification
+        status: "configured",
+        serverName: settings.serverName,
+        credentialRef: settings.credentialRef,
+        credentialStatus: "external-reference-unverified",
+        credentialStored: false,
+        environmentProvisioned: false,
+        connectivity: "not-run",
+        serviceVerification
       };
     } catch (error: any) {
       installed[target] = {
         ok: false,
-        status: "failed",
-        installMode: targetInstallMode(target),
+        status: error?.code === "unsupported_protected_header_reference" ? "unsupported" : "failed",
+        errorCode: error?.code || "registration_failed",
+        installMode: "native-remote-mcp",
         error: redactSensitiveText(error?.message || String(error), [token])
       };
     }
   }
 
-  const discoveryManifest: any = await writeDeviceDiscovery({
-    baseUrl: settings.baseUrl,
-    installed,
-    tokenEnv: settings.tokenEnv,
-    discoveryPath: discoveryRegistryPath(mergedOptions)
-  });
-
-  function summarizeInstalledTarget(target?: any, value: Record<string, any> = {}) : any {
-    return {
-      installMode: value.installMode,
-      status: value.status || (value.ok === false ? "failed" : "installed"),
-      error: value.error || "",
-      tokenSource: value.tokenSource || tokenInfo?.source || "provided",
-      httpVerification: value.httpVerification || null,
-      adapterPackage: value.adapterPackage || "",
-      credentialStored: value.credentialStored === true
-    };
-  }
+  const discoveryManifest: any = Object.values(installed).some((value) => value.ok)
+    ? await writeDeviceDiscovery({
+        baseUrl: settings.baseUrl, serverName: settings.serverName, installed,
+        tokenEnv: settings.tokenEnv, publishEnv: false,
+        discoveryPath: discoveryRegistryPath(mergedOptions)
+      }) : "";
 
   return {
     ok: (Object.values(installed) as any[]).every((value?: any) : any => value?.ok !== false),
@@ -109,10 +101,8 @@ export async function installTargets({ options, targets, token, tokenInfo = null
     targets,
     baseUrl: settings.baseUrl,
     discoveryManifest,
-    installed: Object.fromEntries((Object.entries(installed) as [string, any][]).map(([target, value]: any[]) : any => [
-      target,
-      summarizeInstalledTarget(target, value)
-    ]))
+    serverName: settings.serverName,
+    installed
   };
 }
 
@@ -127,7 +117,6 @@ function assertSelectedInstallLocations(options?: any, selected: any = []) : any
 
 export async function installTuiCommand(options?: any, tokenInfo?: any) : Promise<any> {
   const settings: any = installerOptions(options);
-  await ensureService(settings.baseUrl);
   const scan: any = await scanInstallTargets(options);
   const selected: any = await chooseInstallCandidates({
     candidates: scan.candidates,
@@ -144,8 +133,6 @@ export async function installTuiCommand(options?: any, tokenInfo?: any) : Promis
   }
   assertSelectedInstallLocations(options, selected);
   const selectedTargets: any[] = [...new Set<any>(selected.map((candidate?: any) : any => candidate.target))];
-  const autoUpdate: any = await chooseAutoUpdate();
-  options.__meshrixAutoUpdate = autoUpdate;
   const hasPerCandidateOverrides: any = selected.some((candidate?: any) : any =>
     Object.keys(candidate.optionOverrides || {}).length > 0
   );
@@ -171,6 +158,7 @@ export async function installTuiCommand(options?: any, tokenInfo?: any) : Promis
 
 export async function installSelectedCandidates({ options, selected, tokenInfo }: Record<string, any>) : Promise<any> {
   const partials: any[] = [];
+  const serviceChecks = new Map();
   let discoveryManifest: any = "";
   let baseUrl: any = installerOptions(options).baseUrl;
   const installed: Record<string, any> = {};
@@ -180,6 +168,7 @@ export async function installSelectedCandidates({ options, selected, tokenInfo }
       targets: [candidate.target],
       token: tokenInfo.token,
       tokenInfo,
+      serviceChecks,
       optionOverrides: candidate.optionOverrides || {}
     });
     partials.push({
@@ -213,6 +202,7 @@ export function summarizeInstallCandidate(candidate?: any) : any {
     detail: candidate.detail || "",
     ...(candidate.mcpProbe ? { mcpProbe: candidate.mcpProbe } : {}),
     installed: Boolean(candidate.installed),
+    nativeRegistration: candidate.nativeRegistration,
     installCommand: candidate.installCommand || "",
     repairCommand: candidate.repairCommand || "",
     doctorCommand: candidate.doctorCommand || "meshrix-mcp doctor --json"
@@ -225,24 +215,24 @@ export function noDetectedClientGuidance(candidates: any = [], options: Record<s
     .filter((target?: any, index?: any, values?: any) : any => target && values.indexOf(target) === index);
   const priorityTargets: any = PRIORITY_INSTALL_TARGETS.filter((target?: any) : any => explicitTargets.includes(target));
   const suggestedTarget: any = priorityTargets[0] || explicitTargets[0] || "codex";
-  const { baseUrl, tokenEnv } = commandGuidanceContext(options);
-  const includeUrl: any = Boolean(baseUrl);
-  const scanCommand: any = shellCommandForScan({ includeUrl, baseUrl, tokenEnv });
+  const context = commandGuidanceContext(options);
+  context.includeUrl = Boolean(context.baseUrl);
+  const scanCommand: any = shellCommandForScan(context);
   return {
     errorCode: "NO_SUPPORTED_MCP_CLIENTS_DETECTED",
     nextCommand: scanCommand,
     repairCommands: [
       scanCommand,
-      shellCommandForInstall({ target: suggestedTarget, includeUrl, baseUrl, tokenEnv }),
-      shellCommandForInstall({ target: "auto", includeUrl, baseUrl, tokenEnv })
+      shellCommandForInstall({ target: suggestedTarget, ...context }),
+      shellCommandForInstall({ target: "auto", ...context })
     ],
-    ...installGuidanceMetadata({ includeUrl, baseUrl, tokenEnv })
+    ...installGuidanceMetadata(context)
   };
 }
 
 export async function installAutoDetectedCommand(resolvedOptions?: any, tokenInfo?: any) : Promise<any> {
   const scan: any = await scanInstallTargets(resolvedOptions);
-  const selected: any = scan.candidates.filter((candidate?: any) : any => candidate.status === "detected");
+  const selected: any = scan.candidates.filter((candidate?: any) : any => candidate.status === "detected" && candidate.nativeRegistration?.supported === true);
   const candidates: any = scan.candidates.map(summarizeInstallCandidate);
   if (selected.length === 0) {
     return {
@@ -257,8 +247,6 @@ export async function installAutoDetectedCommand(resolvedOptions?: any, tokenInf
     };
   }
   assertSelectedInstallLocations(resolvedOptions, selected);
-  const autoUpdate: any = Boolean(resolvedOptions["auto-update"]);
-  resolvedOptions.__meshrixAutoUpdate = autoUpdate;
   const selectedTargets: any[] = [...new Set<any>(selected.map((candidate?: any) : any => candidate.target))];
   const result: any = await installSelectedCandidates({ options: resolvedOptions, selected, tokenInfo });
   return {
@@ -268,12 +256,17 @@ export async function installAutoDetectedCommand(resolvedOptions?: any, tokenInf
   };
 }
 
-export async function installCommand(options?: any) : Promise<any> {
-  const tokenInfo: any = await resolveInstallToken(options);
+export async function installCommand(options: Record<string, any> = {}) : Promise<any> {
+  assertNativeInstallOptions(options);
   const initialTargetOpt: any = option(options, "target", "");
   const prevalidatedTargets: any = initialTargetOpt && !isAutoTargetRequest(initialTargetOpt)
     ? parseTargets(initialTargetOpt)
     : null;
+  if (options["client-config"] || options["client-config-root"]) assertSupportedInstallLocation(options, prevalidatedTargets || []);
+  if (prevalidatedTargets?.every((target: string) => !nativeCapability(target).supported)) {
+    return installTargets({ options, targets: prevalidatedTargets, token: "" });
+  }
+  const tokenInfo: any = await resolveInstallToken(options);
   const resolvedOptions: any = await resolveHubForInstall(options);
   if (resolvedOptions.__meshrixSkippedDiscovery) {
     return {
@@ -295,8 +288,6 @@ export async function installCommand(options?: any) : Promise<any> {
     return installAutoDetectedCommand(resolvedOptions, tokenInfo);
   }
   const targets: any = prevalidatedTargets || parseTargets(targetOpt);
-  const autoUpdate: any = Boolean(resolvedOptions["auto-update"]);
-  resolvedOptions.__meshrixAutoUpdate = autoUpdate;
   return installTargets({
     options: resolvedOptions,
     targets,

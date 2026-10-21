@@ -4,104 +4,74 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
+import { parse as parseToml } from "smol-toml";
 import { adapterDescriptors } from "./client-adapter-components.mjs";
-import { sanitizeError } from "./lib/repository.mjs";
+import { repoRoot, sanitizeError } from "./lib/repository.mjs";
 
-function exec(command, args, cwd, input = "", env = process.env) {
+function exec(command, args, cwd, input, env) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"], shell: false });
     let stdout = "";
-    let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    child.stderr.resume();
     child.on("error", reject);
-    child.on("close", (code) => code === 0
-      ? resolve({ stdout, stderr })
-      : reject(new Error(sanitizeError(stderr || stdout))));
+    child.stdin.on("error", reject);
+    child.on("close", (code) => {
+      try { resolve({ code, ...JSON.parse(stdout) }); }
+      catch { reject(new Error("Bundled client adapter returned invalid JSON")); }
+    });
     child.stdin.end(input);
   });
 }
 
-function parseResponse(stdout, label) {
-  try { return JSON.parse(stdout); }
-  catch { throw new Error(`${label} returned invalid JSON`); }
-}
-
 async function main() {
   const descriptors = await adapterDescriptors();
-  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-client-adapters-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-client-adapters-"));
   try {
-    const home = path.join(temporaryRoot, "home");
+    const home = path.join(root, "home");
     await fs.mkdir(home, { recursive: true, mode: 0o700 });
-    const fakeClient = path.join(temporaryRoot, "fake-client.mjs");
-    const fakeState = path.join(temporaryRoot, "fake-state.json");
-    await fs.writeFile(fakeClient, [
-      "#!/usr/bin/env node",
-      "const fs = await import('node:fs');",
-      "const file = process.env.MESHRIX_ADAPTER_SMOKE_STATE;",
-      "const state = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};",
-      "const args = process.argv.slice(2);",
-      "const save = () => fs.writeFileSync(file, JSON.stringify(state));",
-      "if (args[0] === 'list') { if (state.pi) console.log('@meshrix/agent-pi-adapter'); process.exit(0); }",
-      "if (args[0] === 'install' && args[1] === '--help') { console.log('pi install <source>'); process.exit(0); }",
-      "if (args[0] === 'install') { state.pi = true; state.source = args[1]; save(); process.exit(0); }",
-      "if (args[0] === 'remove') { state.pi = false; save(); process.exit(0); }",
-      "if (args[0] === 'mcp' && args[1] === 'get') { if (state.codex) console.log('lico'); process.exit(state.codex ? 0 : 1); }",
-      "if (args[0] === 'mcp' && args[1] === 'add') { state.codex = true; save(); process.exit(0); }",
-      "if (args[0] === 'mcp' && args[1] === 'remove') { state.codex = false; save(); process.exit(0); }",
-      "if (args[0] === 'plugin') process.exit(0);",
-      "process.exit(1);"
-    ].join("\n"), { mode: 0o700 });
-
-    const request = {
-      schemaVersion: "v0.0.1:meshrix:client-adapter-json-stdio-1",
-      baseUrl: "http://127.0.0.1:3010",
-      tokenEnv: "MESHRIX_MCP_TOKEN",
-      connector: { command: process.execPath, args: ["connector.mjs"] },
-      client: { command: fakeClient }
-    };
-    const env = {
-      ...process.env,
-      HOME: home,
-      USERPROFILE: home,
-      MESHRIX_ADAPTER_SMOKE_STATE: fakeState
-    };
-
+    const fakeClient = path.join(root, "client");
+    await fs.copyFile(path.join(repoRoot, "tests/plugins/fixtures/fake-mcp-client.mjs"), fakeClient);
+    await fs.chmod(fakeClient, 0o700);
+    const env = { PATH: process.env.PATH, HOME: home, USERPROFILE: home, SystemRoot: process.env.SystemRoot };
+    const supported = [], unsupported = [];
     for (const { descriptor, packageJson } of descriptors) {
+      const target = descriptor.target;
       const entrypoint = fileURLToPath(import.meta.resolve(`${packageJson.name}/${descriptor.entrypoint}`));
-      const response = parseResponse((await exec(process.execPath, [entrypoint, "describe"], temporaryRoot, "", env)).stdout, `${descriptor.target} describe`);
-      if (!response.ok || response.result?.target !== descriptor.target ||
-          response.result?.packageName !== packageJson.name || response.result?.version !== packageJson.version ||
-          response.result?.protocol !== descriptor.protocol) {
-        throw new Error(`Bundled client adapter descriptor failed: ${descriptor.target}`);
+      const invoke = (action, request = {}) => exec(process.execPath, [entrypoint, action], root, JSON.stringify(request), env);
+      const described = await invoke("describe");
+      if (!described.ok || described.result?.target !== target || described.result?.packageName !== packageJson.name || described.result?.version !== packageJson.version || described.result?.protocol !== descriptor.protocol) throw new Error(`Bundled adapter descriptor failed: ${target}`);
+      const configPath = path.join(root, target, target === "codex" ? "config.toml" : "mcp.json");
+      const request = {
+        schemaVersion: descriptor.protocol,
+        baseUrl: "https://gateway.invalid", serverName: "work",
+        credentialRef: { kind: "env", name: "MESHRIX_WORK_KEY" },
+        client: { command: fakeClient, configPath, marketplaceRoot: path.join(root, "marketplace") }
+      };
+      await fs.mkdir(path.dirname(configPath), { recursive: true });
+      const installed = await invoke("install", request);
+      if (!described.result.nativeRegistration.supported) {
+        if (installed.ok || installed.error?.code !== "unsupported_protected_header_reference") throw new Error(`Unsupported capability was not rejected: ${target}`);
+        try { await fs.stat(configPath); throw new Error(`Unsupported adapter mutated configuration: ${target}`); }
+        catch (error) { if (error.code !== "ENOENT") throw error; }
+        unsupported.push(target);
+        continue;
       }
-      if (descriptor.target === "pi") {
-        await import(import.meta.resolve(`${packageJson.name}/extension.mjs`));
-      }
+      if (!installed.ok || installed.result?.status !== "configured" || installed.result?.connectivity !== "not-run") throw new Error(`Bundled native configuration failed: ${target}`);
+      const text = await fs.readFile(configPath, "utf8");
+      const config = target === "codex" ? parseToml(text) : JSON.parse(text);
+      const entries = target === "codex" ? config.mcp_servers : target === "opencode" ? config.mcp : target === "openclaw" ? config.mcp.servers : config.mcpServers;
+      const entry = entries.work;
+      if (entry.url !== `${request.baseUrl}/mcp` || entry.command || entry.args || !JSON.stringify(entry).includes("MESHRIX_WORK_KEY")) throw new Error(`Native endpoint/reference was not written: ${target}`);
+      const verified = await invoke("verify", request);
+      if (!verified.ok || !verified.result.installed) throw new Error(`Exact native verification failed: ${target}`);
+      const removed = await invoke("uninstall", request);
+      if (!removed.ok || removed.result?.installed !== false || removed.result?.credentialsPreserved !== true) throw new Error(`Credential-safe removal failed: ${target}`);
+      supported.push(target);
     }
-
-    for (const target of ["codex", "pi"]) {
-      const { descriptor, packageJson } = descriptors.find((item) => item.descriptor.target === target);
-      const entrypoint = fileURLToPath(import.meta.resolve(`${packageJson.name}/${descriptor.entrypoint}`));
-      const targetRequest = target === "codex"
-        ? { ...request, client: { ...request.client, marketplaceRoot: path.join(temporaryRoot, "marketplace") } }
-        : { ...request, client: { ...request.client, configPath: path.join(temporaryRoot, "pi.json") } };
-      const installed = parseResponse((await exec(process.execPath, [entrypoint, "install"], temporaryRoot, JSON.stringify(targetRequest), env)).stdout, `${target} install`);
-      if (!installed.ok || !installed.result?.installed) throw new Error(`${target} bundled install smoke failed`);
-      if (target === "pi") {
-        const state = JSON.parse(await fs.readFile(fakeState, "utf8"));
-        if (await fs.realpath(state.source) !== await fs.realpath(path.dirname(entrypoint))) {
-          throw new Error("Pi did not reuse the installed root-component source directory");
-        }
-      }
-      const removed = parseResponse((await exec(process.execPath, [entrypoint, "uninstall"], temporaryRoot, JSON.stringify(targetRequest), env)).stdout, `${target} uninstall`);
-      if (!removed.ok || removed.result?.installed !== false) throw new Error(`${target} bundled uninstall smoke failed`);
-    }
-    process.stdout.write(`${JSON.stringify({ ok: true, adapterCount: descriptors.length, source: "meshrix-root-workspace" })}\n`);
+    process.stdout.write(`${JSON.stringify({ ok: true, adapterCount: descriptors.length, supported, unsupported, connectivity: "not-run", source: "meshrix-root-workspace" })}\n`);
   } finally {
-    await fs.rm(temporaryRoot, { recursive: true, force: true });
+    await fs.rm(root, { recursive: true, force: true });
   }
 }
-
 main().catch((error) => { console.error(sanitizeError(error)); process.exitCode = 1; });

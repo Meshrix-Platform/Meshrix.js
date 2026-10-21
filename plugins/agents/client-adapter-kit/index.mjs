@@ -2,12 +2,12 @@ import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
+import { isIP } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Canonical protocol contract pinned by Meshrix Core; do not edit here without a Core release.
-// Source: Meshrix/packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.mjs (MCP_CLIENT_ADAPTER_PROTOCOL)
-// and  .../gateway-installer/lib/cli/client-adapter-runner.mjs (CLIENT_ADAPTER_DESCRIPTOR_SCHEMA).
+// Shared with the bundled installer runner and mcp-release-targets.ts.
+export * from "./native-registration.mjs";
 export const ADAPTER_PROTOCOL = "v0.0.1:meshrix:client-adapter-json-stdio-1";
 export const ADAPTER_DESCRIPTOR_SCHEMA = "v0.0.1:meshrix:client-adapter-descriptor-1";
 export const MCP_SERVER_NAME = "lico";
@@ -28,14 +28,17 @@ export function descriptor(value) {
   return result;
 }
 
-export function connectorFrom(request, target) {
-  const connector = request?.connector;
-  if (!connector || typeof connector.command !== "string" || !connector.command.trim() ||
-      !Array.isArray(connector.args) || connector.args.some((entry) => typeof entry !== "string")) {
-    throw adapterError("invalid_connector", "A connector command and string arguments are required.", 64);
+export function registrationFrom(request) {
+  const serverName = request?.serverName;
+  const reference = request?.credentialRef;
+  if (typeof serverName !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]*$/u.test(serverName) || ["constructor", "prototype"].includes(serverName)) {
+    throw adapterError("invalid_registration_name", "An explicit alphanumeric MCP registration name is required.", 64);
   }
-  const baseUrl = String(request.baseUrl || "").trim();
-  const tokenEnv = String(request.tokenEnv || "MESHRIX_MCP_TOKEN").trim();
+  if (!reference || reference.kind !== "env" || typeof reference.name !== "string" ||
+      !/^[A-Z_][A-Z0-9_]*$/u.test(reference.name) || Object.keys(reference).some((key) => !["kind", "name"].includes(key))) {
+    throw adapterError("invalid_credential_reference", "An explicit environment credential reference is required; no key value is accepted.", 64);
+  }
+  const baseUrl = String(request.baseUrl || "").trim().replace(/\/+$/u, "");
   let endpoint;
   try {
     endpoint = new URL(baseUrl);
@@ -45,14 +48,12 @@ export function connectorFrom(request, target) {
   if (!/^https?:$/u.test(endpoint.protocol) || !endpoint.hostname || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
     throw adapterError("invalid_base_url", "A valid HTTPS base URL without embedded credentials, query, or fragment is required.", 64);
   }
-  if (endpoint.protocol === "http:" && !isLiteralLoopback(endpoint.hostname)) {
+  const authority = baseUrl.split("://")[1]?.split(/[/?#]/u)[0] || "";
+  const literalHost = authority.replace(/:\d+$/u, "").replace(/^\[|\]$/gu, "");
+  if (endpoint.protocol === "http:" && (!isIP(literalHost) || !isLiteralLoopback(endpoint.hostname))) {
     throw adapterError("insecure_base_url", "HTTP is allowed only for a literal loopback development endpoint; use HTTPS for remote endpoints.", 64);
   }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(tokenEnv)) throw adapterError("invalid_token_binding", "The credential environment binding is invalid.", 64);
-  return {
-    command: connector.command.trim(),
-    args: [...connector.args, "proxy", "--target", target, "--url", baseUrl, "--token-env", tokenEnv]
-  };
+  return { serverName, baseUrl, url: `${baseUrl}/mcp`, credentialRef: { kind: "env", name: reference.name } };
 }
 
 function isLiteralLoopback(hostname) {
@@ -85,13 +86,16 @@ export function sanitizedMessage(error) {
 }
 
 function assertNoSecrets(value, location = "request") {
+  if (typeof value === "string" && /mxak1\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}/u.test(value)) {
+    throw adapterError("raw_secret_rejected", "Raw credentials are forbidden in adapter requests.", 64);
+  }
   if (Array.isArray(value)) {
     value.forEach((entry, index) => assertNoSecrets(entry, `${location}[${index}]`));
     return;
   }
   if (!value || typeof value !== "object") return;
   for (const [key, entry] of Object.entries(value)) {
-    if (SECRET_KEY.test(key)) throw adapterError("raw_secret_rejected", `Raw credential field is forbidden at ${location}.`, 64);
+    if (SECRET_KEY.test(key) || /^(?:headers|authorization|connector)$/iu.test(key)) throw adapterError("raw_secret_rejected", "Raw credentials and connector configuration are forbidden in adapter requests.", 64);
     assertNoSecrets(entry, `${location}.${key}`);
   }
 }
@@ -163,10 +167,29 @@ export function parseJsonc(source) {
     }
     if (char === '"') { inString = true; output += char; continue; }
     if (char === "/" && next === "/") { while (index < source.length && source[index] !== "\n") index += 1; output += "\n"; continue; }
-    if (char === "/" && next === "*") { index += 2; while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) index += 1; index += 1; continue; }
+    if (char === "/" && next === "*") { index += 2; while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) index += 1; index += 1; output += " "; continue; }
+    if (char === ",") {
+      let cursor = index + 1;
+      while (cursor < source.length) {
+        if (/\s/u.test(source[cursor])) { cursor += 1; continue; }
+        if (source.startsWith("//", cursor)) {
+          const end = source.indexOf("\n", cursor + 2);
+          cursor = end < 0 ? source.length : end + 1;
+          continue;
+        }
+        if (source.startsWith("/*", cursor)) {
+          const end = source.indexOf("*/", cursor + 2);
+          if (end < 0) break;
+          cursor = end + 2;
+          continue;
+        }
+        break;
+      }
+      if (source[cursor] === "}" || source[cursor] === "]") continue;
+    }
     output += char;
   }
-  return JSON.parse(output.replace(/,\s*([}\]])/gu, "$1"));
+  return JSON.parse(output);
 }
 
 export async function readJsonc(filePath, fallback = {}) {
@@ -178,22 +201,21 @@ export async function readJsonc(filePath, fallback = {}) {
   }
 }
 
-export async function writeJson(filePath, value) {
+export async function writePrivateFile(filePath, content) {
   const directory = path.dirname(filePath);
   await fs.mkdir(directory, { recursive: true, mode: 0o700 });
-  const temporary = path.join(directory, `.${path.basename(filePath)}.${process.pid}.tmp`);
-  await fs.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  await fs.rename(temporary, filePath);
+  const temporaryDirectory = await fs.mkdtemp(path.join(directory, ".meshrix-registration-"));
+  const temporary = path.join(temporaryDirectory, "config");
+  try {
+    await fs.writeFile(temporary, content, { mode: 0o600, flag: "wx" });
+    await fs.rename(temporary, filePath);
+  } finally {
+    await fs.rm(temporaryDirectory, { recursive: true, force: true });
+  }
 }
 
-export async function removeNamedEntry(filePath, rootKey) {
-  const config = await readJsonc(filePath, {});
-  const existed = Boolean(config?.[rootKey] && Object.hasOwn(config[rootKey], MCP_SERVER_NAME));
-  if (existed) {
-    delete config[rootKey][MCP_SERVER_NAME];
-    await writeJson(filePath, config);
-  }
-  return existed;
+export async function writeJson(filePath, value) {
+  await writePrivateFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 export function homePath(...segments) {

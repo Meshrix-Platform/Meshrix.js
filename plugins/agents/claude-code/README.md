@@ -1,30 +1,21 @@
 # Claude Code Agent Adapter
 
-Plugin ID: `agent-claude-code`
+Bundled private component: `@meshrix/agent-claude-code-adapter` (`agent-claude-code`).
 
-Status: `stable`
+Writes a user-scoped `mcpServers.<name>` HTTP entry to `~/.claude.json` or the
+selected `CLAUDE_CONFIG_DIR`/`client.configRoot`; `client.configPath` overrides it.
+The entry contains `type: "http"`, `url`, and
+`headers: { "X-Meshrix.js-Api-Key": "${SELECTED_ENV}" }`.
 
-Internal component: `@meshrix/agent-claude-code-adapter`
+A dedicated environment-variable name must refer to the explicitly selected Meshrix
+authorization. Claude Code deliberately does not expand some provider credential
+names in remote headers; documented reserved examples are rejected. Missing variables
+may remain unresolved in Claude Code, so configuration alone is not credential
+readiness. No raw key is stored or read by the adapter.
 
-Group: `agents`
+Direct configuration updates preserve unrelated settings and avoid `mcp remove`,
+which can delete native OAuth credentials. Removal affects only a matching selected
+registration and never native authentication stores.
 
-This private first-party module is bundled with `meshrix.js` and included in
-the portable connector runtime. Both consumers use standard Node package
-resolution and invoke it only for an explicit target action.
-
-Claude Code MCP client adapter with JSON-stdio discovery, installation, verification, and removal.
-
-## Boundary
-
-This repository-local optional adapter integrates only through public Meshrix
-extension boundaries.
-
-## Meshrix Integration
-
-- target agent peer plugin configuration
-
-## Security
-
-- Use `secretRef` for credentials.
-- Do not commit provider runtime data, local operator paths, private endpoints, or token plaintext.
-- Agent-facing operations must be exposed through Operation Permission v1 after policy review.
+See the [shared contract](../client-adapter-kit/README.md) and
+[official Claude Code MCP documentation](https://code.claude.com/docs/en/mcp).

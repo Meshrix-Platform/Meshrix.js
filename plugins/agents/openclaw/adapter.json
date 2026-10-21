@@ -7,9 +7,7 @@
   "packageName": "@meshrix/agent-openclaw-adapter",
   "entrypoint": "adapter.mjs",
   "commandNames": [
-    "openclaw",
-    "ironclaw",
-    "zeroclaw"
+    "openclaw"
   ],
   "locations": [
     "local"
@@ -21,5 +19,5 @@
     "verify",
     "uninstall"
   ],
-  "installMode": "external-client-adapter"
+  "installMode": "native-remote-mcp"
 }

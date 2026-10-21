@@ -5,9 +5,13 @@
   "type": "module",
   "license": "Apache-2.0",
   "exports": "./index.mjs",
+  "types": "./index.d.mts",
   "files": [
     "README.md",
     "index.mjs",
+    "native-registration.mjs",
+    "index.d.mts",
+    "native-registration.d.mts",
     "LICENSE"
   ],
   "engines": {

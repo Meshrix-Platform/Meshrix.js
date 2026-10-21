@@ -192,7 +192,9 @@ async function main() : Promise<any> {
     if (forbidden.length > 0) {
       throw new Error(`Protocol package declares forbidden dependencies: ${forbidden.join(", ")}`);
     }
-    const allowed: any = new Set<any>(["@meshrix/contracts", "@meshrix/foundation"]);
+    // The bundled adapter kit owns the shared JSON-stdio registration contract
+    // and pure native-capability facts, not a client application or domain runtime.
+    const allowed: any = new Set<any>(["@meshrix/contracts", "@meshrix/foundation", "@meshrix/client-adapter-kit"]);
     const unexpected: any = Object.keys(declared).filter((name?: any) : any => name.startsWith("@meshrix/") && !allowed.has(name));
     if (unexpected.length > 0) {
       throw new Error(`Protocol package declares unexpected @meshrix dependencies: ${unexpected.join(", ")}`);

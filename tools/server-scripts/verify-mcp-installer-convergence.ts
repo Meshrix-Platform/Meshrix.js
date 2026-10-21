@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import { createServer } from "node:http";
@@ -11,13 +12,15 @@ import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import {
   CLIENT_ADAPTER_DESCRIPTOR_SCHEMA,
   CLIENT_ADAPTER_MAX_MESSAGE_BYTES,
-  clientAdapterConnectorRequest
+  clientAdapterRegistrationRequest
 } from "../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
 import { summarizeMcpInstallerConvergenceReport } from "./lib/mcp-installer-convergence-report.ts";
 
 const execFileAsync: any = promisify(execFile);
+const BEARER_CREDENTIAL = /\bBearer\s+[A-Za-z0-9._~+/-]{24,}={0,2}/iu;
+const SCOPED_API_KEY = /mxak1\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}/u;
 
 const REPORT_PATH: any = "build/reports/mcp-installer-convergence.json";
 const PROTOCOL_INSTALLER_BIN: any = "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts";
@@ -40,10 +43,13 @@ const VERIFIED_DOWNLOAD_GUIDANCE_FILES: any[] = [
 
 const restoreCapabilityKernelEnv: any = useIsolatedCapabilityKernelForVerifier();
 const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-installer-convergence-"));
+const keyRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-installer-key-"));
+const previousMasterKeyFile = process.env.MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE;
 const manifestPath: any = path.join(userDataPath, "device", "servers.json");
 const missingManifestPath: any = path.join(userDataPath, "missing", "servers.json");
 const pathNeedles: any = [
   userDataPath,
+  keyRoot,
   manifestPath,
   missingManifestPath,
   os.homedir(),
@@ -68,7 +74,7 @@ function safeEvidence(value: Record<string, any> = {}) : any {
     for (const needle of pathNeedles) {
       if (needle && child.includes(needle)) return "[redacted-local-path]";
     }
-    if (/Bearer\s+\S+/i.test(child) || /meshrix_[A-Za-z0-9_-]{12,}=/.test(child)) return "[redacted-secret]";
+    if (BEARER_CREDENTIAL.test(child) || SCOPED_API_KEY.test(child) || /meshrix_[A-Za-z0-9_-]{12,}=/.test(child)) return "[redacted-secret]";
     return child;
   }));
 }
@@ -78,7 +84,8 @@ function assertNoLeakText(text: any = "", label: any = "text") : any {
   for (const needle of pathNeedles) {
     assert.equal(needle ? value.includes(needle) : false, false, `${label} leaked local path`);
   }
-  assert.equal(/Bearer\s+\S+/i.test(value), false, `${label} leaked bearer token`);
+  assert.equal(BEARER_CREDENTIAL.test(value), false, `${label} leaked bearer credential`);
+  assert.equal(SCOPED_API_KEY.test(value), false, `${label} leaked scoped API key`);
   assert.equal(/meshrix_[A-Za-z0-9_-]{12,}=/.test(value), false, `${label} leaked cookie`);
 }
 
@@ -119,7 +126,6 @@ async function test(name?: any, fn?: any) : Promise<any> {
   } catch (error: any) {
     record(report.tests, name, "failed", failureEvidence(error));
     console.log("FAIL");
-    throw error;
   }
 }
 
@@ -132,7 +138,6 @@ async function destructiveTest(name?: any, fn?: any) : Promise<any> {
   } catch (error: any) {
     record(report.destructiveTests, name, "failed", failureEvidence(error));
     console.log("FAIL");
-    throw error;
   }
 }
 
@@ -249,12 +254,19 @@ function doctorEnv(deviceManifestPath?: any) : any {
 }
 
 try {
+  const masterKeyFile = path.join(keyRoot, "master.key");
+  const masterKey = randomBytes(32);
+  try { await fs.writeFile(masterKeyFile, masterKey.toString("hex"), { mode: 0o600, flag: "wx" }); }
+  finally { masterKey.fill(0); }
+  process.env.MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE = masterKeyFile;
   server = await startHttpServer({
     userDataPath,
     distPath: "",
     port: 0,
     runtimeOptions: {
       profile: "minimal",
+      enabledPlugins: [],
+      disableFileLogging: true,
       enableFeatures: ["operation-permission-core"]
     }
   });
@@ -315,26 +327,28 @@ try {
     };
   });
 
-  await destructiveTest("external adapter requests contain connector metadata and secret references only", async () : Promise<any> => {
+  await destructiveTest("external adapter requests contain native endpoint metadata and credential references only", async () : Promise<any> => {
     const tokenEnv: any = "MESHRIX_VERIFY_CLIENT_TOKEN";
     const sentinel: any = "meshrix_sensitive_token_must_not_reach_argv";
-    const request: any = clientAdapterConnectorRequest({
+    const request: any = clientAdapterRegistrationRequest({
       baseUrl: server.url,
-      tokenEnv,
+      serverName: "meshrix",
+      credentialRef: { kind: "env", name: tokenEnv },
       client: { configurationRoot: "<client-config-root>" }
     });
     const formatterSource: any = await fs.readFile(FORMATTERS_SOURCE, "utf8");
     const serialized: any = JSON.stringify(request);
     assert.equal(serialized.includes(sentinel), false);
     assert.equal(serialized.includes('"token"'), false);
-    assert.equal(request.tokenEnv, tokenEnv);
-    assert.equal(Array.isArray(request.connector.args), true);
+    assert.deepEqual(request.credentialRef, { kind: "env", name: tokenEnv });
+    assert.equal(request.baseUrl, server.url);
+    assert.equal(request.serverName, "meshrix");
     assert.equal(CLIENT_ADAPTER_DESCRIPTOR_SCHEMA, "v0.0.1:meshrix:client-adapter-descriptor-1");
     assert.equal(CLIENT_ADAPTER_MAX_MESSAGE_BYTES, 256 * 1024);
     assert.equal(formatterSource.includes("X-Meshrix.js-Api-Key: <token>"), false);
     return {
       externalAdapterProtocolBounded: true,
-      connectorMetadataOnly: true,
+      nativeRegistrationMetadataOnly: true,
       directBearerQuickTestAbsent: true,
       rawTokenInChildArguments: false
     };
@@ -417,6 +431,35 @@ try {
     };
   });
 
+  await test("native installer lifecycle joins signed discovery to reference-only configuration without credential provisioning", async () : Promise<any> => {
+    const client = path.join(userDataPath, "synthetic-client.mjs");
+    const config = path.join(userDataPath, "native-mcp.json");
+    const registry = path.join(userDataPath, "native-registration.json");
+    await fs.copyFile("tests/plugins/fixtures/fake-mcp-client.mjs", client);
+    await fs.chmod(client, 0o700);
+    const initial = { preference: "retained", mcpServers: { other: { command: "independent" } } };
+    await fs.writeFile(config, JSON.stringify(initial), { mode: 0o600 });
+    const args = ["--url", server.url, "--target", "pi", "--server-name", "synthetic", "--token-env", DOCTOR_TOKEN_ENV, "--client-command", client, "--client-config", config, "--discovery-file", registry, "--json"];
+    const installed = await runInstallerCli(["install", ...args], doctorEnv(registry));
+    assert.equal(installed.status, 0);
+    const result = parseJsonOutput(installed.stdout);
+    assert.equal(result.installed.pi.status, "configured");
+    assert.equal(result.installed.pi.credentialStatus, "external-reference-unverified");
+    assert.equal(result.installed.pi.connectivity, "not-run");
+    assert.equal(result.installed.pi.credentialStored, false);
+    assert.equal(result.installed.pi.environmentProvisioned, false);
+    const stored = JSON.parse(await fs.readFile(config, "utf8"));
+    assert.deepEqual(stored.mcpServers.synthetic, { url: `${server.url}/mcp`, headers: { "X-Meshrix.js-Api-Key": `\${${DOCTOR_TOKEN_ENV}}` } });
+    assert.deepEqual(stored.mcpServers.other, initial.mcpServers.other);
+    const removed = await runInstallerCli(["uninstall", ...args], doctorEnv(registry));
+    assert.equal(removed.status, 0);
+    assert.deepEqual(JSON.parse(await fs.readFile(config, "utf8")), initial);
+    const stdin = await runNode(PROTOCOL_INSTALLER_BIN, ["install", "--target", "pi", "--token-stdin", "--json"], doctorEnv(registry), { closeStdin: true });
+    assert.notEqual(stdin.status, 0);
+    assert.equal(parseJsonOutput(stdin.stdout || stdin.stderr).errorCode, "credential_handoff_required");
+    return { signedDiscovery: true, configured: true, externalCredentialUnverified: true, nativeConnectivity: "not-run", unrelatedConfigurationPreserved: true, stdinHandoffRefused: true };
+  });
+
   await test("Node installer discover-local uses redacted output contract", async () : Promise<any> => {
     const result: any = await runInstallerCli(["discover-local", "--url", server.url, "--json"], doctorEnv(manifestPath));
     assert.equal(result.status, 0, `Node installer discover-local failed against real server (status=${result.status}, stdoutBytes=${Buffer.byteLength(result.stdout)}, stderrBytes=${Buffer.byteLength(result.stderr)})`);
@@ -489,7 +532,9 @@ try {
   });
 
   await writeReport();
-  console.log(`\n=== MCP Installer Convergence passed; report: ${REPORT_PATH} ===`);
+  const failed = [...report.tests, ...report.destructiveTests].filter(item => item.status === "failed").length;
+  if (failed) process.exitCode = 1;
+  console.log(`\n=== MCP Installer Convergence ${failed ? "failed" : "passed"}; report: ${REPORT_PATH} ===`);
 } catch (error: any) {
   report.executionFailure = safeEvidence(failureEvidence(error));
   await writeReport().catch(() : any => {});
@@ -502,5 +547,8 @@ try {
 } finally {
   await server?.close?.();
   await fs.rm(userDataPath, { recursive: true, force: true }).catch(() : any => {});
+  await fs.rm(keyRoot, { recursive: true, force: true });
+  if (previousMasterKeyFile === undefined) delete process.env.MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE;
+  else process.env.MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE = previousMasterKeyFile;
   restoreCapabilityKernelEnv();
 }

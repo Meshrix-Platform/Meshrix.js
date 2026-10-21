@@ -18,18 +18,22 @@ describe("public MCP install command metadata", () => {
     expect(npmMcpCommand("install", listenUrl)).toBe(`${baseCommand} install --url '${listenUrl}'`);
     expect(discovery.localDiscovery.entrypoint.command)
       .toBe(`${baseCommand} discover-local --url '${listenUrl}' --json`);
+    const referenceArgs = " --token-env MESHRIX_MCP_TOKEN --server-name lico";
     expect(discovery.installer).toMatchObject({
-      installCommand: `${baseCommand} install --url '${listenUrl}'`,
-      autoInstallCommand: `${baseCommand} install --target auto --url '${listenUrl}' --json`,
-      doctorCommand: `${baseCommand} doctor --url '${listenUrl}' --json`,
+      installCommand: `${baseCommand} install --url '${listenUrl}'${referenceArgs}`,
+      autoInstallCommand: `${baseCommand} install --target auto --url '${listenUrl}'${referenceArgs} --json`,
+      doctorCommand: `${baseCommand} doctor --url '${listenUrl}'${referenceArgs} --json`,
       discoverCommand: `${baseCommand} discover-local --url '${listenUrl}' --json`,
       scanCommand: `${baseCommand} scan --url '${listenUrl}' --json`,
-      uninstallCommand: `${baseCommand} uninstall --target codex --url '${listenUrl}' --json`
+      uninstallCommand: `${baseCommand} uninstall --target codex --url '${listenUrl}'${referenceArgs} --json`
     });
-    expect(discovery.clientTargets.every(({ install }: Record<string, any>) =>
-      install.command.startsWith(`${baseCommand} install --target `)
+    expect(discovery.clientTargets.every(({ install, nativeRegistration }: Record<string, any>) =>
+      (nativeRegistration.supported ? install.command.startsWith(`${baseCommand} install --target `) : install.command === "" && install.commandJson === "")
       && install.uninstallCommand.startsWith(`${baseCommand} uninstall --target `)
     )).toBe(true);
+    expect(discovery.installer.priorityTargets).toEqual(["openclaw", "codex", "claude-code", "opencode", "pi"]);
+    expect(discovery.installer.tokenInput).toBe("client-environment-reference");
+    expect(discovery.auth.acceptedHeaders).toEqual(["X-Meshrix.js-Api-Key"]);
     expect(discovery.upgrade.reinstallCommand).toBe(discovery.installer.installCommand);
     expect(discovery.installer.portable.command).toBe("meshrix-mcp");
 

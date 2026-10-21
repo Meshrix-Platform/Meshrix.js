@@ -1,6 +1,5 @@
 import { TARGET_LOCATIONS, msg } from "./constants.ts";
 import { normalizeTarget, option, targetLabel } from "./basic-utils.ts";
-import { writeServerConfigProfile } from "./device-config.ts";
 import { discoverMeshrixHub, resolveApiKey } from "./discovery.ts";
 import { canUseInstallTui, installerOptions } from "./installer-options.ts";
 import { isGenericRemoteLocation } from "./scan-candidates.ts";
@@ -36,23 +35,6 @@ export function renderInstallMenu({ candidates, index, selectedIds, baseUrl, mes
     message
   ];
   process.stdout.write(rows.join("\n"));
-}
-
-export function renderAutoUpdateMenu({ enabled }: Record<string, any>) : any {
-  const rows: any[] = [
-    "\x1b[2J\x1b[H",
-    msg("Meshrix.js MCP Auto-Update Preference", "Meshrix.js MCP 自动推送更新设置"),
-    "",
-    msg("Do you want to enable automatic push updates?", "您是否希望启用自动推送更新？"),
-    msg("If enabled, your local AI agent will automatically download and install updates when the server pushes them.", "如果启用，当服务端推送更新时，您的本地 AI 智能体将自动下载和安装更新。"),
-    msg("(This is disabled by default for security).", "（出于安全考虑，此功能默认禁用）。"),
-    "",
-    enabled ? msg("> [x] Enable automatic push updates", "> [x] 启用自动推送更新") : msg("  [ ] Enable automatic push updates", "  [ ] 启用自动推送更新"),
-    enabled ? msg("  [ ] Disable automatic push updates (Recommended)", "  [ ] 禁用自动推送更新 (推荐)") : msg("> [x] Disable automatic push updates (Recommended)", "> [x] 禁用自动推送更新 (推荐)"),
-    "",
-    msg("Use Up/Down to toggle, Enter to confirm.", "使用上下键切换，Enter 键确认。")
-  ];
-  process.stdout.write(`${rows.join("\n")}\n`);
 }
 
 function interactiveSelection({ candidates, baseUrl, mode = "install" }: Record<string, any>) : Promise<any> {
@@ -121,39 +103,6 @@ function interactiveSelection({ candidates, baseUrl, mode = "install" }: Record<
   });
 }
 
-export async function chooseAutoUpdate() : Promise<any> {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) return false;
-  let enabled: any = false;
-  return new Promise((resolve?: any, reject?: any) : any => {
-    const stdin: any = process.stdin;
-    const wasRaw: any = stdin.isRaw;
-    const cleanup: any = () : any => {
-      stdin.off("data", onData);
-      if (stdin.setRawMode) stdin.setRawMode(Boolean(wasRaw));
-      stdin.pause();
-      process.stdout.write("\x1b[?25h\n");
-    };
-    const onData: any = (chunk?: any) : any => {
-      const key: any = chunk.toString("utf8");
-      if (key === "\u0003") {
-        cleanup();
-        reject(new Error("Interactive install cancelled."));
-      } else if (key === "\r" || key === "\n") {
-        cleanup();
-        resolve(enabled);
-      } else if (["\u001b[A", "k", "K", "\u001b[B", "j", "J", " "].includes(key)) {
-        enabled = !enabled;
-        renderAutoUpdateMenu({ enabled });
-      }
-    };
-    if (stdin.setRawMode) stdin.setRawMode(true);
-    stdin.resume();
-    stdin.on("data", onData);
-    process.stdout.write("\x1b[?25l");
-    renderAutoUpdateMenu({ enabled });
-  });
-}
-
 export async function chooseInstallCandidates(input: Record<string, any>) : Promise<any> {
   return interactiveSelection({ ...input, mode: "install" });
 }
@@ -206,16 +155,30 @@ function canonicalInstallLocation(settings?: any) : any {
 }
 
 export function assertSupportedInstallLocation(options?: any, targets: any = []) : any {
-  const location: any = canonicalInstallLocation(installerOptions(options));
+  const settings = installerOptions(options);
+  if ((settings.clientConfigPath || settings.clientConfigRoot) && targets.length !== 1) throw new Error("An explicit client configuration location requires exactly one --target.");
+  const location: any = canonicalInstallLocation(settings);
   for (const target of [...new Set<any>(targets.map(normalizeTarget).filter(Boolean))]) {
     if (!(TARGET_LOCATIONS[target] || []).includes(location)) {
-      throw new Error(`${targetLabel(target)} installation at ${location} is not supported by this release. Use a supported connector-managed client location.`);
+      throw new Error(`${targetLabel(target)} installation at ${location} is not supported by this release. Use a supported local client configuration location.`);
     }
   }
 }
 
-export async function resolveInstallToken(options?: any) : Promise<any> {
-  return { token: await resolveApiKey(options, { required: true }), source: "provided" };
+export function assertNativeInstallOptions(options: Record<string, any> = {}) : void {
+  if (options["token-stdin"]) throw Object.assign(new Error("Native registration cannot persist a stdin key. Provision the selected client's environment securely and select --token-env NAME; no credential handoff or configuration change was performed."), { code: "credential_handoff_required" });
+  if (options["auto-update"] || options.__meshrixAutoUpdate) throw Object.assign(new Error("Native registration does not install the optional connector or its automatic-update subscription."), { code: "unsupported_native_auto_update" });
+}
+
+export async function resolveInstallToken(options: Record<string, any> = {}) : Promise<any> {
+  assertNativeInstallOptions(options);
+  const settings = installerOptions(options);
+  if (!/^[A-Z_][A-Z0-9_]*$/u.test(settings.tokenEnv)) throw new Error("Native credential references require an uppercase environment-variable name.");
+  const token = await resolveApiKey(options, { required: false });
+  if (!token && !Object.hasOwn(options, "token-env")) {
+    throw Object.assign(new Error("Select an explicit protected environment reference with --token-env NAME. Native registration does not create persistent environment state."), { code: "credential_reference_required" });
+  }
+  return { token, source: "environment-reference", credentialRef: settings.credentialRef };
 }
 
 export async function resolveHubForInstall(options?: any) : Promise<any> {
@@ -236,12 +199,6 @@ export async function resolveHubForInstall(options?: any) : Promise<any> {
   const url: any = await promptLine("Meshrix.js server URL: ");
   const manual: any = await discoverMeshrixHub({ ...options, url });
   if (!manual.ok) throw new Error(`Failed to verify ${url}: ${manual.reason}`);
-  await writeServerConfigProfile({
-    options: { ...options, url },
-    name: String(option(options, "name", "manual")).trim() || "manual",
-    discovered: manual,
-    publishEnv: !options["no-env"]
-  });
   return { ...options, "resolved-url": manual.baseUrl, __meshrixDiscovery: manual };
 }
 

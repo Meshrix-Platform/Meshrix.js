@@ -45,8 +45,8 @@ export function baseUrlFromEndpoint(value?: any) : any {
   }
   try {
     const parsed: any = new URL(text);
-    if (parsed.pathname === "/mcp") {
-      parsed.pathname = "/";
+    if (parsed.pathname.endsWith("/mcp")) {
+      parsed.pathname = parsed.pathname.slice(0, -4) || "/";
       parsed.search = "";
       parsed.hash = "";
       return normalizeBaseUrl(parsed.toString());
@@ -80,7 +80,8 @@ export function parseScanPorts(options: Record<string, any> = {}) : any {
 
 export async function registryBaseUrls(options: Record<string, any> = {}) : Promise<any> {
   const payload: any = await readJson(discoveryRegistryPath(options), null);
-  const server: any = payload?.servers?.[MCP_SERVER_NAME] || payload?.mcpServers?.[MCP_SERVER_NAME] || {};
+  const name = String(option(options, "server-name", MCP_SERVER_NAME));
+  const server: any = payload?.servers?.[name] || payload?.mcpServers?.[name] || {};
   const profiles: any = (Object.values(payload?.serverConfig?.profiles || {}) as any[]);
   const activeProfile: any = payload?.serverConfig?.activeName
     ? payload?.serverConfig?.profiles?.[payload.serverConfig.activeName]

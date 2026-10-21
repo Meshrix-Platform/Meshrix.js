@@ -1,72 +1,53 @@
 #!/usr/bin/env node
-import packageManifest from "./package.json" with { type: "json" };
-import {
-  MCP_SERVER_NAME, clientCommand, connectorFrom, descriptor, homePath, isDirectInvocation, readJson, run, runAdapterCli, writeJson
-} from "@meshrix/client-adapter-kit";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { parse, stringify } from "smol-toml";
+import packageManifest from "./package.json" with { type: "json" };
+import {
+  adapterError, descriptor, homePath, isDirectInvocation, isOwnedProxy, nativeAdapter,
+  readJson, runAdapterCli, writePrivateFile
+} from "@meshrix/client-adapter-kit";
 
-const PLUGIN_NAME = "lico";
-const MARKETPLACE_NAME = "meshrix-local";
-export const description = descriptor({ target: "codex", label: "Codex", version: packageManifest.version, packageName: "@meshrix/agent-codex-adapter", commandNames: ["codex"], installMode: "codex-marketplace-and-mcp-cli" });
-
-function marketplacePaths(request) {
-  const root = String(request?.client?.marketplaceRoot || homePath(".lico", "codex-plugin-marketplace"));
-  return { root, pluginRoot: path.join(root, "plugins", PLUGIN_NAME), catalog: path.join(root, ".agents", "plugins", "marketplace.json") };
+export const description = descriptor({ target: "codex", label: "Codex", version: packageManifest.version, packageName: "@meshrix/agent-codex-adapter", commandNames: ["codex"], installMode: "native-remote-mcp" });
+function configPath(request) {
+  return request.client?.configPath || path.join(request.client?.configRoot || process.env.CODEX_HOME || homePath(".codex"), "config.toml");
 }
-
-async function writeMarketplace(request, connector) {
-  const paths = marketplacePaths(request);
-  const packageManifest = JSON.parse(await fs.readFile(new URL("./package.json", import.meta.url), "utf8"));
-  await writeJson(path.join(paths.pluginRoot, ".codex-plugin", "plugin.json"), {
-    name: PLUGIN_NAME, version: packageManifest.version, description: "Meshrix MCP integration for Codex.", license: "Apache-2.0", mcpServers: "./.mcp.json"
-  });
-  await writeJson(path.join(paths.pluginRoot, ".mcp.json"), { mcpServers: { [MCP_SERVER_NAME]: { command: connector.command, args: connector.args } } });
-  const catalog = await readJson(paths.catalog, { name: MARKETPLACE_NAME, plugins: [] });
-  catalog.name = MARKETPLACE_NAME;
-  catalog.plugins = [...(catalog.plugins || []).filter((item) => item?.name !== PLUGIN_NAME), { name: PLUGIN_NAME, source: { source: "local", path: `./plugins/${PLUGIN_NAME}` }, policy: { installation: "AVAILABLE", authentication: "ON_INSTALL" }, category: "Coding" }];
-  await writeJson(paths.catalog, catalog);
-  return paths;
-}
-
-async function installed(command) {
-  const result = await run(command, ["mcp", "get", MCP_SERVER_NAME], { allowFailure: true });
-  return result.ok && /\blico\b/iu.test(result.stdout);
-}
-
-export const adapter = {
+export const adapter = nativeAdapter({
   description,
-  async scan(request) {
-    const command = clientCommand(request, "codex");
-    const available = (await run(command, ["--version"], { allowFailure: true })).ok;
-    return { available, installed: available && await installed(command) };
-  },
-  async install(request) {
-    const command = clientCommand(request, "codex");
-    const connector = connectorFrom(request, "codex");
-    const marketplace = await writeMarketplace(request, connector);
-    await run(command, ["plugin", "marketplace", "add", marketplace.root], { allowFailure: true });
-    await run(command, ["plugin", "remove", `${PLUGIN_NAME}@${MARKETPLACE_NAME}`], { allowFailure: true });
-    await run(command, ["plugin", "add", `${PLUGIN_NAME}@${MARKETPLACE_NAME}`], { allowFailure: true });
-    await run(command, ["mcp", "remove", MCP_SERVER_NAME], { allowFailure: true });
-    await run(command, ["mcp", "add", MCP_SERVER_NAME, "--", connector.command, ...connector.args]);
-    return { installed: await installed(command), marketplaceRegistered: true };
-  },
-  async verify(request) { return { installed: await installed(clientCommand(request, "codex")) }; },
-  async uninstall(request) {
-    const command = clientCommand(request, "codex");
-    const existed = await installed(command);
-    const marketplace = marketplacePaths(request);
-    await run(command, ["mcp", "remove", MCP_SERVER_NAME], { allowFailure: true });
-    await run(command, ["plugin", "remove", `${PLUGIN_NAME}@${MARKETPLACE_NAME}`], { allowFailure: true });
-    await fs.rm(marketplace.pluginRoot, { recursive: true, force: true });
-    const catalog = await readJson(marketplace.catalog, null);
-    if (catalog?.plugins) {
-      catalog.plugins = catalog.plugins.filter((item) => item?.name !== PLUGIN_NAME);
-      await writeJson(marketplace.catalog, catalog);
+  async load(request, registration) {
+    const file = configPath(request);
+    let config;
+    try { config = parse(await fs.readFile(file, "utf8")); }
+    catch (error) {
+      if (error.code === "ENOENT") config = {};
+      else throw adapterError("invalid_client_config", "The Codex TOML configuration is invalid.", 74);
     }
-    return { removed: existed, installed: await installed(command), marketplaceRemoved: true };
+    if (config.mcp_servers !== undefined && (!config.mcp_servers || typeof config.mcp_servers !== "object" || Array.isArray(config.mcp_servers))) {
+      throw adapterError("invalid_client_config", "The Codex MCP server map is invalid.", 74);
+    }
+    return {
+      config, entry: config.mcp_servers?.[registration.serverName],
+      async save(entry) {
+        if (entry === undefined) delete config.mcp_servers[registration.serverName];
+        else config.mcp_servers = { ...config.mcp_servers, [registration.serverName]: entry };
+        await writePrivateFile(file, stringify(config));
+      }
+    };
+  },
+  async beforeInstall(request, registration, store) {
+    if (registration.serverName !== "lico") return false;
+    const root = request.client?.marketplaceRoot || homePath(".lico", "codex-plugin-marketplace");
+    const pluginRoot = path.join(root, "plugins", "lico");
+    const manifest = await readJson(path.join(pluginRoot, ".codex-plugin", "plugin.json"), null);
+    if (manifest?.name !== "lico" || manifest.description !== "Meshrix MCP integration for Codex." ||
+        manifest.license !== "Apache-2.0" || manifest.mcpServers !== "./.mcp.json") return false;
+    const servers = await readJson(path.join(pluginRoot, ".mcp.json"), {});
+    if (!isOwnedProxy(servers.mcpServers?.lico, registration, "codex")) return false;
+    // Disable only the positively identified former generated duplicate. Keep all plugin assets.
+    const id = "lico@meshrix-local";
+    if (store.config.plugins?.[id]?.enabled === false) return false;
+    store.config.plugins = { ...store.config.plugins, [id]: { ...store.config.plugins?.[id], enabled: false } };
+    return true;
   }
-};
-
+});
 if (isDirectInvocation(import.meta.url)) await runAdapterCli(adapter);

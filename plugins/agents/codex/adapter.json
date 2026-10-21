@@ -19,5 +19,5 @@
     "verify",
     "uninstall"
   ],
-  "installMode": "codex-marketplace-and-mcp-cli"
+  "installMode": "native-remote-mcp"
 }

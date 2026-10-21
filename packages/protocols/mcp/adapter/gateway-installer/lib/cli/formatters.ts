@@ -45,13 +45,11 @@ export function formatTargetInstallLine(target?: any, item: Record<string, any> 
     lines.push(`      Reason: ${item.error || "Install failed."}`);
     return lines;
   }
-  if (item.tokenSource) {
-    lines.push(`      Auth: ${item.tokenSource}`);
-  }
-  if (item.httpVerification) {
-    lines.push(
-      `      MCP verify: tools=${item.httpVerification.toolCount}, stableTool=${item.httpVerification.stableToolName || ""}, health=${yesNo(item.httpVerification.systemHealthOk)}`
-    );
+  lines.push(`      Registration: ${item.status || "unknown"}`);
+  if (item.credentialRef) lines.push(`      Credential reference: ${item.credentialRef.name} (client environment; not provisioned)`);
+  lines.push(`      Native client connectivity: ${item.connectivity || "not-run"}`);
+  if (item.serviceVerification) {
+    lines.push(`      Installer service probe: tools=${item.serviceVerification.toolCount}; this does not verify the client's credential environment.`);
   }
   return lines;
 }
@@ -110,7 +108,7 @@ export function formatInstallResult(result?: any) : any {
     ].join("\n");
   }
   const lines: any[] = [
-    result.ok ? "Meshrix.js MCP install completed." : "Meshrix.js MCP install completed with errors.",
+    result.ok ? "Meshrix.js native MCP configuration completed." : "Meshrix.js native MCP configuration completed with errors.",
     ""
   ];
   if (result.error) {
@@ -140,7 +138,8 @@ export function formatInstallResult(result?: any) : any {
     lines.push(...formatTargetInstallLine(target, installed[target] || {}));
   }
   lines.push("", "Next:");
-  lines.push("  Run: meshrix-mcp doctor");
+  lines.push("  Supply the selected credential reference securely to each client's launch environment.");
+  lines.push("  Environment persistence and native client connectivity were not established by registration.");
   lines.push("  Restart any selected agent app that was already running.");
   if (!result.ok) {
     lines.push("  Re-run failed clients after fixing the reason above.");
@@ -298,6 +297,7 @@ export function emitCommandError(error?: any, options: Record<string, any> = {},
     packageName: packageInfo.name,
     packageVersion: packageInfo.version,
     error: message,
-    ...guidance
+    ...guidance,
+    ...(["credential_handoff_required", "credential_reference_required", "unsupported_native_auto_update"].includes(error?.code) ? { errorCode: error.code } : {})
   }, options, command);
 }

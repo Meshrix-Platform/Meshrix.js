@@ -2,12 +2,12 @@
   "schemaVersion": "v0.0.1:schema:meshrix-plugin-manifest-1",
   "kind": "meshrix.plugin.manifest",
   "id": "agent-kimi",
-  "name": "Kimi CLI Agent Adapter",
+  "name": "Kimi Code Agent Adapter",
   "status": "stable",
   "types": [
     "client-peer-plugin"
   ],
-  "summary": "Kimi CLI peer adapter plugin.",
+  "summary": "Kimi Code capability assessment; protected Meshrix header registration is unsupported.",
   "group": "agents",
   "integration": {
     "sourceBoundary": "Repository-local optional adapter using only public Meshrix extension boundaries.",
@@ -17,13 +17,13 @@
     "operations": [],
     "toolsets": [],
     "mountNames": [],
-    "coveredCapabilities": ["Kimi CLI MCP installation, discovery, verification, and removal"]
+    "coveredCapabilities": ["Native capability assessment and matching generated-registration removal"]
   },
   "security": {
     "secrets": [],
     "risk": "mixed",
     "notes": [
-      "Use secretRef for provider credentials.",
+      "The verified bearer reference cannot carry the required Meshrix API Key header; installation fails without mutation.",
       "Expose agent-facing calls through Operation Permission v1 after policy review.",
       "Do not commit provider runtime data or local operator paths."
     ]
