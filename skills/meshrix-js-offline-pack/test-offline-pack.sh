@@ -340,7 +340,7 @@ NODE
   extracted="$root/extracted"
   mkdir -p "$extracted"
   tar -xzf "$artifact" -C "$extracted"
-  grep -F 'Valorius x-valorius-operation' "$extracted/meshrix-js/app/node_modules/example/index.js" >/dev/null || fail "behavior-not-preserved"
+  grep -F 'fixture-payload' "$extracted/meshrix-js/app/node_modules/example/index.js" >/dev/null || fail "behavior-not-preserved"
   [ "$(readlink "$extracted/meshrix-js/app/node_modules/example/runtime.js")" = "index.js" ] || fail "safe-link-not-preserved"
   [ ! -e "$extracted/meshrix-js/app/node_modules/@meshrix/unshipped-agent" ] || fail "missing-plugin-workspace-link-preserved"
   [ ! -L "$extracted/meshrix-js/app/node_modules/@meshrix/unshipped-agent" ] || fail "missing-plugin-workspace-link-preserved"
