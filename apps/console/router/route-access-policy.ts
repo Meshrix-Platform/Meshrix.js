@@ -69,7 +69,10 @@ export function routeAccessPolicyForPath(routePath: any = "") : any {
 }
 
 export function routeAccessPolicyAllowsSubject(policy: any = null, subject: Record<string, any> = {}, activeFeatureIds: any = []) : any {
-  if (!policy || policy.public === true) {
+  if (!policy) {
+    return false;
+  }
+  if (policy.public === true) {
     return true;
   }
   const requiredScopes: any = stringList(policy.requiredScopes || []);

@@ -123,6 +123,49 @@ describe("plugin console runtime routes", () : any => {
       .toHaveLength(sampleEntries.length);
   });
 
+  it("re-registers a route when its artifact or authorization signature changes", async () : Promise<any> => {
+    const router: any = createTestRouter();
+    const host: any = createHost();
+    syncPluginConsoleRoutes(router, [entry()], { host });
+    const name: any = "plugin-console:sample-plugin:admin.sample-plugin";
+    const before: any = router.getRoutes().find((route?: any) : any => route.name === name);
+    expect(before?.meta.accessPolicy.requiredScopes).toEqual(["console:read"]);
+
+    syncPluginConsoleRoutes(router, [entry({
+      artifactGeneration: 2,
+      artifactDigest: `sha256:${"b".repeat(64)}`,
+      requiredScopes: ["console:read", "console:admin"],
+    })], { host });
+
+    const registered: any = router.getRoutes().filter((route?: any) : any => route.name === name);
+    expect(registered).toHaveLength(1);
+    expect(registered[0].meta.accessPolicy.requiredScopes).toEqual(["console:read", "console:admin"]);
+    expect(registered[0].components?.default).not.toBe(before?.components?.default);
+
+    configureRuntimeRouteGuard(router, {
+      ready: true,
+      authenticated: true,
+      scopes: ["console:read"],
+      activeFeatureIds: ["sample-feature"],
+    });
+    await router.push("/admin/sample-plugin");
+    expect(router.currentRoute.value.path).not.toBe("/admin/sample-plugin");
+  });
+
+  it("denies a non-public route that carries no access policy", async () : Promise<any> => {
+    const router: any = createTestRouter();
+    configureRuntimeRouteGuard(router, {
+      ready: true,
+      authenticated: true,
+      scopes: ["console:read"],
+      activeFeatureIds: ["sample-feature"],
+    });
+    expect(routeAccessPolicyAllowsSubject(null, { scopes: ["console:read"] }, [])).toBe(false);
+    router.addRoute({ path: "/unprotected", component: View });
+    await router.push("/unprotected");
+    expect(router.currentRoute.value.path).not.toBe("/unprotected");
+  });
+
   it("denies direct navigation before authorization and with missing scopes", async () : Promise<any> => {
     const router: any = createTestRouter();
     const host: any = createHost();

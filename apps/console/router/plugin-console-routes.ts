@@ -51,7 +51,33 @@ export function canAccessPluginConsoleEntry(
   return canAccessRouteMeta(pluginConsoleEntryAccessMeta(entry));
 }
 
-const routeRegistrations: any = new WeakMap<Router, Map<string, () => void>>();
+const routeRegistrations: any = new WeakMap<Router, Map<string, { dispose: () => void; signature: string }>>();
+
+function registrationSignature(entry: PluginConsoleEntry) : string {
+  return JSON.stringify({
+    componentId: entry.componentId,
+    sandboxUrl: entry.sandboxUrl,
+    bridgeVersion: entry.bridgeVersion,
+    artifactDigest: entry.artifactDigest,
+    artifactGeneration: entry.artifactGeneration,
+    featureId: entry.featureId,
+    viewKey: entry.viewKey,
+    routePath: entry.routePath || "",
+    slotId: entry.slotId || "",
+    label: entry.label || "",
+    requiredScopes: [...entry.requiredScopes],
+    toolIds: [...entry.toolIds]
+  });
+}
+
+function isActivePluginRoute(router: Router, name: string) : boolean {
+  const registeredRoute: any = router.getRoutes().find((route?: any) : any => route.name === name);
+  return router.currentRoute.value.name === name || (
+    Boolean(registeredRoute) &&
+    router.currentRoute.value.path === registeredRoute?.path &&
+    Boolean(router.currentRoute.value.meta.pluginId)
+  );
+}
 
 function pluginConsoleComponentLoader(
   entry: PluginConsoleEntry,
@@ -119,17 +145,12 @@ export function syncPluginConsoleRoutes(
   }
   const routeEntries: any = entries.filter(hasPluginConsoleRoute);
   const desiredNames: any = new Set<any>(routeEntries.map(routeName));
-  const registrations: any = routeRegistrations.get(router) || new Map<string, () => void>();
+  const registrations: any = routeRegistrations.get(router) || new Map<string, { dispose: () => void; signature: string }>();
   routeRegistrations.set(router, registrations);
-  for (const [name, dispose] of registrations) {
+  for (const [name, registration] of registrations) {
     if (!desiredNames.has(name)) {
-      const registeredRoute: any = router.getRoutes().find((route?: any) : any => route.name === name);
-      const wasActive: any = router.currentRoute.value.name === name || (
-        Boolean(registeredRoute) &&
-        router.currentRoute.value.path === registeredRoute?.path &&
-        Boolean(router.currentRoute.value.meta.pluginId)
-      );
-      dispose();
+      const wasActive: any = isActivePluginRoute(router, name);
+      registration.dispose();
       registrations.delete(name);
       if (wasActive) void router.replace("/");
     }
@@ -137,7 +158,15 @@ export function syncPluginConsoleRoutes(
 
   for (const entry of routeEntries) {
     const name: any = routeName(entry);
-    if (registrations.has(name)) continue;
+    const signature: any = registrationSignature(entry);
+    const existing: any = registrations.get(name);
+    if (existing?.signature === signature) continue;
+    if (existing) {
+      const wasActive: any = isActivePluginRoute(router, name);
+      existing.dispose();
+      registrations.delete(name);
+      if (wasActive) void router.replace("/");
+    }
     const component: any = resolvePluginConsoleComponent(entry, host);
     if (!component) continue;
     const conflict: any = router.getRoutes().find((candidate?: any) : any => candidate.path === entry.routePath);
@@ -154,6 +183,6 @@ export function syncPluginConsoleRoutes(
         ...pluginConsoleEntryAccessMeta(entry),
       },
     };
-    registrations.set(name, router.addRoute(route));
+    registrations.set(name, { dispose: router.addRoute(route), signature });
   }
 }
