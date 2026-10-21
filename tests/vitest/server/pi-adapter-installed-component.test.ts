@@ -3,49 +3,70 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { invokeAdapter } from "@meshrix/client-adapter-kit";
 import packageManifest from "../../../package.json";
 
 import { resolveInstalledClientAdapter } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts";
 
-const temporaryRoots: any[] = [];
+const temporaryRoots: string[] = [];
 
-afterEach(async () : Promise<any> => {
-  await Promise.all(temporaryRoots.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
-  delete process.env.MESHRIX_MCP_PI_CONFIG;
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  await Promise.all(temporaryRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
 });
 
-describe("Pi adapter installed component", () : any => {
-  it("loads the local extension from the resolved root component and calls its MCP tool", async () : Promise<any> => {
-    const temporaryRoot: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-pi-component-"));
-    temporaryRoots.push(temporaryRoot);
-    const installed: any = await resolveInstalledClientAdapter({ target: "pi" });
-    expect(installed.adapter).toMatchObject({
-      packageName: "@meshrix/agent-pi-adapter",
-      version: packageManifest.version,
-      source: "meshrix-root-bundle"
-    });
+async function fixture() {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-pi-registration-"));
+  temporaryRoots.push(root);
+  vi.stubEnv("PI_CODING_AGENT_DIR", root);
+  const installed = await resolveInstalledClientAdapter({ target: "pi" });
+  expect(installed.adapter).toMatchObject({
+    packageName: "@meshrix/agent-pi-adapter",
+    version: packageManifest.version,
+    source: "meshrix-root-bundle"
+  });
+  const { adapter } = await import(pathToFileURL(path.join(installed.packageRoot, "adapter.mjs")).href);
+  const request = {
+    baseUrl: "https://gateway.invalid",
+    serverName: "lico",
+    credentialRef: { kind: "env", name: "MESHRIX_MCP_TOKEN" }
+  };
+  return { root, adapter, request };
+}
 
-    const configPath: any = path.join(temporaryRoot, "pi.json");
-    await fs.writeFile(configPath, `${JSON.stringify({
-      command: process.execPath,
-      args: [path.resolve("tests/plugins/fixtures/pi-mcp-server.mjs")]
-    })}\n`, { mode: 0o600 });
-    process.env.MESHRIX_MCP_PI_CONFIG = configPath;
+describe("Pi adapter installed component", () => {
+  it("registers native MCP under the configured agent directory and preserves unrelated settings", async () => {
+    const { root, adapter, request } = await fixture();
+    const mcpPath = path.join(root, "mcp.json");
+    const settingsPath = path.join(root, "settings.json");
+    const settings = `${JSON.stringify({ theme: "dark", extensions: ["custom.ts"] })}\n`;
+    await fs.writeFile(settingsPath, settings);
+    await fs.writeFile(mcpPath, JSON.stringify({ mcpServers: { other: { command: "other" } } }));
 
-    const extensionPath: any = path.join(installed.packageRoot, "extension.mjs");
-    const extensionModule: any = await import(`${pathToFileURL(extensionPath).href}?component=${Date.now()}`);
-    const handlers: any = new Map<any, any>();
-    const tools: any[] = [];
-    await extensionModule.default({
-      on(name?: any, handler?: any) { handlers.set(name, handler); },
-      registerTool(tool?: any) { tools.push(tool); }
+    await expect(invokeAdapter(adapter, "install", request)).resolves.toMatchObject({ installed: true, status: "configured", connectivity: "not-run" });
+    const registered = JSON.parse(await fs.readFile(mcpPath, "utf8"));
+    expect(registered.mcpServers.lico).toEqual({
+      url: `${request.baseUrl}/mcp`,
+      headers: { "X-Meshrix.js-Api-Key": "${MESHRIX_MCP_TOKEN}" }
     });
-    await handlers.get("session_start")({}, { ui: { notify() {} } });
-    expect(tools.map((tool?: any) : any => tool.name)).toContain("mcp_lico_file_convert");
-    await expect(tools[0].execute("call-1", { source: "installed.txt" })).resolves.toMatchObject({
-      content: [{ type: "text", text: "converted:installed.txt" }]
-    });
-    await handlers.get("session_shutdown")();
+    expect(registered.mcpServers.other).toEqual({ command: "other" });
+    expect(await fs.readFile(settingsPath, "utf8")).toBe(settings);
+    await expect(invokeAdapter(adapter, "verify", request)).resolves.toMatchObject({ installed: true, connectivity: "not-run" });
+    await expect(invokeAdapter(adapter, "uninstall", request)).resolves.toEqual({ removed: true, installed: false, credentialsPreserved: true });
+    expect(JSON.parse(await fs.readFile(mcpPath, "utf8"))).toEqual({ mcpServers: { other: { command: "other" } } });
+    expect(await fs.readFile(settingsPath, "utf8")).toBe(settings);
+  });
+
+  it("honors an explicit config root and refuses malformed configuration without overwriting it", async () => {
+    const { root, adapter, request } = await fixture();
+    const configRoot = path.join(root, "selected");
+    const selected = { ...request, client: { configRoot } };
+    await invokeAdapter(adapter, "install", selected);
+    await expect(fs.access(path.join(root, "mcp.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    const target = path.join(configRoot, "mcp.json");
+    await fs.writeFile(target, "{broken");
+    await expect(invokeAdapter(adapter, "install", selected)).rejects.toThrow("configuration is invalid");
+    expect(await fs.readFile(target, "utf8")).toBe("{broken");
   });
 });

@@ -1,23 +1,25 @@
 #!/usr/bin/env node
-import packageManifest from "./package.json" with { type: "json" };
-import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-  clientCommand, connectorFrom, descriptor, homePath, isDirectInvocation, run, runAdapterCli, writeJson
-} from "@meshrix/client-adapter-kit";
+import packageManifest from "./package.json" with { type: "json" };
+import { adapterError, clientCommand, descriptor, homePath, isDirectInvocation, jsonRegistrationStore, nativeAdapter, run, runAdapterCli } from "@meshrix/client-adapter-kit";
 
-const PACKAGE_NAME = "@meshrix/agent-pi-adapter";
-const LOCAL_PACKAGE_SOURCE = path.dirname(fileURLToPath(import.meta.url));
-export const description = descriptor({ target: "pi", label: "Pi", version: packageManifest.version, packageName: PACKAGE_NAME, commandNames: ["pi"], installMode: "external-client-adapter" });
-function configPath(request) { return String(request?.client?.configPath || homePath(".lico", "mcp", "pi.json")); }
-function packageSource() { return LOCAL_PACKAGE_SOURCE; }
-async function packageInstalled(command, source) { const result = await run(command, ["list"], { allowFailure: true }); return result.ok && (result.stdout.includes(PACKAGE_NAME) || result.stdout.includes(source)); }
-export const adapter = {
+export const description = descriptor({ target: "pi", label: "Pi", version: packageManifest.version, packageName: "@meshrix/agent-pi-adapter", commandNames: ["pi"], installMode: "native-remote-mcp" });
+function configPath(request) {
+  return request.client?.configPath || path.join(request.client?.configRoot || process.env.PI_CODING_AGENT_DIR || homePath(".pi", "agent"), "mcp.json");
+}
+export const adapter = nativeAdapter({
   description,
-  async scan(request) { const command = clientCommand(request, "pi"); const probe = await run(command, ["install", "--help"], { allowFailure: true }); const available = probe.ok && /pi install <source>/iu.test(`${probe.stdout}\n${probe.stderr}`); return { available, installed: available && await packageInstalled(command, packageSource()) }; },
-  async install(request) { const command = clientCommand(request, "pi"); const source = packageSource(); if (!await packageInstalled(command, source)) await run(command, ["install", source]); const connector = connectorFrom(request, "pi"); await writeJson(configPath(request), { serverName: "lico", command: connector.command, args: connector.args }); return { installed: await packageInstalled(command, source) }; },
-  async verify(request) { return { installed: await packageInstalled(clientCommand(request, "pi"), packageSource()) }; },
-  async uninstall(request) { const command = clientCommand(request, "pi"); const source = packageSource(); const existed = await packageInstalled(command, source); await run(command, ["remove", source], { allowFailure: true }); await fs.rm(configPath(request), { force: true }); return { removed: existed, installed: await packageInstalled(command, source) }; }
-};
+  async probe(request) {
+    const help = await run(clientCommand(request, "pi"), ["mcp", "--help"], { allowFailure: true });
+    return help.ok && /\bpi mcp add\b/u.test(`${help.stdout}\n${help.stderr}`);
+  },
+  load: (request, registration) => jsonRegistrationStore(configPath(request), "mcpServers", registration.serverName),
+  beforeInstall(_request, registration, store) {
+    const namespace = registration.serverName.replaceAll("-", "_");
+    if (Object.keys(store.config.mcpServers || {}).some((name) => name !== registration.serverName && name.replaceAll("-", "_") === namespace)) {
+      throw adapterError("registration_conflict", "Another Pi server uses the same tool namespace. Select a distinct --server-name.", 65);
+    }
+    return false;
+  }
+});
 if (isDirectInvocation(import.meta.url)) await runAdapterCli(adapter);

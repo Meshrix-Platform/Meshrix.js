@@ -1,20 +1,21 @@
 # Pi Agent Adapter
 
-Plugin ID: `agent-pi`
+Bundled private component: `@meshrix/agent-pi-adapter` (`agent-pi`).
 
-Internal component: `@meshrix/agent-pi-adapter`
+Writes `mcpServers.<name>` in Pi's native `mcp.json`, containing `url` and
+`headers: { "X-Meshrix.js-Api-Key": "${SELECTED_ENV}" }`. It honors
+`client.configPath`, `client.configRoot` and `PI_CODING_AGENT_DIR`; the default is
+`~/.pi/agent/mcp.json`. It does not install an extension or launch a local proxy.
 
-This private first-party component is bundled with `meshrix.js` and included
-in the portable connector runtime. Both consumers resolve it through standard
-Node package resolution and run it only for an explicit Pi action. Installation
-and authorization remain owned by the Meshrix Core native installer; this
-repository owns the Pi-specific extension runtime.
+Pi owns native MCP discovery, invocation, cancellation and tool exposure. The
+adapter requires a Pi version with native `pi mcp add` support for detection. The
+qualified reference format is Pi 1.3.0's environment-template header resolution and
+Streamable HTTP transport, not legacy SSE. Names differing only in hyphens versus
+underscores share a Pi tool namespace and cannot be installed together.
 
-The same component exposes the standard client-adapter JSON-stdio entrypoint.
-Pi loads its extension from the installed component directory; the adapter
-does not fetch a second package or accept a separate package source.
+Only a matching registration is removed. Existing authentication stores, independent
+assets, unrelated servers and policy fields are retained. Environment provisioning
+and native connectivity remain separate from configuration success.
 
-The extension reads connector metadata from the Core-owned Pi configuration
-file. That file contains no token, private key, provider credential, or backend
-runtime data. The connector retrieves the target-and-server-scoped API Key from
-its private credential store, unless the operator supplies a temporary override.
+See the [shared contract](../client-adapter-kit/README.md) and the installed Pi
+`docs/mcp.md` for native configuration semantics.

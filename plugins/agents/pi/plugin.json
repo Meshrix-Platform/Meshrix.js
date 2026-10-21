@@ -5,22 +5,22 @@
   "name": "Pi Agent Adapter",
   "status": "stable",
   "types": ["client-peer-plugin"],
-  "summary": "Official Pi extension package for the governed Meshrix MCP connector.",
+  "summary": "Native remote Pi MCP registration with an explicit protected credential reference.",
   "group": "agents",
   "integration": {
-    "sourceBoundary": "Repository-local optional adapter using only the public Meshrix MCP connector boundary.",
-    "meshrixBoundaries": ["signed MCP connector stdio proxy", "target-and-server-scoped API Key custody"],
+    "sourceBoundary": "Repository-local optional adapter configuring the public remote MCP endpoint.",
+    "meshrixBoundaries": ["native streamable HTTP MCP", "X-Meshrix.js-Api-Key environment reference"],
     "operations": [],
     "toolsets": [],
     "mountNames": [],
-    "coveredCapabilities": ["Pi MCP tool discovery and invocation"]
+    "coveredCapabilities": ["Native Pi MCP registration"]
   },
   "security": {
     "secrets": [],
     "risk": "mixed",
     "notes": [
-      "The plugin configuration contains connector metadata only.",
-      "Credentials remain in the Core-managed private credential store.",
+      "Client configuration contains the endpoint and selected environment-variable reference, not plaintext credentials.",
+      "The adapter does not provision persistent environment state or modify native authentication stores.",
       "The plugin never accepts raw tokens in configuration or process arguments."
     ]
   },
