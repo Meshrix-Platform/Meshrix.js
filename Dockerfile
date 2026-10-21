@@ -28,7 +28,6 @@ COPY packages/server-runtime/package.json ./packages/server-runtime/package.json
 COPY packages/ui-console/package.json ./packages/ui-console/package.json
 COPY plugins/agents/antigravity/package.json ./plugins/agents/antigravity/package.json
 COPY plugins/agents/claude-code/package.json ./plugins/agents/claude-code/package.json
-COPY plugins/agents/client-adapter-kit/package.json ./plugins/agents/client-adapter-kit/package.json
 COPY plugins/agents/codex/package.json ./plugins/agents/codex/package.json
 COPY plugins/agents/kimi/package.json ./plugins/agents/kimi/package.json
 COPY plugins/agents/meshrix-self-maintenance/package.json ./plugins/agents/meshrix-self-maintenance/package.json
