@@ -10174,21 +10174,39 @@
    "artifactId": "meshrix.workflow.work-queue-default",
    "kind": "runtime_capability",
    "description": "Governed version registry entry for meshrix.workflow.work-queue-default.",
-   "activeVersion": "v0.0.1:workflow:work-queue-default-1",
+   "activeVersion": "v0.0.1:workflow:work-queue-default-2",
    "versions": [
     {
      "version": "v0.0.1:workflow:work-queue-default-1",
      "ref": "meshrix.workflow.work-queue-default@v0.0.1:workflow:work-queue-default-1",
-     "lifecycle": "active",
+     "lifecycle": "deprecated",
      "compatibility": {
-      "newBindingsAllowed": true,
+      "newBindingsAllowed": false,
       "historicalResolutionAllowed": true,
-      "notes": "Current scanned governed version."
+      "notes": "Superseded by defaults that keep recoverable work alive to the caller-visible lifetime bound."
      },
      "artifactRefs": [],
      "evidenceRefs": [
       {
        "evidenceId": "v0-0-1-workflow-work-queue-default-1-source",
+       "kind": "other",
+       "uri": "packages/foundation/src/work-queue/policies.ts"
+      }
+     ]
+    },
+    {
+     "version": "v0.0.1:workflow:work-queue-default-2",
+     "ref": "meshrix.workflow.work-queue-default@v0.0.1:workflow:work-queue-default-2",
+     "lifecycle": "active",
+     "compatibility": {
+      "newBindingsAllowed": true,
+      "historicalResolutionAllowed": true,
+      "notes": "Current scanned governed version. Default attempt and lifetime bounds no longer terminate still-recoverable work early."
+     },
+     "artifactRefs": [],
+     "evidenceRefs": [
+      {
+       "evidenceId": "v0-0-1-workflow-work-queue-default-2-source",
        "kind": "other",
        "uri": "packages/foundation/src/work-queue/policies.ts"
       }

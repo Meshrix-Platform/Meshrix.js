@@ -3,12 +3,12 @@ import { createHash } from "node:crypto";
 export const WORK_QUEUE_LOCAL_MAX_IN_FLIGHT_HARD_LIMIT = 8192;
 
 export const DEFAULT_QUEUE_POLICY = Object.freeze({
-  policyVersion: "v0.0.1:workflow:work-queue-default-1",
+  policyVersion: "v0.0.1:workflow:work-queue-default-2",
   leaseTimeoutMs: 30_000,
   maxInFlight: 1000,
-  maxAttempts: 16,
+  maxAttempts: 10_000,
   workExpiry: Object.freeze({
-    defaultLifetimeMs: 7 * 24 * 60 * 60 * 1000,
+    defaultLifetimeMs: 30 * 24 * 60 * 60 * 1000,
     maxLifetimeMs: 30 * 24 * 60 * 60 * 1000
   }),
   retryBackoff: Object.freeze({

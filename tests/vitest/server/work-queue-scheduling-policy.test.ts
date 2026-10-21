@@ -230,6 +230,13 @@ describe("work queue scheduling policy", () : any => {
     expect(DEFAULT_QUEUE_POLICY.retryBackoff.jitter).toBe("deterministic_sha256");
   });
 
+  it("defaults keep recoverable work alive until the caller-visible lifetime bound", () : any => {
+    const { workExpiry, retryBackoff, maxAttempts } = DEFAULT_QUEUE_POLICY;
+    expect(workExpiry.defaultLifetimeMs).toBe(workExpiry.maxLifetimeMs);
+    const lifetimePacedAttempts = Math.floor(workExpiry.defaultLifetimeMs / retryBackoff.maxDelayMs);
+    expect(maxAttempts).toBeGreaterThanOrEqual(lifetimePacedAttempts);
+  });
+
   it("enforces project capacity transactionally without partial admission", async () : Promise<any> => {
     const fixture: any = await createFixture({
       capacity: {

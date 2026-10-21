@@ -61,7 +61,7 @@ requires an explicit recovery transition before it can be claimed again.
 Admission records an absolute work-expiry
 deadline. Claims and lease renewals cannot extend beyond that deadline, and a
 late acknowledgement, retry, progress update, cancellation, or recovery cannot
-replace `expired`. The default server policy expires work after seven days and
+replace `expired`. The default server policy expires work after thirty days and
 rejects requested lifetimes above thirty days.
 
 Queue startup does not scan job projections or resubmit queued jobs. Durable
