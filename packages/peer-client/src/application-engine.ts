@@ -1745,14 +1745,16 @@ export class PeerApplicationEngine {
           this.#executionQueue.delete(next.key);
           if (this.#started.has(next.key)) continue;
           this.#started.add(next.key);
-          void this.#execute(next.key).catch(() => {}).finally(() => {
+          void this.#execute(next.key).catch(() => {
+            this.#scheduleRecoveryRetry(false, true);
+          }).finally(() => {
             this.#started.delete(next.key);
             this.#executionQueue.delete(next.key);
             this.#pumpExecutionQueue();
             this.#wakeDeferredRoutes();
           });
         }
-      })().catch(() => {});
+      })().catch(() => this.#scheduleRecoveryRetry(false, true));
     });
   }
 

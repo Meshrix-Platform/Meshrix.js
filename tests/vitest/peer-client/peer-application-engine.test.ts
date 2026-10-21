@@ -61,6 +61,7 @@ class MemoryJournal implements PeerApplicationJournal {
   readonly handoffs = new Map<string, PeerApplicationHandoffPlan>();
   readonly fragments = new Map<string, { readonly header: PeerApplicationFragment; readonly parts: Map<number, string>; complete: boolean; applied: boolean }>();
   failResultPartIndex: number | null = null;
+  failResultPartAttempts = 0;
   failOperationWrites = 0;
   operationWriteCount = 0;
   listOperationsCalls = 0;
@@ -124,6 +125,10 @@ class MemoryJournal implements PeerApplicationJournal {
       .sort((left, right) => left.index - right.index));
   }
   async saveResultPart(operationKey: string, part: PeerApplicationResultPart) {
+    if (this.failResultPartAttempts > 0) {
+      this.failResultPartAttempts -= 1;
+      throw new Error("injected result-part write interruption");
+    }
     if (this.failResultPartIndex === part.index) {
       this.failResultPartIndex = null;
       throw new Error("injected result-part write interruption");
@@ -760,6 +765,22 @@ describe("Peer application execution journal", () => {
     expect(record?.resultText).toBe(finalText);
     expect(record?.resultPartCount).toBe(2);
     expect((await savedJournal.listResultParts(record?.key ?? "")).map((part) => part.text).join(" ")).toContain(finalText.slice(0, 32));
+    expect((await savedJournal.listResultParts(record?.key ?? "")).map((part) => part.text).join("")).toBe(finalText);
+    expect(agent.starts).toBe(1);
+  });
+
+  it("recovers a prepared final result without external wake after consecutive result-part write failures", async () => {
+    const journalB = new MemoryJournal();
+    journalB.failResultPartAttempts = 2;
+    const finalText = "x".repeat(40_000);
+    const agent = new CompletingAgent(finalText, "partial text");
+    const { engineA, engineB, journalB: savedJournal } = linkedEngines({ agentB: agent, journalB });
+    const operationId = "op.result.consecutive-write-window";
+    await engineA.submit({ address: ADDRESS_AB, operationId, targetAgentId: "agent.local", prompt: "return controlled result" });
+    await waitFor(async () => (await engineB.getOperation(operationId))?.status === "completed", "prepared result was not recovered after consecutive write failures", 10_000);
+    const record = await engineB.getOperation(operationId);
+    expect(record?.terminalPrepared).toBe(false);
+    expect(record?.resultText).toBe(finalText);
     expect((await savedJournal.listResultParts(record?.key ?? "")).map((part) => part.text).join("")).toBe(finalText);
     expect(agent.starts).toBe(1);
   });
