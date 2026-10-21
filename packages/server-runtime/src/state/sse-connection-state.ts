@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { normalizeMcpProxySessionId } from "#meshrix/contracts/mcp-catalog-delivery";
+import { disconnectMcpGrantSessions } from "#meshrix/protocols/mcp/notifications";
 
 interface SseLimits {
   total: number;
@@ -48,6 +49,7 @@ interface SseConnection {
   subscriptionId?: string | number;
   grant: unknown;
   privateOnly: boolean;
+  deliveryMode: "direct" | "adapter";
   negotiatedCapabilities: readonly string[];
   partitionKeys: readonly string[];
   pendingNotifications: PendingNotification[];
@@ -443,6 +445,7 @@ export function registerMcpSseConnection({
   negotiatedCapabilities = [],
   proxySessionId = "",
   subscriptionId,
+  deliveryMode = "direct",
 }: {
   request?: SseRequest;
   response?: SseResponse;
@@ -453,6 +456,7 @@ export function registerMcpSseConnection({
   negotiatedCapabilities?: unknown;
   proxySessionId?: unknown;
   subscriptionId?: unknown;
+  deliveryMode?: "direct" | "adapter";
 } = {}) {
   const normalizedGrantId = boundedIdentity(grantId);
   const remoteAddress = boundedIdentity(request?.socket?.remoteAddress);
@@ -523,6 +527,7 @@ export function registerMcpSseConnection({
     subscriptionId: normalizedSubscriptionId,
     grant,
     privateOnly: privateOnly !== false,
+    deliveryMode,
     negotiatedCapabilities: Object.freeze(normalizedCapabilities),
     partitionKeys: Object.freeze([]),
     pendingNotifications: [],
@@ -560,7 +565,7 @@ export function registerMcpSseConnection({
     }
     lifetimeBindings.length = 0;
   };
-  bindLifetimeClose(request, onClose, lifetimeBindings);
+  bindLifetimeClose(request, onClose, lifetimeBindings, deliveryMode === "adapter" ? "aborted" : "close");
   bindLifetimeClose(response, onClose, lifetimeBindings);
 
   return {
@@ -654,6 +659,10 @@ export function broadcastMcpNotification(
   }
 
   for (const connection of candidates) {
+    // Standard HTTP delivery is reauthorized by the protocol adapter's iterable.
+    // This owner still enforces connection capacity, backpressure and revocation,
+    // but never sends a duplicate event or imposes a modern acknowledgement.
+    if (connection.deliveryMode === "adapter") continue;
     if (scopedGrantId && connection.grantId !== scopedGrantId) continue;
     if (
       !scopedGrantId &&
@@ -831,6 +840,7 @@ export function disconnectMcpSseConnectionsByGrant(grantId: unknown = "") {
     if (connection.grantId !== normalizedGrantId) continue;
     if (removeConnection(connection, { close: true })) disconnected += 1;
   }
+  disconnectMcpGrantSessions(normalizedGrantId);
   return Object.freeze({ disconnectedConnectionCount: disconnected });
 }
 

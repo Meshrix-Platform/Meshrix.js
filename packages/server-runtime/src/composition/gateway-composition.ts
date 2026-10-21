@@ -65,6 +65,8 @@ export async function executeThroughPlatformGateway(input: { readonly gateway: G
 }
 
 export interface PlatformMcpGatewayOptions {
+  readonly standardSessionLimit?: number;
+  readonly standardRequestsPerSession?: number;
   readonly toolSkillManagementProvider: Record<string, any>;
   readonly upstreamGatewayRegistry?: Record<string, any> | null;
   readonly operationProofSubstrate?: Record<string, any> | null;
@@ -1249,6 +1251,8 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
   const adapter = createModernDownstreamAdapter({
     gateway,
     authenticate,
+    standardSessionLimit: options.standardSessionLimit,
+    standardRequestsPerSession: options.standardRequestsPerSession,
     resultMeta: (context) => {
       const authorization = isRecord(context.metadata?.authorization) ? context.metadata.authorization : {};
       const facts = typeof toolProvider.audienceCatalogFacts === "function"
@@ -1263,6 +1267,7 @@ export function createPlatformMcpGateway(options: PlatformMcpGatewayOptions): Pl
     gateway,
     adapter,
     async close(closeOptions = {}): Promise<void> {
+      adapter.close();
       try {
         await gateway.close(closeOptions);
       } finally {

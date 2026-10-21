@@ -50,6 +50,7 @@ function connectionFixture({
   partitionKeys = [],
   negotiatedCapabilities = ["notifications/tools/list_changed"],
   proxySessionId = "abcdefghijklmnopqrstuvwx",
+  deliveryMode = "direct",
   writeResult = true
 }: Record<string, any>) : any {
   const request: any = new EventEmitter();
@@ -63,7 +64,8 @@ function connectionFixture({
     privateOnly: true,
     partitionKeys,
     negotiatedCapabilities,
-    proxySessionId
+    proxySessionId,
+    deliveryMode
   });
   return { request, response, registration };
 }
@@ -79,6 +81,21 @@ afterEach(() : any => {
 });
 
 describe("MCP catalog convergence partitions", () : any => {
+  it("keeps adapter-delivered standard streams under capacity/backpressure without modern acknowledgement deadlines", async () => {
+    vi.useFakeTimers();
+    const fixture = connectionFixture({ grantId: "standard-grant", remoteAddress: "127.0.0.1", partitionKeys: ["part-standard"], proxySessionId: "", deliveryMode: "adapter" });
+    expect(fixture.registration.ok).toBe(true);
+    const result = broadcastMcpNotification({ method: "notifications/tools/list_changed", params: { change: { sourceRevision: 1, audienceRevision: 1, catalogRevision: "standard-1", affectedPartitions: ["part-standard"] } } }, { grantId: "standard-grant", includePrivate: true });
+    expect(result.deliveredConnectionCount).toBe(0);
+    expect(fixture.response.chunks).toEqual([]);
+    expect(fixture.registration.write("event: message\ndata: {}\n\n")).toBe(true);
+    await vi.advanceTimersByTimeAsync(MCP_SSE_CONNECTION_LIMITS.acknowledgementTimeoutMs + 1);
+    expect(getMcpSseConnectionState().activeConnectionCount).toBe(1);
+    expect(getMcpCatalogConvergenceCohort()).toEqual([]);
+    fixture.response.writableLength = MCP_SSE_CONNECTION_LIMITS.maxBufferedBytes + 1;
+    expect(fixture.registration.write("event: message\ndata: {}\n\n")).toBe(false);
+    expect(getMcpSseConnectionState().activeConnectionCount).toBe(0);
+  });
   it("delivers revision-only invalidation only to affected partitions and digests", () : any => {
     configureMcpNotificationBus({ broadcastNotification: sseBroadcast });
     const affected: any = connectionFixture({

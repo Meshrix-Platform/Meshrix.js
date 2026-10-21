@@ -12,6 +12,7 @@ import {
   parseMcpSubscriptionNotifications
 } from "./protocol.ts";
 import { registerMcpGatewaySubscription } from "../notifications.ts";
+import { isStandardHttpRequest, StandardHttpSessions } from "./standard-http.ts";
 import {
   CATEGORIZED_TOOL_NAMES,
   MCP_DISCOVERY_TOOL_NAME,
@@ -96,6 +97,8 @@ export interface ModernDownstreamResponse {
   readonly body?: unknown;
   readonly stream?: AsyncIterable<unknown>;
   readonly close?: () => void;
+  readonly notificationProfile?: "standard";
+  readonly subscriptionContext?: AuthenticatedContext;
 }
 
 export interface ModernDownstreamAdapterOptions {
@@ -103,6 +106,8 @@ export interface ModernDownstreamAdapterOptions {
   readonly authenticate?: (request: ModernDownstreamRequest) => AuthenticatedContext | Promise<AuthenticatedContext | undefined> | undefined;
   readonly serverInfo?: Readonly<Record<string, unknown>>;
   readonly subscriptionByteBudget?: number;
+  readonly standardSessionLimit?: number;
+  readonly standardRequestsPerSession?: number;
   /**
    * Result-level `_meta` for catalog enumeration replies. The composition supplies the
    * authorization-partitioned catalog revision facts so a peer can prove the catalog it
@@ -159,12 +164,17 @@ const SUPPORTED_MODERN_METHODS: ReadonlySet<string> = new Set([
   "completion/complete"
 ]);
 
-function subscriptionAuthority(context: AuthenticatedContext): string {
+function subscriptionAuthority(context: AuthenticatedContext, allowCatalogChanges = false): string {
+  // Native tools/list_changed invalidates the catalog projection, not the
+  // credential or policy. Comparing derived routeRefs would retire the session
+  // precisely when a tool is added/removed, cancelling unrelated active work.
+  // Keep the published modern subscription's full authority comparison intact.
+  const { routeRefs: _routes, ...authorityGrant } = context.grant;
   return JSON.stringify({
     tenant: context.tenant,
     principal: context.principal,
     authGeneration: context.authGeneration,
-    grant: context.grant
+    grant: allowCatalogChanges ? authorityGrant : context.grant
   });
 }
 
@@ -295,6 +305,8 @@ export class ModernDownstreamAdapter {
   readonly #serverInfo: Readonly<Record<string, unknown>>;
   readonly #subscriptionByteBudget: number;
   readonly #resultMeta?: ModernDownstreamAdapterOptions["resultMeta"];
+  readonly #standard: StandardHttpSessions;
+  readonly #notificationPorts = new Map<string, { users: number; unregister: () => void }>();
 
   constructor(options: ModernDownstreamAdapterOptions) {
     this.#gateway = options.gateway;
@@ -302,6 +314,41 @@ export class ModernDownstreamAdapter {
     this.#serverInfo = Object.freeze({ name: "meshrix-gateway", version: "0.1.0-alpha.1", ...(options.serverInfo ?? {}) });
     this.#subscriptionByteBudget = Math.max(1, Math.floor(options.subscriptionByteBudget ?? 1024 * 1024));
     this.#resultMeta = options.resultMeta;
+    this.#standard = new StandardHttpSessions({
+      authenticate: (request, id) => this.#authorize(request, id),
+      dispatch: (request, context) => this.#dispatch(request, context),
+      subscribe: (request, context, onAuthorizationLost) => this.#subscriptionResponse(request, context, null, { notifications: { toolsListChanged: true } }, onAuthorizationLost),
+      grantId: subscriptionGrantId,
+      serverInfo: this.#serverInfo,
+      maxSessions: options.standardSessionLimit,
+      maxRequestsPerSession: options.standardRequestsPerSession
+    });
+  }
+
+  close(): void {
+    this.#standard.close();
+  }
+
+  #retainNotificationPort(context: AuthenticatedContext): () => void {
+    const key = subscriptionAuthority(context);
+    let port = this.#notificationPorts.get(key);
+    if (!port) {
+      port = { users: 0, unregister: registerMcpGatewaySubscription({
+        methods: Object.keys(EVENT_TYPE_BY_NOTIFICATION_METHOD),
+        grantId: subscriptionGrantId(context),
+        publish: (event: SubscriptionEvent) => {
+          (this.#gateway as Gateway & { publishEvent?: (eventContext: AuthenticatedContext, value: SubscriptionEvent) => void }).publishEvent?.(context, event);
+        }
+      }) };
+      this.#notificationPorts.set(key, port);
+    }
+    port.users += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      if (--port.users === 0) { port.unregister(); this.#notificationPorts.delete(key); }
+    };
   }
 
   /**
@@ -360,18 +407,18 @@ export class ModernDownstreamAdapter {
     }
   }
 
-  async #reauthorizeSubscription(request: ModernDownstreamRequest, original: AuthenticatedContext): Promise<AuthenticatedContext | undefined> {
+  async #reauthorizeSubscription(request: ModernDownstreamRequest, original: AuthenticatedContext, allowCatalogChanges = false): Promise<AuthenticatedContext | undefined> {
     if (!this.#authenticate) return original;
     try {
       const current = await this.#authenticate({ ...request, context: undefined });
-      if (!current || subscriptionAuthority(current) !== subscriptionAuthority(original)) return undefined;
+      if (!current || subscriptionAuthority(current, allowCatalogChanges) !== subscriptionAuthority(original, allowCatalogChanges)) return undefined;
       return current;
     } catch {
       return undefined;
     }
   }
 
-  #subscriptionResponse(request: ModernDownstreamRequest, context: AuthenticatedContext, id: unknown, params: Record<string, unknown>): ModernDownstreamResponse {
+  #subscriptionResponse(request: ModernDownstreamRequest, context: AuthenticatedContext, id: unknown, params: Record<string, unknown>, onAuthorizationLost?: () => void): ModernDownstreamResponse {
     const parsed = parseMcpSubscriptionNotifications(params);
     if (!parsed.ok) return json(400, rpcError(id, -32602, parsed.error));
     const methods = parsed.methods as readonly string[];
@@ -384,13 +431,7 @@ export class ModernDownstreamAdapter {
     const subscription = this.#gateway.subscribe(context, kinds);
     const requestedId = mcpSubscriptionIdFromRequest(request.body);
     const subscriptionId = requestedId === "" ? subscription.id : requestedId;
-    const unregisterNotificationPort = registerMcpGatewaySubscription({
-      methods,
-      grantId: subscriptionGrantId(context),
-      publish: (event: SubscriptionEvent) => {
-        (this.#gateway as Gateway & { publishEvent?: (eventContext: AuthenticatedContext, value: SubscriptionEvent) => void }).publishEvent?.(context, event);
-      }
-    });
+    const unregisterNotificationPort = this.#retainNotificationPort(context);
     let closed = false;
     let abortListener: (() => void) | undefined;
     const close = (): void => {
@@ -416,7 +457,8 @@ export class ModernDownstreamAdapter {
               close();
               return { done: true, value: undefined };
             }
-            const current = await this.#reauthorizeSubscription(request, context);
+            const current = await this.#reauthorizeSubscription(request, context, onAuthorizationLost !== undefined);
+            if (!current) onAuthorizationLost?.();
             const notification = current ? notificationForEvent(next.value, subscriptionId) : null;
             if (!notification || streamBytes(notification) > this.#subscriptionByteBudget) {
               close();
@@ -453,6 +495,7 @@ export class ModernDownstreamAdapter {
   }
 
   async handle(request: ModernDownstreamRequest): Promise<ModernDownstreamResponse> {
+    if (isStandardHttpRequest(request)) return this.#standard.handle(request);
     const transport = request.transport ?? "streamable-http";
     const headers = headersOf(request.headers);
     if (transport !== "streamable-http" && transport !== "stdio") return json(400, rpcError(null, -32600, "Unsupported MCP transport."));
@@ -479,6 +522,12 @@ export class ModernDownstreamAdapter {
     if (isUnauthenticatedMcpMethod(method)) {
        return json(200, { jsonrpc: "2.0", id, result: method === MCP_DISCOVER_METHOD ? mcpDiscoverResult({ serverInfo: this.#serverInfo }) : { resultType: "complete" } });
     }
+    const authorized = await this.#authorize(request, id);
+    if ("status" in authorized) return authorized;
+    return this.#dispatch(request, authorized);
+  }
+
+  async #authorize(request: ModernDownstreamRequest, id: unknown): Promise<AuthenticatedContext | ModernDownstreamResponse> {
     let context: AuthenticatedContext | undefined;
     try {
       context = await this.#authenticate?.(request) ?? request.context;
@@ -500,7 +549,14 @@ export class ModernDownstreamAdapter {
       return json(safeStatus, rpcError(id, safeStatus === 403 ? -32003 : -32001, message, code ? { code } : undefined));
     }
     if (!context) return json(401, rpcError(id, -32001, "Authenticated context is required."));
-    const params = isPlainRecord(request.body.params) ? request.body.params : {};
+    return context;
+  }
+
+  async #dispatch(request: ModernDownstreamRequest, context: AuthenticatedContext): Promise<ModernDownstreamResponse> {
+    const body = request.body as Record<string, unknown>;
+    const id = body.id;
+    const method = String(body.method);
+    const params = isPlainRecord(body.params) ? body.params : {};
     if (method === MCP_SUBSCRIBE_METHOD) return this.#subscriptionResponse(request, context, id, params);
     if (method === "tools/list" || method === "resources/list" || method === "resources/templates/list" || method === "prompts/list") {
       const kind = method === "tools/list" ? "tool" : method === "resources/list" ? "resource" : method === "resources/templates/list" ? "resource_template" : "prompt";

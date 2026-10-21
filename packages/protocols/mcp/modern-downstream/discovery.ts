@@ -157,6 +157,8 @@ function mcpPublicTargetConfigTemplate(_target?: any, { baseUrl = "", vmBaseUrl 
   };
 }
 
+const nativeReferenceArgs = " --token-env MESHRIX_MCP_TOKEN --server-name lico";
+
 function mcpClientTargetGuides({ baseUrl = "", vmBaseUrl = "" }: Record<string, any> = {}) : any {
   const urlArgs: any = commandUrlArgs(baseUrl);
   const packageExec = `npx --yes --package ${MCP_NPM_PACKAGE_NAME}@${MCP_NPM_PACKAGE_VERSION} meshrix-mcp`;
@@ -164,18 +166,19 @@ function mcpClientTargetGuides({ baseUrl = "", vmBaseUrl = "" }: Record<string, 
     target: client.target,
     label: client.label,
     priority: client.priority,
+    nativeRegistration: client.nativeRegistration,
     locations: [...client.locations],
     endpoints: {
       mcpUrl: `${baseUrl}/mcp`,
       vmMcpUrl: `${vmBaseUrl}/mcp`
     },
     install: {
-      command: `${packageExec} install --target ${client.target}${urlArgs}`,
-      commandJson: `${packageExec} install --target ${client.target}${urlArgs} --json`,
-      uninstallCommand: `${packageExec} uninstall --target ${client.target}${urlArgs} --json`,
-      doctorCommand: `${packageExec} doctor${urlArgs} --json`
+      command: client.nativeRegistration.supported ? `${packageExec} install --target ${client.target}${urlArgs}${nativeReferenceArgs}` : "",
+      commandJson: client.nativeRegistration.supported ? `${packageExec} install --target ${client.target}${urlArgs}${nativeReferenceArgs} --json` : "",
+      uninstallCommand: `${packageExec} uninstall --target ${client.target}${urlArgs}${nativeReferenceArgs} --json`,
+      doctorCommand: `${packageExec} doctor${urlArgs}${nativeReferenceArgs} --json`
     },
-    tokenInput: "api-key-stdin-or-env",
+    tokenInput: "client-environment-reference",
     configTemplate: mcpPublicTargetConfigTemplate(client.target, { baseUrl, vmBaseUrl })
   }));
 }
@@ -192,14 +195,14 @@ export function buildMeshrixMcpDiscovery({ listenUrl = "", discoveryState = null
   const { baseUrl, vmBaseUrl } = mcpDiscoveryBase({ listenUrl, discoveryState });
   const urlArgs: any = commandUrlArgs(baseUrl);
   const packageExec = `npx --yes --package ${MCP_NPM_PACKAGE_NAME}@${MCP_NPM_PACKAGE_VERSION} meshrix-mcp`;
-  const installCommand: any = npmMcpCommand("install", baseUrl);
-  const clientInstallCommand: any = `${packageExec} install --target codex${urlArgs}`;
-  const clientInstallJsonCommand: any = `${packageExec} install --target codex${urlArgs} --json`;
-  const autoInstallCommand: any = `${packageExec} install --target auto${urlArgs} --json`;
-  const priorityInstallCommand: any = `${packageExec} install --target ${MCP_PRIORITY_INSTALL_TARGET}${urlArgs} --json`;
+  const installCommand: any = `${npmMcpCommand("install", baseUrl)}${nativeReferenceArgs}`;
+  const clientInstallCommand: any = `${packageExec} install --target codex${urlArgs}${nativeReferenceArgs}`;
+  const clientInstallJsonCommand: any = `${packageExec} install --target codex${urlArgs}${nativeReferenceArgs} --json`;
+  const autoInstallCommand: any = `${packageExec} install --target auto${urlArgs}${nativeReferenceArgs} --json`;
+  const priorityInstallCommand: any = `${packageExec} install --target ${MCP_PRIORITY_INSTALL_TARGET}${urlArgs}${nativeReferenceArgs} --json`;
   const interactiveInstallCommand: any = installCommand;
-  const uninstallCommand: any = `${packageExec} uninstall --target codex${urlArgs} --json`;
-  const doctorCommand: any = `${packageExec} doctor${urlArgs} --json`;
+  const uninstallCommand: any = `${packageExec} uninstall --target codex${urlArgs}${nativeReferenceArgs} --json`;
+  const doctorCommand: any = `${packageExec} doctor${urlArgs}${nativeReferenceArgs} --json`;
   const discoverCommand: any = `${packageExec} discover-local${urlArgs} --json`;
   const scanCommand: any = `${packageExec} scan${urlArgs} --json`;
   const clientTargets: any = mcpClientTargetGuides({ baseUrl, vmBaseUrl });
@@ -262,7 +265,9 @@ export function buildMeshrixMcpDiscovery({ listenUrl = "", discoveryState = null
       doctorCommand,
       discoverCommand,
       scanCommand,
-      tokenInput: "api-key-stdin-or-env",
+      tokenInput: "client-environment-reference",
+      environmentProvisioned: false,
+      nativeConnectivity: "not-run",
       portable: {
         requiresInstalledNode: false,
         strategy: "verified-portable-connector",
@@ -306,9 +311,10 @@ export function buildMeshrixMcpDiscovery({ listenUrl = "", discoveryState = null
       }
     },
     auth: {
-      type: "meshrix_operation_permission_token",
-      acceptedHeaders: ["Authorization: Bearer <token>", "X-Meshrix.js-Api-Key"],
-      tokenSource: "Meshrix.js Operation Permission grant token"
+      type: "meshrix_api_key",
+      acceptedHeaders: ["X-Meshrix.js-Api-Key"],
+      tokenSource: "Meshrix.js scoped API Key",
+      delegatedChild: { grantType: "delegated-mcp-child", acceptedHeaders: ["Authorization: Bearer <token>"] }
     },
     identity: discoveryState?.mcpIdentity
       ? publicMcpIdentity(discoveryState.mcpIdentity)

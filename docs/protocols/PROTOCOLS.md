@@ -107,9 +107,40 @@ Upstream execution sessions are scoped to a trusted principal and grant, not to 
 
 The published protocol is the complete server-client boundary. Core owns only server-side schema, negotiation, authentication, authorization, scoped notification, pull, acknowledgement, disconnect, and reconnect-fence semantics. Core plans, source, tests, gates, and receipts must not depend on a client repository, implementation, build, plan, test, report, or receipt. Server conformance is proven with protocol-owned schemas, frozen wire corpora, and neutral mock peers. Client adoption is independently verified by each client owner and cannot block or promote a server receipt.
 
-### Downstream update subscriptions
+### Native downstream Streamable HTTP
 
-Downstream HTTP MCP uses protocol revision `2026-07-28`. Ordinary success
+The `/mcp` endpoint accepts standard `initialize` and authenticated
+`notifications/initialized` for the tools profile. It negotiates `2025-11-25`,
+`2025-06-18`, or `2025-03-26`; an unsupported offered version receives the newest
+supported version. It advertises tools/list-change support, not unsupported
+resource, prompt, or continuation capabilities. Completed tool results use the
+standard shape; modern continuation or extension results become explicit
+capability errors without replaying the operation.
+
+`Mcp-Session-Id` correlates protocol state but is never a credential. Every
+request is authenticated and bound to the original tenant, principal and
+credential identity. `notifications/cancelled` cancels only the matching typed
+request id within that authenticated session. HTTP request disconnection releases
+its work; DELETE, authorization revocation, and gateway shutdown retire sessions.
+There are no elapsed-time session or request cutoffs. Admission is count-bounded
+(defaults: 1,024 sessions and 128 concurrent requests per session); embedding
+composition may configure those limits.
+
+After initialization, authenticated GET opens one SSE notification stream per
+session. It uses the existing partition isolation, per-delivery authorization,
+revocation and backpressure protections. It does not require modern subscription
+acknowledgements or a proxy identity, and imposes no modern acknowledgement
+deadline. Closing the notification socket releases that stream without cancelling
+unrelated tool requests. Query-string capability negotiation is not supported.
+
+Ordinary scoped keys use `X-Meshrix.js-Api-Key`; Bearer placement remains invalid.
+Client-product identity is optional, while any key-required process identity
+remains enforced. Native clients and the modern profile share the same governed
+catalog and invocation dispatcher.
+
+### Modern downstream update subscriptions
+
+The published modern HTTP MCP profile uses protocol revision `2026-07-28`. Ordinary success
 results use `resultType: "complete"`, including `meshrix/catalog/acknowledge`.
 Discover advertises `supportedVersions` and places server identity in
 `_meta["io.modelcontextprotocol/serverInfo"]`. Required request `_meta` and
@@ -118,8 +149,17 @@ requires `Mcp-Name`. Malformed or unsafe header values are rejected even when
 they match the body. A name mismatch uses generic text and does not echo the
 body name or resource URI. HTTP POST accepts exactly one JSON-RPC request or
 notification; a batch is rejected before authorization or execution. Modern
-`initialize` is not a downstream method. Upstream MCP forwarding keeps its
-independent initialize/session revision.
+`initialize` is not a method of this modern profile. Its metadata and mirror
+headers are never reinterpreted as a less strict native request. Upstream MCP
+forwarding keeps its independent initialize/session revision.
+
+The connector's local stdio surface separately exposes the standard MCP
+`2025-11-25` tools profile. It answers `initialize` with its own supported
+version and consumes `notifications/initialized` locally; neither message is
+forwarded as an HTTP initialization request. This is a generic connector
+boundary, not a client-product-specific protocol. Initialization establishes
+only the local protocol; upstream availability and API Key authorization
+remain enforced by tool discovery and invocation.
 
 The `meshrix.js` package's `meshrix-mcp` executable and the offline portable
 MCP component both depend on the shared `http-mcp-adapter-client-wire`
@@ -138,9 +178,9 @@ Skill Hub exposes its own authenticated, cursor-resumable event stream. Core's
 external-service gateway owns that connection and credential, reduces each
 event to a revision and operation id, and publishes it to authenticated MCP
 subscriptions. Notifications trigger catalog refresh; neither Core nor the
-connector executes commands carried by a notification. The removed GET `/mcp`
-SSE registration and query-string capability negotiation stay retired;
-Streamable HTTP is the current registration path.
+connector executes commands carried by a notification. The modern profile uses
+POST subscriptions; native Streamable HTTP uses the separately negotiated GET
+notification stream described above, not the former query-string registration.
 
 ## Delegated MCP Child Calls
 
@@ -163,8 +203,10 @@ The platform downstream adapter target scope is OpenClaw, Codex, Claude Code,
 Antigravity, OpenCode, Pi, and Kimi CLI. Their optional first-party adapter
 components are private modules bundled with `meshrix.js` and operate through
 the bounded JSON-stdio protocol only after an explicit target action. The
-client applications remain independent products; the connector owns credential
-custody and the install/uninstall transaction.
+client applications remain independent products. The installer owns the selected
+registration transaction; native registrations reference caller-selected external
+credential custody and do not require a shared device credential store. Supported
+and unqualified combinations are listed in [Compatibility](../COMPATIBILITY.md).
 
 MCP user-device installation uses the `meshrix-mcp` executable shipped by the
 `meshrix.js` Node.js package. That CLI is the single implementation of argument

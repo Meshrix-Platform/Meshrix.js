@@ -14,6 +14,24 @@ let sseConnectionRegistrar: any = null;
 let catalogConvergenceAcknowledger: any = null;
 let grantConnectionDisconnector: any = null;
 const gatewaySubscriptions = new Set<any>();
+const grantSessions = new Map<string, Set<() => void>>();
+
+/** Protocol sessions retire with their authorization, including sessions without
+ * an open notification socket. No timer is used as a substitute for revocation. */
+export function registerMcpGrantSession(grantId: string, close: () => void): () => void {
+  if (!grantId) return () => {};
+  let sessions = grantSessions.get(grantId);
+  if (!sessions) { sessions = new Set(); grantSessions.set(grantId, sessions); }
+  sessions.add(close);
+  return () => {
+    sessions.delete(close);
+    if (sessions.size === 0) grantSessions.delete(grantId);
+  };
+}
+
+export function disconnectMcpGrantSessions(grantId: string): void {
+  for (const close of [...(grantSessions.get(grantId) ?? [])]) close();
+}
 
 const EVENT_TYPE_BY_NOTIFICATION_METHOD: Readonly<Record<string, string>> = Object.freeze({
   "notifications/tools/list_changed": "tools/list_changed",

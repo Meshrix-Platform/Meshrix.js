@@ -169,9 +169,14 @@ async function openPlatformMcpSubscriptionStream({
       // The adapter subscription is already released.
     }
   };
-  const parsedNotifications: any = parseMcpSubscriptionNotifications(payload?.params || {});
-  const subscriptionId: any = mcpSubscriptionIdFromRequest(payload);
-  const authorization: any = await toolSkillManagementProvider.authorizeMcpClientRequest({
+  const standard = result.notificationProfile === "standard";
+  const parsedNotifications: any = parseMcpSubscriptionNotifications(standard
+    ? { notifications: { toolsListChanged: true } }
+    : payload?.params || {});
+  const subscriptionId: any = standard ? undefined : mcpSubscriptionIdFromRequest(payload);
+  const authorization: any = standard
+    ? result.subscriptionContext?.metadata?.authorization
+    : await toolSkillManagementProvider.authorizeMcpClientRequest({
     request,
     requiredScopes: [],
     recordUse: false,
@@ -191,8 +196,9 @@ async function openPlatformMcpSubscriptionStream({
     privateOnly: true,
     partitionKeys,
     negotiatedCapabilities: parsedNotifications.ok ? parsedNotifications.methods : [],
+    deliveryMode: standard ? "adapter" : "direct",
     subscriptionId,
-    proxySessionId: normalizeMcpProxySessionId(
+    proxySessionId: standard ? "" : normalizeMcpProxySessionId(
       request?.headers?.[MCP_PROXY_SESSION_HEADER_LOWER]
     )
   });
@@ -216,9 +222,9 @@ async function openPlatformMcpSubscriptionStream({
     "Cache-Control": "no-store, no-transform",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
-    "MCP-Protocol-Version": MCP_PROTOCOL_VERSION
+    ...(standard ? {} : { "MCP-Protocol-Version": MCP_PROTOCOL_VERSION })
   });
-  if (!registration.write(platformMcpSseFrame(mcpSubscriptionAckNotification({
+  if (!registration.write(standard ? ": connected\n\n" : platformMcpSseFrame(mcpSubscriptionAckNotification({
     subscriptionId,
     notifications: parsedNotifications.ok ? parsedNotifications.notifications : {}
   })))) {
@@ -241,7 +247,8 @@ async function openPlatformMcpSubscriptionStream({
     releaseAdapter();
     registration.close?.();
   };
-  request?.once?.("close", onClientGone);
+  const requestCloseEvent = standard ? "aborted" : "close";
+  request?.once?.(requestCloseEvent, onClientGone);
   response?.once?.("close", onClientGone);
   try {
     for await (const event of result.stream) {
@@ -272,7 +279,12 @@ async function openPlatformMcpSubscriptionStream({
   } catch {
     // A broken downstream socket is a client disconnect, not an upstream fault.
   } finally {
-    // The adapter subscription can end on its own when per-delivery
+    if (standard) {
+      registration.close?.();
+      request?.removeListener?.(requestCloseEvent, onClientGone);
+      response?.removeListener?.("close", onClientGone);
+    }
+    // The modern adapter subscription can end on its own when per-delivery
     // re-authorization revokes this caller. The SSE connection outlives it so
     // the client still converges on the catalog revision it was sent and can
     // acknowledge it; the connection itself is closed by the subscription
@@ -353,16 +365,22 @@ async function sendPlatformMcpAdapterResponse({
   toolSkillManagementProvider
 }: Record<string, any>) : Promise<any> {
   if (result?.stream && typeof result.stream[Symbol.asyncIterator] === "function") {
-    await openPlatformMcpSubscriptionStream({
-      request,
-      response,
-      requestBody,
-      url,
-      method,
-      payload,
-      result,
-      toolSkillManagementProvider
-    });
+    try {
+      await openPlatformMcpSubscriptionStream({
+        request,
+        response,
+        requestBody,
+        url,
+        method,
+        payload,
+        result,
+        toolSkillManagementProvider
+      });
+    } finally {
+      // Standard streams have no separate convergence lifetime. Release the
+      // adapter even if connection admission or response setup throws.
+      if (result.notificationProfile === "standard") result.close?.();
+    }
     return;
   }
   const status: any = Number.isInteger(result?.status) ? result.status : 502;
@@ -998,14 +1016,14 @@ export function createHttpServerRequestHandler({
               });
               return;
             }
-            if (method !== "POST") {
-              response.writeHead(405, { Allow: "POST", "Cache-Control": "no-store" });
+            if (!["POST", "GET", "DELETE"].includes(method)) {
+              response.writeHead(405, { Allow: "POST, GET, DELETE", "Cache-Control": "no-store" });
               response.end();
               return;
             }
             let payload: any;
             try {
-              payload = parseMcpRequestBody(requestBody);
+              payload = method === "POST" ? parseMcpRequestBody(requestBody) : undefined;
             } catch {
               runtimeLogger.warn("mcp.http.invalid_json", {
                 requestId: request?.__meshrixRequestId || ""
