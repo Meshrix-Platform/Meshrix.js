@@ -21,6 +21,9 @@ jobs:
   # OIDC token-request authority so arbitrary repo code cannot mint tokens.
   verify:
     name: Verify and qualify the release archives
+    # Only tag refs may qualify a release: a tag-shaped branch selected
+    # through workflow_dispatch must not reach the OIDC publish job.
+    if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-15
     permissions:
       contents: read
@@ -82,6 +85,8 @@ jobs:
   publish:
     name: Publish the verified release
     needs: verify
+    # Re-assert the tag boundary on the privileged job itself.
+    if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-15
     environment: release-candidate
     permissions:
@@ -92,6 +97,9 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.ref }}
+
+      - name: Confirm the checkout is the tagged commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:

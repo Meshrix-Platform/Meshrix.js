@@ -37,6 +37,14 @@ describe("standard npm release workflow", () => {
     const verifySection = workflow.slice(verifyStart, publishStart);
     const publishSection = workflow.slice(publishStart);
 
+    // Only tag refs may qualify or publish: workflow_dispatch can name a
+    // tag-shaped branch, so both jobs must require `github.ref_type == 'tag'`
+    // and the privileged job must prove the checkout is the tagged commit.
+    const tagGuard = "if: ${{ github.ref_type == 'tag' }}";
+    expect(verifySection).toContain(tagGuard);
+    expect(publishSection).toContain(tagGuard);
+    expect(publishSection).toContain('test "$(git rev-parse HEAD)" = "${{ github.sha }}"');
+
     expect(verifySection).not.toContain("id-token: write");
     expect(verifySection.indexOf("npm install --global")).toBeLessThan(verifySection.indexOf("run: npm ci"));
     expect(verifySection).toContain("npm exec --offline -- playwright install --with-deps chromium");
