@@ -39,6 +39,10 @@ export function normalizeServerAddressUrl(value: string | undefined) : any {
     if (!["http:", "https:"].includes(url.protocol)) {
       return "";
     }
+    // Credential-bearing URLs are never normalized, stored, probed or shown.
+    if (url.username || url.password) {
+      return "";
+    }
     url.hash = "";
     url.search = "";
     return url.toString().replace(/\/+$/, "");
@@ -52,7 +56,9 @@ export function uniqueServerAddressStrings(addresses: string[]) : any {
   const result: string[] = [];
 
   for (const address of addresses) {
-    const normalized: any = normalizeServerAddressUrl(address) || address.trim();
+    // Anything that does not normalize to a credentialless http(s) URL is
+    // dropped rather than persisted or displayed raw.
+    const normalized: any = normalizeServerAddressUrl(address);
     const key: any = normalized.toLowerCase();
     if (!normalized || seen.has(key)) {
       continue;
@@ -74,7 +80,7 @@ export function normalizeStoredServerAddresses(value: unknown): StoredServerAddr
     : [];
 
   return {
-    activeUrl: String(value.activeUrl || "").trim(),
+    activeUrl: normalizeServerAddressUrl(String(value.activeUrl || "")),
     addresses: uniqueServerAddressStrings(addresses),
   };
 }

@@ -94,8 +94,7 @@ export type ProductionHealthResponse = {
     runtimeLookupGeneration: number;
     bindingCount: number;
     permissionBindingCount: number;
-    stateRoot: string;
-    statePath: string;
+    fileBacked: boolean;
     linuxDetectedBackends: string[];
     recoverySupported: boolean;
     message: string;
@@ -112,8 +111,7 @@ export type ProductionHealthResponse = {
     degraded: boolean;
     bindingCount: number;
     activeBindingCount: number;
-    stateRoot: string;
-    statePath: string;
+    fileBacked: boolean;
     message: string;
   } | null;
   sections: ProductionHealthSection[];

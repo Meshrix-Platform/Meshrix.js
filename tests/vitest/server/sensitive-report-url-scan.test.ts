@@ -31,4 +31,28 @@ describe("sensitive report URL scanning", () : any => {
     expect(containsSensitiveReportData(value)).toBe(true);
     expect(redactReportText(value)).toBe("[redacted-url]");
   });
+
+  it.each([
+    "/Users/operator/Library/data/state.json",
+    "/home/operator/.config/meshrix/state.json",
+    "/private/var/folders/ab/cd/state.json",
+    "/var/lib/meshrix/state.json",
+    "/root/.local/share/state.json",
+    "/tmp/meshrix-run/state.json",
+    "/opt/meshrix/state.json",
+    "/Volumes/external/meshrix/state.json",
+    "file:///Users/operator/state.json"
+  ])("detects and redacts absolute local path %s", (value?: any) : any => {
+    expect(sensitiveReportFindings(value)).toContain("local_path");
+    const redacted: any = redactReportText(value);
+    expect(redacted).not.toContain("operator");
+    expect(redacted).not.toContain("meshrix-run");
+    expect(redacted).toContain("[redacted-path]");
+  });
+
+  it("detects and redacts absolute Windows paths", () : any => {
+    const value: any = ["C:", "\\", "Users", "\\", "operator", "\\", "state.json"].join("");
+    expect(sensitiveReportFindings(value)).toContain("local_path");
+    expect(redactReportText(value)).toContain("[redacted-path]");
+  });
 });

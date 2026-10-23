@@ -9,10 +9,12 @@ export const WINDOWS_LOCAL_PATH_PATTERN: any =
 const WINDOWS_LOCAL_PATH_REDACTION_PATTERN: any =
   /(^|[^A-Za-z0-9_])([A-Za-z]:\\{1,2}(?:Users|ProgramData|Program Files|Windows|Temp|tmp|[A-Za-z0-9_. -]+\\{1,2})[^\s"'`]*)/gu;
 
+const POSIX_LOCAL_PATH_ROOTS: any = "Users|home|private|var|root|tmp|opt|srv|mnt|media|Volumes|data|workspace";
+
 const POSIX_LOCAL_PATH_PATTERN_SOURCE: any = [
-  "/",
-  "(?:Users|home|private|var/folders|root|tmp|var/tmp)",
-  "/"
+  "/(?:",
+  POSIX_LOCAL_PATH_ROOTS,
+  ")/"
 ].join("");
 
 export const SENSITIVE_REPORT_PATTERNS: readonly any[] = Object.freeze([
@@ -78,9 +80,9 @@ export function redactReportText(value: any = "", { dynamicNeedles = [] }: Recor
       (kind.startsWith("url_") || kind === "private_endpoint") && pattern.test(part)
     ) ? "[redacted-url]" : part
     : part
-      .replace(/file:\/\/(?:\/+)?(?:Users|home|private|var|root|tmp|opt|Volumes)\/[^\s"'`)]+/gu, "file://[redacted-path]")
+      .replace(new RegExp(`file://(?:/+)?(?:${POSIX_LOCAL_PATH_ROOTS})/[^\\s"'\`)]+`, "gu"), "file://[redacted-path]")
       .replace(/\/(?:Users|home)\/<[^>]+>\/[^\s"'`]*/gu, "<local-path-placeholder>")
-      .replace(/(?:\/Users\/|\/home\/|\/private\/|\/var\/folders\/|\/root\/|\/(?:tmp|var\/tmp)\/)[^\s"'`]+/gu, "[redacted-path]")
+      .replace(new RegExp(`(?:/(?:${POSIX_LOCAL_PATH_ROOTS})/)[^\\s"'\`]+`, "gu"), "[redacted-path]")
       .replace(WINDOWS_LOCAL_PATH_REDACTION_PATTERN, "$1[redacted-path]"))
     .join("");
   text = text.replace(/Bearer\s+\S+/giu, "Bearer [redacted]");

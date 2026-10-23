@@ -48,4 +48,30 @@ describe("capability kernel status boundary behavior", () : any => {
       configuredBackend: "local-file"
     });
   });
+
+  it("never serializes absolute state paths in the public status projection", async () : Promise<any> => {
+    const root: any = await tempDir("meshrix-capability-kernel-status-");
+    const dataPath: any = path.join(root, "data");
+    await fs.mkdir(dataPath, { recursive: true });
+
+    const kernel: any = await describeCapabilityKernelStatus({
+      userDataPath: dataPath,
+      backend: "local-file",
+      alias: "status-extra"
+    });
+    const guard: any = await describeCapabilityBindingGuardStatus({
+      userDataPath: dataPath,
+      backend: "local-file",
+      alias: "status-extra"
+    });
+
+    for (const status of [kernel, guard]) {
+      expect(status).not.toHaveProperty("statePath");
+      expect(status).not.toHaveProperty("stateRoot");
+      expect(status.ok).toBe(true);
+    }
+    const serialized: any = JSON.stringify({ kernel, guard });
+    expect(serialized).not.toContain(dataPath);
+    expect(serialized).not.toContain(root);
+  });
 });

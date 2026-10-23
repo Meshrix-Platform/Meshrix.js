@@ -225,7 +225,7 @@ export async function runSecurityCommand(args?: any) : Promise<any> {
           ok: true,
           capabilityBindingGuard: {
             ...description,
-            statePath: bindingOptions.backend === "local-file" ? capabilityBindingGuardStatePath(bindingOptions) : description.statePath || "",
+            statePath: bindingOptions.backend === "local-file" ? capabilityBindingGuardStatePath(bindingOptions) : "",
             degraded: description.securityMode === "degraded_file_fallback"
           }
         }

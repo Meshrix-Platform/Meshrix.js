@@ -1,10 +1,8 @@
 import {
-  capabilityKernelStatePath,
   createOpaqueCapabilityKeyProvider,
   OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION
 } from "./opaque-capability-key.ts";
 import {
-  capabilityBindingGuardStatePath,
   createCapabilityBindingGuard,
   CAPABILITY_BINDING_GUARD_PROTOCOL_VERSION
 } from "./capability-binding-guard.ts";
@@ -67,10 +65,7 @@ export async function describeCapabilityKernelStatus(input: Record<string, unkno
       runtimeLookupGeneration: Number(description.runtimeLookupGeneration || description.keySource?.generation || 0),
       bindingCount: Number(description.bindingCount || 0),
       permissionBindingCount: Number(description.permissionBindingCount || 0),
-      stateRoot: description.stateRoot || "",
-      statePath: providerName === "local-file" || securityMode === "degraded_file_fallback"
-        ? capabilityKernelStatePath({ dataDir, alias })
-        : "",
+      fileBacked: providerName === "local-file" || securityMode === "degraded_file_fallback",
       linuxDetectedBackends: Array.isArray(description.linuxDetectedBackends) ? description.linuxDetectedBackends : [],
       recoverySupported: true,
       message: degraded
@@ -92,8 +87,7 @@ export async function describeCapabilityKernelStatus(input: Record<string, unkno
       runtimeLookupGeneration: 0,
       bindingCount: 0,
       permissionBindingCount: 0,
-      stateRoot: "",
-      statePath: "",
+      fileBacked: false,
       linuxDetectedBackends: [],
       recoverySupported: false,
       message: error instanceof Error ? error.message : String(error)
@@ -125,10 +119,7 @@ export async function describeCapabilityBindingGuardStatus(input: Record<string,
       degraded,
       bindingCount: Number(description.bindingCount || 0),
       activeBindingCount: Number(description.activeBindingCount || 0),
-      stateRoot: description.stateRoot || "",
-      statePath: providerName === "local-file" || securityMode === "degraded_file_fallback"
-        ? capabilityBindingGuardStatePath({ dataDir, alias })
-        : "",
+      fileBacked: providerName === "local-file" || securityMode === "degraded_file_fallback",
       message: degraded
         ? "Capability Binding Guard is using file fallback; binding semantics are preserved but this is not a hardened security boundary."
         : "Capability Binding Guard is available."
@@ -146,8 +137,7 @@ export async function describeCapabilityBindingGuardStatus(input: Record<string,
       degraded: false,
       bindingCount: 0,
       activeBindingCount: 0,
-      stateRoot: "",
-      statePath: "",
+      fileBacked: false,
       message: error instanceof Error ? error.message : String(error)
     };
   } finally {
