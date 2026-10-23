@@ -147,7 +147,8 @@ async function main() : Promise<any> {
       append: rejectUnexpectedUploadAccess,
       seal: rejectUnexpectedUploadAccess
     },
-    custodyDescribe: rejectUnexpectedUploadAccess
+    custodyDescribe: rejectUnexpectedUploadAccess,
+    custodyDiscard: rejectUnexpectedUploadAccess
   });
   const jobManager: any = createJobManager({
     userDataPath,

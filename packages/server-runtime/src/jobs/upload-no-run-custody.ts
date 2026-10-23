@@ -1160,6 +1160,13 @@ export function createUploadNoRunCustody({
     }
     assertOwner(row, owner);
     const sealed = sealedObject(normalizedRef);
+    // Remove bytes before rows: a filesystem failure then leaves the rows —
+    // and the custodyRef mapping — intact so a retry can still resolve the
+    // object path. Removing a missing file stays a no-op on retry.
+    if (sealed?.storage_rel_path) {
+      await fs.rm(storageProvider.resolveStoredObjectPath(sealed.storage_rel_path), { force: true });
+    }
+    await fs.rm(pendingPath(row), { force: true }).catch(() => {});
     const timestamp = new Date().toISOString();
     const commit = db.transaction(() => {
       db.prepare(`
@@ -1175,10 +1182,6 @@ export function createUploadNoRunCustody({
       }
     });
     commit();
-    if (sealed?.storage_rel_path) {
-      await fs.rm(storageProvider.resolveStoredObjectPath(sealed.storage_rel_path), { force: true });
-    }
-    await fs.rm(pendingPath(row), { force: true }).catch(() => {});
     await syncDirectory(pendingRoot).catch(() => {});
     return Object.freeze({ custodyRef: normalizedRef, state: "discarded" });
   }

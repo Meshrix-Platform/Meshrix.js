@@ -188,7 +188,10 @@ async function removeExpiredUploadSessionArtifacts(
     // Custody payloads outlive the session row on purpose: they must be
     // discarded through the custody lifecycle, not left as orphans under the
     // data root once the session metadata disappears.
-    const meta = await loadSessionMeta(userDataPath, expiredSessionId).catch(() => null);
+    // Only ENOENT reads as absent: parse, permission or I/O failures keep the
+    // session artifacts so the sweep can retry instead of orphaning custody.
+    const meta = await loadSessionMeta(userDataPath, expiredSessionId).catch(() => undefined);
+    if (meta === undefined) continue;
     if (custodyDiscard && meta) {
       // Fail closed: a discard failure (owner mismatch, storage fault) keeps
       // the session metadata so the custodyRef mapping is never orphaned.
@@ -1121,7 +1124,7 @@ export async function deleteUploadSession(
   }
 
   assertServerToken(sessionId, "upload_session");
-  const meta = await loadSessionMeta(userDataPath, sessionId).catch(() => null);
+  const meta = await loadSessionMeta(userDataPath, sessionId);
   if (custodyDiscard && meta) {
     // Discard failures propagate: the caller sees the refusal and the session
     // stays intact for retry instead of orphaning the custody payload.

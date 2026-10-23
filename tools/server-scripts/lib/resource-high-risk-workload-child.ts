@@ -211,7 +211,8 @@ async function runMaterializationScenario() : Promise<any> {
   const store: any = createUploadSessionStore({
     userDataPath,
     custodyPort: custody.stagingPort,
-    custodyDescribe: custody.describe
+    custodyDescribe: custody.describe,
+    custodyDiscard: custody.lifecyclePort.discard
   });
   const owner: Readonly<Record<string, any>> = Object.freeze({
     subjectId: "resource-subject",
