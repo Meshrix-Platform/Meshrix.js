@@ -46,6 +46,10 @@ export async function verifyReleaseDefinition({
   if (!npmCliSupported) {
     fail("release_definition_npm_cli_version_unsupported", "The release workflow requires npm 11.5.1 or newer for trusted publishing.");
   }
+  const npmCliIntegrity: any = String(definition?.github?.npmCliIntegrity || "");
+  if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(npmCliIntegrity)) {
+    fail("release_definition_npm_cli_integrity_invalid", "The release workflow requires a pinned npm CLI tarball SHA-512.");
+  }
   if (!semverPattern.test(version) || tag !== `v${version}`) {
     fail("release_definition_coordinates_invalid", "Release version and tag do not agree.");
   }
@@ -163,7 +167,8 @@ async function main() : Promise<any> {
       containerTarget: definition.container.target,
       stableClaim: definition.acceptance.stableRequiredClaim,
       releaseClaim: definition.acceptance.releaseRequiredClaim,
-      npmCliVersion: definition.github.npmCliVersion
+      npmCliVersion: definition.github.npmCliVersion,
+      npmCliIntegrity: definition.github.npmCliIntegrity
     })}\n`);
   }
 }

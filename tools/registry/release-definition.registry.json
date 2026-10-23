@@ -50,7 +50,8 @@
   "github": {
     "environment": "release-candidate",
     "nodeVersion": "24.21.0",
-    "npmCliVersion": "11.21.0"
+    "npmCliVersion": "11.21.0",
+    "npmCliIntegrity": "sha512-Zov8KhamNneiLdELtj5YALtNmJW4L4fCLTzjfpzXG2w6MSHcf0UxgdlK5uloCuksWT+7mGUU7wi79cO6RqivPg=="
   },
   "localVerification": {
     "engine": "automatic-local",

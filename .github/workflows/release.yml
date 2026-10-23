@@ -43,7 +43,7 @@ jobs:
           go-version-file: services/file-parser/format-convert/go.mod
 
       - name: Use the repository-configured npm CLI for Trusted Publishing
-        run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
+        run: node tools/server-scripts/install-release-npm-cli.ts
 
       - name: Install dependencies
         run: npm ci
@@ -106,7 +106,9 @@ jobs:
           node-version: "24.21.0"
           registry-url: https://registry.npmjs.org
       - name: Use the repository-configured npm CLI for Trusted Publishing
-        run: npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"
+        # The CLI is installed from its integrity-pinned tarball so the OIDC
+        # job never executes arbitrary registry-supplied code.
+        run: node tools/server-scripts/install-release-npm-cli.ts
 
       - name: Restore the qualified npm archives
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4

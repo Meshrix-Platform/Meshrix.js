@@ -27,6 +27,7 @@
         "docs/RUNBOOK.md"
       ],
       "consumerPaths": [
+        "tools/server-scripts/install-release-npm-cli.ts",
         "tools/server-scripts/verify-release-definition.ts",
         "tools/server-scripts/prepare-release.ts",
         ".github/workflows/release.yml"

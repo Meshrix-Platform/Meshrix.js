@@ -24,7 +24,9 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain(`node-version: "${definition.github.nodeVersion}"`);
     expect(workflow).toContain("registry-url: https://registry.npmjs.org");
     expect(workflow).toContain("Use the repository-configured npm CLI for Trusted Publishing");
-    expect(workflow).toContain("release-definition.registry.json");
+    // The workflow consumes the release definition through the integrity-pinned
+    // CLI installer (version and tarball SHA-512 both come from the authority).
+    expect(workflow).toContain("install-release-npm-cli.ts");
 
     // The release splits qualification from publication: the verify job runs
     // dependency installation, build and tests without OIDC authority, while the
@@ -46,7 +48,7 @@ describe("standard npm release workflow", () => {
     expect(publishSection).toContain('test "$(git rev-parse HEAD)" = "${{ github.sha }}"');
 
     expect(verifySection).not.toContain("id-token: write");
-    expect(verifySection.indexOf("npm install --global")).toBeLessThan(verifySection.indexOf("run: npm ci"));
+    expect(verifySection.indexOf("install-release-npm-cli.ts")).toBeLessThan(verifySection.indexOf("run: npm ci"));
     expect(verifySection).toContain("npm exec --offline -- playwright install --with-deps chromium");
     expect(verifySection).toContain("npm run release:prepare -- --check --tag \"$RELEASE_TAG\"");
     expect(verifySection).toContain("npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json");
@@ -57,6 +59,10 @@ describe("standard npm release workflow", () => {
     expect(publishSection).toContain("contents: write");
     expect(publishSection).toContain("id-token: write");
     expect(publishSection).not.toContain("run: npm ci");
+    // The OIDC job must not execute whatever the registry serves at install
+    // time: the CLI comes from the integrity-pinned tarball installer only.
+    expect(publishSection).toContain("node tools/server-scripts/install-release-npm-cli.ts");
+    expect(publishSection).not.toContain('npm install --global "npm@');
     expect(publishSection).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
     expect(publishSection).toContain("release-npm-set-${{ github.sha }}");
     expect(publishSection).toContain("node tools/server-scripts/publish-release-set.ts --artifact-dir build/release/npm-set");
@@ -82,7 +88,7 @@ describe("standard npm release workflow", () => {
   it("runs both CI jobs with the release definition's Node and npm versions", () => {
     const ci = read(".github/workflows/ci.yml");
     const definition = JSON.parse(read("tools/registry/release-definition.registry.json"));
-    const npmCliSetup = `npm install --global "npm@$(node -p 'require("./tools/registry/release-definition.registry.json").github.npmCliVersion')"`;
+    const npmCliSetup = "run: node tools/server-scripts/install-release-npm-cli.ts";
 
     for (const [job, nextJob] of [
       ["pull-request-verify", "engineering"],
