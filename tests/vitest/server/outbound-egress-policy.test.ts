@@ -43,6 +43,43 @@ describe("Outbound egress policy", () : any => {
     });
   });
 
+  it("classifies IPv4-embedding IPv6 literals by their embedded destination", () : any => {
+    // ::ffff:a.b.c.d — IPv4-mapped.
+    expect(classifyOutboundHost("::ffff:169.254.169.254")).toMatchObject({
+      category: "link-local",
+      restricted: true
+    });
+    // 64:ff9b::/96 — NAT64 well-known prefix translating link-local targets.
+    expect(classifyOutboundHost("64:ff9b::a9fe:a9fe")).toMatchObject({
+      category: "link-local",
+      restricted: true
+    });
+    expect(classifyOutboundHost("64:ff9b::10.1.2.3")).toMatchObject({
+      category: "private",
+      restricted: true
+    });
+    // A public destination behind NAT64 stays public.
+    expect(classifyOutboundHost("64:ff9b::8.8.8.8")).toMatchObject({
+      category: "public",
+      restricted: false
+    });
+    // 64:ff9b:1::/48 — NAT64 local-use prefix (IPv4 occupies bits 72-103,
+    // so 169.254.169.254 surfaces as ::a9:fea9:fe00:0).
+    expect(classifyOutboundHost("64:ff9b:1::a9:fea9:fe00:0")).toMatchObject({
+      category: "link-local",
+      restricted: true
+    });
+    // 2002::/16 — 6to4 embeds the site IPv4 at bits 16-47.
+    expect(classifyOutboundHost("2002:a9fe:a9fe::1")).toMatchObject({
+      category: "link-local",
+      restricted: true
+    });
+    expect(classifyOutboundHost("2002:808:808::1")).toMatchObject({
+      category: "public",
+      restricted: false
+    });
+  });
+
   it("allows explicit loopback/private access but never widens link-local or metadata access", () : any => {
     expect(() : any => assertOutboundEgressAllowed({
       url: "http://169.254.169.254:80/latest/meta-data/",

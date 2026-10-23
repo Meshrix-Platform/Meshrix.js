@@ -94,10 +94,42 @@ export function ipv6RangeCategory(address: unknown = ""): AddressCategory | "" {
   if ((first & 0xfe00) === 0xfc00) return "private";
   if ((first & 0xffc0) === 0xfe80) return "link-local";
   if ((first & 0xff00) === 0xff00) return "multicast";
-  if (parts.slice(0, 5).every((part) => part === 0) && parts[5] === 0xffff) {
-    return ipv4RangeCategory(`${(parts[6] ?? 0) >> 8}.${(parts[6] ?? 0) & 255}.${(parts[7] ?? 0) >> 8}.${(parts[7] ?? 0) & 255}`);
-  }
+  const embeddedIpv4 = ipv4EmbeddedInIpv6(parts);
+  if (embeddedIpv4) return ipv4RangeCategory(embeddedIpv4);
   return "public";
+}
+
+function dottedQuad(a: number, b: number, c: number, d: number): string {
+  return `${a}.${b}.${c}.${d}`;
+}
+
+/**
+ * IPv6 literals that embed an IPv4 destination inherit the embedded address's
+ * category — a translation prefix naming a private or link-local destination
+ * is not public just because the outer address is IPv6.
+ */
+function ipv4EmbeddedInIpv6(parts: readonly number[]): string | null {
+  // ::ffff:a.b.c.d — IPv4-mapped.
+  if (parts.slice(0, 5).every((part) => part === 0) && parts[5] === 0xffff) {
+    return dottedQuad((parts[6] ?? 0) >> 8, (parts[6] ?? 0) & 255, (parts[7] ?? 0) >> 8, (parts[7] ?? 0) & 255);
+  }
+  // 64:ff9b::/96 — NAT64 well-known prefix (RFC 6052); IPv4 in the low 32 bits.
+  if (parts[0] === 0x64 && parts[1] === 0xff9b && parts.slice(2, 6).every((part) => part === 0)) {
+    return dottedQuad((parts[6] ?? 0) >> 8, (parts[6] ?? 0) & 255, (parts[7] ?? 0) >> 8, (parts[7] ?? 0) & 255);
+  }
+  // 64:ff9b:1::/48 — NAT64 local-use prefix (RFC 8215); bits 48-63 and the
+  // u-octet are zero, IPv4 occupies bits 72-103.
+  if (
+    parts[0] === 0x64 && parts[1] === 0xff9b && parts[2] === 1 &&
+    parts[3] === 0 && ((parts[4] ?? 0) & 0xff00) === 0
+  ) {
+    return dottedQuad((parts[4] ?? 0) & 255, (parts[5] ?? 0) >> 8, (parts[5] ?? 0) & 255, (parts[6] ?? 0) >> 8);
+  }
+  // 2002::/16 — 6to4 embeds the site's IPv4 at bits 16-47.
+  if (parts[0] === 0x2002) {
+    return dottedQuad((parts[1] ?? 0) >> 8, (parts[1] ?? 0) & 255, (parts[2] ?? 0) >> 8, (parts[2] ?? 0) & 255);
+  }
+  return null;
 }
 
 /** `net.isIP` without `node:net`: dotted-quad IPv4 or expandable IPv6. */
