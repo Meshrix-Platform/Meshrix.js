@@ -206,12 +206,13 @@ describe("OpenAPI -> portable upstream service import", () => {
     }
   });
 
-  it("keeps non-flattenable object-body constraints on a nested body argument", () => {
+  it("skips object bodies whose constraints cannot be flattened without changing the wire shape", () => {
     const spec = {
       openapi: "3.0.3",
       info: { title: "Constrained" },
       servers: [{ url: "https://constrained.example.test" }],
       paths: {
+        "/health": { get: { operationId: "healthCheck" } },
         "/items": {
           post: {
             operationId: "createConstrained",
@@ -235,18 +236,16 @@ describe("OpenAPI -> portable upstream service import", () => {
       }
     };
     const result = upstreamServiceImportFromOpenApi(JSON.stringify(spec));
-    const operation = result.document.descriptor.operations.find((op: any) => op.path === "/items") as any;
-    // Body-level constraints stay scoped to the body instead of leaking onto
-    // the combined argument object or being dropped.
-    expect(operation.requestSchema.properties.dryRun).toEqual({ type: "boolean" });
-    expect(operation.requestSchema.properties.name).toBeUndefined();
-    expect(operation.requestSchema.properties.body).toMatchObject({
-      type: "object",
-      required: ["name"],
-      minProperties: 2,
-      allOf: [{ properties: { tag: { type: "string" } } }]
-    });
-    expect(operation.requestSchema.required).toContain("body");
+    // A nested "body" argument would be forwarded to the upstream as-is and
+    // change the request payload, so the operation is skipped with its reason.
+    expect(result.document.descriptor.operations.find((op: any) => op.path === "/items")).toBeUndefined();
+    expect(result.skippedOperations).toEqual([
+      expect.objectContaining({
+        path: "/items",
+        method: "post",
+        reason: expect.stringContaining("cannot be projected without changing the wire shape")
+      })
+    ]);
   });
 
   it("forwards imported operations end-to-end including path parameters", async () => {

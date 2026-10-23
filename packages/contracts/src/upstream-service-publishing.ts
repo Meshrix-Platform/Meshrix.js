@@ -1722,11 +1722,11 @@ const OPENAPI_FLAT_BODY_KEYS = new Set(["type", "properties", "required", "addit
 function openApiOperationSchema(
   parameters: Array<Record<string, unknown>>,
   bodySchema: unknown,
-  bodyRequired: boolean,
   root: unknown,
   warnings: string[],
   label: string,
-  unresolved?: Set<string>
+  unresolved?: Set<string>,
+  skip?: { reason?: string }
 ): Record<string, unknown> | undefined {
   const properties: Record<string, unknown> = {};
   const required = new Set<string>();
@@ -1755,10 +1755,12 @@ function openApiOperationSchema(
       }
       if (merged.additionalProperties !== undefined) schema.additionalProperties = merged.additionalProperties;
     } else {
-      // Body-level constraints (allOf/oneOf/not, property bounds, ...) keep
-      // their scope only as a nested body argument; nothing is dropped.
-      properties.body = merged;
-      if (bodyRequired) required.add("body");
+      // Body-level constraints (allOf/oneOf/not, property bounds, ...) apply to
+      // the body object as a whole. Wrapping them under a nested "body" argument
+      // would forward that wrapper to the upstream and change the wire payload,
+      // so the operation is skipped instead.
+      if (skip) skip.reason = "request body schema applies constraints to the body as a whole and cannot be projected without changing the wire shape";
+      return undefined;
     }
   }
   if (Object.keys(properties).length === 0) return undefined;
@@ -1873,14 +1875,15 @@ export function upstreamServiceImportFromOpenApi(
         : null;
       const readOnly = ["get", "head", "options"].includes(method.toLowerCase());
       const risk = method.toLowerCase() === "delete" ? "destructive" : readOnly ? "read_only" : "safe_write";
+      const requestSchemaSkip: { reason?: string } = {};
       const requestSchema = openApiOperationSchema(
         pathParameters.filter((parameter) => parameter.in === "path" || parameter.in === "query"),
         bodySchema,
-        requestBody?.required === true,
         document,
         warnings,
         label,
-        requestUnresolved
+        requestUnresolved,
+        requestSchemaSkip
       );
       if (requestUnresolved.size > 0) {
         // A request contract that cannot be resolved is never replaced by an
@@ -1890,6 +1893,10 @@ export function upstreamServiceImportFromOpenApi(
           method,
           reason: `request schema references could not be resolved (${[...requestUnresolved].join("; ")})`
         });
+        continue;
+      }
+      if (requestSchemaSkip.reason) {
+        skippedOperations.push({ path, method, reason: requestSchemaSkip.reason });
         continue;
       }
       const responseSchema = openApiResponseSchema(operation, document, warnings, label);
