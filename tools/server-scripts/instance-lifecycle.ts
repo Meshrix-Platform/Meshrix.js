@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolveServerPort, resolveVitePort } from "@meshrix/foundation/config/server-env";
+import { resolveComposeHostPort, resolveServerPort, resolveVitePort } from "@meshrix/foundation/config/server-env";
 import { isConsoleDocument } from "./offline-delivery-vm-target.ts";
 import { runOfflineDeliveryLocalUp } from "./offline-delivery-local-up.ts";
 
@@ -16,7 +16,15 @@ export const INSTANCE_LIFECYCLE_MODES: readonly any[] = Object.freeze([
   "compose-ui",
   "offline",
 ]);
-export const INSTANCE_LIFECYCLE_PORT: any = resolveServerPort();
+// The probe target depends on the mode: Compose modes publish the container
+// listener under MESHRIX_HOST_PORT while source processes bind
+// MESHRIX_SERVER_PORT.
+export function instanceLifecyclePort(mode?: any) : any {
+  if (mode === "compose" || mode === "compose-ui" || mode === "offline") {
+    return resolveComposeHostPort();
+  }
+  return resolveServerPort();
+}
 export const INSTANCE_LIFECYCLE_VITE_PORT: any = resolveVitePort();
 export const INSTANCE_LIFECYCLE_OFFLINE_PROJECT: any = "meshrix-offline-vm";
 
@@ -279,7 +287,7 @@ function stopSourceProcesses(includeVite?: any) : any {
     path.join(repoRootFromMeta(), "tools", "scripts", "clean-existing-service.ts"),
     "--quiet",
     "--port",
-    String(INSTANCE_LIFECYCLE_PORT),
+    String(resolveServerPort()),
   ];
   if (includeVite === true) {
     args.push("--vite-port", String(INSTANCE_LIFECYCLE_VITE_PORT));
@@ -384,7 +392,7 @@ function resultPayload({
     reused: reused === true,
     alreadyStopped: alreadyStopped === true,
     restarted: restarted === true,
-    url: `http://127.0.0.1:${INSTANCE_LIFECYCLE_PORT}`,
+    url: `http://127.0.0.1:${instanceLifecyclePort(mode)}`,
     healthz: Number(probe?.healthz || 0),
     console: Number(probe?.console || 0),
   };
@@ -405,7 +413,7 @@ function inspectCurrentInstance() : any {
 }
 
 async function startInstance(mode?: any, { force = false } = {}) : Promise<any> {
-  const probe: any = await probeInstancePort(INSTANCE_LIFECYCLE_PORT);
+  const probe: any = await probeInstancePort(instanceLifecyclePort(mode));
   const snapshot: any = inspectCurrentInstance();
   if (mode === "offline") {
     const started: any = await runOfflineDeliveryLocalUp();
@@ -434,7 +442,7 @@ async function startInstance(mode?: any, { force = false } = {}) : Promise<any> 
     if (snapshot.container.running !== true) {
       startExistingServerContainer();
     }
-    const ready: any = await waitForHealth(INSTANCE_LIFECYCLE_PORT, 90_000, mode);
+    const ready: any = await waitForHealth(instanceLifecyclePort(mode), 90_000, mode);
     return resultPayload({
       action: "start",
       mode,
@@ -450,7 +458,7 @@ async function startInstance(mode?: any, { force = false } = {}) : Promise<any> 
   } else {
     startSourceProcess(["--profile", "core"]);
   }
-  const ready: any = await waitForHealth(INSTANCE_LIFECYCLE_PORT, 90_000, mode);
+  const ready: any = await waitForHealth(instanceLifecyclePort(mode), 90_000, mode);
   return resultPayload({
     action: "start",
     mode,
@@ -459,7 +467,7 @@ async function startInstance(mode?: any, { force = false } = {}) : Promise<any> 
 }
 
 async function stopInstance(mode?: any) : Promise<any> {
-  const probe: any = await probeInstancePort(INSTANCE_LIFECYCLE_PORT);
+  const probe: any = await probeInstancePort(instanceLifecyclePort(mode));
   const snapshot: any = inspectCurrentInstance();
   if (!snapshot.current) {
     return resultPayload({
@@ -485,7 +493,7 @@ async function stopInstance(mode?: any) : Promise<any> {
   return resultPayload({
     action: "stop",
     mode,
-    probe: await probeInstancePort(INSTANCE_LIFECYCLE_PORT),
+    probe: await probeInstancePort(instanceLifecyclePort(mode)),
   });
 }
 

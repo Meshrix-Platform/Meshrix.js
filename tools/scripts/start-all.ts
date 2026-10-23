@@ -259,7 +259,8 @@ async function main() : Promise<any> {
       viteChild = spawnProcess(npmInvocation.command, npmCliArgs(npmInvocation, ["run", "server:dev:web"]), {
         env: {
           VITE_API_ORIGIN: `http://127.0.0.1:${options.port}`,
-          VITE_API_PORT: options.port
+          VITE_API_PORT: options.port,
+          MESHRIX_VITE_PORT: options.vitePort
         }
       });
       children.push(viteChild);

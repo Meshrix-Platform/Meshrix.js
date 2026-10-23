@@ -7,7 +7,7 @@
 // Production: Static assets should be served via a web server (e.g., Nginx)
 // with HTTPS reverse proxy to the backend API.
 // ==============================================================================
-import { DEFAULT_SERVER_PORT } from "./packages/foundation/src/config/server-env.ts";
+import { DEFAULT_SERVER_PORT, resolveVitePort } from "./packages/foundation/src/config/server-env.ts";
 
 import path from "node:path";
 import vue from "@vitejs/plugin-vue";
@@ -82,7 +82,7 @@ export default defineConfig({
   },
   server: {
     host: "127.0.0.1",
-    port: 5173,
+    port: resolveVitePort(),
     proxy: {
       "/api": {
         target: apiOrigin,
