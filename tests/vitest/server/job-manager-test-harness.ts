@@ -13,7 +13,8 @@ export function createTestJobManager(options: Record<string, any>) : any {
       append: rejectUnexpectedUploadAccess,
       seal: rejectUnexpectedUploadAccess
     },
-    custodyDescribe: rejectUnexpectedUploadAccess
+    custodyDescribe: rejectUnexpectedUploadAccess,
+    custodyDiscard: rejectUnexpectedUploadAccess
   });
   return createJobManager({
     ...options,

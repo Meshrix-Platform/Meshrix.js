@@ -37,7 +37,7 @@ interface CustodyRow {
   created_at: string; updated_at: string;
   storage_rel_path?: string; envelope_byte_count?: number;
 }
-interface SealedCustodyObject extends CustodyRow { storage_rel_path: string; envelope_byte_count: number }
+interface SealedCustodyObject extends CustodyRow { object_id: string; storage_rel_path: string; envelope_byte_count: number }
 interface SealedArtifactRow {
   object_id: string; content_digest: string; envelope_digest: string;
   plaintext_bytes: number; chunk_count: number; state: string;
@@ -1147,6 +1147,42 @@ export function createUploadNoRunCustody({
     return statusFromRow(row);
   }
 
+  // Lifecycle deletion for a session's staged or sealed custody. The session
+  // layer owns the session->custodyRef mapping; this op only answers "drop
+  // this ref's payload": remove the pending file, tombstone the sealed
+  // artifact, release the storage object, then delete the staging row. It is
+  // idempotent so cleanup callers may repeat it safely.
+  async function discardLocked({ custodyRef, owner }: CustodyIdentityInput = {}) {
+    const normalizedRef = normalizeCustodyHandle(custodyRef);
+    const row = rowForCustody(db, normalizedRef);
+    if (!row) {
+      return Object.freeze({ custodyRef: normalizedRef, state: "absent" });
+    }
+    assertOwner(row, owner);
+    const sealed = sealedObject(normalizedRef);
+    const timestamp = new Date().toISOString();
+    const commit = db.transaction(() => {
+      db.prepare(`
+        UPDATE opaque_custody_artifacts
+        SET state = 'deleted', object_id = NULL, updated_at = ?
+        WHERE custody_ref = ?
+      `).run(timestamp, normalizedRef);
+      db.prepare("DELETE FROM upload_no_run_custody_staging WHERE custody_ref = ?")
+        .run(normalizedRef);
+      if (sealed) {
+        db.prepare("DELETE FROM storage_objects WHERE object_id = ?")
+          .run(sealed.object_id);
+      }
+    });
+    commit();
+    if (sealed?.storage_rel_path) {
+      await fs.rm(storageProvider.resolveStoredObjectPath(sealed.storage_rel_path), { force: true });
+    }
+    await fs.rm(pendingPath(row), { force: true }).catch(() => {});
+    await syncDirectory(pendingRoot).catch(() => {});
+    return Object.freeze({ custodyRef: normalizedRef, state: "discarded" });
+  }
+
   function sealedObject(custodyRef: string): SealedCustodyObject | null {
     return db.prepare(`
       SELECT staging.custody_ref, staging.expected_content_digest,
@@ -1154,7 +1190,7 @@ export function createUploadNoRunCustody({
              staging.resource_binding_digest, staging.envelope_id,
              staging.sealed_envelope_digest,
              custody.ciphertext_bytes AS envelope_byte_count,
-             objects.storage_rel_path
+             objects.object_id, objects.storage_rel_path
       FROM upload_no_run_custody_staging AS staging
       JOIN opaque_custody_artifacts AS custody
         ON custody.custody_ref = staging.custody_ref
@@ -1565,7 +1601,13 @@ export function createUploadNoRunCustody({
     return withCustodyMutation(custodyRef, () => describeLocked(input));
   }
 
+  function discard(input: CustodyIdentityInput = {}) {
+    const custodyRef = normalizeCustodyHandle(input.custodyRef);
+    return withCustodyMutation(custodyRef, () => discardLocked(input));
+  }
+
   const stagingPort = Object.freeze({ begin, append, seal });
   const readPort = Object.freeze({ open });
-  return Object.freeze({ stagingPort, readPort, describe });
+  const lifecyclePort = Object.freeze({ discard });
+  return Object.freeze({ stagingPort, readPort, lifecyclePort, describe });
 }

@@ -548,7 +548,8 @@ export async function createServerCompositionRoot({
   const uploadSessionStore: any = createUploadSessionStore({
     userDataPath,
     custodyPort: uploadNoRunCustody.stagingPort,
-    custodyDescribe: uploadNoRunCustody.describe
+    custodyDescribe: uploadNoRunCustody.describe,
+    custodyDiscard: uploadNoRunCustody.lifecyclePort.discard
   });
   const opaqueCustodyRuntime: any = createOpaqueSandboxCustodyRuntime({
     userDataPath,

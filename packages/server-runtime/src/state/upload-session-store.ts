@@ -71,14 +71,15 @@ interface CustodyPort {
   append(input: UnknownRecord): Promise<CustodyResult>;
   seal(input: UnknownRecord): Promise<CustodyResult>;
 }
+type CustodyDiscard = (input: { custodyRef: string; owner?: unknown }) => Promise<unknown>;
 interface FaultInjector { afterCustodyAppendCommitted?(input: UnknownRecord): void | Promise<void> }
-interface SessionOptions extends UnknownRecord { owner?: unknown; custodyDescribe?: CustodyDescribe }
+interface SessionOptions extends UnknownRecord { owner?: unknown; custodyDescribe?: CustodyDescribe; custodyDiscard?: CustodyDiscard }
 interface CreateUploadSessionInput {
-  userDataPath: string; custodyPort: CustodyPort; custodyDescribe: CustodyDescribe;
+  userDataPath: string; custodyPort: CustodyPort; custodyDescribe: CustodyDescribe; custodyDiscard?: CustodyDiscard;
   checkpoint: UnknownRecord; manifest: UnknownRecord; files?: UploadFileInput[]; owner: unknown; trace?: TraceEmitter;
 }
 interface AppendUploadSessionInput {
-  userDataPath: string; custodyPort: CustodyPort; custodyDescribe: CustodyDescribe; sessionId: string;
+  userDataPath: string; custodyPort: CustodyPort; custodyDescribe: CustodyDescribe; custodyDiscard?: CustodyDiscard; sessionId: string;
   fileIndex: unknown; offset: unknown; buffer: unknown; owner: unknown; faultInjector?: FaultInjector | null; trace?: TraceEmitter;
 }
 interface AppendLockedInput extends Omit<AppendUploadSessionInput, "fileIndex" | "owner" | "custodyPort"> {
@@ -93,7 +94,7 @@ interface UploadSessionStore {
   buildCheckpointReceiptFromUploadSession(sessionId: string, options?: SessionOptions): Promise<unknown>;
   deleteUploadSession(sessionId: string): Promise<void>;
 }
-interface StoreOptions { userDataPath?: unknown; custodyPort?: unknown; custodyDescribe?: unknown; faultInjector?: FaultInjector | null }
+interface StoreOptions { userDataPath?: unknown; custodyPort?: unknown; custodyDescribe?: unknown; custodyDiscard?: unknown; faultInjector?: FaultInjector | null }
 
 const uploadSessionStoreBindings: WeakMap<object, string> = new WeakMap();
 
@@ -137,6 +138,13 @@ function requireCustodyDescribe(custodyDescribe: unknown): CustodyDescribe {
   return custodyDescribe as CustodyDescribe;
 }
 
+function requireCustodyDiscard(custodyDiscard: unknown): CustodyDiscard {
+  if (typeof custodyDiscard !== "function") {
+    throw new TypeError("Upload session store requires a bound custody discard function.");
+  }
+  return custodyDiscard as CustodyDiscard;
+}
+
 function freezeUploadDescriptorValue(value: unknown): unknown {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) {
     return value;
@@ -171,8 +179,32 @@ function validateUploadSessionFiles(files: UploadFileInput[]) {
   return declaration;
 }
 
-async function removeExpiredUploadSessionArtifacts(userDataPath: string, sessionIds: string[]): Promise<void> {
+async function removeExpiredUploadSessionArtifacts(
+  userDataPath: string,
+  sessionIds: string[],
+  custodyDiscard?: CustodyDiscard
+): Promise<void> {
   for (const expiredSessionId of sessionIds) {
+    // Custody payloads outlive the session row on purpose: they must be
+    // discarded through the custody lifecycle, not left as orphans under the
+    // data root once the session metadata disappears.
+    const meta = await loadSessionMeta(userDataPath, expiredSessionId).catch(() => null);
+    if (custodyDiscard && meta) {
+      // Fail closed: a discard failure (owner mismatch, storage fault) keeps
+      // the session metadata so the custodyRef mapping is never orphaned.
+      let discarded = true;
+      for (const file of meta.files || []) {
+        if (file.custodyRef) {
+          try {
+            await custodyDiscard({ custodyRef: file.custodyRef, owner: meta });
+          } catch {
+            discarded = false;
+            break;
+          }
+        }
+      }
+      if (!discarded) continue;
+    }
     await deleteCheckpointTree({
       userDataPath,
       treeId: buildCheckpointTreeId("upload-session", expiredSessionId)
@@ -189,6 +221,7 @@ export async function createOrResumeUploadSession({
   userDataPath,
   custodyPort,
   custodyDescribe,
+  custodyDiscard,
   checkpoint,
   manifest,
   files = [],
@@ -257,7 +290,7 @@ export async function createOrResumeUploadSession({
   if (existing) {
     admission = readUploadSessionAdmission(userDataPath, sessionId);
     if (!admission) {
-      await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]);
+      await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId], custodyDiscard);
       throw uploadAdmissionError(
         "upload_session_expired",
         410,
@@ -269,7 +302,8 @@ export async function createOrResumeUploadSession({
     const admissionNowMs = Date.now();
     await removeExpiredUploadSessionArtifacts(
       userDataPath,
-      listExpiredUploadSessionAdmissions(userDataPath, admissionNowMs)
+      listExpiredUploadSessionAdmissions(userDataPath, admissionNowMs),
+      custodyDiscard
     );
     admission = reserveUploadSessionAdmission({
       userDataPath,
@@ -280,7 +314,7 @@ export async function createOrResumeUploadSession({
       totalBytes: declaration.totalBytes,
       nowMs: admissionNowMs
     });
-    await removeExpiredUploadSessionArtifacts(userDataPath, admission.expiredSessionIds);
+    await removeExpiredUploadSessionArtifacts(userDataPath, admission.expiredSessionIds, custodyDiscard);
     if (admission.existing) {
       throw uploadAdmissionError(
         "upload_session_initializing",
@@ -548,7 +582,7 @@ export async function createOrResumeUploadSession({
     syncAdmissionStatus(userDataPath, sessionId, admission, meta.status);
   } catch (error: unknown) {
     deleteUploadSessionAdmission(userDataPath, sessionId);
-    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]).catch(() => null);
+    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId], custodyDiscard).catch(() => null);
     throw error;
   }
   await upsertCheckpointNode({
@@ -626,7 +660,7 @@ async function getUploadSessionLocked(
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
   const admission = readUploadSessionAdmission(userDataPath, sessionId);
   if (!admission) {
-    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]);
+    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId], options.custodyDiscard);
     return null;
   }
   syncAdmissionStatus(userDataPath, sessionId, admission, meta.status);
@@ -655,6 +689,7 @@ export async function appendUploadSessionChunk({
   userDataPath,
   custodyPort,
   custodyDescribe,
+  custodyDiscard,
   sessionId,
   fileIndex,
   offset,
@@ -696,6 +731,7 @@ export async function appendUploadSessionChunk({
     ownerSubject,
     custody,
     custodyDescribe: describeCustody,
+    custodyDiscard,
     faultInjector,
     trace
   }));
@@ -710,6 +746,7 @@ async function appendUploadSessionChunkLocked({
   ownerSubject,
   custody,
   custodyDescribe,
+  custodyDiscard,
   faultInjector,
   trace
 }: AppendLockedInput) {
@@ -752,7 +789,7 @@ async function appendUploadSessionChunkLocked({
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
   const admission = readUploadSessionAdmission(userDataPath, sessionId);
   if (!admission) {
-    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]);
+    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId], custodyDiscard);
     return {
       ok: false,
       code: "session_expired",
@@ -942,7 +979,7 @@ async function resolveUploadSessionFilesLocked(
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
   const admission = readUploadSessionAdmission(userDataPath, sessionId);
   if (!admission) {
-    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]);
+    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId], options.custodyDiscard);
     throw uploadAdmissionError("upload_session_expired", 410, "上传会话已过期。");
   }
   syncAdmissionStatus(userDataPath, sessionId, admission, meta.status);
@@ -1004,7 +1041,7 @@ async function buildCheckpointReceiptFromUploadSessionLocked(
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
   const admission = readUploadSessionAdmission(userDataPath, sessionId);
   if (!admission) {
-    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId]);
+    await removeExpiredUploadSessionArtifacts(userDataPath, [sessionId], options.custodyDiscard);
     throw uploadAdmissionError("upload_session_expired", 410, "上传会话已过期。");
   }
   syncAdmissionStatus(userDataPath, sessionId, admission, meta.status);
@@ -1074,12 +1111,26 @@ export async function buildCheckpointReceiptFromUploadSession(
   );
 }
 
-export async function deleteUploadSession(userDataPath: string, sessionId: string): Promise<void> {
+export async function deleteUploadSession(
+  userDataPath: string,
+  sessionId: string,
+  custodyDiscard?: CustodyDiscard
+): Promise<void> {
   if (!sessionId) {
     return;
   }
 
   assertServerToken(sessionId, "upload_session");
+  const meta = await loadSessionMeta(userDataPath, sessionId).catch(() => null);
+  if (custodyDiscard && meta) {
+    // Discard failures propagate: the caller sees the refusal and the session
+    // stays intact for retry instead of orphaning the custody payload.
+    for (const file of meta.files || []) {
+      if (file.custodyRef) {
+        await custodyDiscard({ custodyRef: file.custodyRef, owner: meta });
+      }
+    }
+  }
   deleteUploadSessionAdmission(userDataPath, sessionId);
   await deleteCheckpointTree({
     userDataPath,
@@ -1095,6 +1146,7 @@ export function createUploadSessionStore({
   userDataPath,
   custodyPort,
   custodyDescribe,
+  custodyDiscard,
   faultInjector = null
 }: StoreOptions = {}): UploadSessionStore {
   const root = String(userDataPath || "").trim();
@@ -1103,12 +1155,14 @@ export function createUploadSessionStore({
   }
   const custody = requireCustodyPort(custodyPort);
   const describeCustody = requireCustodyDescribe(custodyDescribe);
+  const discardCustody = requireCustodyDiscard(custodyDiscard);
   const store = Object.freeze({
     createOrResumeUploadSession(input: Partial<Omit<CreateUploadSessionInput, "userDataPath" | "custodyPort" | "custodyDescribe">> = {}) {
       return createOrResumeUploadSession({
         userDataPath: root,
         custodyPort: custody,
         custodyDescribe: describeCustody,
+        custodyDiscard: discardCustody,
         checkpoint: input.checkpoint || {},
         manifest: input.manifest || {},
         files: input.files || [],
@@ -1121,6 +1175,7 @@ export function createUploadSessionStore({
         userDataPath: root,
         custodyPort: custody,
         custodyDescribe: describeCustody,
+        custodyDiscard: discardCustody,
         sessionId: String(input.sessionId || ""),
         fileIndex: input.fileIndex,
         offset: input.offset,
@@ -1133,7 +1188,8 @@ export function createUploadSessionStore({
     getUploadSession(sessionId: string, options: SessionOptions = {}) {
       return getUploadSession(root, sessionId, {
         ...options,
-        custodyDescribe: describeCustody
+        custodyDescribe: describeCustody,
+        custodyDiscard: discardCustody
       });
     },
     hasUploadSessionOwnerAccess(sessionId: string, options: Pick<SessionOptions, "owner"> = {}) {
@@ -1142,17 +1198,19 @@ export function createUploadSessionStore({
     resolveUploadSessionFiles(sessionId: string, options: SessionOptions = {}) {
       return resolveUploadSessionFiles(root, sessionId, {
         ...options,
-        custodyDescribe: describeCustody
+        custodyDescribe: describeCustody,
+        custodyDiscard: discardCustody
       });
     },
     buildCheckpointReceiptFromUploadSession(sessionId: string, options: SessionOptions = {}) {
       return buildCheckpointReceiptFromUploadSession(root, sessionId, {
         ...options,
-        custodyDescribe: describeCustody
+        custodyDescribe: describeCustody,
+        custodyDiscard: discardCustody
       });
     },
     deleteUploadSession(sessionId: string) {
-      return deleteUploadSession(root, sessionId);
+      return deleteUploadSession(root, sessionId, discardCustody);
     }
   });
   uploadSessionStoreBindings.set(store, path.resolve(root));

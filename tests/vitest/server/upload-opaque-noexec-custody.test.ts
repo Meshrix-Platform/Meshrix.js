@@ -26,6 +26,7 @@ vi.mock(
 );
 
 import { createStorageKernel } from "../../../packages/foundation/src/storage/storage-kernel.ts";
+import { openSqliteDatabase } from "../../../packages/foundation/src/storage/sqlite-database.ts";
 import { createStorageProvider } from "../../../packages/foundation/src/storage/storage-provider.ts";
 import { createServerCompositionRoot } from "../../../packages/server-runtime/src/composition/composition-root.ts";
 import { createServerConsoleDomainServices } from "../../../packages/server-runtime/src/composition/server-runtime-providers.ts";
@@ -313,6 +314,7 @@ function openFixture(root?: any, {
     userDataPath: root,
     custodyPort: noRunCustody.stagingPort,
     custodyDescribe,
+    custodyDiscard: noRunCustody.lifecyclePort.discard,
     faultInjector: uploadSessionFaultInjector
   });
   let closed: any = false;
@@ -818,6 +820,7 @@ describe("upload opaque no-exec custody", () : any => {
 
     expect(Object.keys(fixture.noRunCustody).sort()).toEqual([
       "describe",
+      "lifecyclePort",
       "readPort",
       "stagingPort"
     ]);
@@ -1365,6 +1368,11 @@ describe("upload opaque no-exec custody", () : any => {
       userDataPath: root,
       custodyPort: first.noRunCustody.stagingPort
     })).toThrow("Upload session store requires a bound custody describe function.");
+    expect(() : any => createUploadSessionStore({
+      userDataPath: root,
+      custodyPort: first.noRunCustody.stagingPort,
+      custodyDescribe: first.noRunCustody.describe
+    })).toThrow("Upload session store requires a bound custody discard function.");
 
     const created: any = await createSession(first.uploadSessionStore, plaintext, {
       checkpointId: "post-custody-commit-crash"
@@ -1521,6 +1529,7 @@ describe("upload opaque no-exec custody", () : any => {
     }));
     expect(Object.keys(composition.uploadNoRunCustody).sort()).toEqual([
       "describe",
+      "lifecyclePort",
       "readPort",
       "stagingPort"
     ]);
@@ -1626,5 +1635,103 @@ describe("upload opaque no-exec custody", () : any => {
       OWNER.tenantId,
       plaintext.toString("utf8")
     ]);
+  });
+
+  it("discards sealed custody rows and storage objects on explicit session deletion", async () : Promise<any> => {
+    const root: any = await tempRoot();
+    const fixture: any = openFixture(root);
+    const plaintext: any = Buffer.from("explicit-delete custody discard fixture", "utf8");
+    const created: any = await createSession(fixture.uploadSessionStore, plaintext);
+    await appendSessionChunk(fixture.uploadSessionStore, created.sessionId, 0, plaintext);
+    const custodyRef: any = created.files[0].custodyRef;
+
+    const row: any = storageCustodyRow(fixture.storageKernel, custodyRef);
+    expect(row).toMatchObject({ custodyRef });
+    const objectPath: any = fixture.storageProvider.resolveStoredObjectPath(row.storageRelativePath);
+    await fs.stat(objectPath);
+
+    await expect(fixture.noRunCustody.lifecyclePort.discard({
+      custodyRef,
+      owner: OTHER_OWNER
+    })).rejects.toMatchObject({ code: "upload_custody_owner_mismatch" });
+    expect(storageCustodyRow(fixture.storageKernel, custodyRef)).toBeTruthy();
+
+    await fixture.uploadSessionStore.deleteUploadSession(created.sessionId);
+
+    expect(storageCustodyRow(fixture.storageKernel, custodyRef)).toBeUndefined();
+    expect(fixture.storageKernel.db.prepare(
+      "SELECT state FROM opaque_custody_artifacts WHERE custody_ref = ?"
+    ).get(custodyRef)).toMatchObject({ state: "deleted" });
+    expect(fixture.storageKernel.db.prepare(
+      "SELECT custody_ref FROM upload_no_run_custody_staging WHERE custody_ref = ?"
+    ).get(custodyRef)).toBeUndefined();
+    await expect(fs.stat(objectPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fixture.noRunCustody.describe({
+      custodyRef,
+      owner: OWNER
+    })).rejects.toMatchObject({ code: "upload_custody_missing" });
+    await expect(fixture.noRunCustody.lifecyclePort.discard({
+      custodyRef,
+      owner: OWNER
+    })).resolves.toMatchObject({ custodyRef, state: "absent" });
+  });
+
+  it("keeps session metadata when custody discard fails during deletion", async () : Promise<any> => {
+    const root: any = await tempRoot();
+    const fixture: any = openFixture(root);
+    const plaintext: any = Buffer.from("fail-closed custody discard fixture", "utf8");
+    const created: any = await createSession(fixture.uploadSessionStore, plaintext);
+    await appendSessionChunk(fixture.uploadSessionStore, created.sessionId, 0, plaintext);
+    const custodyRef: any = created.files[0].custodyRef;
+
+    const failingStore: any = createUploadSessionStore({
+      userDataPath: root,
+      custodyPort: fixture.noRunCustody.stagingPort,
+      custodyDescribe: fixture.custodyDescribe,
+      custodyDiscard: async () : Promise<any> => {
+        throw new Error("custody backend unavailable");
+      }
+    });
+    await expect(failingStore.deleteUploadSession(created.sessionId))
+      .rejects.toThrow("custody backend unavailable");
+
+    await expect(
+      fixture.uploadSessionStore.getUploadSession(created.sessionId, { owner: OWNER })
+    ).resolves.toMatchObject({ sessionId: created.sessionId });
+    expect(storageCustodyRow(fixture.storageKernel, custodyRef)).toBeTruthy();
+
+    await fixture.uploadSessionStore.deleteUploadSession(created.sessionId);
+    expect(storageCustodyRow(fixture.storageKernel, custodyRef)).toBeUndefined();
+  });
+
+  it("discards sealed custody rows and storage objects when a session expires", async () : Promise<any> => {
+    const root: any = await tempRoot();
+    const fixture: any = openFixture(root);
+    const plaintext: any = Buffer.from("expiry custody discard fixture", "utf8");
+    const created: any = await createSession(fixture.uploadSessionStore, plaintext);
+    await appendSessionChunk(fixture.uploadSessionStore, created.sessionId, 0, plaintext);
+    const custodyRef: any = created.files[0].custodyRef;
+    const row: any = storageCustodyRow(fixture.storageKernel, custodyRef);
+    const objectPath: any = fixture.storageProvider.resolveStoredObjectPath(row.storageRelativePath);
+    await fs.stat(objectPath);
+
+    const admissionDb: any = openSqliteDatabase(path.join(root, "upload-sessions", "admission.sqlite"));
+    try {
+      admissionDb.prepare(
+        "UPDATE upload_session_admission SET expires_at_ms = 0 WHERE session_id = ?"
+      ).run(created.sessionId);
+    } finally {
+      admissionDb.close();
+    }
+
+    await expect(
+      fixture.uploadSessionStore.getUploadSession(created.sessionId, { owner: OWNER })
+    ).resolves.toBeNull();
+
+    expect(storageCustodyRow(fixture.storageKernel, custodyRef)).toBeUndefined();
+    expect(fixture.storageKernel.db.prepare(
+      "SELECT custody_ref FROM upload_no_run_custody_staging WHERE custody_ref = ?"
+    ).get(custodyRef)).toBeUndefined();
+    await expect(fs.stat(objectPath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

@@ -124,7 +124,8 @@ async function createHarness() : Promise<any> {
   const uploadSessionStore: any = createUploadSessionStore({
     userDataPath,
     custodyPort: noRunCustody.stagingPort,
-    custodyDescribe: noRunCustody.describe
+    custodyDescribe: noRunCustody.describe,
+    custodyDiscard: noRunCustody.lifecyclePort.discard
   });
   return {
     userDataPath,
