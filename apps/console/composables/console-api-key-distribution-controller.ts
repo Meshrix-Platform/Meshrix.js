@@ -1,4 +1,5 @@
 import { computed, ref, shallowRef, watch } from "vue";
+import { DEFAULT_SERVER_PORT, DEFAULT_VITE_PORT } from "@meshrix/foundation/config/server-env";
 import packageManifest from "../package.json";
 import { confirmConsoleAction, copyConsoleText } from "./console-browser-effects";
 import { setApiKeyDistributionAvailability } from "./console-api-key-distribution-availability";
@@ -169,8 +170,8 @@ const UNLIMITED_REQUESTS_PER_MINUTE = 2_000_000_000;
 const UNLIMITED_MAX_CONCURRENT_EFFECTS = 10_000;
 const RATE_WINDOW_SECONDS = 60;
 /** Vite console port; MCP clients use the proxied API port instead. */
-const VITE_CONSOLE_PORT = "5173";
-const DEFAULT_API_PORT = "7228";
+const VITE_CONSOLE_PORT = String(DEFAULT_VITE_PORT);
+const DEFAULT_API_PORT = String(DEFAULT_SERVER_PORT);
 
 function fallbackServerAudience(): string {
   if (typeof window === "undefined" || !window.location?.host) return "";

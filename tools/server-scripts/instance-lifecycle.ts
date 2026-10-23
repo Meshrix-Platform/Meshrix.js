@@ -3,6 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolveServerPort, resolveVitePort } from "@meshrix/foundation/config/server-env";
 import { isConsoleDocument } from "./offline-delivery-vm-target.ts";
 import { runOfflineDeliveryLocalUp } from "./offline-delivery-local-up.ts";
 
@@ -15,8 +16,8 @@ export const INSTANCE_LIFECYCLE_MODES: readonly any[] = Object.freeze([
   "compose-ui",
   "offline",
 ]);
-export const INSTANCE_LIFECYCLE_PORT: any = 7228;
-export const INSTANCE_LIFECYCLE_VITE_PORT: any = 5173;
+export const INSTANCE_LIFECYCLE_PORT: any = resolveServerPort();
+export const INSTANCE_LIFECYCLE_VITE_PORT: any = resolveVitePort();
 export const INSTANCE_LIFECYCLE_OFFLINE_PROJECT: any = "meshrix-offline-vm";
 
 function repoRootFromMeta() : any {

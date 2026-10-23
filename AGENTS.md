@@ -10,9 +10,10 @@ Use the current Better Plan skill for all repository delivery planning, from a
 small scoped change to the long-term product programme. The maintainer-designated
 private project workspace owns the sole active `docs/plans/Programme.json`, with
 `Requirements.json` beside it and referenced split Tree/Task/Node workspaces
-under that plan directory. In the combined development workspace, that source is
-`../docs/plans/Programme.json`; this repository's ignored `docs/plans/` retains
-inactive predecessor evidence only. Keep private planning and execution details
+under that plan directory. In the combined development workspace, that source
+resides in the maintainer-designated sibling planning directory; this
+repository's ignored `docs/plans/` retains inactive predecessor evidence only.
+Keep private planning and execution details
 out of published source and artifacts. Preserve independently completed plans as
 historical assets. When the designated workspace is unavailable, report the
 missing context rather than creating a competing plan in this repository.

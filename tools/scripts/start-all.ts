@@ -4,6 +4,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { resolveServerPort, resolveVitePort } from "@meshrix/foundation/config/server-env";
 import { npmCliArgs, resolveNpmCliInvocation } from "../server-scripts/lib/npm-cli-invocation.ts";
 import { managedProcessIsAlive, stopManagedProcesses } from "./lib/process-lifecycle.ts";
 import { openPlatformBrowser, terminatePlatformProcessTree } from "./lib/startup-platform-adapter.ts";
@@ -21,7 +22,8 @@ running and is not relaunched. Use tools/scripts/restart-all.ts to stop all
 services and start them again.
 
 Options:
-  --port <n>        Server port (default: 7228)
+  --port <n>        Server port (default: 7228 or MESHRIX_SERVER_PORT)
+  --vite-port <n>   Console dev-server port (default: 5173 or MESHRIX_VITE_PORT)
   --data-dir <path> Data directory (default: ServerConfig.getDataDir())
   --profile <name>  Runtime profile (default: default)
   --dev             Start server API + Vite dev server
@@ -32,8 +34,8 @@ Options:
 
 function parseArgs(argv?: any) : any {
   const options: Record<string, any> = {
-    port: "7228",
-    vitePort: "5173",
+    port: String(resolveServerPort()),
+    vitePort: String(resolveVitePort()),
     dataDir: "",
     profile: "default",
     mode: "console",
@@ -57,6 +59,11 @@ function parseArgs(argv?: any) : any {
       index += 1;
     } else if (arg.startsWith("--port=")) {
       options.port = arg.slice("--port=".length);
+    } else if (arg === "--vite-port" && next) {
+      options.vitePort = next;
+      index += 1;
+    } else if (arg.startsWith("--vite-port=")) {
+      options.vitePort = arg.slice("--vite-port=".length);
     } else if (arg === "--data-dir" && next) {
       options.dataDir = next;
       index += 1;
@@ -73,6 +80,9 @@ function parseArgs(argv?: any) : any {
   }
   if (!/^\d+$/.test(options.port)) {
     throw new Error("--port must be a number");
+  }
+  if (!/^\d+$/.test(options.vitePort)) {
+    throw new Error("--vite-port must be a number");
   }
   return options;
 }
