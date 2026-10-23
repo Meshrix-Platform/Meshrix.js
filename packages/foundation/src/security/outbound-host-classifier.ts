@@ -117,13 +117,19 @@ function ipv4EmbeddedInIpv6(parts: readonly number[]): string | null {
   if (parts[0] === 0x64 && parts[1] === 0xff9b && parts.slice(2, 6).every((part) => part === 0)) {
     return dottedQuad((parts[6] ?? 0) >> 8, (parts[6] ?? 0) & 255, (parts[7] ?? 0) >> 8, (parts[7] ?? 0) & 255);
   }
-  // 64:ff9b:1::/48 — NAT64 local-use prefix (RFC 8215); bits 48-63 and the
-  // u-octet are zero, IPv4 occupies bits 72-103.
-  if (
-    parts[0] === 0x64 && parts[1] === 0xff9b && parts[2] === 1 &&
-    parts[3] === 0 && ((parts[4] ?? 0) & 0xff00) === 0
-  ) {
-    return dottedQuad((parts[4] ?? 0) & 255, (parts[5] ?? 0) >> 8, (parts[5] ?? 0) & 255, (parts[6] ?? 0) >> 8);
+  // 64:ff9b:1::/48 — NAT64 local-use prefix (RFC 8215). Per RFC 6052 the
+  // embedded IPv4 occupies bits 48-63 and 72-87, skipping the reserved
+  // u-octet at bits 64-71; bits 88-127 are the zero suffix.
+  if (parts[0] === 0x64 && parts[1] === 0xff9b && parts[2] === 1) {
+    if ((parts[4] ?? 0) >> 8 !== 0 || (parts[5] ?? 0) & 255 || parts[6] || parts[7]) {
+      // Inside the local-use block but not a canonical translation address —
+      // fail closed instead of treating an undecodable literal as public.
+      return "0.0.0.0";
+    }
+    return dottedQuad(
+      (parts[3] ?? 0) >> 8, (parts[3] ?? 0) & 255,
+      (parts[4] ?? 0) & 255, (parts[5] ?? 0) >> 8
+    );
   }
   // 2002::/16 — 6to4 embeds the site's IPv4 at bits 16-47.
   if (parts[0] === 0x2002) {
