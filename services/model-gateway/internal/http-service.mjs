@@ -158,16 +158,22 @@ export async function createModelGatewayHttpHandler(options = {}) {
             signal: controller.signal,
             headers: request.headers
           });
-      if (result.error) {
-        writeJson(response, result.error.status, nativeEnvelope(protocol, result.error));
-        return;
+      try {
+        if (result.error) {
+          writeJson(response, result.error.status, nativeEnvelope(protocol, result.error));
+          return;
+        }
+        if (body.stream === true) {
+          const lines = protocol === "anthropic" ? anthropicChunks(result.body) : openAiChunks(result.body);
+          writeSse(response, lines);
+          return;
+        }
+        writeJson(response, result.status || 200, result.body);
+      } finally {
+        // A settled provider response holds its aggregate memory reservation
+        // until it has been serialized and handed to the client.
+        result?.release?.();
       }
-      if (body.stream === true) {
-        const lines = protocol === "anthropic" ? anthropicChunks(result.body) : openAiChunks(result.body);
-        writeSse(response, lines);
-        return;
-      }
-      writeJson(response, result.status || 200, result.body);
     } finally {
       response.off("close", onResponseClose);
     }

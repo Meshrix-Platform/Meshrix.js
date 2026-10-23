@@ -702,8 +702,9 @@ async function createOwnedModelGatewayApplication(options, ownership) {
         });
         if (result.status >= 200 && result.status < 300) {
           keepInflight = true;
-          return { ok: true, callId, body: result.body, inputRate, outputRate, currency, signal: callSignal };
+          return { ok: true, callId, body: result.body, release: result.release, inputRate, outputRate, currency, signal: callSignal };
         }
+        result.release?.();
       } catch {
         if (callSignal.aborted) return { error: stableError("cancelled", "call cancelled", requestId) };
       }
@@ -812,8 +813,11 @@ async function createOwnedModelGatewayApplication(options, ownership) {
     } finally {
       inflight.delete(result.callId);
     }
-    if (result.signal.aborted) return { error: stableError("cancelled", "call cancelled", requestId) };
-    return { status: 200, body: response };
+    if (result.signal.aborted) {
+      result.release?.();
+      return { error: stableError("cancelled", "call cancelled", requestId) };
+    }
+    return { status: 200, body: response, release: result.release };
   }
 
   async function callAnthropic({ client, body, idempotencyKey, requestId, signal, headers }) {
@@ -871,8 +875,11 @@ async function createOwnedModelGatewayApplication(options, ownership) {
     } finally {
       inflight.delete(result.callId);
     }
-    if (result.signal.aborted) return { error: stableError("cancelled", "call cancelled", requestId) };
-    return { status: 200, body: response };
+    if (result.signal.aborted) {
+      result.release?.();
+      return { error: stableError("cancelled", "call cancelled", requestId) };
+    }
+    return { status: 200, body: response, release: result.release };
   }
 
   async function createProvider(client, body, requestId) {

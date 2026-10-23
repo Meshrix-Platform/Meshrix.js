@@ -255,35 +255,43 @@ test("the actual Undici consumer rejects a DNS answer set containing an unapprov
   } finally { await egress.close(); }
 });
 
-test("concurrent provider responses stay inside the aggregate buffer budget", async () => {
-  const chunkBytes = 1024 * 1024;
+test("concurrent provider responses stay inside the aggregate buffer budget until release", async () => {
+  // The aggregate floor is one per-response cap, so exercise the bound with
+  // declared 8 MiB reservations and a 16 MiB budget; actual bodies stay tiny.
+  const reservationBytes = 8 * 1024 * 1024;
   const controllers = [];
-  let settled = 0;
+  const settledResults = [];
   const egress = createProviderEgress({
-    maxAggregateResponseBufferBytes: 2 * chunkBytes,
+    maxAggregateResponseBufferBytes: 2 * reservationBytes,
     async fetchImpl() {
       const stream = new ReadableStream({
         start(controller) { controllers.push(controller); }
       });
-      return new Response(stream, { status: 200, headers: { "content-length": String(chunkBytes) } });
+      return new Response(stream, { status: 200, headers: { "content-length": String(reservationBytes) } });
     }
   });
   const feed = (controller) => {
-    controller.enqueue(new TextEncoder().encode('{"pad":"' + "x".repeat(chunkBytes - 12) + '"}'));
+    controller.enqueue(new TextEncoder().encode('{"ok":true}'));
     controller.close();
   };
   const settleTick = () => new Promise((resolve) => setTimeout(resolve, 30));
   try {
-    const calls = Array.from({ length: 4 }, () => egress.call({ protocol: "http", baseUrl: "https://synthetic.example", credential: "synthetic", body: {} }).then((result) => { settled++; return result; }));
+    const calls = Array.from({ length: 4 }, () => egress.call({ protocol: "http", baseUrl: "https://synthetic.example", credential: "synthetic", body: {} }).then((result) => { settledResults.push(result); return result; }));
     while (controllers.length < 4) await new Promise((resolve) => setTimeout(resolve, 5));
-    await settleTick();
-    assert.equal(settled, 0);
     feed(controllers[0]); feed(controllers[1]);
     await settleTick();
-    assert.equal(settled, 2, "a third response only buffers once budget frees");
+    assert.equal(settledResults.length, 2);
     feed(controllers[2]); feed(controllers[3]);
+    await settleTick();
+    assert.equal(settledResults.length, 2, "a parsed response keeps its reservation while the body is live");
+    settledResults[0].release();
+    settledResults[0].release();
+    settledResults[1].release();
     const results = await Promise.all(calls);
-    for (const result of results) assert.equal(result.status, 200);
-    assert.equal(settled, 4);
+    for (const result of results) {
+      assert.equal(result.status, 200);
+      result.release();
+    }
+    assert.equal(settledResults.length, 4);
   } finally { await egress.close(); }
 });

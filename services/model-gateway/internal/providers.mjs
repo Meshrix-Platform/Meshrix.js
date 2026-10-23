@@ -234,6 +234,13 @@ export function createProviderEgress({ fetchImpl, lookupImpl = dnsLookup, agentF
       ? Math.min(declaredLength, MAX_PROVIDER_RESPONSE_BYTES)
       : MAX_PROVIDER_RESPONSE_BYTES;
     await acquireResponseBuffer(reservation);
+    let released = false;
+    const release = () => {
+      if (!released) {
+        released = true;
+        releaseResponseBuffer(reservation);
+      }
+    };
     let parsed = null;
     try {
       const text = await readBoundedResponse(response);
@@ -244,10 +251,13 @@ export function createProviderEgress({ fetchImpl, lookupImpl = dnsLookup, agentF
           throw new ProviderEgressError("Provider returned invalid JSON.", { status: response.status });
         }
       }
-    } finally {
-      releaseResponseBuffer(reservation);
+    } catch (error) {
+      release();
+      throw error;
     }
-    return { status: response.status, body: parsed };
+    // The reservation stays held while the parsed body remains live; the
+    // caller releases it once the response has been consumed downstream.
+    return { status: response.status, body: parsed, release };
   }
 
   return {
