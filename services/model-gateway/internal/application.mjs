@@ -810,6 +810,9 @@ async function createOwnedModelGatewayApplication(options, ownership) {
         output: usage.completion_tokens,
         response
       }, result);
+    } catch (error) {
+      result.release?.();
+      throw error;
     } finally {
       inflight.delete(result.callId);
     }
@@ -872,6 +875,9 @@ async function createOwnedModelGatewayApplication(options, ownership) {
         output: usage.output_tokens,
         response
       }, result);
+    } catch (error) {
+      result.release?.();
+      throw error;
     } finally {
       inflight.delete(result.callId);
     }
