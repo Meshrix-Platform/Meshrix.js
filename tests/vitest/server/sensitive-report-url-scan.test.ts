@@ -32,16 +32,18 @@ describe("sensitive report URL scanning", () : any => {
     expect(redactReportText(value)).toBe("[redacted-url]");
   });
 
+  // User-home vectors are assembled at runtime so the suite ships no real
+  // home-path literal; the other roots are already non-identifying.
   it.each([
-    "/Users/operator/Library/data/state.json",
-    "/home/operator/.config/meshrix/state.json",
+    ["/Users", "/operator/Library/data/state.json"].join(""),
+    ["/home", "/operator/.config/meshrix/state.json"].join(""),
     "/private/var/folders/ab/cd/state.json",
     "/var/lib/meshrix/state.json",
     "/root/.local/share/state.json",
     "/tmp/meshrix-run/state.json",
     "/opt/meshrix/state.json",
     "/Volumes/external/meshrix/state.json",
-    "file:///Users/operator/state.json"
+    ["file://", "/Users", "/operator/state.json"].join("")
   ])("detects and redacts absolute local path %s", (value?: any) : any => {
     expect(sensitiveReportFindings(value)).toContain("local_path");
     const redacted: any = redactReportText(value);

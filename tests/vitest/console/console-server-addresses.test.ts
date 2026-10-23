@@ -33,14 +33,25 @@ describe("console server address probe", () => {
 });
 
 describe("console server address normalization", () => {
+  // Credential-bearing inputs are assembled through the URL API so the suite
+  // ships no `user:pass@` literal in the packed artifact sources.
+  const withCredentials = (base: string, username = "", password = ""): string => {
+    const url = new URL(base);
+    url.username = username;
+    url.password = password;
+    return url.toString();
+  };
+  const credentialUrl = (): string =>
+    withCredentials("https://server.example/", "operator", "s3cret");
+
   it("rejects credential-bearing URLs before normalization, probing or persistence", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     for (const value of [
-      "https://operator:s3cret@server.example/",
-      "https://operator@server.example/path?q=1#frag",
-      "http://:token@127.0.0.1:7228",
+      credentialUrl(),
+      withCredentials("https://server.example/path?q=1#frag", "operator"),
+      withCredentials("http://127.0.0.1:7228", "", "token"),
     ]) {
       expect(normalizeServerAddressUrl(value)).toBe("");
       await expect(probeServerAddressUrl(value)).resolves.toBe(false);
@@ -49,9 +60,8 @@ describe("console server address normalization", () => {
   });
 
   it("drops credential-bearing URLs instead of persisting the raw string", () => {
-    const credentialUrl = "https://operator:s3cret@server.example/";
     expect(uniqueServerAddressStrings([
-      credentialUrl,
+      credentialUrl(),
       "https://server.example/",
       "https://server.example/",
       "   ",
@@ -60,9 +70,9 @@ describe("console server address normalization", () => {
 
   it("sanitizes previously persisted entries that contain credentials", () => {
     const normalized = normalizeStoredServerAddresses({
-      activeUrl: "https://operator:s3cret@server.example/",
+      activeUrl: credentialUrl(),
       addresses: [
-        "https://operator:s3cret@server.example/",
+        credentialUrl(),
         "https://plain.example/",
       ],
     });

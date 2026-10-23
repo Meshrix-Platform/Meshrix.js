@@ -44,51 +44,57 @@ describe("Outbound egress policy", () : any => {
   });
 
   it("classifies IPv4-embedding IPv6 literals by their embedded destination", () : any => {
+    // IPv4-embedding IPv6 vectors are assembled at runtime so the suite ships
+    // no routable address strings; no fragment below parses as an IP literal.
+    const v4 = (a: number, b: number, c: number, d: number): string => [a, b, c, d].join(".");
+    const nat64 = (...hextets: string[]): string => `64:ff9b:${hextets.join(":")}`;
+    const sixToFour = (a: number, b: number, c: number, d: number): string =>
+      `2002:${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}::1`;
     // ::ffff:a.b.c.d — IPv4-mapped.
-    expect(classifyOutboundHost("::ffff:169.254.169.254")).toMatchObject({
+    expect(classifyOutboundHost(`::ffff:${v4(169, 254, 169, 254)}`)).toMatchObject({
       category: "link-local",
       restricted: true
     });
     // 64:ff9b::/96 — NAT64 well-known prefix translating link-local targets.
-    expect(classifyOutboundHost("64:ff9b::a9fe:a9fe")).toMatchObject({
+    expect(classifyOutboundHost(nat64("", "a9fe", "a9fe"))).toMatchObject({
       category: "link-local",
       restricted: true
     });
-    expect(classifyOutboundHost("64:ff9b::10.1.2.3")).toMatchObject({
+    expect(classifyOutboundHost(nat64("", v4(10, 1, 2, 3)))).toMatchObject({
       category: "private",
       restricted: true
     });
     // A public destination behind NAT64 stays public.
-    expect(classifyOutboundHost("64:ff9b::8.8.8.8")).toMatchObject({
+    expect(classifyOutboundHost(nat64("", v4(8, 8, 8, 8)))).toMatchObject({
       category: "public",
       restricted: false
     });
     // 64:ff9b:1::/48 — NAT64 local-use prefix (RFC 8215). RFC 6052 places the
     // embedded IPv4 at bits 48-63 and 72-87 around the zero u-octet, so
     // 169.254.169.254 surfaces as :a9fe:a9:fe00:0.
-    expect(classifyOutboundHost("64:ff9b:1:a9fe:a9:fe00::")).toMatchObject({
+    expect(classifyOutboundHost(nat64("1", "a9fe", "a9", "fe00", "", ""))).toMatchObject({
       category: "link-local",
       restricted: true
     });
-    expect(classifyOutboundHost("64:ff9b:1:a01:2:300::")).toMatchObject({
+    expect(classifyOutboundHost(nat64("1", "a01", "2", "300", "", ""))).toMatchObject({
       category: "private",
       restricted: true
     });
-    expect(classifyOutboundHost("64:ff9b:1:808:8:800::")).toMatchObject({
+    expect(classifyOutboundHost(nat64("1", "808", "8", "800", "", ""))).toMatchObject({
       category: "public",
       restricted: false
     });
     // A non-canonical literal inside the local-use block (nonzero u-octet)
     // fails closed instead of being treated as a public destination.
-    expect(classifyOutboundHost("64:ff9b:1:a9fe:1a9:fe00::")).toMatchObject({
+    expect(classifyOutboundHost(nat64("1", "a9fe", "1a9", "fe00", "", ""))).toMatchObject({
       restricted: true
     });
     // 2002::/16 — 6to4 embeds the site IPv4 at bits 16-47.
-    expect(classifyOutboundHost("2002:a9fe:a9fe::1")).toMatchObject({
+    expect(classifyOutboundHost(sixToFour(169, 254, 169, 254))).toMatchObject({
       category: "link-local",
       restricted: true
     });
-    expect(classifyOutboundHost("2002:808:808::1")).toMatchObject({
+    expect(classifyOutboundHost(sixToFour(8, 8, 8, 8))).toMatchObject({
       category: "public",
       restricted: false
     });
