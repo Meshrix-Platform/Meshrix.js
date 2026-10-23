@@ -1166,7 +1166,7 @@ export function createUploadNoRunCustody({
     if (sealed?.storage_rel_path) {
       await fs.rm(storageProvider.resolveStoredObjectPath(sealed.storage_rel_path), { force: true });
     }
-    await fs.rm(pendingPath(row), { force: true }).catch(() => {});
+    await fs.rm(pendingPath(row), { force: true });
     const timestamp = new Date().toISOString();
     const commit = db.transaction(() => {
       db.prepare(`
