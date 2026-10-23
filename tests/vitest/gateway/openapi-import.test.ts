@@ -173,6 +173,82 @@ describe("OpenAPI -> portable upstream service import", () => {
     ]);
   });
 
+  it("never publishes an allow-all request schema for unresolvable references", () => {
+    const schemas: Record<string, any> = {
+      Loop: { type: "object", properties: { next: { $ref: "#/components/schemas/Loop" } } }
+    };
+    for (let depth = 0; depth < 10; depth += 1) {
+      schemas[`D${depth}`] = depth === 0
+        ? { type: "object", properties: { leaf: { type: "string" } } }
+        : { $ref: `#/components/schemas/D${depth - 1}` };
+    }
+    const spec = {
+      openapi: "3.0.3",
+      info: { title: "Ref Probe" },
+      servers: [{ url: "https://probe.example.test" }],
+      components: { schemas },
+      paths: {
+        "/ok": { get: { operationId: "okOperation", responses: {} } },
+        "/external": { post: { requestBody: { content: { "application/json": { schema: { $ref: "https://other.example/Item.json" } } } } } },
+        "/missing": { post: { requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/Absent" } } } } } },
+        "/recursive": { post: { requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/Loop" } } } } } },
+        "/deep": { post: { requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/D9" } } } } } }
+      }
+    };
+    const result = upstreamServiceImportFromOpenApi(JSON.stringify(spec));
+    const imported = result.document.descriptor.operations.map((operation: any) => operation.path);
+    expect(imported).toEqual(["/ok"]);
+    expect(result.skippedOperations.map((skipped: any) => skipped.path).sort()).toEqual([
+      "/deep", "/external", "/missing", "/recursive"
+    ]);
+    for (const skipped of result.skippedOperations) {
+      expect(skipped.reason).toContain("could not be resolved");
+    }
+  });
+
+  it("keeps non-flattenable object-body constraints on a nested body argument", () => {
+    const spec = {
+      openapi: "3.0.3",
+      info: { title: "Constrained" },
+      servers: [{ url: "https://constrained.example.test" }],
+      paths: {
+        "/items": {
+          post: {
+            operationId: "createConstrained",
+            parameters: [{ name: "dryRun", in: "query", schema: { type: "boolean" } }],
+            requestBody: {
+              required: true,
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { name: { type: "string" }, count: { type: "integer" } },
+                    required: ["name"],
+                    minProperties: 2,
+                    allOf: [{ properties: { tag: { type: "string" } } }]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+    const result = upstreamServiceImportFromOpenApi(JSON.stringify(spec));
+    const operation = result.document.descriptor.operations.find((op: any) => op.path === "/items") as any;
+    // Body-level constraints stay scoped to the body instead of leaking onto
+    // the combined argument object or being dropped.
+    expect(operation.requestSchema.properties.dryRun).toEqual({ type: "boolean" });
+    expect(operation.requestSchema.properties.name).toBeUndefined();
+    expect(operation.requestSchema.properties.body).toMatchObject({
+      type: "object",
+      required: ["name"],
+      minProperties: 2,
+      allOf: [{ properties: { tag: { type: "string" } } }]
+    });
+    expect(operation.requestSchema.required).toContain("body");
+  });
+
   it("forwards imported operations end-to-end including path parameters", async () => {
     const peer = await jsonPeer((body, request) =>
       request.method === "GET" && typeof request.url === "string" && request.url.startsWith("/items/")

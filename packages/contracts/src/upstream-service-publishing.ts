@@ -1581,21 +1581,42 @@ function openApiPointer(root: unknown, ref: string): unknown {
   return current;
 }
 
-function resolveOpenApiSchema(schema: unknown, root: unknown, depth: number, stack: ReadonlySet<string>): unknown {
-  if (depth > OPENAPI_IMPORT_MAX_REF_DEPTH) return true;
+function resolveOpenApiSchema(
+  schema: unknown,
+  root: unknown,
+  depth: number,
+  stack: ReadonlySet<string>,
+  unresolved?: Set<string>
+): unknown {
+  if (depth > OPENAPI_IMPORT_MAX_REF_DEPTH) {
+    unresolved?.add("a reference exceeded the resolution depth limit");
+    return true;
+  }
   if (Array.isArray(schema)) {
-    return schema.map((entry) => resolveOpenApiSchema(entry, root, depth + 1, stack));
+    return schema.map((entry) => resolveOpenApiSchema(entry, root, depth + 1, stack, unresolved));
   }
   if (!isPlainObject(schema)) return schema;
   const reference = typeof schema.$ref === "string" ? schema.$ref : "";
   if (reference) {
     // External references are never fetched; recursive ones stop the loop.
-    if (!reference.startsWith("#/") || stack.has(reference)) return true;
+    // Every unresolved case is recorded so callers can refuse to publish an
+    // allow-all schema in place of the source contract.
+    if (!reference.startsWith("#/")) {
+      unresolved?.add(`external reference ${reference.slice(0, 120)}`);
+      return true;
+    }
+    if (stack.has(reference)) {
+      unresolved?.add(`recursive reference ${reference.slice(0, 120)}`);
+      return true;
+    }
     const target = openApiPointer(root, reference);
-    if (target === undefined) return true;
+    if (target === undefined) {
+      unresolved?.add(`unresolved reference ${reference.slice(0, 120)}`);
+      return true;
+    }
     const next = new Set<string>(stack);
     next.add(reference);
-    return resolveOpenApiSchema(target, root, depth + 1, next);
+    return resolveOpenApiSchema(target, root, depth + 1, next, unresolved);
   }
   const output: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(schema)) {
@@ -1605,12 +1626,12 @@ function resolveOpenApiSchema(schema: unknown, root: unknown, depth: number, sta
       const resolvedMap: Record<string, unknown> = {};
       for (const [propertyName, propertySchema] of Object.entries(value)) {
         if (OPENAPI_UNSAFE_KEYS.has(propertyName)) continue;
-        resolvedMap[propertyName] = resolveOpenApiSchema(propertySchema, root, depth + 1, stack);
+        resolvedMap[propertyName] = resolveOpenApiSchema(propertySchema, root, depth + 1, stack, unresolved);
       }
       output[key] = resolvedMap;
       continue;
     }
-    output[key] = resolveOpenApiSchema(value, root, depth + 1, stack);
+    output[key] = resolveOpenApiSchema(value, root, depth + 1, stack, unresolved);
   }
   // OpenAPI 3.0 `nullable` widens a declared type to include null.
   if (schema.nullable === true) {
@@ -1682,12 +1703,21 @@ function openApiServerBaseUrl(document: Record<string, unknown>, override: unkno
   return candidate;
 }
 
-function openApiParameterSchema(parameter: Record<string, unknown>, root: unknown): Record<string, unknown> {
+function openApiParameterSchema(
+  parameter: Record<string, unknown>,
+  root: unknown,
+  unresolved?: Set<string>
+): Record<string, unknown> {
   const schema = isPlainObject(parameter.schema)
-    ? resolveOpenApiSchema(parameter.schema, root, 0, new Set<string>())
+    ? resolveOpenApiSchema(parameter.schema, root, 0, new Set<string>(), unresolved)
     : { type: "string" };
   return isPlainObject(schema) ? schema : { type: "string" };
 }
+
+// Object body keywords whose meaning stays identical when moved onto the
+// combined caller-argument object. Anything else applies to the body object
+// as a whole and cannot be folded without changing its scope.
+const OPENAPI_FLAT_BODY_KEYS = new Set(["type", "properties", "required", "additionalProperties"]);
 
 function openApiOperationSchema(
   parameters: Array<Record<string, unknown>>,
@@ -1695,20 +1725,25 @@ function openApiOperationSchema(
   bodyRequired: boolean,
   root: unknown,
   warnings: string[],
-  label: string
+  label: string,
+  unresolved?: Set<string>
 ): Record<string, unknown> | undefined {
   const properties: Record<string, unknown> = {};
   const required = new Set<string>();
   for (const parameter of parameters) {
     const name = typeof parameter.name === "string" ? parameter.name : "";
     if (!name || ["__proto__", "constructor", "prototype"].includes(name)) continue;
-    properties[name] = openApiParameterSchema(parameter, root);
+    properties[name] = openApiParameterSchema(parameter, root, unresolved);
     if (parameter.required === true || parameter.in === "path") required.add(name);
   }
   const schema: Record<string, unknown> = { type: "object", properties };
   if (isPlainObject(bodySchema)) {
     const merged = bodySchema as Record<string, unknown>;
-    if ((merged.type === "object" || merged.type === undefined) && isPlainObject(merged.properties)) {
+    if (
+      (merged.type === "object" || merged.type === undefined) &&
+      isPlainObject(merged.properties) &&
+      Object.keys(merged).every((key) => OPENAPI_FLAT_BODY_KEYS.has(key))
+    ) {
       // The caller-argument object IS the request body for write operations,
       // so object body properties merge flat into the argument schema.
       for (const [name, value] of Object.entries(merged.properties as Record<string, unknown>)) {
@@ -1720,6 +1755,8 @@ function openApiOperationSchema(
       }
       if (merged.additionalProperties !== undefined) schema.additionalProperties = merged.additionalProperties;
     } else {
+      // Body-level constraints (allOf/oneOf/not, property bounds, ...) keep
+      // their scope only as a nested body argument; nothing is dropped.
       properties.body = merged;
       if (bodyRequired) required.add("body");
     }
@@ -1733,7 +1770,12 @@ function openApiOperationSchema(
   return schema;
 }
 
-function openApiResponseSchema(operation: Record<string, unknown>, root: unknown): Record<string, unknown> | undefined {
+function openApiResponseSchema(
+  operation: Record<string, unknown>,
+  root: unknown,
+  warnings: string[],
+  label: string
+): Record<string, unknown> | undefined {
   const responses = isPlainObject(operation.responses) ? operation.responses : {};
   for (const [status, response] of Object.entries(responses)) {
     if (!/^2[0-9]{2}$/u.test(status) || !isPlainObject(response)) continue;
@@ -1743,7 +1785,12 @@ function openApiResponseSchema(operation: Record<string, unknown>, root: unknown
       ? (response.content as Record<string, unknown>)[mediaTypes[0]] as Record<string, unknown>
       : {};
     if (!isPlainObject(media.schema)) continue;
-    const schema = resolveOpenApiSchema(media.schema, root, 0, new Set<string>());
+    const unresolved = new Set<string>();
+    const schema = resolveOpenApiSchema(media.schema, root, 0, new Set<string>(), unresolved);
+    if (unresolved.size > 0) {
+      warnings.push(`${label}: response schema references could not be resolved (${[...unresolved].join("; ")}); the projected operation has no response contract.`);
+      return undefined;
+    }
     if (isPlainObject(schema) && Buffer.byteLength(JSON.stringify(schema), "utf8") <= OPENAPI_IMPORT_MAX_SCHEMA_BYTES) {
       return schema;
     }
@@ -1820,8 +1867,9 @@ export function upstreamServiceImportFromOpenApi(
       const bodyMedia = requestBody && requestMediaTypes.length > 0
         ? (requestBody.content as Record<string, unknown>)[requestMediaTypes[0]]
         : null;
+      const requestUnresolved = new Set<string>();
       const bodySchema = isPlainObject(bodyMedia) && isPlainObject(bodyMedia.schema)
-        ? resolveOpenApiSchema(bodyMedia.schema, document, 0, new Set<string>())
+        ? resolveOpenApiSchema(bodyMedia.schema, document, 0, new Set<string>(), requestUnresolved)
         : null;
       const readOnly = ["get", "head", "options"].includes(method.toLowerCase());
       const risk = method.toLowerCase() === "delete" ? "destructive" : readOnly ? "read_only" : "safe_write";
@@ -1831,9 +1879,20 @@ export function upstreamServiceImportFromOpenApi(
         requestBody?.required === true,
         document,
         warnings,
-        label
+        label,
+        requestUnresolved
       );
-      const responseSchema = openApiResponseSchema(operation, document);
+      if (requestUnresolved.size > 0) {
+        // A request contract that cannot be resolved is never replaced by an
+        // allow-all projection: the operation is skipped with its reason.
+        skippedOperations.push({
+          path,
+          method,
+          reason: `request schema references could not be resolved (${[...requestUnresolved].join("; ")})`
+        });
+        continue;
+      }
+      const responseSchema = openApiResponseSchema(operation, document, warnings, label);
       operations.push({
         operationKey: openApiOperationKey(operation, method, path, usedKeys),
         label: typeof operation.summary === "string" && operation.summary.trim()
