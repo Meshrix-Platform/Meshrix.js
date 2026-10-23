@@ -78,11 +78,11 @@ function parseArgs(argv?: any) : any {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
-  if (!/^\d+$/.test(options.port)) {
-    throw new Error("--port must be a number");
-  }
-  if (!/^\d+$/.test(options.vitePort)) {
-    throw new Error("--vite-port must be a number");
+  for (const [flag, value] of [["--port", options.port], ["--vite-port", options.vitePort]] as const) {
+    const port: any = Number(value);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new Error(`${flag} must be a port number between 1 and 65535`);
+    }
   }
   return options;
 }

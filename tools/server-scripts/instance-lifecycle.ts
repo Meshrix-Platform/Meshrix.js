@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveComposeHostPort, resolveServerPort, resolveVitePort } from "@meshrix/foundation/config/server-env";
-import { isConsoleDocument } from "./offline-delivery-vm-target.ts";
+import { isConsoleDocument, OFFLINE_VM_DEFAULT_HOST_PORT, OFFLINE_VM_PREFERRED_HOST_PORT } from "./offline-delivery-vm-target.ts";
 import { runOfflineDeliveryLocalUp } from "./offline-delivery-local-up.ts";
 
 export const INSTANCE_LIFECYCLE_ACTIONS: readonly any[] = Object.freeze(["start", "stop", "restart"]);
@@ -18,14 +18,38 @@ export const INSTANCE_LIFECYCLE_MODES: readonly any[] = Object.freeze([
 ]);
 // The probe target depends on the mode: Compose modes publish the container
 // listener under MESHRIX_HOST_PORT while source processes bind
-// MESHRIX_SERVER_PORT.
+// MESHRIX_SERVER_PORT. The offline launcher selects its own candidate ports,
+// so it is probed through probeOfflineInstancePort instead.
 export function instanceLifecyclePort(mode?: any) : any {
-  if (mode === "compose" || mode === "compose-ui" || mode === "offline") {
+  if (mode === "compose" || mode === "compose-ui") {
     return resolveComposeHostPort();
   }
   return resolveServerPort();
 }
 export const INSTANCE_LIFECYCLE_VITE_PORT: any = resolveVitePort();
+
+// The offline launcher selects the preferred candidate when it is free and
+// falls back to the VM host port; mirror that order so a stale listener on
+// either candidate is reported instead of probing an unrelated port.
+async function probeOfflineInstancePort() : Promise<any> {
+  const preferred: any = await probeInstancePort(OFFLINE_VM_PREFERRED_HOST_PORT);
+  if (preferred.healthOk === true) {
+    return Object.freeze({ ...preferred, port: Number(OFFLINE_VM_PREFERRED_HOST_PORT) });
+  }
+  const fallback: any = await probeInstancePort(OFFLINE_VM_DEFAULT_HOST_PORT);
+  if (fallback.healthOk === true) {
+    return Object.freeze({ ...fallback, port: Number(OFFLINE_VM_DEFAULT_HOST_PORT) });
+  }
+  return Object.freeze({
+    ...preferred,
+    listening: preferred.listening === true || fallback.listening === true,
+    port: 0,
+  });
+}
+
+async function probeInstanceForMode(mode?: any) : Promise<any> {
+  return mode === "offline" ? probeOfflineInstancePort() : probeInstancePort(instanceLifecyclePort(mode));
+}
 export const INSTANCE_LIFECYCLE_OFFLINE_PROJECT: any = "meshrix-offline-vm";
 
 function repoRootFromMeta() : any {
@@ -384,6 +408,7 @@ function resultPayload({
   restarted = false,
   probe,
   stages,
+  url,
 }: Record<string, any> = {}) : any {
   const payload: Record<string, any> = {
     ok: true,
@@ -392,7 +417,7 @@ function resultPayload({
     reused: reused === true,
     alreadyStopped: alreadyStopped === true,
     restarted: restarted === true,
-    url: `http://127.0.0.1:${instanceLifecyclePort(mode)}`,
+    url: url || `http://127.0.0.1:${instanceLifecyclePort(mode)}`,
     healthz: Number(probe?.healthz || 0),
     console: Number(probe?.console || 0),
   };
@@ -413,7 +438,7 @@ function inspectCurrentInstance() : any {
 }
 
 async function startInstance(mode?: any, { force = false } = {}) : Promise<any> {
-  const probe: any = await probeInstancePort(instanceLifecyclePort(mode));
+  const probe: any = await probeInstanceForMode(mode);
   const snapshot: any = inspectCurrentInstance();
   if (mode === "offline") {
     const started: any = await runOfflineDeliveryLocalUp();
@@ -426,6 +451,7 @@ async function startInstance(mode?: any, { force = false } = {}) : Promise<any> 
         console: started.console,
       },
       stages: started.stages,
+      url: started.url,
     });
   }
   if (force !== true && snapshot.current === mode && probe.healthOk === true) {
@@ -467,7 +493,7 @@ async function startInstance(mode?: any, { force = false } = {}) : Promise<any> 
 }
 
 async function stopInstance(mode?: any) : Promise<any> {
-  const probe: any = await probeInstancePort(instanceLifecyclePort(mode));
+  const probe: any = await probeInstanceForMode(mode);
   const snapshot: any = inspectCurrentInstance();
   if (!snapshot.current) {
     return resultPayload({
@@ -493,7 +519,7 @@ async function stopInstance(mode?: any) : Promise<any> {
   return resultPayload({
     action: "stop",
     mode,
-    probe: await probeInstancePort(instanceLifecyclePort(mode)),
+    probe: await probeInstanceForMode(mode),
   });
 }
 
