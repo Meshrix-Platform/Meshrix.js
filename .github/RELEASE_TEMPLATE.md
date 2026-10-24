@@ -92,7 +92,7 @@ cd "${asset%.tar.gz}"
 | Server and Web Console container | Linux amd64 and arm64 | Published as the signed multi-platform container after pinned Trivy scans and per-platform provenance/SBOM validation. Native runtime support is claimed only by a matching optional real-machine receipt. |
 | MCP Connector | macOS arm64 | Published as a functionally accepted artifact. Native runtime support is claimed only after the exact final archive passes the macOS arm64 Real-Machine Verification Workflow. |
 | MCP Connector | macOS x64, Linux x64/arm64, Windows x64/arm64 | Build support may remain in source; each runtime support claim requires its own optional real-machine receipt. |
-| Pactium substrate | `pactium@0.8.1` | Runtime dependency pinned by the release package manifests and lockfile. |
+| Pactium substrate | `pactium@0.8.4` | Runtime dependency pinned by the release package manifests and lockfile. |
 
 ## Uninstall
 

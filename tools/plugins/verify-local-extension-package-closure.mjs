@@ -59,7 +59,7 @@ async function main() {
   const architectureRoots = packageJson["//architecture-governance"]?.canonicalSourceRoots || [];
   for (const root of ["services/", "plugins/"]) if (!architectureRoots.includes(root)) throw new Error(`architecture policy omits ${root}`);
   const notice = await fs.readFile(path.join(repoRoot, "THIRD_PARTY_NOTICES.md"), "utf8");
-  for (const marker of ["Apache-2.0", "pactium@0.8.1", "MIT", "GPL-3.0-or-later", "tools/plugins/", "tests/plugins/"]) {
+  for (const marker of ["Apache-2.0", "`pactium@0.8.4` is distributed under Apache-2.0", "GPL-3.0-or-later", "tools/plugins/", "tests/plugins/"]) {
     if (!notice.includes(marker)) throw new Error(`mixed license notice omits ${marker}`);
   }
   const npmInvocation = resolveNpmCliInvocation();

@@ -11,15 +11,15 @@ import { createLockBackedNpmRegistry } from "../../../tools/server-scripts/lib/l
 const REPO_ROOT: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const LOCK: any = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "package-lock.json"), "utf8"));
 const ROOT_PACTIUM_LOCK: any = LOCK.packages["node_modules/pactium"];
-const PACTIUM_VERSION: any = "0.8.1";
+const PACTIUM_VERSION: any = "0.8.4";
 const PACTIUM_RESOLVED: any = `https://registry.npmjs.org/pactium/-/pactium-${PACTIUM_VERSION}.tgz`;
-const SYNTHETIC_TARBALL_BYTES: any = Buffer.from("synthetic pactium 0.8.1 registry fixture\n");
+const SYNTHETIC_TARBALL_BYTES: any = Buffer.from("synthetic pactium 0.8.4 registry fixture\n");
 const SYNTHETIC_PACTIUM_LOCK: any = {
   name: "pactium",
   version: PACTIUM_VERSION,
   resolved: PACTIUM_RESOLVED,
   integrity: `sha512-${createHash("sha512").update(SYNTHETIC_TARBALL_BYTES).digest("base64")}`,
-  license: "MIT"
+  license: "Apache-2.0"
 };
 
 let registryHandle: any = null;
@@ -35,7 +35,7 @@ describe("lock-backed npm registry artifacts", () : any => {
     expect(ROOT_PACTIUM_LOCK).toMatchObject({
       version: PACTIUM_VERSION,
       resolved: PACTIUM_RESOLVED,
-      license: "MIT"
+      license: "Apache-2.0"
     });
     expect(ROOT_PACTIUM_LOCK.integrity).toMatch(/^sha512-[A-Za-z0-9+/]+=*$/u);
   });

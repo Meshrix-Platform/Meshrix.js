@@ -61,7 +61,7 @@ than discovered from a client-brand catalog.
 | Downstream client integration | `meshrix.js` contains the first-party adapter components for its declared target catalog. Each runs only for an explicit target action through the bounded JSON-stdio contract; client applications remain independent external products. |
 | Optional parsers, providers, datastores, and service adapters | Optional integrations are disabled or absent by default. Each enabled implementation has its own contract, configuration, and verification evidence. |
 
-The root package and Foundation declare `pactium@0.8.1` as a runtime
+The root package and Foundation declare `pactium@0.8.4` as a runtime
 dependency, and `package-lock.json` pins the resolved package. The separate
 `vendor/pactium-0.8.0.tgz` source archive is not that runtime dependency; its
 license and inclusion in a release artifact must be assessed independently.

@@ -375,7 +375,7 @@ installed dependencies and container images, so a target host still needs
 network access while building uncached npm artifacts. It retains the authorized
 Pactium archive under `vendor/` for the source-package contract. The Dockerfile
 copies that directory, but the root package resolves Pactium from the public npm
-registry at exact version `0.8.1`, with integrity pinned in `package-lock.json`;
+registry at exact version `0.8.4`, with integrity pinned in `package-lock.json`;
 the source archive's vendor copy does not satisfy that npm dependency.
 
 Set `MESHRIX_HOST_PORT` to change the loopback host port. The Compose contract uses

@@ -39,7 +39,7 @@ const npmCli: any = resolveNpmCliInvocation();
 const REPO_ROOT: any = path.resolve(import.meta.dirname, "../../..");
 const ROOT_LOCK: any = JSON.parse(await fs.readFile(path.join(REPO_ROOT, "package-lock.json"), "utf8"));
 const PACTIUM_LOCK: any = ROOT_LOCK.packages["node_modules/pactium"];
-const PACTIUM_VERSION: any = "0.8.1";
+const PACTIUM_VERSION: any = "0.8.4";
 const PACTIUM_RESOLVED: any = `https://registry.npmjs.org/pactium/-/pactium-${PACTIUM_VERSION}.tgz`;
 
 function npmEnvironment(root?: any, registry?: any) : any {
@@ -78,7 +78,7 @@ async function runNpm(args?: any[], cwd?: any, env?: any) : Promise<any> {
   }
 }
 
-async function createSyntheticArtifact(root?: any, { name = "pactium", version = PACTIUM_VERSION, dependencies = {}, main = "index.js", index = "module.exports = { version: '0.8.1' };\n", scripts = {}, bundledPackages = {}, license = name === "pactium" ? "MIT" : "Apache-2.0" }: Record<string, any> = {}) : Promise<any> {
+async function createSyntheticArtifact(root?: any, { name = "pactium", version = PACTIUM_VERSION, dependencies = {}, main = "index.js", index = "module.exports = { version: '0.8.4' };\n", scripts = {}, bundledPackages = {}, license = "Apache-2.0" }: Record<string, any> = {}) : Promise<any> {
   const packageDirectory: any = path.join(root, `synthetic-${name.replace(/[^a-z0-9]+/giu, "-")}-${version}`);
   const packDirectory: any = path.join(root, `synthetic-${name.replace(/[^a-z0-9]+/giu, "-")}-${version}-pack`);
   await fs.mkdir(packageDirectory, { recursive: true });
@@ -544,7 +544,7 @@ describe("npm artifact installability source", () : any => {
     expect(PACTIUM_LOCK).toMatchObject({
       version: PACTIUM_VERSION,
       resolved: PACTIUM_RESOLVED,
-      license: "MIT"
+      license: "Apache-2.0"
     });
     expect(PACTIUM_LOCK.integrity).toMatch(/^sha512-[A-Za-z0-9+/]+=*$/u);
   });

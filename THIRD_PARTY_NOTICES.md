@@ -10,10 +10,10 @@ license also covers the first-party plugin packaging and test support in
 Third-party dependencies and incorporated assets retain their own terms. In
 particular:
 
-- The runtime dependency `pactium@0.8.1` is distributed under MIT as declared by
+- The runtime dependency `pactium@0.8.4` is distributed under Apache-2.0 as declared by
   its package metadata and pinned in `package-lock.json`.
 - `vendor/pactium-0.8.0.tgz` is a separate source archive under
-  GPL-3.0-or-later. It is not the `pactium@0.8.1` runtime dependency, and its
+  GPL-3.0-or-later. It is not the `pactium@0.8.4` runtime dependency, and its
   terms remain distinct in any artifact that includes it.
 - The workspace-local dependency `@signalapp/libsignal-client@0.104.0` (used by
   `packages/peer-crypto` for device-side Signal protocol operations) is
