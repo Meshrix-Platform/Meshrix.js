@@ -826,30 +826,19 @@ version, then consumes those archives. Do not repeat separate packing,
 installation, registry-preflight, OIDC-probe, or post-publication audit steps.
 
 The `release-candidate` GitHub environment supplies npm publishing identity.
-For the first publication only, npm packages do not yet have Trusted Publisher
-settings, so store a temporary `NPM_BOOTSTRAP_TOKEN` secret in that environment.
-The workflow exposes it as `NODE_AUTH_TOKEN` only to the npm
-publish command. After both packages have been created and their Trusted
-Publishers are configured, delete the secret; subsequent releases authenticate
-with npm's standard GitHub Actions OIDC support. The first publication
-(`v0.1.0`) completed that cycle: the bootstrap secret has been removed and the
-workflow now publishes through OIDC alone, so publishing the next release
-depends on both Trusted Publisher entries below existing.
-
-Create the temporary token from npm's profile menu under **Access Tokens →
-Generate New Token**. Choose a granular token with package publish permission,
-the narrowest package scope npm offers, and an expiration suited to the first
-release. Enable its **Bypass two-factor authentication** option only if npm
-requires it for this non-interactive first publish. In GitHub, add its value as
-an environment secret named
-`NPM_BOOTSTRAP_TOKEN` under **Settings → Environments → release-candidate**.
-After the first release, delete this GitHub secret and revoke the token in npm.
-See npm's [granular access token instructions](https://docs.npmjs.com/creating-and-viewing-access-tokens/).
+Publication authenticates only through npm Trusted Publishing with the publish
+job's OIDC identity: no npm token is stored in repository or environment
+secrets, exposed to any job, or consumed by the publish command. The first
+publication (`v0.1.0`) used a temporary bootstrap token because Trusted
+Publishing could not yet be configured; that secret was removed and every
+subsequent release publishes through OIDC alone. Do not reintroduce a token
+path: a package that lacks a configured Trusted Publisher is a maintainer-side
+prerequisite to resolve before tagging, not a reason to add a secret.
 
 ### Configure npm Trusted Publishing
 
-After the first release creates each package, configure a Trusted Publisher for
-both `meshrix.js` and `@meshrix/gateway` from each package's npm settings:
+Both `meshrix.js` and `@meshrix/gateway` carry a Trusted Publisher entry in
+each package's npm settings:
 
 1. Sign in to [npmjs.com](https://www.npmjs.com/) and open the package's
    **Settings → Trusted Publisher** section.
@@ -861,11 +850,13 @@ both `meshrix.js` and `@meshrix/gateway` from each package's npm settings:
    of `npm publish`.
 4. Save the configuration and repeat for the other package. Enable account-level
    two-factor authentication for the npm maintainer account; npm requires it to
-   manage Trusted Publisher settings. Once both entries are saved, remove
-   `NPM_BOOTSTRAP_TOKEN` from the GitHub environment.
+   manage Trusted Publisher settings.
 
-npm does not confirm the GitHub values when they are saved. The next ordinary
-release proves the configured identity through the actual publish. Do not add a
+Both entries were proven by an actual publish (`v0.3.0`). Recreating or
+renaming the GitHub repository invalidates the recorded bindings, which must
+then be re-registered before OIDC publishing works again. npm does not confirm
+the GitHub values when they are saved; the next ordinary release proves the
+configured identity through the actual publish. Do not add a
 separate OIDC probe or a local identity-verification gate. See the [npm Trusted
 Publishing guide](https://docs.npmjs.com/trusted-publishers/) and [npm 2FA
 requirements](https://docs.npmjs.com/requiring-2fa-for-package-publishing-and-settings-modification/).

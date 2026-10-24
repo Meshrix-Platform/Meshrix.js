@@ -57,10 +57,10 @@ GitHub Actions Trusted Publishing, and creates a GitHub Release.
 
 The release definition owns the version and Node/npm toolchain pins. Existing
 npm Trusted Publisher configuration uses the `release-candidate` GitHub
-environment. For first publication, the temporary `NPM_BOOTSTRAP_TOKEN`
-environment secret is exposed as `NODE_AUTH_TOKEN` to create packages that do
-not yet exist; configure Trusted Publishing once the packages exist and then
-remove the secret. Do not make stable-branch promotion a release prerequisite,
+environment. Publication authenticates only through that OIDC identity: no npm
+token may be stored in secrets or consumed by the publish command, and a
+package missing its Trusted Publisher binding is a maintainer-side
+prerequisite rather than a reason to add one. Do not make stable-branch promotion a release prerequisite,
 or add cross-workflow run identifiers, custom OIDC probes, or
 candidate receipts as extra publication steps. Branch maintenance remains
 separate from npm publication. The [release runbook](../../docs/RUNBOOK.md#release-definition-and-publication)

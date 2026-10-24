@@ -23,12 +23,8 @@ separate from npm publication.
 
 ## Configure npm
 
-The first publication uses the temporary `NPM_BOOTSTRAP_TOKEN` GitHub
-environment secret, mapped to `NODE_AUTH_TOKEN` for the npm publish command.
-The secret belongs to the repository's `release-candidate` environment.
-
-After both packages exist on npm, open each package's **Settings → Trusted
-Publisher** and add a **GitHub Actions** publisher with:
+Each package's **Settings → Trusted Publisher** carries a **GitHub Actions**
+publisher with:
 
 - Organization or user: `Meshrix-Platform`
 - Repository: `Meshrix.js`
@@ -36,11 +32,12 @@ Publisher** and add a **GitHub Actions** publisher with:
 - Environment: `release-candidate`
 - Allowed action: `npm publish`
 
-Enable account-level two-factor authentication before changing npm publisher
-settings. The workflow sets the publish dist-tag as part of `npm publish`, so
-the separate dist-tag permission is unnecessary. Once the publisher is set for
-both packages, delete the GitHub environment secret and revoke the temporary
-npm token. Ongoing releases use npm's standard GitHub Actions OIDC publishing.
+Publication authenticates only through that OIDC identity; no npm token is
+stored in repository or environment secrets. Enable account-level two-factor
+authentication before changing npm publisher settings. The workflow sets the
+publish dist-tag as part of `npm publish`, so the separate dist-tag permission
+is unnecessary. Recreating or renaming the GitHub repository invalidates the
+bindings and they must be re-registered before the next release.
 
 See [docs/RUNBOOK.md](../../../../../../docs/RUNBOOK.md#release-definition-and-publication)
 for the full release procedure and npm settings links.

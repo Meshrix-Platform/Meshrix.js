@@ -131,10 +131,9 @@ The release workflow is `.github/workflows/release.yml`. Push a `v*` tag or
 manually dispatch it from the release tag; the workflow checks the tag
 against package metadata, builds and runs the applicable release tests, packs
 and smoke-tests the public npm archives, publishes them to npm, and creates a
-GitHub Release. It uses npm Trusted Publishing for ordinary publication. For
-the first publication only, a temporary `NPM_BOOTSTRAP_TOKEN` environment
-secret is exposed as `NODE_AUTH_TOKEN` to create the packages; configure npm
-Trusted Publishers after the packages exist, then remove the secret. See the
+GitHub Release. It publishes only through npm Trusted Publishing with the
+job's OIDC identity; no npm token is stored or consumed anywhere in the
+release path. See the
 [release procedure](docs/RUNBOOK.md#release-definition-and-publication).
 
 Keep this orchestration and its tools in the canonical implementation and update

@@ -324,10 +324,11 @@ standard GitHub Actions Trusted Publisher flow, and creates the GitHub Release.
 Publish the archives produced by that run; do not add a second preparation or
 publication authority.
 
-The first publication may use a temporary `NPM_BOOTSTRAP_TOKEN` environment
-secret because npm Trusted Publishing can only be configured after the package
-exists. Expose it as `NODE_AUTH_TOKEN` only to the publish command and remove
-it after the packages' Trusted Publishers are configured. Do not make
-cross-workflow receipts, manually constructed OIDC probes, or post-publication
-signature audits prerequisites for this release flow. A package version
-conflict must still be caught before publishing.
+Publication authenticates only through npm Trusted Publishing with the job's
+OIDC identity. No long-lived npm token may be stored in repository or
+environment secrets, exposed to any job, or consumed by the publish command;
+a package that lacks a configured Trusted Publisher is a maintainer-side
+prerequisite, not a reason to introduce a token. Do not make cross-workflow
+receipts, manually constructed OIDC probes, or post-publication signature
+audits prerequisites for this release flow. A package version conflict must
+still be caught before publishing.
