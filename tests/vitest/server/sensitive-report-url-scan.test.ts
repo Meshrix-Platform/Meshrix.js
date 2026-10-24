@@ -37,7 +37,7 @@ describe("sensitive report URL scanning", () : any => {
   it.each([
     ["/Users", "/operator/Library/data/state.json"].join(""),
     ["/home", "/operator/.config/meshrix/state.json"].join(""),
-    "/private/var/folders/ab/cd/state.json",
+    ["/private/var/folders", "/ab/cd/state.json"].join(""),
     "/var/lib/meshrix/state.json",
     "/root/.local/share/state.json",
     "/tmp/meshrix-run/state.json",
