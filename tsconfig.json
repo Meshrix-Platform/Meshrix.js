@@ -12,6 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "customConditions": ["source"],
     "paths": {
       "@meshrix/ui-console/*": ["./packages/ui-console/src/*"],
       "@meshrix/contracts/*": ["./packages/contracts/src/*"]
