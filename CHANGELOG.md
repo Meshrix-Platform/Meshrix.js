@@ -11,7 +11,7 @@ No unreleased changes.
 - Moves the state-commit event log to Pactium 0.8.4's digest-shaped event
   records. Events persist `payloadHash` inside the hashed record while the
   caller-authorized plaintext payload lives in a Meshrix-owned sidecar keyed
-  by `eventHash`; `getEvent`/`listEvents` re-attach it and verify the digest
+  by that digest; `getEvent`/`listEvents` re-attach it and verify the digest
   before use, and `verifyCommit` binds commit payloads through the
   chain-anchored digest. Pre-digest event records keep their inline payload.
 - Pins `pactium` to `0.8.4`, inheriting its phantom-record write-order fix,
