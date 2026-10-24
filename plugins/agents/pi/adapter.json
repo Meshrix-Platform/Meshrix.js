@@ -3,7 +3,7 @@
   "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1",
   "target": "pi",
   "label": "Pi",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "packageName": "@meshrix/agent-pi-adapter",
   "entrypoint": "adapter.mjs",
   "commandNames": [

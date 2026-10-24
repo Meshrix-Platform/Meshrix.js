@@ -95,7 +95,8 @@ export interface ProtocolEvent extends PactiumRecord {
   afterRoot?: string;
   operationId?: string;
   contentRefs: string[];
-  payload: PactiumRecord;
+  payloadHash?: string;
+  payload?: PactiumRecord;
   prevEventHash: string;
 }
 
@@ -204,7 +205,13 @@ const STATE_COMMIT_SCOPE = "meshrix-state-commit";
 const STATE_COMMIT_EVENT_INDEX_SCOPE = "meshrix-state-commit-event-index";
 const STATE_MUTATION_IDEMPOTENCY_SCOPE = "meshrix-state-mutation-idempotency";
 const EVENT_LOG_SCOPE = "meshrix-event-log";
+const EVENT_PAYLOAD_SCOPE = "meshrix-event-payload";
 const STATE_EVENT_HASH_DOMAIN = "meshrix.state-event";
+// Pactium persists payloadHash (the payload digest) inside the hashed event
+// instead of the plaintext. The digest domain is part of the stored event
+// shape and is not exported by pactium; hydration and verification re-derive
+// it here so plaintext sidecar content stays bound to the chain-anchored hash.
+const PACTIUM_EVENT_PAYLOAD_HASH_DOMAIN = "pactium.event-payload";
 const EMPTY_STATE_VALUE_REF = "meshrix:value-ref:none";
 
 function substrateMutationError(code: string, message: string): CodedError {
@@ -579,12 +586,50 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
   const protocolEventLog = createdProtocolEventLog;
 
   async function appendEventUnlocked(input: PactiumRecord = {}) {
-    // Meshrix.js-normalize before Pactium so event payloads / eventHash match
-    // commit records that already use normalizeCanonical(asObject(...)).
-    return protocolEventLog.appendEvent({
-      ...input,
-      payload: normalizeCanonical(asObject(input.payload))
-    });
+    // Meshrix.js-normalize before Pactium so event payload digests / eventHash
+    // match commit records that already use normalizeCanonical(asObject(...)).
+    // Pactium persists payloadHash inside the hashed event; the plaintext is
+    // caller-authorized content and lives in a Meshrix-owned sidecar keyed by
+    // that digest. The sidecar is written before the event so a committed
+    // event can never reference a payload that was not persisted.
+    const normalizedPayload = input.payload === undefined
+      ? undefined
+      : normalizeCanonical(asObject(input.payload)) as PactiumRecord;
+    const derivedHash = normalizedPayload === undefined
+      ? ""
+      : protocolHash(PACTIUM_EVENT_PAYLOAD_HASH_DOMAIN, normalizedPayload);
+    if (text(input.payloadHash) && text(input.payloadHash) !== derivedHash) {
+      throw substrateMutationError(
+        "state_event_payload_hash_conflict",
+        "The supplied event payload digest does not match the payload."
+      );
+    }
+    if (normalizedPayload !== undefined) {
+      await storage.putProtocolObject(EVENT_PAYLOAD_SCOPE, derivedHash, normalizedPayload);
+    }
+    const event = await protocolEventLog.appendEvent({ ...input, payload: undefined, payloadHash: derivedHash });
+    return normalizedPayload === undefined ? event : { ...event, payload: normalizedPayload };
+  }
+
+  async function hydrateEventPayload<Event extends ProtocolEvent | null>(event: Event): Promise<Event> {
+    if (!event || event.payload !== undefined || !text(event.payloadHash)) return event;
+    const stored = await storage.getProtocolObject(EVENT_PAYLOAD_SCOPE, text(event.payloadHash), undefined);
+    // The append path persists the payload sidecar before the event, so a
+    // digest-bearing event without one is corruption, not a missing feature.
+    if (stored === undefined) {
+      throw substrateMutationError(
+        "state_event_payload_missing",
+        "State commit event payload is missing its stored value."
+      );
+    }
+    const storedPayload = asObject(stored);
+    if (protocolHash(PACTIUM_EVENT_PAYLOAD_HASH_DOMAIN, normalizeCanonical(storedPayload)) !== event.payloadHash) {
+      throw substrateMutationError(
+        "state_event_payload_mismatch",
+        "Stored event payload does not match its hashed event."
+      );
+    }
+    return { ...event, payload: storedPayload };
   }
 
   const eventLog = Object.freeze({
@@ -596,8 +641,19 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         ()  => appendEventUnlocked(input)
       );
     },
-    listEvents: protocolEventLog.listEvents,
-    getEvent: protocolEventLog.getEvent,
+    async listEvents(partitionId: string, options?: PactiumRecord) {
+      const events = await protocolEventLog.listEvents(partitionId, options);
+      const hydrated: ProtocolEvent[] = new Array(events.length);
+      for (let index = 0; index < events.length; index += 32) {
+        await Promise.all(events.slice(index, index + 32).map(async (event: ProtocolEvent, offset: number) => {
+          hydrated[index + offset] = await hydrateEventPayload(event);
+        }));
+      }
+      return hydrated;
+    },
+    async getEvent(partitionId: string, offset: number) {
+      return hydrateEventPayload(await protocolEventLog.getEvent(partitionId, offset));
+    },
     verifyPartition: protocolEventLog.verifyPartition
   });
 
@@ -760,7 +816,10 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     anchor?: unknown;
     maxSuffixEvents?: unknown;
   }) {
-    const events = [...await eventLog.listEvents(scope, { limit: 10000 })].reverse();
+    // Lineage checks only need the stored chain fields, not hydrated payload
+    // sidecars, so this reads the raw log instead of the payload-hydrating
+    // eventLog wrapper.
+    const events = [...await protocolEventLog.listEvents(scope, { limit: 10000 })].reverse();
     const normalizedAnchor = asObject(anchor);
     const anchorOffset = Number(normalizedAnchor.offset);
     const anchoredEvent = Number.isInteger(anchorOffset) ? events[anchorOffset] : null;
@@ -878,7 +937,10 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
   }
 
   async function verifyCommitEvent(commit: StateCommitRecord): Promise<void> {
-    const event = await eventLog.getEvent(commit.scope, commit.eventOffset);
+    // Read the raw stored event (not the hydrated wrapper): eventHash is
+    // recomputed over the persisted record shape, which carries payloadHash
+    // rather than the plaintext payload field the wrapper re-attaches.
+    const event = await protocolEventLog.getEvent(commit.scope, commit.eventOffset);
     if (!event) {
       throw substrateMutationError(
         "state_commit_event_missing",
@@ -892,6 +954,14 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       ...event,
       eventHash: undefined
     });
+    // Events written through Pactium's digest-shaped appends carry payloadHash
+    // inside the hashed record; the digest is chain-anchored so comparing it
+    // binds the commit payload even when the plaintext sidecar is unavailable.
+    // Pre-digest records carry the plaintext payload inline instead.
+    const payloadMatches = text(event.payloadHash)
+      ? event.payloadHash ===
+        protocolHash(PACTIUM_EVENT_PAYLOAD_HASH_DOMAIN, normalizeCanonical(expectedPayload))
+      : canonicalEquals(event.payload, expectedPayload);
     if (
       event.protocol !== PACTIUM_PROTOCOL ||
       event.schema !== PACTIUM_SCHEMA_VERSION ||
@@ -904,7 +974,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       event.beforeRoot !== commit.beforeRoot ||
       event.afterRoot !== commit.afterRoot ||
       !canonicalEquals(event.contentRefs, commit.contentRefs) ||
-      !canonicalEquals(event.payload, expectedPayload)
+      !payloadMatches
     ) {
       throw substrateMutationError(
         "state_commit_event_mismatch",

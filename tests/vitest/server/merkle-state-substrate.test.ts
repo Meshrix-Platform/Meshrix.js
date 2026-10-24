@@ -154,6 +154,8 @@ describe("merkle state substrate", () : any => {
         contentRefs: [chunkA.cid],
         payload: { actor: "test" },
       });
+      expect(firstEvent.payloadHash).toMatch(/^sha256:/);
+      expect(firstEvent.payload).toEqual({ actor: "test" });
       const secondEvent: any = await substrate.eventLog.appendEvent({
         partitionId: "workspace/a",
         operationId: "index.update",
@@ -166,6 +168,15 @@ describe("merkle state substrate", () : any => {
       expect(await substrate.eventLog.listEvents("workspace/a", { limit: 1 })).toEqual([
         expect.objectContaining({ eventHash: secondEvent.eventHash }),
       ]);
+      await expect(substrate.eventLog.getEvent("workspace/a", 0)).resolves.toMatchObject({
+        payloadHash: firstEvent.payloadHash,
+        payload: { actor: "test" },
+      });
+      await expect(substrate.eventLog.appendEvent({
+        partitionId: "workspace/a",
+        payload: { actor: "mismatch" },
+        payloadHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      })).rejects.toMatchObject({ code: "state_event_payload_hash_conflict" });
       await expect(substrate.eventLog.verifyPartition("workspace/a")).resolves.toMatchObject({
         ok: true,
         eventCount: 2,

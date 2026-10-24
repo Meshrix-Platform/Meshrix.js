@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/foundation",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Meshrix.js pure infrastructure primitives — security, policy, config, storage, proof, checkpoint, workflow, observability, module-system",
   "license": "Apache-2.0",
   "engines": {
@@ -613,9 +613,9 @@
   },
   "private": true,
   "peerDependencies": {
-    "@meshrix/contracts": "0.2.0",
+    "@meshrix/contracts": "0.3.0",
     "better-sqlite3": "^12.9.0",
-    "pactium": "0.8.1",
+    "pactium": "0.8.4",
     "pg": "^8.22.0",
     "smol-toml": "^1.9.1",
     "undici": "^8.11.2"
