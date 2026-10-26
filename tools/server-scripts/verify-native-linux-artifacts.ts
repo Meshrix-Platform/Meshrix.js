@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { validatePublicBuildProvenance } from "../../apps/entry-native/tools/build-linux.mjs";
+import { loadNativeReleaseConfig, nativeTargets } from "../../apps/entry-native/tools/native-release-config.mjs";
+import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm } from "node:fs/promises";
 import os from "node:os";
@@ -12,19 +15,22 @@ const BUILD_ROOT = path.join(NATIVE_ROOT, "dist", "linux");
 const PACKAGE_ROOT = path.join(BUILD_ROOT, "packages");
 const BUILD_MANIFEST = path.join(BUILD_ROOT, "build-manifest.json");
 const PACKAGE_MANIFEST = path.join(PACKAGE_ROOT, "package-manifest.json");
-const EXPECTED = Object.freeze([
-  Object.freeze({ component: "cli-tui", arch: "x86_64", rustTarget: "x86_64-unknown-linux-musl", libc: "musl", binary: "bin/meshrix-entry", buildBinary: "bin/x86_64/meshrix-entry" }),
-  Object.freeze({ component: "cli-tui", arch: "aarch64", rustTarget: "aarch64-unknown-linux-musl", libc: "musl", binary: "bin/meshrix-entry", buildBinary: "bin/aarch64/meshrix-entry" }),
-  Object.freeze({ component: "gui", arch: "x86_64", rustTarget: "x86_64-unknown-linux-gnu", libc: "gnu", binary: "bin/meshrix-entry-gui", buildBinary: "bin/x86_64/meshrix-entry-gui" }),
-  Object.freeze({ component: "gui", arch: "aarch64", rustTarget: "aarch64-unknown-linux-gnu", libc: "gnu", binary: "bin/meshrix-entry-gui", buildBinary: "bin/aarch64/meshrix-entry-gui" })
-]);
-const ALPINE_IMAGES: any = Object.freeze({
-  x86_64: "docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764",
-  aarch64: "docker.io/library/alpine@sha256:2e1a7aa4cbc4e9e5222bb4c24a839aa1a6170ea5492d644777ce7b178824e44f"
-});
+// The verified artifact set and runtime qualification images are shared
+// configuration: builders, packagers and verifiers all derive them from the
+// same versioned registry.
+const EXPECTED = Object.freeze(nativeTargets("linux").map((target: any) => Object.freeze({
+  component: target.component,
+  arch: target.arch,
+  rustTarget: target.rustTarget,
+  libc: target.libc,
+  binary: target.archiveBinary,
+  buildBinary: target.binaryPath
+})));
+const RELEASE_CONFIG = loadNativeReleaseConfig();
+const ALPINE_IMAGES: any = RELEASE_CONFIG.runtimeImages.alpine;
 const MANYLINUX_IMAGES: any = Object.freeze({
-  x86_64: "quay.io/pypa/manylinux_2_28_x86_64:latest",
-  aarch64: "quay.io/pypa/manylinux_2_28_aarch64:latest"
+  x86_64: RELEASE_CONFIG.linuxBuilders.x86_64.base,
+  aarch64: RELEASE_CONFIG.linuxBuilders.aarch64.base
 });
 const SYNTHETIC_CUSTODY_SECRET = "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -159,7 +165,11 @@ function validateTarget(actual: any, expected: any, code: any) {
   }
 }
 
-function validateBuildManifest(manifest: any) {
+async function validateBuildManifest(manifest: any) {
+  // The manifest's provenance claims are checked against the real lockfile,
+  // not trusted as recorded.
+  const lockSha256 = createHash("sha256").update(await readFile(path.join(NATIVE_ROOT, "Cargo.lock"))).digest("hex");
+  validatePublicBuildProvenance(manifest, { lockSha256 });
   if (!manifest || manifest.schemaVersion !== 1 || !Array.isArray(manifest.artifacts) || manifest.artifacts.length !== EXPECTED.length) {
     fail("build_manifest_invalid");
   }
@@ -170,7 +180,7 @@ function validateBuildManifest(manifest: any) {
     if (matches.length !== 1) fail("build_manifest_target_missing_or_duplicate");
     const entry = matches[0];
     validateTarget(entry, expected, "build_manifest");
-    if (entry.binary !== expected.buildBinary || entry.buildSource !== "current-local-development-sources") {
+    if (entry.binary !== expected.buildBinary || entry.buildSource !== "public-registry-locked") {
       fail("build_manifest_output_contract_mismatch");
     }
     seen.add(`${entry.component}\0${entry.arch}`);
@@ -595,14 +605,26 @@ async function probeContainerArchitecture(image: any, arch: any, component: any)
 }
 
 async function inspectRuntimeImage(image: any, arch: any) {
-  const output = (await checked("docker", [
+  const inspect = () => checked("docker", [
     "image", "inspect", "--format", "{{.Os}}|{{.Architecture}}|{{.Id}}", image
-  ], { failureCode: "runtime_image_missing" })).trim().split("|");
+  ], { failureCode: "runtime_image_missing" });
+  let output;
+  try {
+    output = (await inspect()).trim();
+  } catch (error: any) {
+    if (!String(error?.message ?? "").includes("runtime_image_missing")) throw error;
+    // Probe images are build-host prerequisites; fetch the pinned reference
+    // once instead of failing on a clean Docker daemon. Probe containers
+    // still run with --pull=never and no network.
+    await checked("docker", ["pull", image], { failureCode: "runtime_image_pull_failed" });
+    output = (await inspect()).trim();
+  }
+  const parts = output.split("|");
   const expected = arch === "x86_64" ? /^(?:amd64|x86_64)$/iu : /^(?:arm64|aarch64)$/iu;
-  if (output[0] !== "linux" || !expected.test(output[1] ?? "") || !/^sha256:[a-f0-9]{64}$/u.test(output[2] ?? "")) {
+  if (parts[0] !== "linux" || !expected.test(parts[1] ?? "") || !/^sha256:[a-f0-9]{64}$/u.test(parts[2] ?? "")) {
     fail("runtime_image_architecture_mismatch");
   }
-  return output[2];
+  return parts[2];
 }
 
 async function runtimeRun(image: any, arch: any, bundleRoot: any, stateRoot: any, binary: any, args: any, env: any = []) {
@@ -704,7 +726,7 @@ async function main() {
   const version = workspaceVersion(nativeCargo);
   requireLinuxDisplayFeatures(nativeCargo);
   const buildManifest = JSON.parse(await readFile(BUILD_MANIFEST, "utf8"));
-  const buildEntries = validateBuildManifest(buildManifest);
+  const buildEntries = await validateBuildManifest(buildManifest);
   const packageManifest = JSON.parse(await readFile(PACKAGE_MANIFEST, "utf8"));
   if (!packageManifest || packageManifest.schemaVersion !== 1 || packageManifest.version !== version
     || !Array.isArray(packageManifest.artifacts) || packageManifest.artifacts.length !== EXPECTED.length) {

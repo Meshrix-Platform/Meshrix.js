@@ -5,6 +5,8 @@ version = 4
 [[package]]
 name = "a4aa"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d26a0662456ac45999772b90c239bbdf32e12eb8a2800cecbdb4f934b5441480"
 dependencies = [
  "agent-client-protocol",
  "async-trait",
@@ -21,6 +23,8 @@ dependencies = [
 [[package]]
 name = "a4aa-antigravity"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0768cc563cb0bc46795adbb4e8b0b0dae103d3e400080cfa0dadcbc6be2cd747"
 dependencies = [
  "a4aa",
 ]
@@ -28,6 +32,8 @@ dependencies = [
 [[package]]
 name = "a4aa-claude"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cfe7b2800426c683ccf9235928051e505bb6f3f4f98414bdb26ad614f1ab612"
 dependencies = [
  "a4aa",
 ]
@@ -35,6 +41,8 @@ dependencies = [
 [[package]]
 name = "a4aa-codex"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7180b84cb1ce0b41809887413ba6f0944b5f43419d1f433da74093412ab3aab1"
 dependencies = [
  "a4aa",
 ]
@@ -42,6 +50,8 @@ dependencies = [
 [[package]]
 name = "a4aa-command-code"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa76242234e007d8985f4ee0ab89bd17bde6dbd6ca5e98d8c59ffff583202f36"
 dependencies = [
  "a4aa",
 ]
@@ -49,6 +59,8 @@ dependencies = [
 [[package]]
 name = "a4aa-cursor"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98552e61d7d3528b1efc2f3351f5489f34125c47b78f3009f50e909ee4cb9811"
 dependencies = [
  "a4aa",
 ]
@@ -56,6 +68,8 @@ dependencies = [
 [[package]]
 name = "a4aa-devin"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c34edf590bf0850f2da5a7aed8a42be226ebabc937f281cd1137aef6ac09a81"
 dependencies = [
  "a4aa",
 ]
@@ -63,6 +77,8 @@ dependencies = [
 [[package]]
 name = "a4aa-dialects"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d82cb7a02906c4019814d576e35f6fae67785693ac65284c23324ee9590e32fc"
 dependencies = [
  "a4aa",
  "a4aa-antigravity",
@@ -86,6 +102,8 @@ dependencies = [
 [[package]]
 name = "a4aa-dsh"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76c30557de62ce3cf0df47018e54fb2f22054c79df7f2ecab72aee39df7a764e"
 dependencies = [
  "a4aa",
 ]
@@ -93,6 +111,8 @@ dependencies = [
 [[package]]
 name = "a4aa-factory"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "727735b88c64cdcea17fa3a09e393ff7ffd3b7c013d6c32193418cc3469d4e5f"
 dependencies = [
  "a4aa",
 ]
@@ -100,6 +120,8 @@ dependencies = [
 [[package]]
 name = "a4aa-grok"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f845bec47381b6e80eccaf75b1ddd7d6fae4aead491e4802a170864dff5249a"
 dependencies = [
  "a4aa",
 ]
@@ -107,6 +129,8 @@ dependencies = [
 [[package]]
 name = "a4aa-hermes"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21e21623f8a1e962be5601eba236040c4aefa14a1d35e7a3369238898aa18092"
 dependencies = [
  "a4aa",
 ]
@@ -114,6 +138,8 @@ dependencies = [
 [[package]]
 name = "a4aa-kilo-code"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b24e9046dbcd3ab732eadfafeee27f8c66daf75d05c8cc134f52bdbb1d1cb05"
 dependencies = [
  "a4aa",
 ]
@@ -121,6 +147,8 @@ dependencies = [
 [[package]]
 name = "a4aa-kimi-code"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a0aaab1f40e1ce3869a175d14cef0f0686607379d3d9a29bba1ad5c233f47bd"
 dependencies = [
  "a4aa",
 ]
@@ -128,6 +156,8 @@ dependencies = [
 [[package]]
 name = "a4aa-kiro"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d938a6d33e373a696abb8ad89438d92eb34bdba8d14f6629bff22357184b298"
 dependencies = [
  "a4aa",
 ]
@@ -135,6 +165,8 @@ dependencies = [
 [[package]]
 name = "a4aa-open-claw"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46e2f9fa871d34cef2bc918ba500c89ae822fea1764b459caf30d3489655cf74"
 dependencies = [
  "a4aa",
 ]
@@ -142,6 +174,8 @@ dependencies = [
 [[package]]
 name = "a4aa-opencode"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd32ee6cd03b8190955631b2ad8dc984e2164ccd62c007c3f8b4261b0cc41e74"
 dependencies = [
  "a4aa",
 ]
@@ -149,6 +183,8 @@ dependencies = [
 [[package]]
 name = "a4aa-pi"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec32ff76c712189e35216a13115aab7206b9de5b5834afc4fdf19acea680fc99"
 dependencies = [
  "a4aa",
 ]
@@ -301,9 +337,12 @@ dependencies = [
 [[package]]
 name = "agents-with-profiles"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4104eec806dcd647804db31062a21adc6ed4fc3ec1c79667ff832ea117dacc63"
 dependencies = [
  "a4aa",
  "a4aa-dialects",
+ "jiff",
  "serde",
  "serde_json",
  "tokio",

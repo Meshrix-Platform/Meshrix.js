@@ -6,6 +6,28 @@ All notable changes to Meshrix.js are recorded here.
 
 No unreleased changes.
 
+## [0.4.0] - 2026-10-26
+
+- Releases the Rust native client with the npm products: the tag-driven
+  release workflow now builds and qualifies the Linux and macOS client
+  matrices and attaches all eight client archives to the GitHub Release.
+- Adds macOS aarch64 and x86_64 build, packaging and artifact verification
+  for the native client. The thin Mach-O executables link only system dylibs
+  and frameworks, resolve their build-time `protoc` from a checksum-pinned
+  download, and carry the same license inventory and runtime probes as the
+  Linux archives.
+- Resolves A4AA, AwP and the A4AA dialect cards exclusively from published
+  crates.io coordinates pinned in `Cargo.lock`; local sibling source
+  snapshots and Cargo path patches are removed. The Linux client builder
+  accepts a local aarch64 or x86_64 Docker daemon and cross-compiles the
+  remaining architecture, and `build-linux.mjs --host` builds host-linked
+  GNU binaries on a clean Linux machine without Docker — recorded separately
+  from portable archive qualification.
+- Migrates the native client to A4AA 0.2.0 and AwP 0.1.0. Detection enrolls
+  the card lane whose executable is actually installed while preserving
+  later resolvable lanes as alternates, and Agent entry updates no longer
+  discard saved lane alternates.
+
 ## [0.3.0] - 2026-10-24
 
 - Moves the state-commit event log to Pactium 0.8.4's digest-shaped event

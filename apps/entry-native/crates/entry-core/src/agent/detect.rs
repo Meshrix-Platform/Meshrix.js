@@ -3,7 +3,7 @@
 //! This module contains host filesystem logic only. It has no per-product
 //! catalog: executable names, bundled paths and configuration markers come
 //! from each card's `DetectSurface`, while lane and command behavior come
-//! from `AgentCard::spec`.
+//! from `AgentCard::specs`, preserving each executable's declared lane.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -17,6 +17,7 @@ use a4aa::AgentSpec;
 pub(crate) struct DetectedAgent {
     card: &'static AgentCard,
     pub spec: AgentSpec,
+    pub(crate) alternates: Vec<AgentSpec>,
     binary: Option<PathBuf>,
     app: Option<PathBuf>,
     configured: bool,
@@ -69,11 +70,33 @@ fn detect_card(card: &'static AgentCard, shared_bin_dirs: &[PathBuf]) -> Detecte
     bin_dirs.extend(card.detect.binary_dirs.iter().filter_map(expand_os_path));
     dedupe_paths(&mut bin_dirs);
 
-    let binary = card
-        .detect
-        .binaries
-        .iter()
-        .find_map(|name| resolve_binary(&bin_dirs, name));
+    // A detection name is not a protocol declaration. In particular an ACP
+    // primary and its CLI alternate may use different executables. Resolve
+    // the complete specs in the card's preference order, pick the first
+    // executable that exists as the enrolled lane, and keep every later
+    // resolvable lane as a runtime alternate.
+    let mut specs = card.specs();
+    let resolved: Vec<Option<PathBuf>> = specs
+        .iter_mut()
+        .map(|spec| {
+            resolve_binary(&bin_dirs, &spec.command.program).inspect(|path| {
+                spec.command.program = path.to_string_lossy().into_owned();
+            })
+        })
+        .collect();
+    let selected = resolved.iter().position(Option::is_some);
+    let (spec, alternates, binary) = match selected {
+        Some(index) => {
+            let alternates = specs[index + 1..]
+                .iter()
+                .zip(&resolved[index + 1..])
+                .filter(|(_, path)| path.is_some())
+                .map(|(spec, _)| spec.clone())
+                .collect();
+            (specs[index].clone(), alternates, resolved[index].clone())
+        }
+        None => (card.spec(), Vec::new(), None),
+    };
     let app = card
         .detect
         .apps
@@ -93,13 +116,10 @@ fn detect_card(card: &'static AgentCard, shared_bin_dirs: &[PathBuf]) -> Detecte
         .filter_map(|template| expand_path_template(template))
         .any(|path| path.exists());
 
-    let mut spec = card.spec();
-    if let Some(path) = &binary {
-        spec.command.program = path.to_string_lossy().into_owned();
-    }
     DetectedAgent {
         card,
         spec,
+        alternates,
         binary,
         app,
         configured,
@@ -276,6 +296,86 @@ mod tests {
         let antigravity = cards.iter().find(|agent| agent.id() == "antigravity");
         assert!(antigravity.is_some());
         assert_eq!(antigravity.unwrap().spec.id, "antigravity");
+    }
+
+    #[cfg(unix)]
+    fn antigravity_with_binaries(names: &[&str]) -> (tempfile::TempDir, DetectedAgent) {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().expect("isolated detection directory");
+        for name in names {
+            let binary = directory.path().join(name);
+            std::fs::write(&binary, "#!/bin/sh\nexit 99\n")
+                .expect("write detection-only executable");
+            std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755))
+                .expect("make detection-only fixture executable");
+        }
+        let card = a4aa_dialects::card("antigravity").expect("maintained card");
+        let detected = detect_card(card, &[directory.path().to_path_buf()]);
+        (directory, detected)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn antigravity_primary_only_uses_acp_executable_and_lane() {
+        let (directory, detected) = antigravity_with_binaries(&["agy_acp_server.par"]);
+        assert!(detected.callable());
+        assert_eq!(
+            PathBuf::from(&detected.spec.command.program),
+            directory.path().join("agy_acp_server.par")
+        );
+        assert!(matches!(&detected.spec.lane, a4aa::LaneSpec::Acp { .. }));
+        assert!(
+            a4aa::Adapter::new(detected.spec)
+                .capabilities()
+                .permission_prompts
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn antigravity_alternate_only_keeps_cli_protocol_and_arguments() {
+        let (directory, detected) = antigravity_with_binaries(&["agy"]);
+        assert!(detected.callable());
+        assert_eq!(
+            PathBuf::from(&detected.spec.command.program),
+            directory.path().join("agy")
+        );
+        let a4aa::LaneSpec::Cli(lane) = &detected.spec.lane else {
+            panic!("the CLI executable must never receive an ACP handshake");
+        };
+        assert_eq!(&lane.args[..2], &["--print", "{prompt}"]);
+        assert!(lane.json_lines);
+        assert!(matches!(lane.stream, a4aa::StreamMode::Stdio));
+        assert_eq!(
+            detected.spec.lane,
+            a4aa_dialects::card("antigravity").unwrap().specs()[1].lane
+        );
+        assert!(
+            !a4aa::Adapter::new(detected.spec)
+                .capabilities()
+                .permission_prompts
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn antigravity_both_executables_preserve_primary_preference() {
+        let (directory, detected) = antigravity_with_binaries(&["agy", "agy_acp_server.par"]);
+        assert!(detected.callable());
+        assert_eq!(
+            PathBuf::from(&detected.spec.command.program),
+            directory.path().join("agy_acp_server.par")
+        );
+        assert!(matches!(&detected.spec.lane, a4aa::LaneSpec::Acp { .. }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn antigravity_without_executable_stays_an_uncallable_template() {
+        let (_directory, detected) = antigravity_with_binaries(&[]);
+        assert!(!detected.callable());
+        assert_eq!(detected.spec.command.program, "agy_acp_server.par");
+        assert!(matches!(&detected.spec.lane, a4aa::LaneSpec::Acp { .. }));
     }
 
     #[test]

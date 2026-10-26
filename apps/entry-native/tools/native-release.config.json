@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "meshrix-native-release-config-1",
+  "targets": {
+    "linux": [
+      {
+        "component": "cli-tui",
+        "arch": "x86_64",
+        "rustTarget": "x86_64-unknown-linux-musl",
+        "buildTarget": "x86_64-unknown-linux-musl",
+        "packageName": "meshrix-entry-cli",
+        "binaryName": "meshrix-entry",
+        "libc": "musl"
+      },
+      {
+        "component": "cli-tui",
+        "arch": "aarch64",
+        "rustTarget": "aarch64-unknown-linux-musl",
+        "buildTarget": "aarch64-unknown-linux-musl",
+        "packageName": "meshrix-entry-cli",
+        "binaryName": "meshrix-entry",
+        "libc": "musl"
+      },
+      {
+        "component": "gui",
+        "arch": "x86_64",
+        "rustTarget": "x86_64-unknown-linux-gnu",
+        "buildTarget": "x86_64-unknown-linux-gnu.2.28",
+        "packageName": "meshrix-entry-gui",
+        "binaryName": "meshrix-entry-gui",
+        "libc": "gnu"
+      },
+      {
+        "component": "gui",
+        "arch": "aarch64",
+        "rustTarget": "aarch64-unknown-linux-gnu",
+        "buildTarget": "aarch64-unknown-linux-gnu.2.28",
+        "packageName": "meshrix-entry-gui",
+        "binaryName": "meshrix-entry-gui",
+        "libc": "gnu"
+      }
+    ],
+    "macos": [
+      {
+        "component": "cli-tui",
+        "arch": "aarch64",
+        "rustTarget": "aarch64-apple-darwin",
+        "packageName": "meshrix-entry-cli",
+        "binaryName": "meshrix-entry",
+        "libc": "system"
+      },
+      {
+        "component": "cli-tui",
+        "arch": "x86_64",
+        "rustTarget": "x86_64-apple-darwin",
+        "packageName": "meshrix-entry-cli",
+        "binaryName": "meshrix-entry",
+        "libc": "system"
+      },
+      {
+        "component": "gui",
+        "arch": "aarch64",
+        "rustTarget": "aarch64-apple-darwin",
+        "packageName": "meshrix-entry-gui",
+        "binaryName": "meshrix-entry-gui",
+        "libc": "system"
+      },
+      {
+        "component": "gui",
+        "arch": "x86_64",
+        "rustTarget": "x86_64-apple-darwin",
+        "packageName": "meshrix-entry-gui",
+        "binaryName": "meshrix-entry-gui",
+        "libc": "system"
+      }
+    ]
+  },
+  "linuxBuilders": {
+    "aarch64": {
+      "platform": "linux/arm64",
+      "imageTag": "meshrix-entry-linux-builder:arm64",
+      "base": "quay.io/pypa/manylinux_2_28_aarch64@sha256:abd1230aa9e4058a74b89d27cd14ba18c0db036d7bfe6e6f219a29ea63c24eb6",
+      "protocPackage": "protoc-3.12.4-linux-aarch_64.zip",
+      "protocSha256": "30b4597db5d7c5c1c473f7c51d965890f025009917e1e02f06a6a72a44135002"
+    },
+    "x86_64": {
+      "platform": "linux/amd64",
+      "imageTag": "meshrix-entry-linux-builder:amd64",
+      "base": "quay.io/pypa/manylinux_2_28_x86_64@sha256:4131ddd7acb9c6c966af02fe7e71edc51e078c2d41f475966697676430bfa2ae",
+      "protocPackage": "protoc-3.12.4-linux-x86_64.zip",
+      "protocSha256": "d0d4c7a3c08d3ea9a20f94eaface12f5d46d7b023fe2057e834a4181c9e93ff3"
+    }
+  },
+  "runtimeImages": {
+    "alpine": {
+      "x86_64": "docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764",
+      "aarch64": "docker.io/library/alpine@sha256:2e1a7aa4cbc4e9e5222bb4c24a839aa1a6170ea5492d644777ce7b178824e44f"
+    }
+  },
+  "macosProtoc": {
+    "version": "29.5",
+    "url": "https://github.com/protocolbuffers/protobuf/releases/download/v29.5/protoc-29.5-osx-universal_binary.zip",
+    "sha256": "87f10476554cc93428df8cfc84cefb41205147bf2c3778e78fc1d6a600ccc978"
+  }
+}

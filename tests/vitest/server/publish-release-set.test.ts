@@ -322,7 +322,9 @@ describe("npm release-set publication", () => {
       environment: {
         ...cleanNpmEnvironment,
         npm_config_userconfig: userConfig,
-        npm_config_globalconfig: globalConfig
+        npm_config_globalconfig: globalConfig,
+        // A clean consumer must not depend on a writable or prewarmed host cache.
+        npm_config_cache: path.join(consumerDirectory, "npm-cache")
       }
     });
     const installed = await npmRunner([

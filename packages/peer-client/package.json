@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/peer-client",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Device-side encrypted peer client with durable local outbox and inbox, exact-ciphertext retry, pairing-pinned signed receipts, paged local history, and host-neutral application dispatch over online private-relay forwarding.",
   "license": "Apache-2.0",
   "scripts": {
@@ -18,9 +18,9 @@
     }
   },
   "dependencies": {
-    "@meshrix/contracts": "0.3.0",
-    "@meshrix/foundation": "0.3.0",
-    "@meshrix/peer-crypto": "0.3.0"
+    "@meshrix/contracts": "0.4.0",
+    "@meshrix/foundation": "0.4.0",
+    "@meshrix/peer-crypto": "0.4.0"
   },
   "files": [
     "dist/**/*",

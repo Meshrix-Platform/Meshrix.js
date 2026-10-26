@@ -264,13 +264,25 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     scriptName: "build:native-linux-client", command: "npm run build:native-linux-client", category: "packaging", subsystem: "native-client-linux",
     owner: "entry-native", tier: "release", sideEffects: "container",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
-    inputs: ["apps/entry-native/Cargo.toml", "apps/entry-native/Cargo.lock", "apps/entry-native/crates/**", "apps/entry-native/packaging/linux/**", "apps/entry-native/tools/build-linux.mjs", "apps/entry-native/tools/package-linux.mjs", "apps/entry-native/tools/linux-builder/**", "LICENSE"], outputs: ["apps/entry-native/dist/linux/**"],
+    inputs: ["apps/entry-native/Cargo.toml", "apps/entry-native/Cargo.lock", "apps/entry-native/crates/**", "apps/entry-native/packaging/linux/**", "apps/entry-native/tools/build-linux.mjs", "apps/entry-native/tools/package-linux.mjs", "apps/entry-native/tools/native-release.config.json", "apps/entry-native/tools/native-release-config.mjs", "apps/entry-native/tools/native-release-config.d.mts", "apps/entry-native/tools/linux-builder/**", "LICENSE"], outputs: ["apps/entry-native/dist/linux/**"],
   },
   "test:native-linux-client": {
     scriptName: "test:native-linux-client", command: "npm run test:native-linux-client", category: "test", subsystem: "native-client-linux",
     owner: "entry-native", tier: "integration", sideEffects: "container",
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
-    inputs: ["package.json", "tests/run.ts", "tools/registry/tests.registry.json", "tools/scripts/lib/unified-test-runner-execution.ts", "tools/scripts/package-script-registry-catalog.ts", "tools/server-scripts/verify-native-linux-artifacts.ts", "apps/entry-native/Cargo.toml", "apps/entry-native/Cargo.lock", "apps/entry-native/packaging/linux/**", "apps/entry-native/dist/linux/**"], outputs: ["build/reports/native-linux-client.json"],
+    inputs: ["package.json", "tests/run.ts", "tools/registry/tests.registry.json", "tools/scripts/lib/unified-test-runner-execution.ts", "tools/scripts/package-script-registry-catalog.ts", "tools/server-scripts/verify-native-linux-artifacts.ts", "apps/entry-native/tools/build-linux.mjs", "apps/entry-native/tools/package-linux.mjs", "apps/entry-native/tools/native-release.config.json", "apps/entry-native/tools/native-release-config.mjs", "apps/entry-native/tools/native-release-config.d.mts", "tests/node/native-linux-host-build.test.mjs", "apps/entry-native/Cargo.toml", "apps/entry-native/Cargo.lock", "apps/entry-native/packaging/linux/**", "apps/entry-native/dist/linux/**"], outputs: ["build/reports/native-linux-client.json"],
+  },
+  "build:native-macos-client": {
+    scriptName: "build:native-macos-client", command: "npm run build:native-macos-client", category: "packaging", subsystem: "native-client-macos",
+    owner: "entry-native", tier: "release", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["apps/entry-native/Cargo.toml", "apps/entry-native/Cargo.lock", "apps/entry-native/crates/**", "apps/entry-native/packaging/macos/**", "apps/entry-native/tools/build-macos.mjs", "apps/entry-native/tools/package-macos.mjs", "apps/entry-native/tools/package-linux.mjs", "apps/entry-native/tools/native-release.config.json", "apps/entry-native/tools/native-release-config.mjs", "apps/entry-native/tools/native-release-config.d.mts", "LICENSE"], outputs: ["apps/entry-native/dist/macos/**"],
+  },
+  "test:native-macos-client": {
+    scriptName: "test:native-macos-client", command: "npm run test:native-macos-client", category: "test", subsystem: "native-client-macos",
+    owner: "entry-native", tier: "integration", sideEffects: "temp-files",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["package.json", "tests/run.ts", "tools/registry/tests.registry.json", "tools/scripts/lib/unified-test-runner-execution.ts", "tools/scripts/package-script-registry-catalog.ts", "tools/server-scripts/verify-native-macos-artifacts.ts", "apps/entry-native/tools/build-linux.mjs", "apps/entry-native/tools/package-macos.mjs", "apps/entry-native/tools/native-release.config.json", "apps/entry-native/tools/native-release-config.mjs", "apps/entry-native/tools/native-release-config.d.mts", "apps/entry-native/Cargo.toml", "apps/entry-native/Cargo.lock", "apps/entry-native/packaging/macos/**", "apps/entry-native/dist/macos/**"], outputs: ["build/reports/native-macos-client.json"],
   },
   "server:verify:resource-discipline": {
     scriptName: "server:verify:resource-discipline", command: "npm run server:verify:resource-discipline", category: "verifier", subsystem: "resource-discipline",

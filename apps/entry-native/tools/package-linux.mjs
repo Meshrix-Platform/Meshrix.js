@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
+import { validatePublicBuildProvenance, publicDependencyEvidence } from "./build-linux.mjs";
+import { nativeTargets } from "./native-release-config.mjs";
+import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { cp, chmod, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { cp, chmod, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,44 +18,17 @@ const SYSTEM_LICENSE_DIR = path.join(WORKSPACE_DIR, "packaging", "linux", "syste
 const ROOT_LICENSE = path.join(REPOSITORY_DIR, "LICENSE");
 const PACKAGE_MANIFEST_SCHEMA = 1;
 
-const EXPECTED_ARTIFACTS = Object.freeze([
-  Object.freeze({
-    component: "cli-tui",
-    arch: "x86_64",
-    rustTarget: "x86_64-unknown-linux-musl",
-    binaryPath: "bin/x86_64/meshrix-entry",
-    libc: "musl",
-    archiveProduct: "meshrix-entry",
-    archiveBinary: "bin/meshrix-entry"
-  }),
-  Object.freeze({
-    component: "cli-tui",
-    arch: "aarch64",
-    rustTarget: "aarch64-unknown-linux-musl",
-    binaryPath: "bin/aarch64/meshrix-entry",
-    libc: "musl",
-    archiveProduct: "meshrix-entry",
-    archiveBinary: "bin/meshrix-entry"
-  }),
-  Object.freeze({
-    component: "gui",
-    arch: "x86_64",
-    rustTarget: "x86_64-unknown-linux-gnu",
-    binaryPath: "bin/x86_64/meshrix-entry-gui",
-    libc: "gnu",
-    archiveProduct: "meshrix-entry-gui",
-    archiveBinary: "bin/meshrix-entry-gui"
-  }),
-  Object.freeze({
-    component: "gui",
-    arch: "aarch64",
-    rustTarget: "aarch64-unknown-linux-gnu",
-    binaryPath: "bin/aarch64/meshrix-entry-gui",
-    libc: "gnu",
-    archiveProduct: "meshrix-entry-gui",
-    archiveBinary: "bin/meshrix-entry-gui"
-  })
-]);
+// The artifact set is shared configuration: builders, packagers and
+// verifiers all derive it from the same versioned registry.
+const EXPECTED_ARTIFACTS = Object.freeze(nativeTargets("linux").map((target) => Object.freeze({
+  component: target.component,
+  arch: target.arch,
+  rustTarget: target.rustTarget,
+  binaryPath: target.binaryPath,
+  libc: target.libc,
+  archiveProduct: target.archiveProduct,
+  archiveBinary: target.archiveBinary
+})));
 
 const LICENSE_FILE_NAME = /^(?:license|copying|notice|copyright)(?:[._-].*)?$/iu;
 const RELATED_LICENSE_PACKAGES = Object.freeze({
@@ -642,7 +618,8 @@ async function readJson(filePath, errorCode) {
   }
 }
 
-function validateBuildManifest(value) {
+export function validateBuildManifest(value, expectedProvenance = {}) {
+  validatePublicBuildProvenance(value, expectedProvenance);
   if (!value || value.schemaVersion !== 1 || !Array.isArray(value.artifacts)) {
     throw new Error("build_manifest_shape_invalid");
   }
@@ -687,7 +664,7 @@ function validateBuildManifest(value) {
     }
     if (binaries.has(artifact.binary)) throw new Error("build_manifest_binary_path_duplicated");
     const buildSource = safeToken(artifact.buildSource, "build_source");
-    if (buildSource !== "current-local-development-sources") {
+    if (buildSource !== "public-registry-locked") {
       throw new Error("build_manifest_source_qualification_unexpected");
     }
     seen.add(key);
@@ -724,7 +701,6 @@ async function cargoMetadataFor(target) {
     "metadata",
     "--format-version", "1",
     "--locked",
-    "--offline",
     "--filter-platform", target,
     "--manifest-path", "Cargo.toml"
   ], WORKSPACE_DIR);
@@ -819,10 +795,9 @@ async function collectCargoLicenseInventory(metadata) {
         });
       }
     }
-    const a4aaWorkspaceCrate = dependency.source == null && dependency.name.startsWith("a4aa-");
     const signalWorkspaceCrate = dependency.source?.startsWith("git+https://github.com/signalapp/libsignal.git")
       && ["libsignal-core", "libsignal-debug", "libsignal-protocol", "signal-crypto"].includes(dependency.name);
-    if (a4aaWorkspaceCrate || signalWorkspaceCrate) {
+    if (signalWorkspaceCrate) {
       const workspaceRoot = await realpath(path.resolve(packageDir, "../.."));
       const workspaceManifest = await readFile(path.join(workspaceRoot, "Cargo.toml"), "utf8");
       if (!/^\[workspace\]\s*$/mu.test(workspaceManifest)) throw new Error("dependency_license_workspace_missing");
@@ -976,27 +951,63 @@ function archiveName(artifact, version) {
   return `${artifact.archiveProduct}-${version}-linux-${artifact.arch}-${artifact.libc}.tar.gz`;
 }
 
-async function createArchive(stagingDir, destination, binaryPath) {
-  const entries = [
-    path.posix.dirname(binaryPath),
-    "README.md",
-    "LICENSE",
-    "artifact.json",
-    "THIRD_PARTY_LICENSES.md",
-    "licenses"
-  ];
-  if (await lstat(path.join(stagingDir, "lib")).then((result) => result.isDirectory()).catch(() => false)) {
-    entries.push("lib");
+// GNU tar and libarchive bsdtar spell archive ownership differently.
+let tarOwnershipFlags;
+async function archiveOwnershipFlags() {
+  tarOwnershipFlags ??= (await run("tar", ["--version"], process.cwd())).stdout.match(/bsdtar|libarchive/iu)
+    ? ["--uid", "0", "--gid", "0", "--numeric-owner"]
+    : ["--owner=0", "--group=0", "--numeric-owner"];
+  return tarOwnershipFlags;
+}
+
+// Same-tag release retries compare archive bytes, so archives must be
+// byte-reproducible: members are enumerated in sorted order with
+// --no-recursion (each tar descends directories in filesystem order), member
+// mtimes are normalized on the staged files, and the gzip header timestamp
+// is suppressed — bsdtar through an option, GNU tar through GZIP=-n.
+const ARCHIVE_MEMBER_MTIME = new Date("2001-01-01T00:00:00Z");
+
+let tarDeterminismFlags;
+async function archiveDeterminismFlags() {
+  tarDeterminismFlags ??= (await run("tar", ["--version"], process.cwd())).stdout.match(/bsdtar|libarchive/iu)
+    ? ["--options", "gzip:!timestamp"]
+    : [];
+  return tarDeterminismFlags;
+}
+
+// Only regular files are listed — passing a directory member would let tar
+// recurse it and emit descendants a second time, and recursion is never
+// needed when every member is explicit.
+async function archiveEntries(stagingDir) {
+  const entries = [];
+  async function walk(relative) {
+    for (const dirent of await readdir(path.join(stagingDir, relative), { withFileTypes: true })) {
+      const child = path.posix.join(relative, dirent.name);
+      if (dirent.isDirectory()) {
+        await walk(child);
+      } else if (dirent.isFile()) {
+        entries.push(child);
+      }
+    }
+  }
+  await walk(".");
+  return entries.sort();
+}
+
+async function createArchive(stagingDir, destination) {
+  const entries = await archiveEntries(stagingDir);
+  for (const entry of entries) {
+    await utimes(path.join(stagingDir, entry), ARCHIVE_MEMBER_MTIME, ARCHIVE_MEMBER_MTIME);
   }
   const output = await run("tar", [
-    "--owner=0",
-    "--group=0",
-    "--numeric-owner",
+    ...(await archiveOwnershipFlags()),
+    ...(await archiveDeterminismFlags()),
     "--no-xattrs",
+    "-n",
     "-czf", destination,
     "-C", stagingDir,
     ...entries
-  ], stagingDir, { ...process.env, COPYFILE_DISABLE: "1" });
+  ], stagingDir, { ...process.env, COPYFILE_DISABLE: "1", GZIP: "-n" });
   if (output.stderr.trim().length > 0) {
     const warning = redactPaths(output.stderr.trim());
     if (warning.length > 0) process.stderr.write(`${warning}\n`);
@@ -1016,7 +1027,13 @@ async function main() {
   await mkdir(outputRoot, { recursive: true });
 
   const buildManifest = await readJson(path.join(inputRoot, "build-manifest.json"), "build_manifest_json_invalid");
-  const { artifacts, builder } = validateBuildManifest(buildManifest);
+  // The manifest's provenance claims are checked against the real lockfile
+  // and fresh metadata, not trusted as recorded.
+  const expectedProvenance = {
+    lockSha256: createHash("sha256").update(await readFile(path.join(WORKSPACE_DIR, "Cargo.lock"))).digest("hex"),
+    dependencies: publicDependencyEvidence(JSON.parse((await run("cargo", ["metadata", "--format-version", "1", "--locked", "--manifest-path", CARGO_MANIFEST], WORKSPACE_DIR)).stdout))
+  };
+  const { artifacts, builder } = validateBuildManifest(buildManifest, expectedProvenance);
   const binaries = new Map();
   const binaryFiles = new Set();
   for (const artifact of artifacts) {
@@ -1067,7 +1084,7 @@ async function main() {
       );
       const archive = archiveName(packageArtifact, version);
       const stagedArchive = path.join(tempRoot, archive);
-      await createArchive(staged.stagingDir, stagedArchive, packageArtifact.archiveBinary);
+      await createArchive(staged.stagingDir, stagedArchive);
       stagedArchives.push({ stagedArchive, finalArchive: path.join(outputRoot, archive) });
       packageEntries.push(Object.freeze({
         archive,

@@ -2,16 +2,16 @@
 
 - Repository: `Meshrix.js`
 - Profile: `semver`
-- Published version: `0.1.0`
-- Prepared source version: `0.2.0` (not published)
+- Published version: `0.3.0`
+- Prepared source version: `0.4.0` (not published)
 
 ## Release history
 
-The first public release is available as:
+The latest public release is available as:
 
-- [`meshrix.js@0.1.0`](https://registry.npmjs.org/meshrix.js/0.1.0)
-- [`@meshrix/gateway@0.1.0`](https://registry.npmjs.org/@meshrix%2fgateway/0.1.0)
-- [GitHub release `v0.1.0`](https://github.com/Meshrix-Platform/Meshrix.js/releases/tag/v0.1.0), published on 2026-10-04 UTC.
+- [`meshrix.js@0.3.0`](https://registry.npmjs.org/meshrix.js/0.3.0)
+- [`@meshrix/gateway@0.3.0`](https://registry.npmjs.org/@meshrix%2fgateway/0.3.0)
+- [GitHub release `v0.3.0`](https://github.com/Meshrix-Platform/Meshrix.js/releases/tag/v0.3.0).
 
 These publication facts establish the listed release artifacts. They do not
 establish deployment of later source, Workers support, application-layer
@@ -21,12 +21,14 @@ boundaries.
 
 ## Subsequent releases
 
-The `0.2.0` source candidate consolidates the Rust client, adopts A4AA and
-AwP for Agent adaptation and behavior profiles, and updates the Peer,
-recording and security implementation. See the [changelog](../../CHANGELOG.md).
-The native client is qualified independently from the two npm products.
-Its current dependency API changes require matching distributable A4AA and
-AwP releases; development-source checks alone do not establish that build path.
+The `0.4.0` source candidate releases the Rust native client binaries
+together with the npm products. The tag-driven workflow builds and qualifies
+the Linux and macOS client matrices — musl CLI/TUI and X11/Wayland GUI
+archives for Linux x86_64 and aarch64, thin Mach-O CLI/TUI and GUI archives
+for macOS aarch64 and x86_64 — and attaches all eight archives to the GitHub
+Release. The A4AA, AwP and A4AA dialect dependencies resolve exclusively from
+published crates.io coordinates pinned in `apps/entry-native/Cargo.lock`. See
+the [changelog](../../CHANGELOG.md).
 
 The standard tag-driven workflow performs build, test, packaging and
 clean-consumer checks before npm and GitHub publication. Local source

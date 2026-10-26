@@ -1,7 +1,7 @@
 //! Deterministic process-boundary coverage for the AwP/A4AA Peer executor.
 //!
 //! The Antigravity case uses the maintained card and replaces only its
-//! executable with a shell fixture. The ACP case uses a minimal local agent
+//! ACP executable with a deterministic local fixture. The generic ACP case uses a minimal local agent
 //! to exercise Meshrix's explicit permission roundtrip through A4AA.
 
 #[cfg(unix)]
@@ -131,33 +131,80 @@ for line in sys.stdin:
 "#;
 
 #[cfg(unix)]
-const ANTIGRAVITY_SHELL_FIXTURE: &str = r#"
-prompt=''
-model=''
-effort=''
-mode=''
-format=''
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --print) prompt=$2; shift 2 ;;
-    --output-format) format=$2; shift 2 ;;
-    --model) model=$2; shift 2 ;;
-    --effort) effort=$2; shift 2 ;;
-    --mode) mode=$2; shift 2 ;;
-    *) shift ;;
-  esac
-done
-expected_prompt='Profile instructions
+const ANTIGRAVITY_ACP_FIXTURE: &str = r#"#!/usr/bin/env python3
+import json, os, sys
 
-user task'
-[ "$prompt" = "$expected_prompt" ] || exit 41
-[ "$format" = "stream-json" ] || exit 42
-[ "$model" = "request-model" ] || [ "$model" = "profile-model" ] || exit 43
-[ "$effort" = "request-effort" ] || [ "$effort" = "profile-effort" ] || exit 44
-[ "$mode" = "plan" ] || exit 45
-[ -f "reserved" ] || exit 46
-printf '%s\n' '{"event":"init","conversation_id":"fixture-conversation"}'
-printf '{"event":"result","result":{"response":"model=%s;effort=%s;mode=%s"}}\n' "$model" "$effort" "$mode"
+def send(value):
+    sys.stdout.write(json.dumps(value) + "\n")
+    sys.stdout.flush()
+
+session_id = "antigravity.fixture.1"
+choices = {
+    "model": ["initial-model", "profile-model", "request-model"],
+    "thought_level": ["initial-effort", "profile-effort", "request-effort"],
+    "mode": ["auto", "plan"]
+}
+selected = {slot: values[0] for slot, values in choices.items()}
+def config_options():
+    return [{"id": slot, "name": slot, "category": slot, "type": "select",
+             "currentValue": selected[slot],
+             "options": [{"value": value, "name": value} for value in values]}
+            for slot, values in choices.items()]
+
+for line in sys.stdin:
+    message = json.loads(line)
+    method = message.get("method")
+    request_id = message.get("id")
+    params = message.get("params") or {}
+    if method == "initialize":
+        send({"jsonrpc": "2.0", "id": request_id, "result": {
+            "protocolVersion": 1, "agentCapabilities": {}, "authMethods": []
+        }})
+    elif method == "session/new":
+        send({"jsonrpc": "2.0", "id": request_id, "result": {
+            "sessionId": session_id, "configOptions": config_options()
+        }})
+    elif method == "session/set_config_option":
+        slot, value = params["configId"], params["value"]
+        assert value in choices[slot], "only advertised selector values are accepted"
+        selected[slot] = value
+        send({"jsonrpc": "2.0", "id": request_id,
+              "result": {"configOptions": config_options()}})
+    elif method == "session/prompt":
+        assert os.path.isfile("reserved"), "durable reservation precedes prompt"
+        prompt = "".join(block.get("text", "") for block in params.get("prompt", [])
+                         if block.get("type") == "text")
+        assert prompt == "Profile instructions\n\nuser task"
+        assert selected["model"] in ["profile-model", "request-model"]
+        assert selected["thought_level"] in ["profile-effort", "request-effort"]
+        assert selected["mode"] == "plan"
+        send({"jsonrpc": "2.0", "id": 9000,
+              "method": "session/request_permission", "params": {
+                  "sessionId": session_id,
+                  "toolCall": {"toolCallId": "antigravity-fixture-call",
+                               "title": "Fixture tool call", "kind": "execute",
+                               "content": [], "locations": []},
+                  "options": [
+                      {"optionId": "allow-once", "name": "Allow once", "kind": "allow_once"},
+                      {"optionId": "deny", "name": "Deny", "kind": "reject_once"}
+                  ]
+              }})
+        permission = json.loads(sys.stdin.readline())
+        assert permission.get("id") == 9000
+        assert permission["result"]["outcome"] == {
+            "outcome": "selected", "optionId": "allow-once"
+        }, "Meshrix must explicitly approve the ACP tool request"
+        text = "model=%s;effort=%s;mode=%s" % (
+            selected["model"], selected["thought_level"], selected["mode"])
+        send({"jsonrpc": "2.0", "method": "session/update", "params": {
+            "sessionId": session_id,
+            "update": {"sessionUpdate": "agent_message_chunk",
+                       "content": {"type": "text", "text": text}}
+        }})
+        send({"jsonrpc": "2.0", "id": request_id, "result": {"stopReason": "end_turn"}})
+    elif request_id is not None:
+        send({"jsonrpc": "2.0", "id": request_id,
+              "error": {"code": -32601, "message": "unsupported fixture request"}})
 "#;
 
 #[cfg(unix)]
@@ -166,21 +213,28 @@ async fn antigravity_card_executes_through_awp_and_meshrix_bridge() {
     let card = a4aa_dialects::card("antigravity").expect("maintained Antigravity card");
     assert!(card.features.permission_modes.is_empty());
     assert_eq!(card.features.permission_default, None);
-    assert!(matches!(&card.spec().lane, LaneSpec::Cli(_)));
+    assert!(matches!(&card.spec().lane, LaneSpec::Acp { .. }));
+    assert_eq!(card.spec().command.program, "agy_acp_server.par");
     assert!(
-        !a4aa::Adapter::new(card.spec())
+        a4aa::Adapter::new(card.spec())
             .capabilities()
             .permission_prompts
     );
     let temp_dir = tempfile::tempdir().expect("temporary fixture directory");
     let bin_dir = temp_dir.path().join("bin");
     std::fs::create_dir_all(&bin_dir).expect("create fixture executable directory");
-    let script_path = bin_dir.join("agy");
-    std::fs::write(&script_path, ANTIGRAVITY_SHELL_FIXTURE)
-        .expect("write deterministic Antigravity CLI fixture");
+    let script_path = bin_dir.join("agy_acp_server.par");
+    std::fs::write(&script_path, ANTIGRAVITY_ACP_FIXTURE)
+        .expect("write deterministic Antigravity ACP fixture");
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
-        .expect("make deterministic CLI fixture executable");
+        .expect("make deterministic ACP fixture executable");
+    // Any unexpected fallback must fail locally, never invoke an installed agent.
+    let alternate_path = bin_dir.join("agy");
+    std::fs::write(&alternate_path, "#!/bin/sh\nexit 99\n")
+        .expect("write fail-closed alternate fixture");
+    std::fs::set_permissions(&alternate_path, std::fs::Permissions::from_mode(0o755))
+        .expect("make fail-closed alternate executable");
     let _restore_path = prepend_path(&bin_dir);
 
     let reservation_path = temp_dir.path().join("reserved");
@@ -240,13 +294,17 @@ async fn antigravity_card_executes_through_awp_and_meshrix_bridge() {
                     reservations.clone(),
                     permission_requests.clone(),
                     Rc::new(RefCell::new(Vec::new())),
-                    AcpPermissionResolution::Cancelled,
+                    AcpPermissionResolution::Selected {
+                        option_id: "allow-once".to_string(),
+                    },
                 ),
             );
             let default_result = default_execution
                 .result
                 .await
                 .expect("profile-default result channel");
+            std::fs::remove_file(&reservation_path)
+                .expect("the override turn must acquire its own durable reservation");
             let override_execution = executor.start(
                 "antigravity-operation-override",
                 "user task",
@@ -257,7 +315,9 @@ async fn antigravity_card_executes_through_awp_and_meshrix_bridge() {
                     reservations.clone(),
                     permission_requests.clone(),
                     Rc::new(RefCell::new(Vec::new())),
-                    AcpPermissionResolution::Cancelled,
+                    AcpPermissionResolution::Selected {
+                        option_id: "allow-once".to_string(),
+                    },
                 ),
             );
             let override_result = override_execution
@@ -281,7 +341,7 @@ async fn antigravity_card_executes_through_awp_and_meshrix_bridge() {
         "model=request-model;effort=request-effort;mode=plan"
     );
     assert_eq!(reservations_after.get(), 2);
-    assert_eq!(permission_requests_after.get(), 0);
+    assert_eq!(permission_requests_after.get(), 2);
 }
 
 #[cfg(unix)]
@@ -302,6 +362,7 @@ async fn acp_permission_roundtrip_uses_meshrix_selection() {
         lane: LaneSpec::Acp {
             mcp_servers: Vec::new(),
             prefer_load: false,
+            auth_key: None,
         },
         command: CommandSpec {
             program: "python3".to_string(),
@@ -316,7 +377,7 @@ async fn acp_permission_roundtrip_uses_meshrix_selection() {
     };
     let profile_id = "fixture-acp-profile";
     let registry = Registry::from_document(RegistryDocument {
-        agents: BTreeMap::from([(agent.id.clone(), agent)]),
+        agents: BTreeMap::from([(agent.id.clone(), agent.into())]),
         profiles: BTreeMap::from([(
             profile_id.to_string(),
             ProfilePatch {
@@ -392,7 +453,7 @@ async fn unsupported_turn_selectors_fail_before_reservation() {
     };
     let profile_id = "no-selector-profile";
     let registry = Registry::from_document(RegistryDocument {
-        agents: BTreeMap::from([(spec.id.clone(), spec)]),
+        agents: BTreeMap::from([(spec.id.clone(), spec.into())]),
         profiles: BTreeMap::from([(
             profile_id.to_string(),
             ProfilePatch {

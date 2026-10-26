@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "repository": "Meshrix.js",
   "profile": "semver",
-  "currentVersion": "0.3.0",
+  "currentVersion": "0.4.0",
   "versionSources": [
     {
       "format": "json",

@@ -19,7 +19,9 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain('tags: ["v*"]');
     expect(workflow).toContain("workflow_dispatch: {}");
     expect(workflow).toContain("runs-on: macos-15");
-    expect(workflow).toContain("ref: ${{ github.ref }}");
+    // All jobs qualify the immutable tagged commit, never the movable ref.
+    expect(workflow).not.toContain("ref: ${{ github.ref }}");
+    expect(workflow).toContain("ref: ${{ github.sha }}");
     expect(workflow).toContain("RELEASE_TAG: ${{ github.ref_name }}");
     expect(workflow).toContain(`node-version: "${definition.github.nodeVersion}"`);
     expect(workflow).toContain("registry-url: https://registry.npmjs.org");
@@ -33,10 +35,13 @@ describe("standard npm release workflow", () => {
     // publish job alone holds `id-token: write` and only publishes the archives
     // the verify job qualified and retained.
     const verifyStart = workflow.indexOf("  verify:");
+    const nativeStart = workflow.indexOf("  native-assets:");
     const publishStart = workflow.indexOf("  publish:");
     expect(verifyStart).toBeGreaterThanOrEqual(0);
-    expect(publishStart).toBeGreaterThan(verifyStart);
-    const verifySection = workflow.slice(verifyStart, publishStart);
+    expect(nativeStart).toBeGreaterThan(verifyStart);
+    expect(publishStart).toBeGreaterThan(nativeStart);
+    const verifySection = workflow.slice(verifyStart, nativeStart);
+    const nativeSection = workflow.slice(nativeStart, publishStart);
     const publishSection = workflow.slice(publishStart);
 
     // Only tag refs may qualify or publish: workflow_dispatch can name a
@@ -46,6 +51,8 @@ describe("standard npm release workflow", () => {
     expect(verifySection).toContain(tagGuard);
     expect(publishSection).toContain(tagGuard);
     expect(publishSection).toContain('test "$(git rev-parse HEAD)" = "${{ github.sha }}"');
+    expect(verifySection).toContain('test "$(git rev-parse HEAD)" = "${{ github.sha }}"');
+    expect(nativeSection).toContain('test "$(git rev-parse HEAD)" = "${{ github.sha }}"');
 
     expect(verifySection).not.toContain("id-token: write");
     expect(verifySection.indexOf("install-release-npm-cli.ts")).toBeLessThan(verifySection.indexOf("run: npm ci"));
@@ -54,7 +61,18 @@ describe("standard npm release workflow", () => {
     expect(verifySection).toContain("npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json");
     expect(verifySection).toContain("release-npm-set-${{ github.sha }}");
 
-    expect(publishSection).toContain("needs: verify");
+    // The native-assets job qualifies the Rust client archives on both
+    // platforms without OIDC authority, and publication waits for it.
+    expect(nativeSection).toContain(tagGuard);
+    expect(nativeSection).not.toContain("id-token: write");
+    expect(nativeSection).toContain("os: ubuntu-24.04");
+    expect(nativeSection).toContain("os: macos-15");
+    expect(nativeSection).toContain("npm run build:native-linux-client");
+    expect(nativeSection).toContain("npm run build:native-macos-client");
+    expect(nativeSection).toContain("verify-native-${{ matrix.platform }}-artifacts.ts");
+    expect(nativeSection).toContain("release-native-${{ matrix.platform }}-${{ github.sha }}");
+
+    expect(publishSection).toContain("needs: [verify, native-assets]");
     expect(publishSection).toContain("environment: release-candidate");
     expect(publishSection).toContain("contents: write");
     expect(publishSection).toContain("id-token: write");
@@ -65,6 +83,23 @@ describe("standard npm release workflow", () => {
     expect(publishSection).not.toContain('npm install --global "npm@');
     expect(publishSection).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
     expect(publishSection).toContain("release-npm-set-${{ github.sha }}");
+    // The complete native artifact set must be staged locally before the
+    // irreversible npm publication, so an expired download cannot leave a
+    // partial release.
+    expect(publishSection).toContain("release-native-*-${{ github.sha }}");
+    // download-artifact@v4's pattern match lands each artifact in its own
+    // subdirectory; the checksum glob and Release upload need one flat set.
+    expect(publishSection).toContain("merge-multiple: true");
+    expect(publishSection).toContain("shasum -a 256 *.tar.gz > SHA256SUMS.txt");
+    expect(publishSection).toContain("-eq 8");
+    expect(publishSection.indexOf("release-native-*-${{ github.sha }}"))
+      .toBeLessThan(publishSection.indexOf("publish-release-set.ts"));
+    // The remote tag must peel to this commit before npm publication —
+    // unconditionally, whether or not a Release object already exists.
+    const tagVerify = publishSection.indexOf("Verify the release tag still points at this commit");
+    expect(tagVerify).toBeGreaterThanOrEqual(0);
+    expect(tagVerify).toBeLessThan(publishSection.indexOf("publish-release-set.ts"));
+    expect(publishSection).toContain("refusing to publish");
     expect(publishSection).toContain("node tools/server-scripts/publish-release-set.ts --artifact-dir build/release/npm-set");
     // Trusted Publishing: the release workflow publishes through its OIDC
     // identity and must not carry a long-lived npm token secret.
@@ -73,6 +108,14 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain('NPM_CONFIG_PROVENANCE: "true"');
     expect(workflow).toContain('if gh release view "$RELEASE_TAG"');
     expect(workflow).toContain("gh release create \"$RELEASE_TAG\"");
+    // An existing release may only be refreshed when its tag still peels to
+    // this commit and every published native asset is byte-identical; a
+    // partial-upload retry fills in missing assets instead of stopping.
+    expect(workflow).toContain('git/ref/tags/$RELEASE_TAG');
+    expect(workflow).toContain('no longer points at ${{ github.sha }}');
+    expect(workflow).toContain("refusing to replace");
+    expect(workflow).toContain("uploading missing native assets");
+    expect(workflow).toContain('gh release upload "$RELEASE_TAG" $missing');
     expect(workflow).toContain("if: ${{ always() }}");
     expect(uploadArtifactAction).toBe("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
     expect(workflow).toContain(`uses: ${uploadArtifactAction}`);

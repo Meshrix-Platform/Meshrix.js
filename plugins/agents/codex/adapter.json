@@ -3,7 +3,7 @@
   "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1",
   "target": "codex",
   "label": "Codex",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "packageName": "@meshrix/agent-codex-adapter",
   "entrypoint": "adapter.mjs",
   "commandNames": [

@@ -661,7 +661,8 @@ mod tests {
                         ..Default::default()
                     },
                     max_output_bytes: None,
-                },
+                }
+                .into(),
             )]),
             profiles: BTreeMap::from([(
                 profile_id.to_string(),
@@ -782,7 +783,7 @@ mod tests {
             max_output_bytes: None,
         };
         let document = RegistryDocument {
-            agents: BTreeMap::from([("fixture-agent".to_string(), agent)]),
+            agents: BTreeMap::from([("fixture-agent".to_string(), agent.into())]),
             profiles: BTreeMap::from([(
                 "review-profile".to_string(),
                 ProfilePatch {

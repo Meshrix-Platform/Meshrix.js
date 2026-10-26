@@ -3,8 +3,8 @@
   "version": "v0.0.1:registry:release-definition-1",
   "product": "Meshrix.js",
   "release": {
-    "version": "0.3.0",
-    "tag": "v0.3.0",
+    "version": "0.4.0",
+    "tag": "v0.4.0",
     "channel": "stable"
   },
   "packages": {

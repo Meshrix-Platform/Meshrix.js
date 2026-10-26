@@ -23,9 +23,47 @@ used by native dependencies such as `ring`. These are build-machine
 requirements; they do not imply that recipients need a compiler or Cargo.
 The target triple alone does not establish static linkage or runtime support.
 
+## Build on a Linux host
+
+For a clean Linux x86_64 or aarch64 GNU host, the maintained entry builds both
+CLI/TUI and GUI from public locked dependencies, without Docker or sibling
+source repositories:
+
+```sh
+node apps/entry-native/tools/build-linux.mjs --host
+# → apps/entry-native/dist/linux-host/meshrix-entry
+# → apps/entry-native/dist/linux-host/meshrix-entry-gui
+```
+
+Install a native GNU Rust/Cargo toolchain, a C compiler, Protobuf `protoc`
+(`PROTOC` may select its executable), `pkg-config`, and `bubblewrap` first —
+compilation runs dependency build scripts inside a `bwrap` filesystem and
+network sandbox, and the entry refuses to build without it. GUI development
+and runtime dependencies include X11/Wayland, xkbcommon and OpenGL/EGL. On a
+Debian/Ubuntu development machine these are normally provided by
+`build-essential protobuf-compiler pkg-config bubblewrap libx11-dev
+libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev libwayland-dev
+libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev`. Installing OS packages
+remains an explicit operator action; the build entry does not use sudo or
+modify system packages.
+
+The entry checks the native Rust target and the public registry dependency
+sources, then runs Cargo with `--release --locked --bins`. It stages outputs
+only after both binaries exist, retaining the last successful output on build
+failure. `host-build-manifest.json` records the target, tool versions, public
+dependency versions and lockfile digest. `CARGO_BUILD_JOBS` may limit compiler
+concurrency. No account login or credentials are created during the build.
+
+These GNU binaries are linked for the observed host. They **do not** establish
+a musl/static CLI, a glibc 2.28 floor, another architecture's qualification, or
+portable release-archive readiness. Do not feed `dist/linux-host` to the
+portable packager. A successful GUI build or `--help` invocation is not visual
+acceptance: launching the window needs a display server and graphics support.
+
 ## Portable Linux artifacts
 
-The maintained Linux build entry produces four client binaries from the
+The no-option Linux build entry uses the same pinned public dependencies in a
+separate Docker workflow and produces four client binaries from the
 integrated native workspace. Packaging is a separate step that consumes the
 build manifest rather than guessing Cargo output paths:
 
@@ -46,17 +84,42 @@ glibc floor, ELF dependencies and any bundled user-space libraries are
 artifact-specific facts established by the Linux artifact verification; a
 target name is not evidence of universal Linux compatibility.
 
-The build manifest records sanitized dependency-source provenance. Current
-local development dependency patches are not copied into the archives, and
-these artifacts do not establish clean-clone reproducibility or publication
-qualification. The CLI and GUI archives include the native workspace license
-and third-party license notices; the GUI archive also includes the Inter font
-license for its embedded fonts.
+The build manifest records the committed lockfile hash and public registry
+dependency provenance from Cargo metadata. No private sibling repositories or
+local dependency patches are required. A host build does not qualify the Docker
+container path: all four cross-target artifacts still require their own build,
+packaging and runtime verification before publication. The CLI and GUI archives
+include the native workspace license and third-party license notices; the GUI
+archive also includes the Inter font license for its embedded fonts.
 
-On the packaging host, install `readelf` or `llvm-readelf` and keep Docker
-available with the local builder image. The packager uses the image's target
-sysroots to stage only measured, licensed GUI runtime libraries; these are
-build-time requirements and are not required on recipient machines.
+On the build and packaging host, install `readelf` or `llvm-readelf` and keep
+a local Linux Docker daemon available on aarch64 or x86_64; the builder image
+follows the daemon's native architecture and cross-compiles the remaining
+target set. The packager uses the image's target sysroots to stage only
+measured, licensed GUI runtime libraries; these are build-time requirements
+and are not required on recipient machines.
+
+## Portable macOS artifacts
+
+The maintained macOS build entry produces the same four client binaries on a
+local macOS host (aarch64 or x86_64) and cross-compiles the other
+architecture through the installed Rust targets:
+
+```sh
+node apps/entry-native/tools/build-macos.mjs
+node apps/entry-native/tools/package-macos.mjs \
+  --input-dir apps/entry-native/dist/macos \
+  --output-dir apps/entry-native/dist/macos/packages
+```
+
+Both artifacts are thin single-architecture Mach-O executables linked only
+against system dylibs and frameworks; nothing is bundled and no Homebrew
+library is required. The packager downloads a checksum-pinned `protoc` for
+the libsignal protobuf build so a clean host needs only Rust and the Xcode
+command-line tools. The binaries are unsigned; recipients launching an
+archive downloaded through a browser clear the Gatekeeper quarantine
+attribute once. Minimum macOS, Mach-O architecture and direct library
+references are recorded per archive by the macOS artifact verification.
 
 ## Verify
 

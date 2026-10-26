@@ -18,7 +18,7 @@ use a4aa::card::ModelCatalog;
 use a4aa::env::{EnvPolicy, EnvSource, EnvValue};
 use a4aa::model::{CommandSpec, LaneSpec};
 use a4aa::{AgentSpec, SelectorPhase, SelectorSupport};
-use awp::{Profile, ProfilePatch, Registry, RegistryDocument};
+use awp::{AgentEntry, Profile, ProfilePatch, Registry, RegistryDocument};
 
 use crate::error::entry_error;
 use crate::peer::application::AcpAgentSummary;
@@ -327,18 +327,24 @@ impl FileAgentProfileRegistry {
                     .metadata
                     .enrolled_cards
                     .insert(card_id.to_owned());
-                next_state
-                    .registry
-                    .agents
-                    .insert(card_id.to_owned(), candidate.spec);
+                next_state.registry.agents.insert(
+                    card_id.to_owned(),
+                    AgentEntry {
+                        spec: candidate.spec,
+                        alternates: candidate.alternates,
+                    },
+                );
                 return Ok((next_state, profile.clone()));
             }
             let mut next_registry = registry.clone();
             let display_name = candidate.label().to_owned();
-            let spec = candidate.spec.clone();
+            let entry = AgentEntry {
+                spec: candidate.spec.clone(),
+                alternates: candidate.alternates.clone(),
+            };
             next_registry
                 .apply(RegistryDocument {
-                    agents: BTreeMap::from([(card_id.to_owned(), spec.clone())]),
+                    agents: BTreeMap::from([(card_id.to_owned(), entry.clone())]),
                     profiles: BTreeMap::from([(
                         profile_id.clone(),
                         ProfilePatch {
@@ -354,7 +360,7 @@ impl FileAgentProfileRegistry {
                 .profile(&profile_id)
                 .cloned()
                 .ok_or_else(profile_error)?;
-            next_state.registry.agents.insert(card_id.to_owned(), spec);
+            next_state.registry.agents.insert(card_id.to_owned(), entry);
             next_state
                 .registry
                 .profiles
@@ -454,7 +460,10 @@ impl FileAgentProfileRegistry {
             }
             let mut next_state = state.clone();
             let id = spec.id.clone();
-            next_state.registry.agents.insert(id.clone(), spec.clone());
+            next_state
+                .registry
+                .agents
+                .insert(id.clone(), AgentEntry::single(spec.clone()));
             Ok((next_state, spec))
         })
         .await
@@ -473,10 +482,14 @@ impl FileAgentProfileRegistry {
                 return Err(agent_error());
             }
             let mut next_state = state.clone();
+            // Updating the primary spec must not silently discard AwP lane
+            // alternates already present in an imported registry document.
             next_state
                 .registry
                 .agents
-                .insert(id.to_owned(), spec.clone());
+                .get_mut(id)
+                .ok_or_else(agent_error)?
+                .spec = spec.clone();
             Ok((next_state, spec))
         })
         .await
@@ -792,9 +805,10 @@ fn mode_value_allowed(spec: &AgentSpec, value: &str) -> bool {
     match &spec.lane {
         LaneSpec::Cli(lane) => lane.execution_modes.iter().any(|mode| mode == value),
         // ACP validates its dynamically advertised options during session
-        // setup. Generic RPC has no maintained mode-value allowlist.
+        // setup. Generic RPC and serve lanes have no maintained mode-value
+        // allowlist.
         LaneSpec::Acp { .. } => true,
-        LaneSpec::Rpc(_) => false,
+        LaneSpec::Rpc(_) | LaneSpec::Serve { .. } => false,
     }
 }
 
@@ -805,8 +819,9 @@ fn permission_value_allowed(spec: &AgentSpec, value: &str) -> bool {
     match &spec.lane {
         LaneSpec::Cli(lane) => lane.permission_modes.iter().any(|mode| mode == value),
         // ACP validates its dynamically advertised options during session
-        // setup. Generic RPC has no maintained permission-value allowlist.
-        LaneSpec::Acp { .. } => true,
+        // setup. Serve negotiates permission against its injected configuration.
+        // Generic RPC has no maintained permission-value allowlist.
+        LaneSpec::Acp { .. } | LaneSpec::Serve { .. } => true,
         LaneSpec::Rpc(_) => false,
     }
 }
@@ -874,6 +889,7 @@ fn convert_legacy_document(document: LegacyAgentDocument) -> Result<StoredAgentS
             lane: LaneSpec::Acp {
                 mcp_servers: Vec::new(),
                 prefer_load: true,
+                auth_key: None,
             },
             command: CommandSpec {
                 program: legacy.command,
@@ -886,7 +902,10 @@ fn convert_legacy_document(document: LegacyAgentDocument) -> Result<StoredAgentS
             },
             max_output_bytes: None,
         };
-        state.registry.agents.insert(id.clone(), spec);
+        state
+            .registry
+            .agents
+            .insert(id.clone(), AgentEntry::single(spec));
         let profile_name = legacy.display_name.trim().to_owned();
         state.registry.profiles.insert(
             id.clone(),
@@ -977,6 +996,7 @@ fn agent_transport(spec: &AgentSpec) -> String {
         LaneSpec::Acp { .. } => "acp".to_owned(),
         LaneSpec::Rpc(_) => "rpc".to_owned(),
         LaneSpec::Cli(_) => "cli".to_owned(),
+        LaneSpec::Serve { .. } => "serve".to_owned(),
     }
 }
 
@@ -1033,6 +1053,72 @@ mod tests {
             },
             max_output_bytes: None,
         }
+    }
+
+    #[tokio::test]
+    async fn updating_primary_spec_preserves_saved_awp_alternates() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("agents.json");
+        let primary = generic_cli_spec("custom.alternate", &["{prompt}"]);
+        let mut alternate = primary.clone();
+        alternate.command.program = "alternate-agent".to_owned();
+        let mut state = StoredAgentState::empty();
+        state.registry.agents.insert(
+            primary.id.clone(),
+            awp::AgentEntry {
+                spec: primary.clone(),
+                alternates: vec![alternate.clone()],
+            },
+        );
+        std::fs::write(&path, serde_json::to_vec(&state).unwrap()).unwrap();
+        let registry = FileAgentProfileRegistry::new(path.clone(), Arc::new(EmptySecrets)).unwrap();
+        let mut updated = primary.clone();
+        updated.command.program = "updated-agent".to_owned();
+        registry
+            .update_agent(&primary.id, updated.clone())
+            .await
+            .unwrap();
+        let saved: StoredAgentState =
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(saved.registry.agents[&primary.id].spec, updated);
+        assert_eq!(
+            saved.registry.agents[&primary.id].alternates,
+            vec![alternate]
+        );
+    }
+
+    #[test]
+    fn public_awp_agent_entry_preserves_the_flat_saved_spec_shape() {
+        let spec = generic_cli_spec("custom.saved", &["{prompt}"]);
+        let value = serde_json::to_value(&spec).unwrap();
+        let entry: awp::AgentEntry = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(entry.spec, spec);
+        assert!(entry.alternates.is_empty());
+        assert_eq!(serde_json::to_value(entry).unwrap(), value);
+    }
+
+    #[test]
+    fn serve_lane_has_explicit_transport_and_selector_boundaries() {
+        let mut spec = generic_cli_spec("custom.serve", &[]);
+        spec.lane = LaneSpec::Serve {
+            mcp_servers: vec![],
+        };
+        assert_eq!(agent_transport(&spec), "serve");
+        let mut profile = Profile {
+            id: "profile.serve".to_owned(),
+            agent: spec.id.clone(),
+            model: Some("model-x".to_owned()),
+            permission: Some("read-only".to_owned()),
+            ..Profile::default()
+        };
+        // A4AA negotiates permission at session establishment; it does not
+        // advertise mode or effort support for the Serve lane.
+        assert!(validate_profile_capabilities(&profile, &spec).is_ok());
+        profile.mode = Some("plan".to_owned());
+        assert!(validate_profile_capabilities(&profile, &spec).is_err());
+        profile.mode = None;
+        profile.effort = Some("high".to_owned());
+        assert!(validate_profile_capabilities(&profile, &spec).is_err());
     }
 
     #[test]
@@ -1250,6 +1336,7 @@ mod tests {
                 lane: LaneSpec::Acp {
                     mcp_servers: Vec::new(),
                     prefer_load: false,
+                    auth_key: None,
                 },
                 command: CommandSpec {
                     program: "custom-acp".to_owned(),
@@ -1300,7 +1387,13 @@ mod tests {
         profile
             .mcp_servers
             .push(serde_json::json!({"name":"local"}));
-        assert!(validate_profile_capabilities(&profile, &spec).is_err());
+        assert!(validate_profile_capabilities(&profile, &spec).is_ok());
+        let cli_spec = card
+            .specs()
+            .into_iter()
+            .find(|candidate| matches!(candidate.lane, LaneSpec::Cli(_)))
+            .expect("the card keeps its CLI alternate");
+        assert!(validate_profile_capabilities(&profile, &cli_spec).is_err());
     }
 
     #[tokio::test]
@@ -1340,7 +1433,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&converted).unwrap();
         assert_eq!(value["version"], CURRENT_DOCUMENT_VERSION);
         let persisted: StoredAgentState = serde_json::from_value(value).unwrap();
-        let spec = &persisted.registry.agents["agent.custom"];
+        let spec = &persisted.registry.agents["agent.custom"].spec;
         let EnvPolicy::Sanitized { set, .. } = &spec.command.env else {
             panic!("legacy environment remains sanitized")
         };
@@ -1453,7 +1546,7 @@ mod tests {
             )]),
         };
         let state = convert_legacy_document(document).unwrap();
-        let spec = &state.registry.agents["agent.x"];
+        let spec = &state.registry.agents["agent.x"].spec;
         let LaneSpec::Acp { .. } = spec.lane else {
             panic!("legacy ACP enrollment keeps its lane")
         };

@@ -1,6 +1,6 @@
 {
   "name": "@meshrix/agent-antigravity-adapter",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "license": "Apache-2.0",
   "files": [
@@ -24,6 +24,6 @@
   "description": "JSON-stdio MCP client adapter for Antigravity.",
   "private": true,
   "peerDependencies": {
-    "@meshrix/client-adapter-kit": "0.3.0"
+    "@meshrix/client-adapter-kit": "0.4.0"
   }
 }

@@ -10,9 +10,10 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 meshrix-entry-core = { path = "crates/entry-core" }
-a4aa = "0.2.0"
-awp = { package = "agents-with-profiles", version = "0.1.0" }
-a4aa-dialects = "0.2.0"
+# Keep the public API surface and clean-consumer lockfile reproducible.
+a4aa = "=0.2.0"
+awp = { package = "agents-with-profiles", version = "=0.1.0" }
+a4aa-dialects = "=0.2.0"
 
 # Official Signal implementation — the same sources the TS
 # @signalapp/libsignal-client@0.104.0 npm bridge wraps (PQXDH + SPQR).

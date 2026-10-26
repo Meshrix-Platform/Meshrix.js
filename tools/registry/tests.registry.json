@@ -21,7 +21,15 @@
     "native-linux-client": {
       "description": "Qualify prebuilt Meshrix Entry Linux client archives independently from server and npm release verification",
       "suites": [
+        "entry.native-linux-host-build",
         "entry.native-linux-artifact-qualification"
+      ]
+    },
+    "native-macos-client": {
+      "description": "Qualify prebuilt Meshrix Entry macOS client archives independently from server and npm release verification",
+      "suites": [
+        "entry.native-macos-package",
+        "entry.native-macos-artifact-qualification"
       ]
     },
     "core-baseline": {
@@ -796,6 +804,51 @@
       "artifacts": []
     },
     {
+      "id": "entry.native-macos-package",
+      "label": "Verify macOS native packaging Mach-O dependency parsing and system-linkage contract",
+      "owner": "entry-native",
+      "package": "entry-native",
+      "level": "smoke",
+      "command": "node",
+      "args": ["--test", "tests/node/native-macos-package.test.mjs"],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "triggerPaths": [
+        "apps/entry-native/tools/package-macos.mjs",
+        "apps/entry-native/tools/package-macos.d.mts",
+        "tools/server-scripts/verify-native-macos-artifacts.ts",
+        "tests/node/native-macos-package.test.mjs",
+        "tools/registry/tests.registry.json"
+      ],
+      "artifacts": []
+    },
+    {
+      "id": "entry.native-linux-host-build",
+      "label": "Verify public locked native Linux host build orchestration",
+      "owner": "entry-native",
+      "package": "entry-native",
+      "level": "smoke",
+      "command": "node",
+      "args": ["--test", "tests/node/native-linux-host-build.test.mjs"],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "triggerPaths": [
+        "apps/entry-native/tools/build-linux.mjs",
+        "apps/entry-native/tools/package-linux.mjs",
+        "tools/server-scripts/verify-native-linux-artifacts.ts",
+        "apps/entry-native/Cargo.toml",
+        "apps/entry-native/Cargo.lock",
+        "apps/entry-native/README.md",
+        "tests/node/native-linux-host-build.test.mjs",
+        "tools/registry/tests.registry.json"
+      ],
+      "artifacts": []
+    },
+    {
       "id": "entry.native-linux-artifact-qualification",
       "label": "Verify packaged Linux Entry ELF, ABI, license and isolated runtime probes",
       "owner": "entry-native",
@@ -822,6 +875,34 @@
         "tools/scripts/lib/unified-test-runner-execution.ts",
         "tools/scripts/package-script-registry-catalog.ts",
         "tools/server-scripts/verify-native-linux-artifacts.ts",
+        "tools/registry/tests.registry.json"
+      ],
+      "artifacts": []
+    },
+    {
+      "id": "entry.native-macos-artifact-qualification",
+      "label": "Verify packaged macOS Entry Mach-O, linkage, license and isolated runtime probes",
+      "owner": "entry-native",
+      "package": "entry-native",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-native-macos-artifacts.ts"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "platforms": [
+        "darwin"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "triggerPaths": [
+        "apps/entry-native/",
+        "package.json",
+        "tests/run.ts",
+        "tools/scripts/lib/unified-test-runner-execution.ts",
+        "tools/scripts/package-script-registry-catalog.ts",
+        "tools/server-scripts/verify-native-macos-artifacts.ts",
         "tools/registry/tests.registry.json"
       ],
       "artifacts": []

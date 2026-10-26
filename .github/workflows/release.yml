@@ -25,13 +25,17 @@ jobs:
     # through workflow_dispatch must not reach the OIDC publish job.
     if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-15
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Confirm the checkout is the tagged commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -80,14 +84,75 @@ jobs:
           retention-days: 14
           overwrite: true
 
+  # Builds and qualifies the Rust client archives for every supported
+  # platform so the release ships npm and native artifacts from the same
+  # tagged revision. No OIDC authority: repository code runs unprivileged.
+  native-assets:
+    name: Build and qualify the native client archives
+    if: ${{ github.ref_type == 'tag' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, platform: linux }
+          - { os: macos-15, platform: macos }
+    runs-on: ${{ matrix.os }}
+    # Four targets built, packaged and qualified per platform; the bound
+    # fails a stuck job so it can retry instead of burning runner minutes.
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Confirm the checkout is the tagged commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+
+      # Cheap preflight before ~two hours of matrix compilation: a tag that
+      # does not match the package version can never publish, so fail here
+      # instead of spending native build minutes on a rejected candidate.
+      - name: Preflight the release tag against the package version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          test "${{ github.ref_name }}" = "v$version" || { echo "release tag ${{ github.ref_name }} does not match package version $version"; exit 1; }
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.21.0"
+
+      - name: Build the Linux client matrix
+        if: ${{ matrix.platform == 'linux' }}
+        run: npm run build:native-linux-client
+
+      - name: Build the macOS client matrix
+        if: ${{ matrix.platform == 'macos' }}
+        run: npm run build:native-macos-client
+
+      - name: Qualify the ${{ matrix.platform }} archives
+        env:
+          NODE_OPTIONS: --conditions=source
+        run: node tools/server-scripts/verify-native-${{ matrix.platform }}-artifacts.ts
+
+      - name: Retain the qualified client archives
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-native-${{ matrix.platform }}-${{ github.sha }}
+          path: apps/entry-native/dist/${{ matrix.platform }}/packages/
+          if-no-files-found: error
+          retention-days: 5
+
   # Only this job holds OIDC token-request authority; it installs no
   # dependencies and runs no repository build/test code.
   publish:
     name: Publish the verified release
-    needs: verify
+    needs: [verify, native-assets]
     # Re-assert the tag boundary on the privileged job itself.
     if: ${{ github.ref_type == 'tag' }}
     runs-on: macos-15
+    timeout-minutes: 30
     environment: release-candidate
     permissions:
       contents: write
@@ -96,7 +161,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }}
 
       - name: Confirm the checkout is the tagged commit
         run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
@@ -116,6 +181,47 @@ jobs:
           name: release-npm-set-${{ github.sha }}
           path: build/release/npm-set/
 
+      - name: Restore the qualified native archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-native-*-${{ github.sha }}
+          path: build/release/native-set/
+          # download-artifact@v4 keeps each matched artifact in its own
+          # directory by default; the checksum glob and Release upload
+          # need one flat asset set.
+          merge-multiple: true
+
+      # Everything the Release needs must be staged locally before the
+      # irreversible npm publication; a missing or expired native artifact
+      # fails the job instead of producing a partial release.
+      - name: Check the complete native artifact set
+        run: |
+          count=$(find build/release/native-set -name '*.tar.gz' -type f | wc -l | tr -d ' ')
+          test "$count" -eq 8 || { echo "expected 8 native client archives, found $count"; exit 1; }
+
+      - name: Generate native asset checksums
+        run: |
+          cd build/release/native-set
+          shasum -a 256 *.tar.gz > SHA256SUMS.txt
+
+      # Publication is irreversible, so the tag must still peel to this
+      # commit before anything is published — a moved tag never releases
+      # artifacts built from a different commit.
+      - name: Verify the release tag still points at this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          repo="${{ github.repository }}"
+          ref_sha=$(gh api "repos/$repo/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
+          ref_type=$(gh api "repos/$repo/git/ref/tags/$RELEASE_TAG" --jq '.object.type')
+          if [ "$ref_type" = "tag" ]; then
+            peeled=$(gh api "repos/$repo/git/tags/$ref_sha" --jq '.object.sha')
+          else
+            peeled=$ref_sha
+          fi
+          test "$peeled" = "${{ github.sha }}" || { echo "release tag $RELEASE_TAG does not point at ${{ github.sha }}; refusing to publish"; exit 1; }
+
       - name: Publish the qualified npm archives
         env:
           # Trusted Publishing through this job's OIDC identity
@@ -128,8 +234,40 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "GitHub Release already exists for $RELEASE_TAG"
+          assets=$(find build/release/native-set -name '*.tar.gz' -type f | sort)
+          repo="${{ github.repository }}"
+          # The tag is re-peeled immediately before touching the release: a
+          # moved tag never gets a release attached at a different commit.
+          ref_sha=$(gh api "repos/$repo/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
+          ref_type=$(gh api "repos/$repo/git/ref/tags/$RELEASE_TAG" --jq '.object.type')
+          if [ "$ref_type" = "tag" ]; then
+            peeled=$(gh api "repos/$repo/git/tags/$ref_sha" --jq '.object.sha')
           else
-            gh release create "$RELEASE_TAG" --title "Meshrix.js $RELEASE_TAG" --generate-notes
+            peeled=$ref_sha
+          fi
+          test "$peeled" = "${{ github.sha }}" || { echo "release tag $RELEASE_TAG no longer points at ${{ github.sha }}; refusing to update"; exit 1; }
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            # Partial-upload retries may fill in missing assets, and a
+            # byte-identical rebuild may refresh them — but no published
+            # asset may ever be replaced by different bytes.
+            missing=""
+            for staged in $assets; do
+              name=$(basename "$staged")
+              staged_sum=$(shasum -a 256 "$staged" | cut -d' ' -f1)
+              published=$(gh api "repos/$repo/releases/tags/$RELEASE_TAG" --jq ".assets[] | select(.name == \"$name\") | .digest")
+              if [ -z "$published" ]; then
+                missing="$missing $staged"
+              elif [ "$published" != "sha256:$staged_sum" ]; then
+                echo "asset $name differs from the staged candidate; refusing to replace"
+                exit 1
+              fi
+            done
+            if [ -n "$missing" ]; then
+              echo "uploading missing native assets:$missing"
+              gh release upload "$RELEASE_TAG" $missing
+            fi
+            gh release upload "$RELEASE_TAG" build/release/native-set/SHA256SUMS.txt --clobber
+          else
+            assets="$assets build/release/native-set/SHA256SUMS.txt"
+            gh release create "$RELEASE_TAG" --title "Meshrix.js $RELEASE_TAG" --generate-notes $assets
           fi
