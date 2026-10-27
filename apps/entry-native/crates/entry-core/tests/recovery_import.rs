@@ -119,6 +119,7 @@ impl RecoveryEndpointPort for StubEndpoint {
                     "principal.test",
                     1,
                     "nonce.import.0000000001",
+                    &request.fresh_device_id,
                     &request.fresh_device_public_key,
                     &now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                     &(now + chrono::Duration::minutes(5))

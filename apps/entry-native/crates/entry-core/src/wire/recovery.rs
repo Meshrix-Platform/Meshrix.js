@@ -305,6 +305,7 @@ pub struct RecoveryChallenge {
     pub principal_ref: String,
     pub generation: u64,
     pub nonce: String,
+    pub fresh_device_id: String,
     pub fresh_device_public_key: String,
     pub issued_at: String,
     pub expires_at: String,
@@ -315,8 +316,9 @@ pub fn parse_recovery_challenge(value: &Value) -> Option<RecoveryChallenge> {
         || !has_exact_keys(
             value,
             &[
-                "challengeId", "endpointRouteId", "expiresAt", "freshDevicePublicKey", "generation",
-                "issuedAt", "kind", "nonce", "principalRef", "purpose", "schemaVersion", "singleUse",
+                "challengeId", "endpointRouteId", "expiresAt", "freshDeviceId",
+                "freshDevicePublicKey", "generation", "issuedAt", "kind", "nonce", "principalRef",
+                "purpose", "schemaVersion", "singleUse",
             ],
         )
     {
@@ -339,6 +341,7 @@ pub fn parse_recovery_challenge(value: &Value) -> Option<RecoveryChallenge> {
         principal_ref: opaque_id(get(o, "principalRef"), OPAQUE_ID_MAX)?,
         generation: positive_revision(get(o, "generation"))?,
         nonce: nonce_token(get(o, "nonce"), NONCE_MAX)?,
+        fresh_device_id: opaque_id(get(o, "freshDeviceId"), OPAQUE_ID_MAX)?,
         fresh_device_public_key: public_key_material(get(o, "freshDevicePublicKey"))?,
         issued_at,
         expires_at,
@@ -723,6 +726,7 @@ pub fn create_recovery_challenge(
     principal_ref: &str,
     generation: u64,
     nonce: &str,
+    fresh_device_id: &str,
     fresh_device_public_key: &str,
     issued_at: &str,
     expires_at: &str,
@@ -734,6 +738,7 @@ pub fn create_recovery_challenge(
     extras.insert("principalRef".into(), principal_ref.into());
     extras.insert("generation".into(), generation.into());
     extras.insert("nonce".into(), nonce.into());
+    extras.insert("freshDeviceId".into(), fresh_device_id.into());
     extras.insert("freshDevicePublicKey".into(), fresh_device_public_key.into());
     extras.insert("issuedAt".into(), issued_at.into());
     extras.insert("expiresAt".into(), expires_at.into());

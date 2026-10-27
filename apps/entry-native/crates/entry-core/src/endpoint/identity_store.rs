@@ -738,14 +738,33 @@ impl EndpointIdentityStore {
             trust_generation: binding.get("trustGeneration").and_then(Value::as_u64).unwrap_or(0),
             admission_generation: existing.as_ref().map(|d| d.admission_generation).unwrap_or(0) + 1,
             revoked: false,
-            account_binding: existing.as_ref().and_then(|d| d.account_binding.clone()),
+            // Account and peer state belong to the enrolled key identity; they
+            // survive re-enrollment only while the paired key itself is unchanged.
+            account_binding: existing
+                .as_ref()
+                .filter(|d| d.paired_identity_key == get_str("pairedIdentityKey"))
+                .and_then(|d| d.account_binding.clone()),
             account_scopes: existing.as_ref().and_then(|d| {
-                d.account_binding.as_ref().and_then(|_| d.account_scopes.clone())
+                if d.paired_identity_key == get_str("pairedIdentityKey") {
+                    d.account_binding.as_ref().and_then(|_| d.account_scopes.clone())
+                } else {
+                    None
+                }
             }),
             account_grants: existing.as_ref().and_then(|d| {
-                d.account_binding.as_ref().and_then(|_| d.account_grants.clone())
+                if d.paired_identity_key == get_str("pairedIdentityKey") {
+                    d.account_binding.as_ref().and_then(|_| d.account_grants.clone())
+                } else {
+                    None
+                }
             }),
-            entry_peer_identity: existing.as_ref().and_then(|d| d.entry_peer_identity.clone()),
+            entry_peer_identity: existing.as_ref().and_then(|d| {
+                if d.paired_identity_key == get_str("pairedIdentityKey") {
+                    d.entry_peer_identity.clone()
+                } else {
+                    None
+                }
+            }),
         };
         if let Some(collision) = self.by_fingerprint.get(&record.paired_identity_fingerprint) {
             if collision != &record.device_id {

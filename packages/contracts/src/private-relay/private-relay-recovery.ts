@@ -389,6 +389,7 @@ export function parseRecoveryChallenge(value?: unknown) {
     principalRef: (entry) => opaqueId(entry),
     generation: positiveRevision,
     nonce: (entry) => nonceToken(entry),
+    freshDeviceId: (entry) => opaqueId(entry),
     freshDevicePublicKey: (entry) => publicKeyMaterial(entry),
     issuedAt: instantValue,
     expiresAt: (entry, record) => {
@@ -680,6 +681,7 @@ export function createRecoveryChallenge(value: Record<string, unknown> = {}) {
     principalRef: value.principalRef,
     generation: value.generation,
     nonce: value.nonce,
+    freshDeviceId: value.freshDeviceId,
     freshDevicePublicKey: value.freshDevicePublicKey,
     issuedAt: value.issuedAt,
     expiresAt: value.expiresAt,

@@ -53,6 +53,7 @@ struct IssuedRecoveryChallenge {
     principal_ref: String,
     generation: u64,
     nonce: String,
+    fresh_device_id: String,
     fresh_device_public_key: String,
     issued_at: i64,
     expires_at: i64,
@@ -113,6 +114,11 @@ impl EndpointRecoveryAuthority {
             .recovery_authorities()
             .into_iter()
             .find(|a| a.state == "active" || a.state == "rotating")?;
+        // Recovery enrolls only fresh identities: an already-registered device
+        // id belongs to the authenticated rotation flow, never to this channel.
+        if identity.device(&parsed.fresh_device_id).is_some() {
+            return None;
+        }
         let mut raw = [0u8; 12];
         use rand::RngCore;
         rand::rng().fill_bytes(&mut raw);
@@ -123,6 +129,7 @@ impl EndpointRecoveryAuthority {
             principal_ref: authority.principal_ref.clone(),
             generation: authority.generation,
             nonce: nonce.clone(),
+            fresh_device_id: parsed.fresh_device_id.clone(),
             fresh_device_public_key: parsed.fresh_device_public_key.clone(),
             issued_at: now,
             expires_at: now + DEFAULT_CHALLENGE_TTL_MS,
@@ -134,6 +141,7 @@ impl EndpointRecoveryAuthority {
             &challenge.principal_ref,
             challenge.generation,
             &challenge.nonce,
+            &challenge.fresh_device_id,
             &challenge.fresh_device_public_key,
             &iso_at(challenge.issued_at),
             &iso_at(challenge.expires_at),
@@ -161,7 +169,12 @@ impl EndpointRecoveryAuthority {
             self.challenges.remove(&parsed.challenge_id);
             return Some(create_recovery_result_refused(&parsed.challenge_id, "challenge_expired"));
         }
-        if challenge.fresh_device_public_key != parsed.fresh_device_public_key {
+        if challenge.fresh_device_id != parsed.fresh_device_id
+            || challenge.endpoint_route_id != parsed.endpoint_route_id
+            || challenge.principal_ref != parsed.principal_ref
+            || challenge.generation != parsed.generation
+            || challenge.fresh_device_public_key != parsed.fresh_device_public_key
+        {
             return Some(create_recovery_result_refused(&parsed.challenge_id, "key_possession_mismatch"));
         }
         let authority = identity
@@ -190,6 +203,10 @@ impl EndpointRecoveryAuthority {
         );
         if !verified {
             return Some(create_recovery_result_refused(&parsed.challenge_id, "key_possession_mismatch"));
+        }
+        if let Some(prior) = identity.device(&parsed.fresh_device_id) {
+            let refusal = if prior.revoked { "principal_revoked" } else { "purpose_mismatch" };
+            return Some(create_recovery_result_refused(&parsed.challenge_id, refusal));
         }
         self.challenges.remove(&parsed.challenge_id);
 
@@ -241,4 +258,178 @@ fn iso_at(ms: i64) -> String {
     chrono::DateTime::from_timestamp_millis(ms)
         .map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::wire::recovery::{create_recovery_proof, create_recovery_request};
+
+    struct AcceptAll;
+    impl RecoverySigner for AcceptAll {
+        fn verify(&self, _public_key: &str, _signature: &str, _transcript: &Value) -> bool {
+            true
+        }
+    }
+
+    fn store_with_authority() -> EndpointIdentityStore {
+        let mut store = EndpointIdentityStore::in_memory();
+        store
+            .enroll_recovery_authority("rckey.pr.1", "prin.pr.1", "pk_rc", 3, None)
+            .expect("authority enrolls");
+        store
+    }
+
+    fn enroll_entry(store: &mut EndpointIdentityStore, device_id: &str, public_key: &str) {
+        store
+            .enroll(
+                device_id,
+                "route.pr.1",
+                "tenant.pr.1",
+                &serde_json::json!({
+                    "schemaVersion": "v0.0.1:private-relay:recovery-1",
+                    "kind": "endpoint-trust-binding",
+                    "pairedIdentityKey": public_key,
+                    "pairedIdentityFingerprint": format!("fp.{}", device_id),
+                    "mode": "personal",
+                    "role": "entry",
+                    "trustGeneration": 3,
+                    "endpointPrincipalRef": "prin.pr.1",
+                    "capabilityGrantRef": "grantref.pr.1",
+                    "boundRecoveryKeyId": null
+                }),
+            )
+            .expect("device enrolls");
+    }
+
+    fn refusal(result: &Value) -> &str {
+        assert_eq!(result["outcome"].as_str(), Some("refused"));
+        result["refusal"].as_str().unwrap()
+    }
+
+    #[test]
+    fn proof_must_match_every_challenge_bound_field() {
+        let mut store = store_with_authority();
+        let mut service = EndpointRecoveryAuthority::new(Arc::new(AcceptAll));
+        let request = create_recovery_request("route.pr.1", "dev.fresh.9", "cGFpcmVkS2V5");
+        let challenge = service
+            .begin_recovery(&store, &request)
+            .expect("challenge issued");
+        let challenge_id = challenge["challengeId"].as_str().unwrap();
+        let principal = challenge["principalRef"].as_str().unwrap();
+        let generation = challenge["generation"].as_u64().unwrap();
+
+        for mutation in [
+            serde_json::json!({"freshDeviceId": "dev.fresh.impostor"}),
+            serde_json::json!({"endpointRouteId": "route.pr.other"}),
+            serde_json::json!({"principalRef": "prin.pr.other"}),
+            serde_json::json!({"generation": generation + 1}),
+            serde_json::json!({"freshDevicePublicKey": "b3RoZXJLZXk"}),
+        ] {
+            let merged = serde_json::json!({
+                "challengeId": challenge_id,
+                "endpointRouteId": "route.pr.1",
+                "principalRef": principal,
+                "generation": generation,
+                "freshDeviceId": "dev.fresh.9",
+                "freshDevicePublicKey": "cGFpcmVkS2V5",
+            })
+            .as_object()
+            .unwrap()
+            .clone()
+            .into_iter()
+            .chain(mutation.as_object().unwrap().clone())
+            .collect::<serde_json::Map<String, Value>>();
+            let proof = create_recovery_proof(
+                merged["challengeId"].as_str().unwrap(),
+                merged["endpointRouteId"].as_str().unwrap(),
+                merged["principalRef"].as_str().unwrap(),
+                merged["generation"].as_u64().unwrap(),
+                merged["freshDeviceId"].as_str().unwrap(),
+                merged["freshDevicePublicKey"].as_str().unwrap(),
+                "c2lnbmF0dXJl",
+            );
+            let result = service.complete_recovery(&mut store, &proof).unwrap();
+            assert_eq!(refusal(&result), "key_possession_mismatch");
+        }
+    }
+
+    #[test]
+    fn recovery_never_replaces_an_existing_device_identity() {
+        let mut store = store_with_authority();
+        let mut service = EndpointRecoveryAuthority::new(Arc::new(AcceptAll));
+        enroll_entry(&mut store, "dev.pr.entry.1", "dmljdGltS2V5");
+
+        // An enrolled id receives no challenge at all.
+        let request = create_recovery_request("route.pr.1", "dev.pr.entry.1", "aW1wb3N0ZXJLZXk");
+        assert!(service.begin_recovery(&store, &request).is_none());
+
+        // A device enrolled between challenge issuance and proof is refused at
+        // completion, and its record stays untouched.
+        let request = create_recovery_request("route.pr.1", "dev.race.1", "cGFpcmVkS2V5");
+        let challenge = service
+            .begin_recovery(&store, &request)
+            .expect("challenge issued");
+        enroll_entry(&mut store, "dev.race.1", "cGFpcmVkS2V5");
+        let proof = create_recovery_proof(
+            challenge["challengeId"].as_str().unwrap(),
+            "route.pr.1",
+            challenge["principalRef"].as_str().unwrap(),
+            challenge["generation"].as_u64().unwrap(),
+            "dev.race.1",
+            "cGFpcmVkS2V5",
+            "c2lnbmF0dXJl",
+        );
+        let result = service.complete_recovery(&mut store, &proof).unwrap();
+        assert_eq!(refusal(&result), "purpose_mismatch");
+        assert_eq!(
+            store.device("dev.race.1").unwrap().paired_identity_fingerprint,
+            "fp.dev.race.1"
+        );
+
+        // A revoked id collides the same way instead of resurrecting.
+        let request = create_recovery_request("route.pr.1", "dev.gone.1", "cGFpcmVkS2V5");
+        let challenge = service
+            .begin_recovery(&store, &request)
+            .expect("challenge issued");
+        enroll_entry(&mut store, "dev.gone.1", "cGFpcmVkS2V5");
+        store.revoke("dev.gone.1");
+        let proof = create_recovery_proof(
+            challenge["challengeId"].as_str().unwrap(),
+            "route.pr.1",
+            challenge["principalRef"].as_str().unwrap(),
+            challenge["generation"].as_u64().unwrap(),
+            "dev.gone.1",
+            "cGFpcmVkS2V5",
+            "c2lnbmF0dXJl",
+        );
+        let result = service.complete_recovery(&mut store, &proof).unwrap();
+        assert_eq!(refusal(&result), "principal_revoked");
+    }
+
+    #[test]
+    fn exact_match_proof_still_enrolls() {
+        let mut store = store_with_authority();
+        let mut service = EndpointRecoveryAuthority::new(Arc::new(AcceptAll));
+        let request = create_recovery_request("route.pr.1", "dev.fresh.9", "cGFpcmVkS2V5");
+        let challenge = service
+            .begin_recovery(&store, &request)
+            .expect("challenge issued");
+        let proof = create_recovery_proof(
+            challenge["challengeId"].as_str().unwrap(),
+            "route.pr.1",
+            challenge["principalRef"].as_str().unwrap(),
+            challenge["generation"].as_u64().unwrap(),
+            "dev.fresh.9",
+            "cGFpcmVkS2V5",
+            "c2lnbmF0dXJl",
+        );
+        let result = service.complete_recovery(&mut store, &proof).unwrap();
+        assert_eq!(result["outcome"].as_str(), Some("enrolled"));
+        assert_eq!(
+            result["deviceAdmission"]["deviceId"].as_str(),
+            Some("dev.fresh.9")
+        );
+        assert_eq!(store.device("dev.fresh.9").unwrap().route_id, "route.pr.1");
+    }
 }

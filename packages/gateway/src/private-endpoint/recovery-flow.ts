@@ -36,6 +36,7 @@ export interface IssuedRecoveryChallenge {
   readonly principalRef: string;
   readonly generation: number;
   readonly nonce: string;
+  readonly freshDeviceId: string;
   readonly freshDevicePublicKey: string;
   readonly issuedAt: number;
   readonly expiresAt: number;
@@ -85,6 +86,9 @@ export class RecoveryAuthorityService {
     const authority = [...this.#identity.recoveryAuthorities()]
       .find((entry) => entry.state === "active" || entry.state === "rotating");
     if (!authority) return null;
+    // Recovery enrolls only fresh identities: an already-registered device id
+    // belongs to the authenticated rotation flow, never to this channel.
+    if (this.#identity.device(String(parsed.freshDeviceId))) return null;
     const challengeId = `rch.${now.toString(36)}.${Math.random().toString(36).slice(2, 10)}`;
     const nonce = `rn.${challengeId}.${Math.random().toString(36).slice(2, 14)}`;
     const challenge: IssuedRecoveryChallenge = {
@@ -93,6 +97,7 @@ export class RecoveryAuthorityService {
       principalRef: authority.principalRef,
       generation: authority.generation,
       nonce,
+      freshDeviceId: String(parsed.freshDeviceId),
       freshDevicePublicKey: String(parsed.freshDevicePublicKey),
       issuedAt: now,
       expiresAt: now + DEFAULT_CHALLENGE_TTL_MS,
@@ -105,6 +110,7 @@ export class RecoveryAuthorityService {
       principalRef: challenge.principalRef,
       generation: challenge.generation,
       nonce: challenge.nonce,
+      freshDeviceId: challenge.freshDeviceId,
       freshDevicePublicKey: challenge.freshDevicePublicKey,
       issuedAt: new Date(challenge.issuedAt).toISOString(),
       expiresAt: new Date(challenge.expiresAt).toISOString()
@@ -130,7 +136,11 @@ export class RecoveryAuthorityService {
       this.#challenges.delete(challenge.challengeId);
       return createRecoveryResult({ challengeId: parsed.challengeId, outcome: "refused", refusal: "challenge_expired" });
     }
-    if (challenge.freshDevicePublicKey !== parsed.freshDevicePublicKey) {
+    if (challenge.freshDeviceId !== parsed.freshDeviceId
+      || challenge.endpointRouteId !== parsed.endpointRouteId
+      || challenge.principalRef !== parsed.principalRef
+      || challenge.generation !== Number(parsed.generation)
+      || challenge.freshDevicePublicKey !== parsed.freshDevicePublicKey) {
       return createRecoveryResult({ challengeId: parsed.challengeId, outcome: "refused", refusal: "key_possession_mismatch" });
     }
 
@@ -159,6 +169,14 @@ export class RecoveryAuthorityService {
     });
     if (!verified) {
       return createRecoveryResult({ challengeId: parsed.challengeId, outcome: "refused", refusal: "key_possession_mismatch" });
+    }
+
+    const priorDevice = this.#identity.device(String(parsed.freshDeviceId));
+    if (priorDevice?.revoked) {
+      return createRecoveryResult({ challengeId: parsed.challengeId, outcome: "refused", refusal: "principal_revoked" });
+    }
+    if (priorDevice) {
+      return createRecoveryResult({ challengeId: parsed.challengeId, outcome: "refused", refusal: "purpose_mismatch" });
     }
 
     challenge.consumed = true;

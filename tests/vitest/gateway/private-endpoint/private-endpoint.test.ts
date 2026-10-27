@@ -161,6 +161,32 @@ describe("private endpoint identity store", () => {
     })).toThrow(/fingerprint already belongs/);
   });
 
+  it("carries account bindings only while the paired key is unchanged", () => {
+    const { store } = makeDevice();
+    store.bindAccountEndpoint({
+      deviceId: "dev.pr.entry.1",
+      account: { accountId: "acct.pr.1", authEpoch: 1 }
+    });
+    const trustBinding = (key: string, fp: string) => ({
+      schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "endpoint-trust-binding",
+      pairedIdentityKey: key, pairedIdentityFingerprint: fp,
+      mode: "personal", role: "endpoint", trustGeneration: 4,
+      endpointPrincipalRef: "prin.pr.1", capabilityGrantRef: "grantref.pr.1",
+      boundRecoveryKeyId: null
+    });
+    const sameKey = store.enroll({
+      deviceId: "dev.pr.entry.1", routeId: "route.pr.1", tenantId: "tenant.pr.1",
+      trustBinding: trustBinding("pk_test_endpoint_1", "fp.test.endpoint.1")
+    });
+    expect(sameKey.accountBinding?.accountId).toBe("acct.pr.1");
+    const changedKey = store.enroll({
+      deviceId: "dev.pr.entry.1", routeId: "route.pr.1", tenantId: "tenant.pr.1",
+      trustBinding: trustBinding("pk_rotated", "fp.rotated")
+    });
+    expect(changedKey.accountBinding).toBeUndefined();
+    expect(store.device("dev.pr.entry.1")?.accountBinding).toBeUndefined();
+  });
+
   it("stages recovery rotation only when the candidate generation advances", () => {
     const { store } = makeDevice();
     store.enrollRecoveryAuthority({ recoveryKeyId: "rckey.pr.1", principalRef: "prin.pr.1", publicKey: "pk_old", generation: 3 });
@@ -539,6 +565,87 @@ describe("recovery authority service", () => {
 
     const bad = service.completeRecovery({ ...proof, challengeId: "nope", signature });
     expect(bad?.outcome).toBe("refused");
+  });
+
+  it("refuses proofs whose submitted identity fields diverge from the issued challenge", () => {
+    const { service, keys } = harness();
+    const challenge = service.beginRecovery({
+      schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-request",
+      purpose: "recover_device", endpointRouteId: "route.pr.1",
+      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: "pk_fresh_pub"
+    })!;
+
+    function proofWith(mutation: Record<string, unknown>) {
+      const merged = {
+        challengeId: challenge.challengeId, endpointRouteId: "route.pr.1",
+        principalRef: challenge.principalRef, generation: challenge.generation,
+        freshDeviceId: "dev.fresh.9", freshDevicePublicKey: "pk_fresh_pub",
+        ...mutation
+      };
+      // Sign over the submitted fields so signature verification itself would
+      // pass — only the challenge binding can refuse these proofs.
+      const signature = cryptoSign(null, Buffer.from(canonicalProofTranscript(merged)), keys.privateKey).toString("base64url");
+      return {
+        schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-proof",
+        purpose: "recover_device", ...merged, signature
+      };
+    }
+
+    for (const mutation of [
+      { freshDeviceId: "dev.fresh.impostor" },
+      { endpointRouteId: "route.pr.other" },
+      { principalRef: "prin.pr.other" },
+      { generation: challenge.generation + 1 },
+      { freshDevicePublicKey: "pk_fresh_other" }
+    ]) {
+      const result = service.completeRecovery(proofWith(mutation));
+      expect(result?.outcome).toBe("refused");
+      expect(result?.refusal).toBe("key_possession_mismatch");
+    }
+  });
+
+  it("refuses recovery over an already-enrolled device identity", () => {
+    const { store, service, keys } = harness();
+    // A request for an enrolled id never receives a challenge at all; identity
+    // changes for live devices belong to the authenticated rotation flow.
+    expect(service.beginRecovery({
+      schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-request",
+      purpose: "recover_device", endpointRouteId: "route.pr.1",
+      freshDeviceId: "dev.pr.entry.1", freshDevicePublicKey: "pk_impostor"
+    })).toBeNull();
+
+    // A device enrolled between challenge issuance and proof is refused at
+    // completion as well, and its record stays untouched.
+    const challenge = service.beginRecovery({
+      schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-request",
+      purpose: "recover_device", endpointRouteId: "route.pr.1",
+      freshDeviceId: "dev.race.1", freshDevicePublicKey: "pk_race_pub"
+    })!;
+    store.enroll({
+      deviceId: "dev.race.1", routeId: "route.pr.1", tenantId: "tenant.pr.1",
+      trustBinding: {
+        schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "endpoint-trust-binding",
+        pairedIdentityKey: "pk_race_pub", pairedIdentityFingerprint: "fp.race.1",
+        mode: "personal", role: "entry", trustGeneration: 3,
+        endpointPrincipalRef: "prin.pr.1", capabilityGrantRef: "grantref.pr.1",
+        boundRecoveryKeyId: null
+      }
+    });
+    const signature = cryptoSign(null, Buffer.from(canonicalProofTranscript({
+      challengeId: challenge.challengeId, endpointRouteId: "route.pr.1",
+      principalRef: challenge.principalRef, generation: challenge.generation,
+      freshDeviceId: "dev.race.1", freshDevicePublicKey: "pk_race_pub"
+    })), keys.privateKey).toString("base64url");
+    const result = service.completeRecovery({
+      schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-proof",
+      purpose: "recover_device", challengeId: challenge.challengeId,
+      endpointRouteId: "route.pr.1", principalRef: challenge.principalRef,
+      generation: challenge.generation, freshDeviceId: "dev.race.1",
+      freshDevicePublicKey: "pk_race_pub", signature
+    });
+    expect(result?.outcome).toBe("refused");
+    expect(result?.refusal).toBe("purpose_mismatch");
+    expect(store.device("dev.race.1")?.pairedIdentityFingerprint).toBe("fp.race.1");
   });
 
   it("admits only recovery kinds on the recovery channel", () => {

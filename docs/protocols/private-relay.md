@@ -140,8 +140,12 @@ The recovery wire (`private-relay-recovery.ts`) separates three proof purposes
   `singleUse: true`, `expiresAt > issuedAt` enforced) → `recovery-proof` →
   `recovery-result` (`enrolled` with a device admission that requires mutual
   TLS rebind, or `refused` with a typed `PRIVATE_RELAY_RECOVERY_REFUSALS`
-  reason). Fresh-device proof does not depend on an old device cookie or
-  certificate.
+  reason). The challenge echoes and binds the requested `freshDeviceId`; the
+  proof's device id, route, principal, generation, and key must equal the
+  issued challenge exactly. Recovery enrolls only fresh identities — a device
+  id already registered (active or revoked) is refused, since live identity
+  changes belong to the authenticated rotation flow. Fresh-device proof does
+  not depend on an old device cookie or certificate.
 - `EncryptedRecoverySnapshot` is a versioned AEAD envelope
   (`AES-256-GCM`/`XChaCha20-Poly1305`), an opaque vault locator, generation and
   revision, plus a public verifier. `PRIVATE_RELAY_SNAPSHOT_MAY_HOLD_PLAINTEXT

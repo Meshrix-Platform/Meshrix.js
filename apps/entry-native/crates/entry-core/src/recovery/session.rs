@@ -94,6 +94,12 @@ impl<'a, T: RecoveryEndpointPort> EntryRecoverySession<'a, T> {
                 "Recovery challenge answered by a different endpoint route than requested.",
             ));
         }
+        if challenge.fresh_device_id != device.device_id {
+            return Err(entry_error(
+                "endpoint_refused",
+                "Recovery challenge does not bind this fresh device identity.",
+            ));
+        }
         if challenge.fresh_device_public_key != device.public_key {
             return Err(entry_error(
                 "endpoint_refused",

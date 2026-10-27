@@ -303,7 +303,9 @@ export class EndpointIdentityStore {
       trustGeneration: binding.trustGeneration as number,
       admissionGeneration: (existing?.admissionGeneration ?? 0) + 1,
       revoked: false,
-      ...(existing?.accountBinding ? {
+      // Account bindings and grants belong to the enrolled key identity; they
+      // survive re-enrollment only while the paired key itself is unchanged.
+      ...(existing?.accountBinding && existing.pairedIdentityKey === String(binding.pairedIdentityKey) ? {
         accountBinding: existing.accountBinding,
         ...(existing.accountScopes ? { accountScopes: existing.accountScopes } : {}),
         ...(existing.accountGrants ? { accountGrants: existing.accountGrants } : {})
