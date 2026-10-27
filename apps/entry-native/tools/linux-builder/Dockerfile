@@ -42,10 +42,19 @@ RUN rustup target add \
     && python3.13 -m pip install --no-cache-dir ziglang==0.15.2 \
     && chmod -R a+rX /opt/cargo /opt/rustup
 
+# `filesystem` must land first: its /lib64 entry is a symlink and rpm cannot
+# replace a real directory created by an earlier package in one transaction.
 RUN dnf -y --installroot=/opt/meshrix-sysroot-${CROSS_ARCH} \
       --forcearch=${CROSS_ARCH} \
       --releasever=8 \
       --setopt=install_weak_deps=False \
+      --setopt=tsflags=noscripts \
+      install filesystem \
+    && dnf -y --installroot=/opt/meshrix-sysroot-${CROSS_ARCH} \
+      --forcearch=${CROSS_ARCH} \
+      --releasever=8 \
+      --setopt=install_weak_deps=False \
+      --setopt=tsflags=noscripts \
       install \
         glibc-devel \
         wayland-devel \
@@ -100,7 +109,7 @@ RUN dnf -y --setopt=tsflags= reinstall \
       --forcearch=${CROSS_ARCH} \
       --releasever=8 \
       --setopt=install_weak_deps=False \
-      --setopt=tsflags= \
+      --setopt=tsflags=noscripts \
       reinstall \
       libX11 \
       libX11-xcb \
@@ -134,7 +143,7 @@ RUN sed -i '/^tsflags=nodocs$/d' /etc/dnf/dnf.conf \
       --forcearch=${CROSS_ARCH} \
       --releasever=8 \
       --setopt=install_weak_deps=False \
-      --setopt=tsflags= \
+      --setopt=tsflags=noscripts \
       reinstall \
       libX11-common-1.6.8-9.el8_10.noarch \
       libxcb-1.13.1-1.el8 \
@@ -142,14 +151,14 @@ RUN sed -i '/^tsflags=nodocs$/d' /etc/dnf/dnf.conf \
       --forcearch=${CROSS_ARCH} \
       --releasever=8 \
       --setopt=install_weak_deps=False \
-      --setopt=tsflags= \
+      --setopt=tsflags=noscripts \
       install \
       libxkbcommon-x11-0.9.1-1.el8 \
     && dnf -y --installroot=/opt/meshrix-sysroot-${CROSS_ARCH} \
       --forcearch=${CROSS_ARCH} \
       --releasever=8 \
       --setopt=install_weak_deps=False \
-      --setopt=tsflags= \
+      --setopt=tsflags=noscripts \
       reinstall \
       libxcb-devel-1.13.1-1.el8 \
     && dnf clean all
