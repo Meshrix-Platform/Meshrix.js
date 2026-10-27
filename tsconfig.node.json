@@ -32,6 +32,8 @@
   ],
   "exclude": [
     "tools/server-scripts/benchmark-gateway.ts",
+    "tools/server-scripts/verify-native-linux-artifacts.ts",
+    "tools/server-scripts/verify-native-macos-artifacts.ts",
     "apps/console/**",
     "packages/ui-console/**",
     "tests/**",

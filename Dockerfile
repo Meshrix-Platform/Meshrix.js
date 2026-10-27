@@ -66,7 +66,7 @@ COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
 
-RUN npm run build:node && rm -f tools/server-scripts/benchmark-gateway.ts
+RUN npm run build:node && rm -f tools/server-scripts/benchmark-gateway.ts tools/server-scripts/verify-native-linux-artifacts.ts tools/server-scripts/verify-native-macos-artifacts.ts
 RUN npm prune --omit=dev
 
 FROM deps AS build-ui
@@ -84,7 +84,7 @@ COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
 
-RUN npm run build && rm -f tools/server-scripts/benchmark-gateway.ts
+RUN npm run build && rm -f tools/server-scripts/benchmark-gateway.ts tools/server-scripts/verify-native-linux-artifacts.ts tools/server-scripts/verify-native-macos-artifacts.ts
 RUN npm prune --omit=dev
 
 FROM docker.io/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203 AS runtime
