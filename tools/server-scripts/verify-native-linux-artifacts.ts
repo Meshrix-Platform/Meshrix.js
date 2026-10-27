@@ -671,6 +671,20 @@ async function writableState(tempRoot: any, name: any) {
   return state;
 }
 
+// Probe binaries run as nobody (65534) and create state entries only they
+// can read. The host-side cleanup cannot traverse those directories, so a
+// root cleanup pass inside the same pinned image restores traversal before
+// the host removes the scratch tree.
+async function resetStatePermissions(image: any, arch: any, stateRoot: any) {
+  await checked("docker", [
+    "run", "--rm", "--pull=never", "--network=none", `--platform=${dockerPlatform(arch)}`,
+    "--read-only", "--user=0:0", "--cap-drop=ALL", "--cap-add=DAC_OVERRIDE", "--cap-add=FOWNER", "--security-opt=no-new-privileges",
+    "--volume", `${stateRoot}:/state:rw`,
+    "--entrypoint", "/bin/chmod",
+    image, "-R", "a+rwX", "/state"
+  ], { failureCode: "runtime_state_cleanup_failed" });
+}
+
 async function verifyRuntime(probes: any, daemon: any, version: any, tempRoot: any) {
   const modes = new Set();
   for (const probe of probes) {
@@ -695,6 +709,7 @@ async function verifyRuntime(probes: any, daemon: any, version: any, tempRoot: a
         const profiles = parseJsonOutput(profilesOutput, "cli_profiles_output_invalid");
         if (!Array.isArray(profiles.profiles) || profiles.profiles.length !== 0) fail("cli_empty_profiles_probe_failed");
       } finally {
+        await resetStatePermissions(image, expected.arch, profileState);
         await rm(profileState, { recursive: true, force: true });
       }
       const cardsState = await writableState(tempRoot, `${expected.arch}-cards-${process.pid}`);
@@ -703,6 +718,7 @@ async function verifyRuntime(probes: any, daemon: any, version: any, tempRoot: a
         const cards = parseJsonOutput(cardsOutput, "cli_agent_cards_output_invalid");
         if (!Array.isArray(cards.cards)) fail("cli_agent_cards_probe_failed");
       } finally {
+        await resetStatePermissions(image, expected.arch, cardsState);
         await rm(cardsState, { recursive: true, force: true });
       }
       process.stdout.write(`PASS ${expected.arch} static CLI/TUI (${mode}, ${imageId}): --help, --version, empty profiles, read-only agent-cards\n`);
