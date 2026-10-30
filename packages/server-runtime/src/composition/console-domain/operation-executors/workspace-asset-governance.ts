@@ -88,6 +88,11 @@ export function workspaceAssetPolicyDecision(governance: Record<string, any> = {
   };
 }
 
+function workspaceAssetProofIdempotencyKey(input: Record<string, any> = {}) : string {
+  const key: any = String(input.idempotencyKey || input["idempotency-key"] || "").trim();
+  return key ? `workspace-asset:${key}` : "";
+}
+
 export async function startWorkspaceAssetProof({ operationId, input = {}, context = {}, semantic = "", target = {}, downstreamOperationId = "", routeMode = "executed" }: Record<string, any> = {}) : Promise<any> {
   const governance: any = await evaluateWorkspaceAssetGovernance({ operationId, input, context, semantic, target });
   const warnings: any = governance.warning ? [governance.warning] : [];
@@ -101,7 +106,7 @@ export async function startWorkspaceAssetProof({ operationId, input = {}, contex
     targetRef: workspaceAssetTargetRef(input, target),
     subject: workspaceAssetSubject(context, input),
     risk: workspaceAssetRiskForOperation(operationId, input),
-    idempotencyKey: input.idempotencyKey || input["idempotency-key"] || "",
+    idempotencyKey: workspaceAssetProofIdempotencyKey(input),
     input: {
       ...input,
       downstreamOperationId,
