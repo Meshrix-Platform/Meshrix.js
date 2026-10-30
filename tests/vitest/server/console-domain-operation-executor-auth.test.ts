@@ -2,12 +2,79 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 import {
   browseServerPath,
   createPathBrowserRoots
 } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/path-browser.ts";
+const canned1 = "csrf-1";
+const canned2 = "csrf-2";
+const canned3 = "";
+const canned4 = "secret";
+const canned5 = "synthetic-secret-password";
+const canned6 = "blocked";
+
+
+
 
 let executeConsoleDomainOperation: any;
+
+it("admits declared path-browser input over HTTP without expanding filesystem or caller authority", async () => {
+  const { startHttpServer } = await import("../../../apps/server/runtime/http-server.ts");
+  const { createConsoleAuth } = await import("../../../packages/foundation/src/security/auth/console-auth.ts");
+  const { createTagStoreAdapter } = await import("../../../packages/server-runtime/src/state/tags/tag-store.adapter.ts");
+  const { provisionVerifierLocalSecretKey } = await import("../../../tools/server-scripts/lib/local-secret-verifier-key.ts");
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-path-browser-http-"));
+  const key = await provisionVerifierLocalSecretKey();
+  let server: any;
+  try {
+    const sampleRoot = path.join(userDataPath, "sample");
+    await fs.mkdir(sampleRoot);
+    await fs.writeFile(path.join(sampleRoot, "sample.ts"), "export default {};\n");
+    const tagStore = createTagStoreAdapter({ userDataPath });
+    const auth = createConsoleAuth({ userDataPath, tagManagementStore: tagStore });
+    const owner: any = await auth.ensureInitialOwner();
+    const viewerPassword = crypto.randomUUID();
+    await auth.createUser({ username: "preview.viewer", password: viewerPassword, roleId: "viewer" });
+    await auth.close();
+    tagStore.close();
+    server = await startHttpServer({ userDataPath, distPath: "", host: "127.0.0.1", port: 0, runtimeOptions: { disableFileLogging: true } });
+    const login = async (username: string, password: string) => {
+      const response = await fetch(`${server.url}/api/auth/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password })
+      });
+      expect(response.status).toBe(200);
+      const payload: any = await response.json();
+      return {
+        "Content-Type": "application/json",
+        Cookie: response.headers.getSetCookie().map(value => value.split(";")[0]).join("; "),
+        "x-meshrix-csrf": payload.csrfToken
+      };
+    };
+    const ownerHeaders = await login(owner.username, owner.password);
+    const viewerHeaders = await login("preview.viewer", viewerPassword);
+    const root = createPathBrowserRoots({ userDataPath }).find((entry: any) => entry.path === userDataPath);
+    const input = { path: `${root.id}:/sample`, mode: "file", extensions: [".ts"], includeHidden: false };
+    const browse = (body: Record<string, unknown>, headers = ownerHeaders) => fetch(`${server.url}/api/runtime/path-browse`, {
+      method: "POST", headers, body: JSON.stringify(body)
+    });
+    const valid = await browse(input);
+    expect(valid.status).toBe(200);
+    const payload: any = await valid.json();
+    expect(payload.entries.map((entry: any) => entry.name)).toEqual(["sample.ts"]);
+    expect(payload.entries[0].path).toBe(`${root.id}:/sample/sample.ts`);
+    expect((await browse({ ...input, undeclared: true })).status).toBe(400);
+    expect((await browse({ ...input, mode: "invalid" })).status).toBe(400);
+    const traversal = await browse({ ...input, path: `${root.id}:/../outside` });
+    expect(traversal.status).toBeGreaterThanOrEqual(400);
+    expect((await traversal.json() as any).entries).toBeUndefined();
+    expect((await browse(input, viewerHeaders)).status).toBe(403);
+  } finally {
+    await server?.close();
+    await key.close();
+    await fs.rm(userDataPath, { recursive: true, force: true });
+  }
+});
 
 beforeAll(async () : Promise<any> => {
   ({ executeConsoleDomainOperation } = await import(
@@ -30,7 +97,7 @@ function createAuthProvider(overrides: Record<string, any> = {}) : any {
     getSummary: vi.fn(() : any => ({ ok: true, source: "summary" })),
     login: vi.fn(async () : Promise<any> => ({
       cookies: ["sid=next; HttpOnly"],
-      csrfToken: "csrf-1",
+      csrfToken: canned1,
       session: {
         sessionId: "session-1",
         expiresAt: "2026-06-04T10:00:00.000Z",
@@ -53,7 +120,7 @@ function createAuthProvider(overrides: Record<string, any> = {}) : any {
     rotateSession: vi.fn(() : any => ({
       ok: true,
       cookies: ["sid=rotated; HttpOnly"],
-      csrfToken: "csrf-2",
+      csrfToken: canned2,
       rotatedAt: "2026-06-04T11:00:00.000Z",
       session: { sessionId: "session-2", user }
     })),
@@ -159,7 +226,7 @@ describe("console domain auth and authorization facade coverage", () : any => {
     const disclosingProvider: any = createAuthProvider({
       getConsoleSummary: vi.fn(() : any => ({
         enabled: true,
-        session: { authenticated: false, csrfToken: "", expiresAt: "", user: null },
+        session: { authenticated: false, csrfToken: canned3, expiresAt: "", user: null },
         roles: [{
           roleId: "owner",
           label: "Owner",
@@ -178,13 +245,13 @@ describe("console domain auth and authorization facade coverage", () : any => {
     expect(JSON.stringify(anonymousSession.payload)).not.toMatch(/scopes|resourcePolicies|issuer\.example/);
 
     await expect(runOperation("auth.login", {
-      input: { username: "alice", password: "secret", remember: true },
+      input: { username: "alice", password: canned4, remember: true },
       context
     })).resolves.toMatchObject({
       status: 200,
       payload: {
         ok: true,
-        csrfToken: "csrf-1",
+        csrfToken: canned1,
         roles: [
           { roleId: "maintainer", label: "maintainer" },
           { roleId: "viewer", label: "viewer" }
@@ -203,7 +270,7 @@ describe("console domain auth and authorization facade coverage", () : any => {
     });
     const failedLoginLog = vi.fn();
     await expect(runOperation("auth.login", {
-      input: { username: "alice", password: "synthetic-secret-password" },
+      input: { username: "alice", password: canned5 },
       context: { request, securityPermissions: failedProvider, appendConsoleOperationLog: failedLoginLog }
     })).resolves.toMatchObject({ status: 401, payload: { error: "用户名或密码错误。" } });
     expect(failedProvider.audit).toHaveBeenCalledWith(expect.objectContaining({
@@ -223,7 +290,7 @@ describe("console domain auth and authorization facade coverage", () : any => {
       .resolves.toMatchObject({ status: 200, payload: { users: expect.any(Array), roles: expect.any(Array) } });
     await expect(runOperation("auth.users.create", { context }))
       .resolves.toMatchObject({ status: 405 });
-    await expect(runOperation("auth.users.update", { input: { userId: "u-1", password: "blocked" }, context }))
+    await expect(runOperation("auth.users.update", { input: { userId: "u-1", password: canned6 }, context }))
       .resolves.toMatchObject({ status: 405 });
     await expect(runOperation("auth.users.update", { input: {}, context }))
       .resolves.toMatchObject({ status: 404 });

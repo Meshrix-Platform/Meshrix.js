@@ -28,9 +28,7 @@ function handleHeaderDragend(newWidth: number, oldWidth: number, column: any, ev
     :row-key="rowKey"
     :empty-text="emptyText"
     v-loading="loading"
-    border
-    stripe
-    size="small"
+    size="default"
     scrollbar-always-on
     class="meshrix-data-table"
     @scroll="handleScroll"
@@ -43,16 +41,14 @@ function handleHeaderDragend(newWidth: number, oldWidth: number, column: any, ev
 <style>
 .meshrix-data-table.el-table {
   --meshrix-table-row-bg: var(--bg-surface);
-  --meshrix-table-row-stripe-bg: color-mix(in srgb, var(--bg-subtle) 48%, var(--bg-surface));
-  --meshrix-table-row-hover-bg: var(--bg-subtle);
+  --meshrix-table-row-hover-bg: var(--console-frame);
   --el-table-bg-color: var(--bg-surface);
   --el-table-tr-bg-color: var(--meshrix-table-row-bg);
-  --el-table-border-color: var(--border-subtle);
-  --el-table-header-bg-color: var(--bg-subtle);
+  --el-table-border-color: var(--console-rule);
+  --el-table-header-bg-color: var(--console-frame);
   --el-table-row-hover-bg-color: var(--meshrix-table-row-hover-bg);
   --el-table-text-color: var(--text-primary);
-  --el-table-header-text-color: var(--text-secondary);
-  --el-fill-color-lighter: var(--meshrix-table-row-stripe-bg);
+  --el-table-header-text-color: var(--console-ink-secondary);
   background: var(--bg-surface);
   color: var(--text-primary);
   border-radius: var(--radius-md);
@@ -68,17 +64,13 @@ function handleHeaderDragend(newWidth: number, oldWidth: number, column: any, ev
 }
 
 .meshrix-data-table.el-table th.el-table__cell {
-  background: var(--bg-subtle) !important;
-  color: var(--text-secondary);
+  background: var(--bg-surface) !important;
+  color: var(--console-ink-secondary);
 }
 
 .meshrix-data-table.el-table td.el-table__cell {
   background: var(--meshrix-table-row-bg) !important;
   color: var(--text-primary);
-}
-
-.meshrix-data-table.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
-  background: var(--meshrix-table-row-stripe-bg) !important;
 }
 
 .meshrix-data-table.el-table .el-table__body tr:hover > td.el-table__cell,
@@ -92,25 +84,18 @@ function handleHeaderDragend(newWidth: number, oldWidth: number, column: any, ev
 }
 
 .meshrix-data-table.el-table .el-table__empty-text {
-  color: var(--text-muted);
-}
-
-.meshrix-data-table.el-table--border .el-table__inner-wrapper::after,
-.meshrix-data-table.el-table--border::before,
-.meshrix-data-table.el-table--border::after {
-  background-color: var(--border-subtle);
+  color: var(--console-ink-secondary);
 }
 
 .meshrix-data-table .el-table__cell {
+  padding: var(--space-3) 0;
   vertical-align: top;
-}
-
-.meshrix-data-table.el-table--border .el-table__cell {
-  border-right: 1px solid var(--border-subtle) !important;
+  font-size: var(--text-lg);
+  line-height: var(--leading-normal);
 }
 
 .meshrix-data-table.el-table td.el-table__cell,
 .meshrix-data-table.el-table th.el-table__cell.is-leaf {
-  border-bottom: 1px solid var(--border-subtle) !important;
+  border-bottom: 1px solid var(--console-rule) !important;
 }
 </style>

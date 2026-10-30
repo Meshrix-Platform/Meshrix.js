@@ -33,8 +33,8 @@ withDefaults(
 <style scoped>
 .server-address-save-message {
   margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   line-height: var(--leading-relaxed);
 }
 </style>

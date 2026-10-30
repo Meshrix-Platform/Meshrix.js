@@ -109,7 +109,7 @@ const gridColumns = computed(() =>
   display: block;
   height: 8px;
   border-radius: var(--radius-full);
-  background: var(--border-subtle);
+  background: var(--console-rule);
   transition:
     background-color var(--dur-base) var(--ease-std),
     box-shadow var(--dur-base) var(--ease-std);
@@ -132,8 +132,8 @@ const gridColumns = computed(() =>
 
 .meshrix-segmented-progress-segment small {
   min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: 700;
   line-height: 1.25;
   text-align: center;

@@ -21,7 +21,7 @@
   display: flex;
   align-items: flex-end;
   gap: 0;
-  border-bottom: 2px solid var(--border-subtle);
+  border-bottom: 1px solid var(--console-rule);
   padding: 0;
   margin: 0;
 }
@@ -41,13 +41,13 @@
   align-items: center;
   gap: var(--space-1-5);
   padding: var(--space-2-5) var(--space-4);
-  margin-bottom: calc(-1 * var(--space-0-5));  /* overlap the parent border */
+  margin-bottom: calc(-1 * var(--space-px));  /* overlap the parent rule */
   border: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   font-family: inherit;
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   font-weight: var(--font-medium);
   cursor: pointer;
   white-space: nowrap;
@@ -84,14 +84,14 @@
   align-items: center;
   gap: var(--space-1-5);
   padding: var(--space-2) var(--space-3);
-  margin-bottom: calc(-1 * var(--space-0-5));  /* overlap the parent border */
-  border: 1px solid var(--border-subtle);
-  border-bottom-color: var(--border-subtle);
+  margin-bottom: calc(-1 * var(--space-px));  /* overlap the parent rule */
+  border: 1px solid var(--console-rule);
+  border-bottom-color: var(--console-rule);
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
   font-family: inherit;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: var(--font-medium);
   cursor: pointer;
   white-space: nowrap;
@@ -110,7 +110,7 @@
   color: var(--brand);
   font-weight: var(--font-semibold);
   background: var(--bg-surface);
-  border-color: var(--border-subtle);
+  border-color: var(--console-rule);
   border-bottom-color: var(--bg-surface);  /* "connects" to content panel */
 }
 
@@ -132,9 +132,9 @@
 }
 
 .meshrix-tab__meta {
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   font-weight: var(--font-bold);
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
 }
 
 .meshrix-tab__close {
@@ -147,7 +147,7 @@
   font-size: var(--text-lg);
   font-weight: 800;
   line-height: 1;
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
   cursor: pointer;
   transition:
     background var(--dur-fast) var(--ease-std),
@@ -163,12 +163,12 @@
 
 .meshrix-tabs--small .meshrix-tab {
   padding: var(--space-2) var(--space-3);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 
 .meshrix-tabs--compact .meshrix-tab {
   padding: var(--space-1-5) var(--space-2-5);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 
 /* ─── Focus ──────────────────────────────────────────────────────────────── */

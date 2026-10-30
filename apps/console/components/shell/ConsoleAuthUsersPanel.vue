@@ -181,14 +181,14 @@ const {
 
 .auth-user-role-label {
   color: var(--text-primary);
-  font-size: var(--text-md);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
   line-height: 1.25;
 }
 
 .auth-user-name {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   line-height: 1.35;
 }
 
@@ -199,11 +199,11 @@ const {
   align-items: center;
   justify-content: center;
   padding: 0 var(--space-2-5);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-full);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
   line-height: 1;
   white-space: nowrap;

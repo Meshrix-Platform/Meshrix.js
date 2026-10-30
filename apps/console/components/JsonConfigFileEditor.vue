@@ -161,14 +161,14 @@ async function saveEdit() {
   min-height: 180px;
   resize: vertical;
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   line-height: 1.55;
 }
 
 .json-config-file-editor-error {
   margin: 0;
   color: var(--danger);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 
 .json-config-file-editor-actions {

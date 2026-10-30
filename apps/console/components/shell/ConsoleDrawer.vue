@@ -10,25 +10,29 @@ import { useServerConsoleShellContext } from "#meshrix/console/server-console-sh
 import { useConsoleUrlState } from "../../composables/use-console-url-state";
 
 const {
+  canAdminAuth,
   isAuthenticated,
 } = useServerConsoleShellContext().access;
 const {
   msg,
 } = useServerConsoleShellContext().preferences;
+const { refreshAuthAdmin } = useServerConsoleShellContext().refresh;
 const {
   closeDrawer,
   drawerOpen,
   drawerTab,
   openDrawer,
 } = useServerConsoleShellContext().overlays;
-const {
-  hasFeature,
-} = useServerConsoleShellContext().runtime;
 
 // URL-addressable drawer tab: context tab clicks drive the query, and query
-// changes (mount read, back/forward) drive the context through openDrawer so
-// its side effects (opening the drawer) run too.
+// non-default queries (mount read, back/forward) also open the drawer.
+// Removing the query restores the default tab without reopening a closed drawer.
 const drawerUrlTab: Ref<string> = useConsoleUrlState("drawer.tab", "preferences");
+watch([drawerOpen, drawerTab, canAdminAuth], ([opened, tab, allowed]) => {
+  if (opened && tab === "users" && allowed) {
+    void refreshAuthAdmin();
+  }
+}, { immediate: true });
 watch(drawerTab, (tab: string): void => {
   if (tab !== drawerUrlTab.value) {
     drawerUrlTab.value = tab;
@@ -36,7 +40,11 @@ watch(drawerTab, (tab: string): void => {
 });
 watch(drawerUrlTab, (tab: string): void => {
   if (tab !== drawerTab.value) {
-    openDrawer(tab);
+    if (tab === "preferences" && !drawerOpen.value) {
+      drawerTab.value = tab;
+    } else {
+      openDrawer(tab);
+    }
   }
 });
 
@@ -68,7 +76,7 @@ const drawerTabs: ComputedRef<MeshrixTab[]> = computed(() : MeshrixTab[] => {
     { key: "preferences", label: msg.value.drawer.preferences },
     { key: "discovery", label: msg.value.drawer.serviceDiscovery },
   ];
-  if (hasFeature("analysis-runtime")) {
+  if (canAdminAuth.value) {
     tabs.push({ key: "users", label: msg.value.drawer.users });
   }
   return tabs;

@@ -86,14 +86,14 @@
 }
 
 .section-header h3 {
-  color: var(--brand);
+  color: var(--text-primary);
   font-size: var(--text-2xl);
   font-weight: 600;
   letter-spacing: -0.03em;
 }
 
 .drawer-header h3 {
-  color: var(--brand);
+  color: var(--text-primary);
 }
 
 .section-tags span {

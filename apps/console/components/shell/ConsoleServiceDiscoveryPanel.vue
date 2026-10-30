@@ -299,8 +299,8 @@ watch(
 }
 
 .server-address-heading {
-  color: var(--text-secondary);
-  font-size: var(--text-md);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 

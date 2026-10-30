@@ -2,19 +2,19 @@
   width: 100%;
   /* Light-mode baseline — overridden in dark mode via :root block */
   --el-color-primary:           var(--brand);
-  --el-border-color:            var(--border-subtle);
-  --el-border-color-light:      var(--border-subtle);
-  --el-border-color-hover:      var(--brand);
+  --el-border-color:            var(--console-rule);
+  --el-border-color-light:      var(--console-rule);
+  --el-border-color-hover:      var(--console-ink-secondary);
   --el-bg-color:                var(--bg-surface);
   --el-bg-color-overlay:        var(--bg-surface);
   --el-fill-color-blank:        var(--bg-surface);
-  --el-fill-color-light:        var(--bg-subtle);
+  --el-fill-color-light:        var(--console-frame);
   --el-text-color-primary:      var(--text-primary);
   --el-text-color-regular:      var(--text-primary);
-  --el-text-color-placeholder:  var(--text-muted);
+  --el-text-color-placeholder:  var(--console-ink-secondary);
   --el-text-color-disabled:     var(--text-disabled);
   --el-border-radius-base:      var(--radius-md);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
 }
 
 .el-select .el-select__wrapper {
@@ -22,7 +22,7 @@
   padding: var(--space-1-5) var(--space-3);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
-  box-shadow: 0 0 0 1px var(--border-subtle) inset;
+  box-shadow: 0 0 0 1px var(--console-rule) inset;
 }
 
 .el-select .el-select__wrapper.is-focused {
@@ -34,21 +34,22 @@
 .el-select .el-select__placeholder,
 .el-select .el-select__selected-item {
   color: var(--text-primary);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
 }
 
 .el-select-dropdown {
   --el-color-primary: var(--brand);
   --el-bg-color-overlay: var(--bg-surface);
-  --el-border-color-light: var(--border-subtle);
+  --el-border-color-light: var(--console-rule);
   --el-text-color-regular: var(--text-primary);
-  --el-fill-color-light: var(--bg-subtle);
+  --el-fill-color-light: var(--console-frame);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
 }
 
 .el-select-dropdown__item {
-  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
 }
 
 .el-button {
@@ -58,7 +59,7 @@
   --el-color-primary-light-7: var(--brand-ring);
   --el-color-primary-light-9: var(--brand-subtle);
   --el-color-primary-dark-2: var(--brand-strong);
-  --el-border-color: var(--border-subtle);
+  --el-border-color: var(--console-rule);
   --el-border-radius-base: var(--radius-md);
   font-weight: 600;
 }
@@ -68,7 +69,7 @@
    and near-white pages. Typed buttons keep their own fills. */
 html[data-appearance-color-scheme="light"]
   .el-button:not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger):not(.el-button--info):not(.is-text):not(.is-link) {
-  --el-button-bg-color: var(--bg-subtle);
+  --el-button-bg-color: var(--bg-surface);
 }
 
 .path-action-button.el-button {

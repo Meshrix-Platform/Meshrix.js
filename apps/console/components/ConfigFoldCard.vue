@@ -30,7 +30,7 @@ withDefaults(defineProps<{
 
 <style scoped>
 .config-fold-card {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -45,7 +45,7 @@ withDefaults(defineProps<{
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2-5) var(--space-3-5);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -54,10 +54,10 @@ withDefaults(defineProps<{
 
 .config-fold-summary::-webkit-details-marker { display: none; }
 
-.config-fold-summary:hover { background: var(--bg-inset); }
+.config-fold-summary:hover { background: var(--console-hover); }
 
 .config-fold-title {
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
   min-width: 0;
@@ -65,14 +65,14 @@ withDefaults(defineProps<{
 }
 
 .config-fold-subtitle {
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   font-weight: var(--font-medium);
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
   white-space: nowrap;
 }
 
 .config-fold-chevron {
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
   transition: transform var(--dur-base) var(--ease-std);
   flex-shrink: 0;
 }
@@ -86,6 +86,10 @@ details[open] .config-fold-chevron {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--console-rule);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .config-fold-chevron { transition: none; }
 }
 </style>

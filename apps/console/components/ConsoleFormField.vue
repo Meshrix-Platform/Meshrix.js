@@ -111,8 +111,8 @@ const controlAttrs: ComputedRef<Record<string, string | undefined>> = computed(
   display: inline-flex;
   align-items: baseline;
   gap: var(--space-1);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: var(--font-semibold);
 }
 
@@ -122,12 +122,12 @@ const controlAttrs: ComputedRef<Record<string, string | undefined>> = computed(
 
 .console-form-field-error {
   color: var(--danger);
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
 }
 
 .console-form-field-help {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
 }
 
 /* Screen-reader-only text without raw px values: absolutely positioned and

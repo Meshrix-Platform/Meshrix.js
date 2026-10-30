@@ -72,7 +72,7 @@ function toggle() {
 .feature-toggle:focus-visible { outline: none; }
 
 .feature-toggle:focus-visible .feature-toggle-track {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.20);
+  box-shadow: 0 0 0 3px var(--brand-ring);
 }
 
 .feature-toggle-track {
@@ -80,7 +80,7 @@ function toggle() {
   width: 40px;
   height: 22px;
   border-radius: var(--radius-full);
-  background: var(--border-strong);
+  background: var(--console-rule);
   transition: background var(--dur-base) var(--ease-std);
 }
 
@@ -96,7 +96,7 @@ function toggle() {
   height: 16px;
   border-radius: var(--radius-full);
   background: var(--bg-surface);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  box-shadow: var(--shadow-xs);
   transition: transform var(--dur-base) var(--ease-emphasized);
   will-change: transform;
 }
@@ -106,8 +106,8 @@ function toggle() {
 }
 
 .feature-toggle-label {
-  color: var(--text-secondary);
-  font-size: var(--text-md);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: var(--font-medium);
   line-height: var(--leading-tight);
   white-space: nowrap;
@@ -115,5 +115,9 @@ function toggle() {
 
 .feature-toggle[data-enabled="true"] .feature-toggle-label {
   color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature-toggle-knob { transition: none; }
 }
 </style>

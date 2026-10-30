@@ -100,14 +100,14 @@ function toggleFromSummary(event: MouseEvent | KeyboardEvent) {
   grid-template-columns: minmax(0, 1fr) var(--split-toggle-card-toggle-width, 56px);
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--split-toggle-card-border-color, var(--border-subtle));
+  border: 1px solid var(--split-toggle-card-border-color, var(--console-rule));
   border-radius: var(--split-toggle-card-radius, var(--radius-lg));
   background: var(--split-toggle-card-bg, var(--bg-surface));
   transition: border-color var(--dur-fast) var(--ease-std), background var(--dur-fast) var(--ease-std);
 }
 
 .split-toggle-card[data-open="true"] {
-  border-color: var(--split-toggle-card-open-border-color, var(--split-toggle-card-border-color, var(--brand-muted)));
+  border-color: var(--split-toggle-card-open-border-color, var(--split-toggle-card-border-color, var(--console-rule)));
   background: var(--split-toggle-card-open-bg, var(--split-toggle-card-bg, var(--bg-surface)));
 }
 
@@ -135,7 +135,7 @@ function toggleFromSummary(event: MouseEvent | KeyboardEvent) {
   gap: var(--split-toggle-card-body-gap, var(--space-3));
   min-width: 0;
   padding-top: var(--split-toggle-card-body-padding-top, var(--space-2));
-  border-top: 1px solid var(--split-toggle-card-divider-color, var(--border-subtle));
+  border-top: 1px solid var(--split-toggle-card-divider-color, var(--console-rule));
 }
 
 .split-toggle-card__toggle {
@@ -147,16 +147,16 @@ function toggleFromSummary(event: MouseEvent | KeyboardEvent) {
   min-width: 0;
   padding: var(--split-toggle-card-toggle-padding, var(--space-4) 0);
   border: 0;
-  border-inline-start: 1px solid var(--split-toggle-card-divider-color, var(--border-subtle));
+  border-inline-start: 1px solid var(--split-toggle-card-divider-color, var(--console-rule));
   background: var(--split-toggle-card-toggle-bg, transparent);
-  color: var(--split-toggle-card-toggle-color, var(--text-secondary));
+  color: var(--split-toggle-card-toggle-color, var(--console-ink-secondary));
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-std), color var(--dur-fast) var(--ease-std);
 }
 
 .split-toggle-card__toggle:hover,
 .split-toggle-card__toggle:focus-visible {
-  background: var(--split-toggle-card-toggle-hover-bg, var(--info-surface));
+  background: var(--split-toggle-card-toggle-hover-bg, var(--console-hover));
   color: var(--split-toggle-card-toggle-hover-color, var(--brand-strong));
 }
 

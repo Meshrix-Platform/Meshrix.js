@@ -172,10 +172,10 @@ function handleUrlInput(event: Event) {
 .server-address-icon-button,
 .server-address-validate-button {
   min-height: 36px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   font-weight: 700;
   transition:
     background var(--dur-fast) var(--ease-std),
@@ -207,7 +207,7 @@ function handleUrlInput(event: Event) {
 .server-address-icon-button:hover,
 .server-address-validate-button:hover {
   border-color: var(--border-strong);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   color: var(--text-primary);
 }
 
@@ -242,11 +242,11 @@ function handleUrlInput(event: Event) {
   padding: 0 var(--space-2);
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-full);
-  background: var(--bg-subtle);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: 700;
   transform: translateY(-50%);
   pointer-events: none;
@@ -273,8 +273,8 @@ function handleUrlInput(event: Event) {
 .server-address-row-message {
   grid-column: 2 / -1;
   margin: calc(-1 * var(--space-0-5)) 0 0;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   line-height: var(--leading-snug);
 }
 

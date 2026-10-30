@@ -135,7 +135,7 @@ onBeforeUnmount(removePositionListeners);
   border: 0;
   border-radius: var(--radius-full);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
   cursor: help;
 }
 
@@ -161,12 +161,12 @@ onBeforeUnmount(removePositionListeners);
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   box-shadow: var(--shadow-lg);
-  font-size: var(--text-md);
+  font-size: var(--text-base);
   font-weight: var(--font-normal);
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -185,11 +185,11 @@ onBeforeUnmount(removePositionListeners);
 .help-tooltip-item strong {
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
 }
 
 .help-tooltip-text {
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
 }
 </style>

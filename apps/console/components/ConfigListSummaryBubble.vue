@@ -242,7 +242,7 @@ button svg {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   box-shadow: var(--shadow-lg);
@@ -254,8 +254,8 @@ button svg {
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--console-rule);
+  background: var(--console-frame);
 }
 
 .config-list-summary-header > div {
@@ -271,8 +271,8 @@ button svg {
 }
 
 .config-list-summary-header span {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 
 .config-list-summary-close {
@@ -282,10 +282,10 @@ button svg {
   flex: 0 0 auto;
   place-items: center;
   padding: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   cursor: pointer;
   font-size: var(--text-lg);
   line-height: 1;
@@ -306,8 +306,8 @@ button svg {
 
 .config-list-summary-group h4 {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: var(--font-bold);
 }
 
@@ -323,9 +323,9 @@ button svg {
   gap: var(--space-2);
   min-width: 0;
   padding: var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
 }
 
 .config-list-summary-entry dt,
@@ -338,7 +338,7 @@ button svg {
 
 .config-list-summary-entry dt span {
   color: var(--text-primary);
-  font-size: var(--text-md);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -346,33 +346,33 @@ button svg {
 
 .config-list-summary-entry code {
   min-width: 0;
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   overflow-wrap: anywhere;
 }
 
 .config-list-summary-entry dd strong {
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: var(--font-medium);
   overflow-wrap: anywhere;
 }
 
 .config-list-summary-entry dd span {
   color: var(--success);
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   font-weight: var(--font-bold);
 }
 
 .config-list-summary-entry[data-configured="false"] dd span {
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
 }
 
 .config-list-summary-entry small {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   line-height: 1.35;
   overflow-wrap: anywhere;
 }

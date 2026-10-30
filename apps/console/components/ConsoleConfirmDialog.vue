@@ -193,7 +193,7 @@ watch(currentConfirm, async (next: any, previous: any) => {
   display: grid;
   gap: var(--space-3);
   padding: var(--space-5);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: var(--shadow-xl);
@@ -213,8 +213,8 @@ watch(currentConfirm, async (next: any, previous: any) => {
 
 .console-confirm-message {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-base);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-lg);
   line-height: var(--leading-relaxed);
   white-space: pre-line;
   word-break: break-word;
@@ -225,19 +225,19 @@ watch(currentConfirm, async (next: any, previous: any) => {
 .console-confirm-require {
   display: grid;
   gap: var(--space-1-5);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 
 .console-confirm-require input {
   height: 34px;
   padding: 0 var(--space-2-5);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-inset);
+  background: var(--console-hover);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
 }
 
 .console-confirm-require input:focus-visible {

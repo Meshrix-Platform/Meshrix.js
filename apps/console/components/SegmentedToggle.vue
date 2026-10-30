@@ -56,9 +56,9 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
   width: min(360px, 100%);
   min-height: 44px;
   padding: var(--space-1);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-lg);
-  background: var(--info-surface);
+  background: var(--console-frame);
   margin: 0 auto;
 }
 
@@ -68,7 +68,7 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
 }
 .meshrix-segmented-toggle.size-small .meshrix-segmented-toggle-tab {
   min-height: 28px;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 
 .meshrix-segmented-toggle.size-large {
@@ -77,7 +77,7 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
 }
 .meshrix-segmented-toggle.size-large .meshrix-segmented-toggle-tab {
   min-height: 44px;
-  font-size: var(--text-md);
+  font-size: var(--text-base);
 }
 
 .meshrix-segmented-toggle-tab {
@@ -86,9 +86,9 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--info);
+  color: var(--console-ink-secondary);
   font: inherit;
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   font-weight: 700;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
@@ -104,8 +104,9 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
 }
 
 .meshrix-segmented-toggle-tab.active {
-  color: var(--text-on-brand);
-  background: var(--brand);
-  box-shadow: 0 2px 6px var(--brand-shadow);
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  box-shadow: none;
+  outline: 1px solid var(--console-rule);
 }
 </style>

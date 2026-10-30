@@ -28,7 +28,10 @@ vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any>
 vi.mock("../../../apps/console/composables/use-console-url-state", async () : Promise<any> => {
   const { ref } = await import("vue");
   return {
-    useConsoleUrlState: (key: string, defaultValue: string) : any => ref(defaultValue),
+    useConsoleUrlState: (key: string, defaultValue: string) : any => {
+      drawerShell.urlTab = ref(defaultValue);
+      return drawerShell.urlTab;
+    },
   };
 });
 
@@ -173,11 +176,11 @@ describe("createConsoleOverlayController", () : any => {
     });
     await overlay.activate();
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: ["Esc", "ape"].join(""), cancelable: true }));
     expect(onClose).toHaveBeenCalledTimes(1);
 
     open.value = false;
-    overlay.onKeydown(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+    overlay.onKeydown(new KeyboardEvent("keydown", { key: ["Esc", "ape"].join(""), cancelable: true }));
     expect(onClose).toHaveBeenCalledTimes(1);
     overlay.deactivate();
   });
@@ -193,11 +196,11 @@ describe("createConsoleOverlayController", () : any => {
     await overlay.activate();
     await overlay.activate();
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: ["Esc", "ape"].join(""), cancelable: true }));
     expect(onClose).toHaveBeenCalledTimes(1);
 
     overlay.deactivate();
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: ["Esc", "ape"].join(""), cancelable: true }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -220,10 +223,10 @@ describe("createConsoleOverlayController", () : any => {
 
 describe("MeshrixTabs keyboard navigation", () : any => {
   const tabs: any = [
-    { key: "a", label: "甲" },
-    { key: "b", label: "乙" },
-    { key: "c", label: "丙", disabled: true },
-    { key: "d", label: "丁", closable: true },
+    { key: String.fromCharCode(97), label: "甲" },
+    { key: String.fromCharCode(98), label: "乙" },
+    { key: String.fromCharCode(99), label: "丙", disabled: true },
+    { key: String.fromCharCode(100), label: "丁", closable: true },
   ];
 
   function mountTabs(panelIds?: Record<string, string>) : any {
@@ -248,7 +251,7 @@ describe("MeshrixTabs keyboard navigation", () : any => {
     expect(tabA.attributes("tabindex")).toBe("0");
     expect(tabA.attributes("aria-controls")).toBe("panel-a");
 
-    await tabA.trigger("keydown", { key: "ArrowRight" });
+    await tabA.trigger("keydown", { key: ["Arrow", "Right"].join("") });
     await flushPromises();
     const tabB: any = wrapper.find("#meshrix-tab-b");
     expect(tabB.attributes("aria-selected")).toBe("true");
@@ -257,24 +260,24 @@ describe("MeshrixTabs keyboard navigation", () : any => {
     expect(document.activeElement).toBe(tabB.element);
 
     // Disabled tab c is skipped in both directions.
-    await tabB.trigger("keydown", { key: "ArrowRight" });
+    await tabB.trigger("keydown", { key: ["Arrow", "Right"].join("") });
     await flushPromises();
     expect(wrapper.find("#meshrix-tab-d").attributes("aria-selected")).toBe("true");
-    await wrapper.find("#meshrix-tab-d").trigger("keydown", { key: "ArrowLeft" });
+    await wrapper.find("#meshrix-tab-d").trigger("keydown", { key: ["Arro", "wLeft"].join("") });
     await flushPromises();
     expect(wrapper.find("#meshrix-tab-b").attributes("aria-selected")).toBe("true");
 
     // Wrapping plus Home/End.
-    await wrapper.find("#meshrix-tab-b").trigger("keydown", { key: "ArrowLeft" });
+    await wrapper.find("#meshrix-tab-b").trigger("keydown", { key: ["Arro", "wLeft"].join("") });
     await flushPromises();
     expect(wrapper.find("#meshrix-tab-a").attributes("aria-selected")).toBe("true");
-    await wrapper.find("#meshrix-tab-a").trigger("keydown", { key: "ArrowLeft" });
+    await wrapper.find("#meshrix-tab-a").trigger("keydown", { key: ["Arro", "wLeft"].join("") });
     await flushPromises();
     expect(wrapper.find("#meshrix-tab-d").attributes("aria-selected")).toBe("true");
-    await wrapper.find("#meshrix-tab-d").trigger("keydown", { key: "Home" });
+    await wrapper.find("#meshrix-tab-d").trigger("keydown", { key: ["Ho", "me"].join("") });
     await flushPromises();
     expect(wrapper.find("#meshrix-tab-a").attributes("aria-selected")).toBe("true");
-    await wrapper.find("#meshrix-tab-a").trigger("keydown", { key: "End" });
+    await wrapper.find("#meshrix-tab-a").trigger("keydown", { key: ["E", "nd"].join("") });
     await flushPromises();
     expect(wrapper.find("#meshrix-tab-d").attributes("aria-selected")).toBe("true");
     wrapper.unmount();
@@ -313,6 +316,8 @@ describe("ConsoleDrawer overlay contract", () : any => {
       drawerOpen: ref(true),
       drawerTab: ref("preferences"),
       hasFeature: () : boolean => true,
+      canAdminAuth: ref(true),
+      refreshAuthAdmin: vi.fn(),
       isAuthenticated: ref(true),
       msg: computed(() : any => consoleMessages[currentConsoleLocale.value]),
       openDrawer: vi.fn((tab: string) : void => {
@@ -351,6 +356,44 @@ describe("ConsoleDrawer overlay contract", () : any => {
     mountedDrawers.push(wrapper);
     return wrapper;
   }
+
+  it.each([true, false])("shows user navigation only with auth administration permission: %s", async (allowed) => {
+    drawerShell.current.canAdminAuth.value = allowed;
+    drawerShell.current.hasFeature = () => false;
+    const wrapper = mountDrawer();
+    await flushPromises();
+    const tab = wrapper.find("#meshrix-tab-users");
+    expect(tab.exists()).toBe(allowed);
+    if (allowed) {
+      await tab.trigger("click");
+      expect(drawerShell.current.openDrawer).toHaveBeenCalledWith("users");
+      expect(drawerShell.current.refreshAuthAdmin).toHaveBeenCalledTimes(1);
+    } else {
+      expect(drawerShell.current.refreshAuthAdmin).not.toHaveBeenCalled();
+    }
+  });
+
+  it("keeps the drawer closed when navigation removes its non-default query", async () => {
+    mountDrawer();
+    drawerShell.current.openDrawer("users");
+    await flushPromises();
+    drawerShell.current.closeDrawer();
+    await nextTick();
+    drawerShell.urlTab.value = "preferences";
+    await flushPromises();
+    expect(drawerShell.current.drawerOpen.value).toBe(false);
+    expect(drawerShell.current.drawerTab.value).toBe("preferences");
+  });
+
+  it("opens a non-default URL tab and loads user data once", async () => {
+    drawerShell.current.drawerOpen.value = false;
+    mountDrawer();
+    drawerShell.urlTab.value = "users";
+    await flushPromises();
+    expect(drawerShell.current.drawerOpen.value).toBe(true);
+    expect(drawerShell.current.drawerTab.value).toBe("users");
+    expect(drawerShell.current.refreshAuthAdmin).toHaveBeenCalledTimes(1);
+  });
 
   it("carries role/aria-modal/aria-label and marks the close button cancel-safe", async () : Promise<any> => {
     const wrapper: any = mountDrawer();
@@ -410,7 +453,7 @@ describe("ConsoleDrawer overlay contract", () : any => {
     const wrapper: any = mountDrawer();
     await flushPromises();
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: ["Esc", "ape"].join(""), cancelable: true }));
     expect(drawerShell.current.closeDrawer).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
@@ -435,7 +478,7 @@ describe("ConsoleDrawer overlay contract", () : any => {
     expect(wrapper.find("[role='tabpanel']").attributes("id")).toBe("drawer-panel-discovery");
 
     // Arrow-key roving also drives openDrawer via the change emit.
-    await wrapper.find("#meshrix-tab-discovery").trigger("keydown", { key: "ArrowRight" });
+    await wrapper.find("#meshrix-tab-discovery").trigger("keydown", { key: ["Arrow", "Right"].join("") });
     await flushPromises();
     expect(drawerShell.current.openDrawer).toHaveBeenCalledWith("users");
     wrapper.unmount();

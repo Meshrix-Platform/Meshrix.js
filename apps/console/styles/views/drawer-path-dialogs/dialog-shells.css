@@ -17,7 +17,7 @@
   align-content: start;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: var(--shadow-md);
@@ -43,7 +43,7 @@
   grid-template-rows: auto minmax(260px, 1fr) auto;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: var(--shadow-md);
@@ -60,7 +60,7 @@
 
 .agent-evidence-preview-header h3 {
   margin: 0;
-  color: var(--brand);
+  color: var(--text-primary);
   font-size: var(--text-xl);
 }
 
@@ -68,9 +68,9 @@
   display: block;
   max-width: min(760px, 72vw);
   margin-top: var(--space-1);
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

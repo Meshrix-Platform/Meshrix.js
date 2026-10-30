@@ -95,15 +95,11 @@ function runToastAction(toast: ConsoleToast) {
   align-items: flex-start;
   gap: var(--space-2-5);
   padding: var(--space-3) var(--space-3-5);
-  border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--info);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   box-shadow: var(--shadow-lg);
 }
-
-.console-toast.tone-success { border-left-color: var(--success); }
-.console-toast.tone-danger { border-left-color: var(--danger); }
 
 .console-toast-dot {
   flex: none;
@@ -126,14 +122,14 @@ function runToastAction(toast: ConsoleToast) {
 
 .console-toast-title {
   color: var(--text-primary);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   line-height: var(--leading-snug);
 }
 
 .console-toast-message {
-  color: var(--text-secondary);
-  font-size: var(--text-base);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-lg);
   line-height: var(--leading-normal);
   white-space: pre-line;
   word-break: break-word;
@@ -147,7 +143,7 @@ function runToastAction(toast: ConsoleToast) {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--brand);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   line-height: var(--leading-snug);
   cursor: pointer;
@@ -157,7 +153,7 @@ function runToastAction(toast: ConsoleToast) {
 }
 
 .console-toast-action:hover {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
 }
 
 .console-toast-action:focus-visible {
@@ -176,7 +172,7 @@ function runToastAction(toast: ConsoleToast) {
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
   font-size: var(--text-2xl);
   line-height: 1;
   cursor: pointer;
@@ -186,7 +182,7 @@ function runToastAction(toast: ConsoleToast) {
 }
 
 .console-toast-close:hover {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   color: var(--text-primary);
 }
 

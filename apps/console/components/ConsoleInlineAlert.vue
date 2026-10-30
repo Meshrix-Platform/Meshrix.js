@@ -51,11 +51,11 @@ const role = computed(() => (props.tone === "danger" ? "alert" : "status"));
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2-5) var(--space-3);
-  border: 1px solid var(--info-border);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
-  background: var(--info-surface);
-  color: var(--info);
-  font-size: var(--text-base);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-lg);
   line-height: var(--leading-normal);
   word-break: break-word;
 }

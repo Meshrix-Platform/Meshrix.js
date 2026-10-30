@@ -44,15 +44,16 @@ withDefaults(
 
 .console-description-item {
   min-width: 0;
-  padding: var(--space-2-5) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
+  padding: var(--space-3) 0;
+  border: 0;
+  border-bottom: 1px solid var(--console-rule);
+  border-radius: 0;
+  background: transparent;
 }
 
 .console-description-item dt {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: var(--font-medium);
 }
 
@@ -60,13 +61,13 @@ withDefaults(
   min-width: 0;
   margin: var(--space-1) 0 0;
   color: var(--text-primary);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   overflow-wrap: anywhere;
 }
 
 .console-description-item dd.mono {
   font-family: var(--font-mono);
-  font-size: var(--text-md);
+  font-size: var(--text-base);
 }
 
 @media (max-width: 1120px) {

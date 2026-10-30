@@ -41,7 +41,7 @@ withDefaults(defineProps<{
   gap: var(--space-2);
   padding: var(--space-12) var(--space-6);
   text-align: center;
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
 }
 
 .console-empty-state::before {
@@ -70,14 +70,14 @@ withDefaults(defineProps<{
 }
 
 .console-empty-state-title {
-  color: var(--text-secondary);
-  font-size: var(--text-base);
+  color: var(--text-primary);
+  font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
 }
 
 .console-empty-state-description {
   max-width: 360px;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   line-height: var(--leading-relaxed);
 }
 

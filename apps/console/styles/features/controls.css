@@ -2,10 +2,10 @@
 
 .surface-card {
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-xl);
   padding: var(--space-5);
-  box-shadow: var(--shadow-xs);
+  box-shadow: none;
 }
 
 .surface-card + .surface-card {
@@ -54,42 +54,42 @@
 .tool-button:not(.tool-button-ghost) {
   height: 34px;
   padding: 0 var(--space-3-5);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   background: var(--brand);
   color: var(--text-on-brand);
 }
 .primary-action:hover,
 .tool-button:not(.tool-button-ghost):hover {
   background: var(--brand-strong);
-  box-shadow: 0 1px 3px var(--brand-shadow);
+  box-shadow: none;
 }
 
 /* Ghost */
 .tool-button-ghost {
   height: 34px;
   padding: 0 var(--space-3-5);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   background: var(--bg-surface);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  color: var(--console-ink-secondary);
+  border: 1px solid var(--console-rule);
 }
 .tool-button-ghost:hover {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   border-color: var(--border-strong);
   color: var(--text-primary);
 }
 
 /* Table / inline actions */
 .table-action {
-  height: 28px;
+  min-height: 32px;
   padding: 0 var(--space-2-5);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   background: var(--bg-surface);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  color: var(--console-ink-secondary);
+  border: 1px solid var(--console-rule);
 }
 .table-action:hover {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   border-color: var(--border-strong);
   color: var(--text-primary);
 }
@@ -98,20 +98,20 @@
    cards, so a surface-filled secondary button is invisible in both places.
    Give ghost/table actions a --bg-subtle fill under the light scheme; the
    dark scheme keeps the surface fill. */
-html[data-appearance-color-scheme="light"] .tool-button-ghost:not(.active):not(.tool-button-icon),
+html[data-appearance-color-scheme="light"] .tool-button-ghost:not(.active):not(.tool-button-icon):not(.topbar-palette-trigger),
 html[data-appearance-color-scheme="light"] .table-action {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
 }
-html[data-appearance-color-scheme="light"] .tool-button-ghost:not(.active):not(.tool-button-icon):hover,
+html[data-appearance-color-scheme="light"] .tool-button-ghost:not(.active):not(.tool-button-icon):not(.topbar-palette-trigger):hover,
 html[data-appearance-color-scheme="light"] .table-action:hover {
-  background: var(--bg-inset);
+  background: var(--console-hover);
 }
 
 /* Compact variant */
 .compact-action {
   height: 28px;
   padding: 0 var(--space-3);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 
 /* Active/selected state */
@@ -155,7 +155,7 @@ html[data-appearance-color-scheme="light"] .table-action:hover {
 }
 
 .topbar {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
   padding: 0 var(--space-5);
@@ -175,13 +175,13 @@ html[data-appearance-color-scheme="light"] .table-action:hover {
 
 .topbar-heading {
   min-width: 0;
-  justify-self: center;
-  text-align: center;
+  justify-self: start;
+  text-align: left;
 }
 
 .topbar-page-title {
   margin: 0;
-  text-align: center;
+  text-align: left;
 }
 
 .topbar-status {
@@ -233,9 +233,9 @@ html[data-appearance-color-scheme="light"] .table-action:hover {
 
 label > span {
   display: block;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: var(--font-medium);
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   margin-bottom: var(--space-1);
 }
 
@@ -243,13 +243,13 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 select,
 textarea {
   width: 100%;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text-primary);
   padding: var(--space-1-5) var(--space-3);
   font: inherit;
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   line-height: var(--leading-normal);
   outline: none;
   transition:
@@ -274,14 +274,14 @@ textarea:focus {
 }
 
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):read-only {
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
   cursor: default;
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--text-disabled);
+  color: var(--console-ink-secondary);
 }
 
 textarea {
@@ -338,8 +338,8 @@ textarea {
 
 .section-header > div > p {
   margin: var(--space-1) 0 0;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
+  font-size: var(--text-base);
+  color: var(--console-ink-secondary);
   line-height: var(--leading-relaxed);
 }
 
@@ -351,11 +351,11 @@ textarea {
 }
 
 .section-tags > span {
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   font-weight: var(--font-medium);
-  color: var(--text-muted);
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-subtle);
+  color: var(--console-ink-secondary);
+  background: var(--console-frame);
+  border: 1px solid var(--console-rule);
   padding: var(--space-px) var(--space-1-5);
   border-radius: var(--radius-full);
 }

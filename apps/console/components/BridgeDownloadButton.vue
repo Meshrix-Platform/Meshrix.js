@@ -81,7 +81,7 @@ async function startDownload() {
 .bridge-download-error {
   max-width: min(36rem, 100%);
   color: var(--danger);
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   overflow-wrap: anywhere;
 }
 

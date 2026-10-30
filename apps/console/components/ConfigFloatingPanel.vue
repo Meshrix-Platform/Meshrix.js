@@ -134,7 +134,7 @@ onBeforeUnmount(removeDocumentListeners);
   display: grid;
   place-items: center;
   padding: var(--space-6);
-  background: rgb(17 24 39 / 46%);
+  background: var(--backdrop);
 }
 
 .config-floating-panel {
@@ -143,7 +143,7 @@ onBeforeUnmount(removeDocumentListeners);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: var(--shadow-xl);
@@ -157,7 +157,7 @@ onBeforeUnmount(removeDocumentListeners);
   align-items: flex-start;
   padding: var(--space-4);
   padding-right: var(--space-16);
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--console-rule);
   background: var(--bg-surface);
 }
 
@@ -176,8 +176,8 @@ onBeforeUnmount(removeDocumentListeners);
 
 .config-floating-panel-title p {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-base);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-lg);
   line-height: 1.5;
 }
 

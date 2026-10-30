@@ -188,10 +188,10 @@ function stopSummaryToggle(event: Event) {
 .multi-choice-card-group {
   display: grid;
   gap: var(--space-2-5);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--bg-subtle);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .multi-choice-card-header {
@@ -204,13 +204,13 @@ function stopSummaryToggle(event: Event) {
 
 .multi-choice-card-header strong {
   color: var(--text-primary);
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
 }
 
 .multi-choice-card-header span {
   min-width: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   overflow: hidden;
   text-align: right;
   text-overflow: ellipsis;
@@ -233,14 +233,14 @@ function stopSummaryToggle(event: Event) {
   gap: var(--space-2);
   min-width: 0;
   padding: var(--space-2-5);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
 }
 
 .multi-choice-card-option[data-active="true"] {
   border-color: var(--brand-muted);
-  background: color-mix(in srgb, var(--info-surface) 70%, var(--bg-surface) 30%);
+  background: var(--console-selected);
 }
 
 .multi-choice-card-option[data-disabled="true"] {
@@ -248,8 +248,8 @@ function stopSummaryToggle(event: Event) {
 }
 
 .multi-choice-card-option small {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   line-height: 1.45;
 }
 
@@ -281,7 +281,7 @@ function stopSummaryToggle(event: Event) {
   display: block;
   width: 100%;
   min-width: 0;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--console-rule);
   background: var(--bg-surface);
 }
 
@@ -290,11 +290,11 @@ function stopSummaryToggle(event: Event) {
 }
 
 .multi-choice-list-row[data-active="true"] {
-  background: color-mix(in srgb, var(--info-surface) 70%, var(--bg-surface) 30%);
+  background: var(--console-selected);
 }
 
 .multi-choice-list-select-all {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
 }
 
 .multi-choice-list-select-all :deep(.binary-checkbox-label) {
@@ -306,11 +306,11 @@ function stopSummaryToggle(event: Event) {
 }
 
 .multi-choice-list-row:hover:not([data-disabled="true"]) {
-  background: color-mix(in srgb, var(--bg-subtle) 80%, var(--bg-surface) 20%);
+  background: var(--console-hover);
 }
 
 .multi-choice-list-row[data-active="true"]:hover:not([data-disabled="true"]) {
-  background: color-mix(in srgb, var(--info-surface) 80%, var(--bg-surface) 20%);
+  background: var(--console-selected);
 }
 
 .multi-choice-card-list :deep(.binary-checkbox.multi-choice-list-item) {
@@ -323,7 +323,6 @@ function stopSummaryToggle(event: Event) {
   padding: var(--space-2-5) var(--space-3-5);
   border: 0 !important;
   border-radius: 0 !important;
-  outline: none !important;
   background: transparent !important;
   box-shadow: none !important;
   white-space: normal;
@@ -366,14 +365,14 @@ function stopSummaryToggle(event: Event) {
 
 .multi-choice-fold-detail {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
 .multi-choice-fold-detail.is-empty {
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
   font-family: var(--font-mono);
 }
 
@@ -396,7 +395,7 @@ function stopSummaryToggle(event: Event) {
 }
 
 .multi-choice-card-group[data-layout="fold"] :deep(.config-fold-card[data-active="true"] .config-fold-summary) {
-  background: color-mix(in srgb, var(--info-surface) 70%, var(--bg-surface) 30%);
+  background: var(--console-selected);
 }
 
 .multi-choice-card-group[data-layout="fold"] :deep(.config-fold-card[data-disabled="true"]) {

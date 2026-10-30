@@ -132,7 +132,7 @@ const toggleScope = (scopeId: string) => {
 
 .scope-group + .scope-group {
   padding-top: var(--space-3);
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--console-rule);
 }
 
 .scope-group-header {
@@ -143,7 +143,7 @@ const toggleScope = (scopeId: string) => {
 }
 
 .scope-group-title {
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   color: var(--text-primary);
 }
@@ -151,11 +151,11 @@ const toggleScope = (scopeId: string) => {
 .scope-group-toggle {
   min-height: 26px;
   padding: 0 var(--space-2-5);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: var(--font-medium);
   cursor: pointer;
   transition:
@@ -165,7 +165,7 @@ const toggleScope = (scopeId: string) => {
 }
 
 .scope-group-toggle:hover {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   border-color: var(--border-strong);
   color: var(--text-primary);
 }

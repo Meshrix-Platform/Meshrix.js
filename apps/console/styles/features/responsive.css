@@ -68,7 +68,8 @@
     width: 100%;
   }
   .topbar-status { grid-area: status; }
-  .view-content { padding: var(--space-3); }
+  .view-content { padding: var(--space-4); }
+  .dashboard-main-region { margin: 0 var(--space-2) var(--space-2); }
 
   /* Mobile topbar: collapse the service address to its status dot and drop
      the breadcrumb
