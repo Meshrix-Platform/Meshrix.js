@@ -26,6 +26,7 @@ export const ACCOUNT_API_ROUTES = Object.freeze({
   sessions: `${ACCOUNT_API_BASE}/sessions`,
   sessionRevoke: `${ACCOUNT_API_BASE}/sessions/{sessionId}`,
   sessionsRevokeOthers: `${ACCOUNT_API_BASE}/sessions/revoke-others`,
+  accountDelete: `${ACCOUNT_API_BASE}/delete`,
   securityEvents: `${ACCOUNT_API_BASE}/security/events`,
   passkeyRegistrationOptions: `${ACCOUNT_API_BASE}/passkeys/enrollment/options`,
   passkeyRegistrationVerify: `${ACCOUNT_API_BASE}/passkeys/enrollment/verify`,
