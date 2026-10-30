@@ -1,10 +1,9 @@
 .operation-permission-card,
 .permission-card {
   min-width: 0;
-  padding: var(--space-3-5);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  background: var(--bg-subtle);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--console-rule);
+  background: transparent;
 }
 
 .operation-permission-card {
@@ -32,20 +31,20 @@
 }
 
 .operation-permission-card-header strong {
-  font-size: var(--text-base);
-  font-weight: 700;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
 }
 
 .operation-permission-card-header span,
 .operation-permission-card p,
 .token-panel p {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
 }
 
 .operation-permission-card-header span,
 .token-panel p {
-  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: var(--font-mono);
   overflow-wrap: anywhere;
 }
 
@@ -56,10 +55,10 @@
   display: inline-flex;
   align-items: center;
   border-radius: var(--radius-sm);
-  background: var(--info-surface);
-  color: var(--info);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
   font-style: normal;
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   font-weight: 700;
 }
 
@@ -85,26 +84,26 @@
   gap: var(--space-1);
   align-content: center;
   text-align: left;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
 }
 
 .scope-chip strong {
   color: var(--text-primary);
-  font-size: var(--text-md);
-  font-weight: 700;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
 }
 
 .scope-chip span {
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 
 .scope-chip.active {
   border-color: var(--brand);
-  background: var(--info-surface);
-  color: var(--info);
+  background: var(--console-selected);
+  color: var(--text-primary);
 }
 
 .token-panel {
@@ -127,7 +126,7 @@
 }
 
 .permission-card[data-enabled="false"] {
-  opacity: 0.72;
+  background: var(--console-frame);
 }
 
 .permission-card-main,
@@ -189,8 +188,8 @@
 }
 
 .permission-token-config-heading small {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: var(--font-medium);
 }
 
@@ -205,21 +204,19 @@
 .permission-token-summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: 0;
+  border-block: 1px solid var(--console-rule);
 }
 
 .permission-token-summary > div {
   min-width: 0;
-  padding: var(--space-2-5) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
+  padding: var(--space-3) 0;
 }
 
 .permission-token-summary dt {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: var(--font-medium);
 }
 
@@ -234,7 +231,7 @@
 
 .permission-token-config-panel {
   min-width: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   overflow: hidden;
@@ -246,7 +243,7 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2-5) var(--space-3);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   cursor: pointer;
   list-style: none;
 }
@@ -262,8 +259,8 @@
 }
 
 .permission-token-config-panel > summary small {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: var(--font-medium);
 }
 
@@ -271,7 +268,7 @@
   content: "展开";
   flex: 0 0 auto;
   color: var(--brand);
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   font-weight: var(--font-semibold);
 }
 
@@ -303,7 +300,7 @@
 }
 
 .inline-link:disabled {
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
   cursor: not-allowed;
 }
 

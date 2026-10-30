@@ -109,10 +109,10 @@ const RouterLink: any = resolveComponent("RouterLink");
 .permission-config-empty {
   margin: 0;
   padding: var(--space-3);
-  border: 1px dashed var(--border-subtle);
+  border: 1px dashed var(--console-rule);
   border-radius: var(--radius-md);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 .token-panel {
   display: flex;
@@ -121,9 +121,9 @@ const RouterLink: any = resolveComponent("RouterLink");
   gap: var(--space-3);
   margin-top: var(--space-3);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
 }
 .token-panel-next-link {
   margin-left: auto;

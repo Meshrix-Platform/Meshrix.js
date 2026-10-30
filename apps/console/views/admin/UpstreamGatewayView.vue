@@ -242,38 +242,61 @@ function stateLabel(state: string): string {
 .upstream-gateway-layout {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-4);
+  gap: var(--space-6);
+  min-width: 0;
 }
 
 .gateway-toolbar {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2-5);
+  gap: var(--space-4);
+  min-height: 38px;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+}
+
+.gateway-refresh-action {
+  margin-left: auto;
 }
 
 .gateway-grid {
   display: grid;
-  gap: var(--space-4);
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: var(--space-6);
+  grid-template-columns: minmax(230px, 0.75fr) minmax(0, 1.75fr);
+  align-items: start;
+  min-width: 0;
 }
 
 .gateway-stack {
   display: grid;
-  gap: var(--space-3-5);
+  gap: var(--space-5);
+  min-width: 0;
 }
 
 .gateway-service-actions {
   align-items: center;
   display: flex;
   gap: var(--space-2-5);
+  flex-wrap: wrap;
 }
 
 .gateway-panel {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--space-3-5);
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.gateway-grid > .gateway-panel {
+  padding-right: var(--space-6);
+  border-right: 1px solid var(--console-rule);
+}
+
+.gateway-stack > .gateway-panel + .gateway-panel {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--console-rule);
 }
 
 .section-header {
@@ -282,6 +305,8 @@ function stateLabel(state: string): string {
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .section-header h3,
@@ -290,15 +315,18 @@ function stateLabel(state: string): string {
 }
 
 .section-header h3 {
-  font-size: var(--text-xl);
+  color: var(--text-primary);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-semibold);
 }
 
 .section-header p,
 .empty-copy,
 .gateway-form-grid span,
 .gateway-forward-body span {
-  color: var(--text-muted);
-  font-size: var(--text-md);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
 }
 
 .service-row {
@@ -309,14 +337,30 @@ function stateLabel(state: string): string {
   cursor: pointer;
   display: flex;
   justify-content: space-between;
-  padding: var(--space-2-5);
+  padding: var(--space-3);
   text-align: left;
   width: 100%;
+  min-width: 0;
+  gap: var(--space-3);
+  color: var(--text-primary);
+  font-size: var(--text-lg);
 }
 
-.service-row.active,
 .service-row:hover {
-  background: var(--bg-subtle);
+  background: var(--console-hover);
+}
+
+.service-row.active {
+  background: var(--console-selected);
+}
+
+.service-row:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.service-row > span:first-child {
+  min-width: 0;
 }
 
 .service-row strong,
@@ -325,16 +369,16 @@ function stateLabel(state: string): string {
 }
 
 .service-row small {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   overflow-wrap: anywhere;
 }
 
 .gateway-state {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   border-radius: var(--radius-full);
-  color: var(--text-muted);
-  font-size: var(--text-md);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   padding: var(--space-0-5) var(--space-2);
 }
 
@@ -343,6 +387,7 @@ function stateLabel(state: string): string {
   display: inline-block;
   height: 10px;
   width: 10px;
+  flex: 0 0 10px;
 }
 
 .gateway-state-dot.active {
@@ -350,55 +395,64 @@ function stateLabel(state: string): string {
 }
 
 .gateway-state-dot.disabled {
-  background: var(--text-muted);
+  background: var(--console-ink-secondary);
 }
 
 .gateway-table {
   border-collapse: collapse;
   width: 100%;
+  table-layout: fixed;
+  font-size: var(--text-base);
 }
 
 .gateway-table th,
 .gateway-table td {
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--console-rule);
   padding: var(--space-2) var(--space-2-5);
   text-align: left;
   vertical-align: top;
+  overflow-wrap: anywhere;
 }
 
 .gateway-table th {
-  color: var(--text-muted);
-  font-size: var(--text-md);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
 .gateway-form-grid {
   display: grid;
   gap: var(--space-2-5);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .gateway-form-grid label,
 .gateway-forward-body {
   display: grid;
   gap: var(--space-1);
+  min-width: 0;
 }
 
 .gateway-form-grid input,
 .gateway-form-grid select,
 .gateway-forward-body textarea {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  min-height: 34px;
+  min-height: 38px;
   padding: var(--space-2) var(--space-2-5);
+  width: 100%;
+  min-width: 0;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
 }
 
 .gateway-actions button,
 .table-action,
 .tool-button {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  min-height: 32px;
+  min-height: 36px;
   padding: var(--space-1-5) var(--space-2-5);
 }
 
@@ -409,7 +463,7 @@ function stateLabel(state: string): string {
 }
 
 pre {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   border-radius: var(--radius-sm);
   margin: 0;
   max-height: 360px;
@@ -424,8 +478,8 @@ pre {
 }
 
 .gateway-readiness-heading {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
@@ -444,10 +498,10 @@ pre {
 }
 
 .gateway-readiness-bar {
-  background: var(--border-subtle);
+  background: var(--console-rule);
   border-radius: var(--radius-full);
   display: block;
-  height: 8px;
+  height: 4px;
 }
 
 .gateway-readiness-segment[data-state="done"] .gateway-readiness-bar {
@@ -455,8 +509,8 @@ pre {
 }
 
 .gateway-readiness-segment small {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: 700;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -471,6 +525,13 @@ pre {
   .gateway-grid,
   .gateway-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .gateway-grid > .gateway-panel {
+    padding-right: 0;
+    padding-bottom: var(--space-5);
+    border-right: 0;
+    border-bottom: 1px solid var(--console-rule);
   }
 }
 </style>

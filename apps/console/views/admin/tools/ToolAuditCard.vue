@@ -71,7 +71,7 @@ const RouterLink: any = resolveComponent("RouterLink");
   background: var(--success-surface);
   border-radius: var(--radius-full);
   padding: 0.1rem 0.5rem;
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
 }
 .first-call-cta {
   color: var(--brand);

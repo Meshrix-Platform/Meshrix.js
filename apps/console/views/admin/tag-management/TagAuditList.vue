@@ -51,12 +51,12 @@ withDefaults(defineProps<{
   gap: var(--space-3);
   align-items: center;
   min-height: 34px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--console-rule);
 }
 
 .tag-audit-row.header {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
@@ -67,8 +67,8 @@ withDefaults(defineProps<{
 }
 
 .tag-audit-row small {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
 }
 
 @media (max-width: 900px) {

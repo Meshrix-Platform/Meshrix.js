@@ -186,13 +186,13 @@ const displayedLabel = computed(() => props.selectedTag
 }
 
 .tag-editor-grid span {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
 }
 
 .tag-editor-field-note {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   line-height: 1.5;
 }
 
@@ -201,7 +201,7 @@ const displayedLabel = computed(() => props.selectedTag
 .tag-editor-grid textarea {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -218,7 +218,7 @@ const displayedLabel = computed(() => props.selectedTag
   resize: vertical;
   padding: var(--space-2);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   line-height: 1.55;
 }
 
@@ -238,8 +238,8 @@ const displayedLabel = computed(() => props.selectedTag
 }
 
 .tag-detail-meta dt {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
 }
 
 .tag-detail-meta dd {
@@ -255,15 +255,15 @@ const displayedLabel = computed(() => props.selectedTag
   align-items: center;
   min-height: 22px;
   border-radius: var(--radius-full);
-  background: var(--bg-subtle);
-  color: var(--text-muted);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
   padding: 0 var(--space-2);
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
 }
 
 .tag-state.archived {
-  background: var(--bg-subtle);
-  color: var(--text-muted);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
 }
 
 @media (max-width: 900px) {

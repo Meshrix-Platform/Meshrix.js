@@ -346,8 +346,8 @@ const sinkHealthLabel = computed(() => {
 }
 
 .recording-facts dt {
-  color: var(--muted-text, #667);
-  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 
 .recording-facts dd {
@@ -356,8 +356,8 @@ const sinkHealthLabel = computed(() => {
 }
 
 .recording-note {
-  color: var(--muted-text, #667);
-  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   margin: var(--space-2) 0 0;
 }
 
@@ -375,8 +375,8 @@ const sinkHealthLabel = computed(() => {
 }
 
 .recording-field span {
-  color: var(--muted-text, #667);
-  font-size: var(--font-size-sm, 0.85rem);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 
 .recording-field textarea,
@@ -400,7 +400,7 @@ const sinkHealthLabel = computed(() => {
 .recording-table td {
   text-align: left;
   padding: var(--space-2);
-  border-bottom: 1px solid var(--border-color, #e2e2e2);
-  font-size: var(--font-size-sm, 0.85rem);
+  border-bottom: 1px solid var(--console-rule);
+  font-size: var(--text-base);
 }
 </style>

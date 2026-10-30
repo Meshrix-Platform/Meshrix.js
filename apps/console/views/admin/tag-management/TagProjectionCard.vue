@@ -62,8 +62,8 @@ withDefaults(defineProps<{
 }
 
 .tag-detail-meta dt {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
 }
 
 .tag-detail-meta dd {
@@ -78,13 +78,13 @@ withDefaults(defineProps<{
   max-height: 360px;
   margin: 0;
   overflow: auto;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   color: var(--text-primary);
   padding: var(--space-3);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   line-height: 1.55;
 }
 

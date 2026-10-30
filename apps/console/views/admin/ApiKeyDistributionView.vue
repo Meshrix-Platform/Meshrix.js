@@ -247,7 +247,6 @@ usePageRefreshHandler(
   <section class="api-key-distribution-layout">
     <header class="section-header api-key-distribution-header">
       <div>
-        <span class="api-key-page-eyebrow">{{ t("MCP 客户端接入", "MCP client access") }}</span>
         <h2>{{ t("创建 MCP 连接", "Create an MCP connection") }}</h2>
         <p>{{ t("选择连接指引、需要的能力和使用范围。连接指引只帮助配置客户端，不会限制密钥受众；只有明确选择客户端受众限制时才会写入授权策略。", "Choose connection guidance, the access it needs, and its resource scope. The guide only helps configure a client and does not restrict key audience; an audience restriction is added only when you explicitly select one.") }}</p>
         <p class="journey-disambiguation" data-testid="journey-disambiguation">
@@ -280,8 +279,8 @@ usePageRefreshHandler(
     <template v-else>
       <section v-if="oneTimeSecret" class="surface-card api-key-reveal" role="region" aria-live="assertive" :aria-label="t('一次性密钥', 'One-time key')">
         <div>
-          <span class="api-key-eyebrow">{{ t("最后一步，仅显示这一次", "Final step, shown only this time") }}</span>
           <h3>{{ t("保存连接资料", "Save the connection details") }}</h3>
+          <p class="api-key-reveal-notice">{{ t("最后一步，仅显示这一次", "Final step, shown only this time") }}</p>
           <p class="api-key-reveal-agent">{{ revealedRecord?.workloadDisplayName }}</p>
           <p>{{ revealedRecord ? processIdentitySummary(revealedRecord) : "" }}</p>
           <p v-if="revealedRecord?.policy.processIdentity.mode === 'optional'">{{ t("这是持有者凭证。若密钥被盗，攻击者可在其权限范围内冒用记录的工作负载身份。", "This is a bearer credential. If stolen, an attacker can impersonate the recorded workload identity within its permissions.") }}</p>
@@ -342,7 +341,6 @@ usePageRefreshHandler(
       <section v-if="!oneTimeSecret" class="surface-card api-key-create-card api-key-setup-card" data-testid="api-key-distribution-workspace">
         <div class="section-header api-key-setup-header">
           <div>
-            <span class="api-key-step-kicker">{{ t("快速接入", "Quick setup") }}</span>
             <h3>{{ t("三步完成 MCP 接入", "Set up MCP access in three steps") }}</h3>
             <p>{{ t("常用选项在主流程中完成；只有需要精细限制时才展开高级设置。", "Complete the common choices in the main flow. Open advanced settings only when you need finer limits.") }}</p>
           </div>

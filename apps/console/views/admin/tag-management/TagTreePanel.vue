@@ -95,17 +95,17 @@ const tagIcon = (kind: string) => kind === "role"
 
 .tag-tree-row:hover,
 .tag-tree-row.active {
-  border-color: var(--border-subtle);
-  background: var(--bg-subtle);
+  border-color: var(--console-rule);
+  background: var(--console-frame);
 }
 
 .tag-tree-row.archived {
-  opacity: 0.62;
+  color: var(--console-ink-secondary);
 }
 
 .tag-tree-section-divider {
   margin: var(--space-2) 0;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--console-rule);
 }
 
 .tag-tree-row-main {
@@ -130,20 +130,20 @@ const tagIcon = (kind: string) => kind === "role"
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
 }
 
 .tag-tree-row-main small {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
 }
 
 .tag-pill {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   padding: var(--space-0-5) var(--space-1-5);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
 }
 
 @media (max-width: 900px) {

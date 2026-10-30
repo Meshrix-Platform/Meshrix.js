@@ -57,8 +57,8 @@ const RouterLink: any = resolveComponent("RouterLink");
 /* REQ-018 journey affordances — existing tokens only. */
 .journey-disambiguation {
   margin: 0 0 var(--space-3);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   line-height: var(--leading-normal);
 }
 .journey-cross-link {

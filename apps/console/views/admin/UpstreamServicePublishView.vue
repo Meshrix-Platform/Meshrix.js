@@ -794,6 +794,7 @@ usePageRefreshHandler(
       </template>
       <ConsoleEmptyState
         v-else
+        compact
         :title="publishListMessages.emptyTitle"
         :description="publishListMessages.emptyDescription"
       >
@@ -829,8 +830,9 @@ usePageRefreshHandler(
 .upstream-publish-layout {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-5);
   height: 100%;
+  min-width: 0;
 }
 .publish-grid {
   flex: 1;
@@ -842,11 +844,11 @@ usePageRefreshHandler(
 }
 .health-result {
   padding: 0.75rem 1rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
 }
-.health-result h2 { margin: 0 0 0.5rem; font-size: 0.95rem; }
-.health-result pre { margin: 0; overflow-x: auto; font-size: 0.8rem; }
+.health-result h2 { margin: 0 0 0.5rem; font-size: var(--text-xl); }
+.health-result pre { margin: 0; overflow-x: auto; font-size: var(--text-base); }
 
 /* REQ-017 outcome rendering — existing tokens only. */
 .publish-success-links {
@@ -858,7 +860,7 @@ usePageRefreshHandler(
   color: var(--brand);
   font-weight: var(--font-semibold);
   text-decoration: underline;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 .publish-stage-strip {
   display: flex;
@@ -867,17 +869,17 @@ usePageRefreshHandler(
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 .publish-stage {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
   padding: 0.25rem 0.625rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-full);
-  color: var(--text-muted);
-  background: var(--bg-subtle);
+  color: var(--console-ink-secondary);
+  background: var(--console-frame);
 }
 .publish-stage--active {
   border-color: var(--brand);
@@ -893,7 +895,7 @@ usePageRefreshHandler(
 .publish-stage--failed {
   color: var(--danger);
   border-color: var(--danger);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
 }
 .publication-observer {
   display: flex;
@@ -901,11 +903,11 @@ usePageRefreshHandler(
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 .publication-observer-status {
   min-width: 0;
@@ -914,7 +916,7 @@ usePageRefreshHandler(
 .publication-observer-action {
   margin-left: auto;
   padding: 0.25rem 0.625rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
@@ -927,7 +929,7 @@ usePageRefreshHandler(
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
 }
 .health-check {
   display: flex;
@@ -935,7 +937,7 @@ usePageRefreshHandler(
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.4rem 0.625rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-xs);
   background: var(--bg-surface);
 }
@@ -943,11 +945,11 @@ usePageRefreshHandler(
   font-weight: var(--font-semibold);
 }
 .health-check-status {
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-full);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
+  border: 1px solid var(--console-rule);
+  color: var(--console-ink-secondary);
 }
 .health-check--pass .health-check-status {
   color: var(--success);
@@ -962,24 +964,24 @@ usePageRefreshHandler(
 .health-check--fail .health-check-status {
   color: var(--danger);
   border-color: var(--danger);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
 }
 .health-check-detail {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: var(--text-md);
+  color: var(--console-ink-secondary);
   overflow-wrap: anywhere;
 }
 .health-check-remediation {
   margin-left: auto;
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
 }
 .health-raw-json {
   margin-top: 0.625rem;
 }
 .health-raw-json summary {
   cursor: pointer;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
+  font-size: var(--text-base);
+  color: var(--console-ink-secondary);
 }
 .health-raw-json pre {
   margin-top: 0.5rem;
@@ -991,14 +993,13 @@ usePageRefreshHandler(
   gap: 0.5rem;
   max-height: 30vh;
   overflow-y: auto;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--console-rule);
+  padding: 0 0 var(--space-5);
 }
 .published-service-list-title {
   margin: 0;
-  font-size: 0.95rem;
-  color: var(--text-secondary);
+  font-size: var(--text-xl);
+  color: var(--console-ink-secondary);
 }
 .published-service-rows {
   list-style: none;
@@ -1016,7 +1017,7 @@ usePageRefreshHandler(
   gap: 0.75rem;
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
@@ -1028,26 +1029,33 @@ usePageRefreshHandler(
   opacity: 0.6;
 }
 .published-service-row.is-selected .published-service-select {
-  border-color: var(--border-strong);
-  background-color: var(--border-strong);
+  border-color: var(--console-rule);
+  background-color: var(--console-selected);
+}
+.published-service-select:hover:not(:disabled) {
+  background: var(--console-hover);
+}
+.published-service-select:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 .published-service-id {
   flex: 1 1 12rem;
   min-width: 0;
   overflow-wrap: anywhere;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.85rem;
+  font-size: var(--text-lg);
 }
 .published-service-summary {
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
-  font-size: 0.8rem;
-  color: var(--text-muted);
+  font-size: var(--text-base);
+  color: var(--console-ink-secondary);
 }
 .published-service-create-action {
   padding: 0.375rem 0.75rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;

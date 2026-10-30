@@ -732,44 +732,44 @@ defineExpose({ focusFirstInvalid });
 
 <style scoped>
 .publish-form {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 1rem;
+  min-width: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-5);
   overflow-y: auto;
 }
 .tab-content {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-4);
+  min-width: 0;
 }
 .mcp-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
   gap: 0.75rem;
 }
 .form-help {
   margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   line-height: var(--leading-normal);
 }
 .operation-descriptor-preview {
   min-width: 0;
   padding: 0.85rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
 }
 .operation-descriptor-preview h3 {
   margin: 0 0 0.35rem;
-  font-size: 0.95rem;
+  font-size: var(--text-xl);
 }
 .operation-descriptor-summary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
   gap: 0.55rem;
   margin-top: 0.65rem;
 }
@@ -779,10 +779,10 @@ defineExpose({ focusFirstInvalid });
   gap: 0.2rem;
   min-width: 0;
   padding: 0.65rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-xs);
   background: var(--bg-base);
-  font-size: 0.78rem;
+  font-size: var(--text-base);
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -791,10 +791,10 @@ defineExpose({ focusFirstInvalid });
   margin: 0.65rem 0 0;
   padding: 0.75rem;
   overflow: auto;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-xs);
   background: var(--bg-base);
-  font-size: 0.78rem;
+  font-size: var(--text-base);
   line-height: 1.35;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -803,7 +803,8 @@ defineExpose({ focusFirstInvalid });
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-size: 0.85rem;
+  font-size: var(--text-lg);
+  min-width: 0;
 }
 .field-label-row {
   display: flex;
@@ -830,12 +831,12 @@ defineExpose({ focusFirstInvalid });
    classes so the form and the primitive share one visual language. */
 .console-form-field-required-marker {
   color: var(--danger);
-  font-size: 0.85rem;
+  font-size: var(--text-lg);
   line-height: 1;
 }
 .console-form-field-error {
   color: var(--danger);
-  font-size: var(--text-xs);
+  font-size: var(--text-md);
 }
 /* Tab validity badge: the line variant of MeshrixTabs has no draft visual, so
    the draft dot is scoped here (H7 — MeshrixTabs stays untouched). */
@@ -856,19 +857,24 @@ defineExpose({ focusFirstInvalid });
 .form-field input,
 .form-field select {
   padding: 0.4rem 0.5rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-xs);
-  font-size: 0.85rem;
+  font-size: var(--text-lg);
+  min-height: 38px;
+  width: 100%;
+  min-width: 0;
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 .operation-builder,
 .credential-builder {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 0.85rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
+  min-width: 0;
+  padding: var(--space-4) 0;
+  border-block: 1px solid var(--console-rule);
+  background: transparent;
 }
 .field-grid,
 .transport-grid {
@@ -883,7 +889,7 @@ defineExpose({ focusFirstInvalid });
   min-width: 0;
   margin: 0;
   padding: 0.75rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
 }
@@ -892,7 +898,7 @@ defineExpose({ focusFirstInvalid });
   align-items: center;
   gap: var(--space-1-5);
   padding: 0 0.3rem;
-  font-size: 0.85rem;
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 .builder-actions {
@@ -901,14 +907,14 @@ defineExpose({ focusFirstInvalid });
 }
 .credential-selection-summary {
   margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 .op-list {
   list-style: none;
   padding: 0;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-lg);
 }
 .op-list li {
   display: flex;
@@ -916,7 +922,7 @@ defineExpose({ focusFirstInvalid });
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.55rem 0;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--console-rule);
 }
 .operation-name {
   display: flex;
@@ -930,7 +936,7 @@ defineExpose({ focusFirstInvalid });
   background: transparent;
   cursor: pointer;
   color: var(--danger);
-  font-size: 0.78rem;
+  font-size: var(--text-base);
   padding: 0.2rem 0.45rem;
 }
 .visually-hidden {
@@ -950,11 +956,11 @@ defineExpose({ focusFirstInvalid });
   gap: 0.5rem;
   margin-top: auto;
   padding-top: 0.75rem;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--console-rule);
 }
 .table-action.primary {
   background: var(--brand);
-  color: white;
+  color: var(--text-on-brand);
   border-color: var(--brand);
 }
 .table-action.danger {

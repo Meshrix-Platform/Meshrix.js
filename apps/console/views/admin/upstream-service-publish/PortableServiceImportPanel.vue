@@ -158,14 +158,14 @@ function loadDraft() {
 }
 .portable-import-panel p { margin: 0; }
 .portable-import-panel p,
-.source-name { font-size: 0.8rem; opacity: 0.75; }
+.source-name { font-size: var(--text-base); color: var(--console-ink-secondary); line-height: var(--leading-relaxed); }
 .source-name code { font-family: var(--font-mono); }
 .portable-import-panel textarea {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--text-base);
 }
 .file-picker { cursor: pointer; white-space: nowrap; }
 .file-picker input { display: none; }

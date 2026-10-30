@@ -1,6 +1,6 @@
 .operation-permission-layout {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-5);
   min-width: 0;
 }
 
@@ -17,7 +17,7 @@
 
 .operation-permission-stack {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-6);
   min-width: 0;
 }
 
@@ -26,10 +26,9 @@
   grid-template-columns: minmax(200px, 1fr) minmax(120px, 160px) auto;
   gap: var(--space-3);
   align-items: end;
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-subtle);
+  padding: var(--space-4) 0;
+  border-block: 1px solid var(--console-rule);
+  background: transparent;
 }
 
 @media (max-width: 720px) {

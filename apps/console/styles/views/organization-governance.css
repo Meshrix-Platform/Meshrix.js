@@ -1,7 +1,7 @@
 .organization-governance-layout {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-6);
   min-width: 0;
 }
 
@@ -28,6 +28,7 @@
 
 .organization-governance-page-header {
   margin-bottom: 0;
+  align-items: flex-start;
 }
 
 .organization-governance-page-header h2,
@@ -44,7 +45,7 @@
 .organization-governance-unconfigured p,
 .organization-governance-published p {
   margin: var(--space-1) 0 0;
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
 }
 
 .organization-governance-state-card,
@@ -65,17 +66,21 @@
 .organization-governance-state-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: 0;
+  border-block: 1px solid var(--console-rule);
 }
 
 .organization-governance-state-summary > div {
   display: grid;
   min-width: 0;
   gap: var(--space-1);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-subtle);
+  padding: var(--space-4);
+  border: 0;
+  background: transparent;
+}
+
+.organization-governance-state-summary > div + div {
+  border-left: 1px solid var(--console-rule);
 }
 
 .organization-governance-state-summary span,
@@ -83,8 +88,8 @@
 .organization-governance-node-type small,
 .organization-governance-role-list span,
 .organization-governance-empty-copy {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 
 .organization-governance-state-summary strong {
@@ -94,25 +99,25 @@
 .organization-governance-unconfigured,
 .organization-governance-published {
   padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--console-rule);
 }
 
 .organization-governance-local-badge,
 .organization-governance-projection-state {
   flex: 0 0 auto;
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-full);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
+  background: transparent;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: var(--font-semibold);
 }
 
 .organization-governance-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
-  gap: var(--space-4);
+  gap: var(--space-6);
   align-items: start;
   min-width: 0;
 }
@@ -135,7 +140,7 @@
   min-width: 0;
   min-height: 38px;
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -162,40 +167,39 @@
   min-width: 0;
   margin-left: min(calc(var(--node-depth) * var(--space-5)), 45%);
   padding: var(--space-2) var(--space-3);
-  border-left: 2px solid var(--border-strong);
+  border-left: 1px solid var(--console-rule);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  background: var(--bg-subtle);
+  background: transparent;
 }
 
 .organization-governance-node-type {
   display: flex;
   flex-direction: column;
   gap: var(--space-0-5);
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   font-weight: var(--font-semibold);
 }
 
 .organization-governance-node-row.is-person-placeholder {
   min-height: 46px;
   border-left-style: dashed;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 
 .organization-governance-security-note {
   display: grid;
   gap: var(--space-1);
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--brand);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
 }
 
 .organization-governance-role-list {
   display: grid;
-  gap: var(--space-2);
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -206,9 +210,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--console-rule);
 }
 
 .organization-governance-role-list li > div {
@@ -233,15 +236,15 @@
 }
 
 .organization-governance-danger-action {
-  color: var(--text-primary);
-  background: var(--danger);
-  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+  border-color: var(--danger-border);
 }
 
 .organization-governance-danger-action:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--danger) 88%, var(--bg-base) 12%);
-  border-color: color-mix(in srgb, var(--danger) 88%, var(--bg-base) 12%);
+  color: var(--danger);
+  background: var(--danger-tint);
+  border-color: var(--danger);
 }
 
 .organization-governance-danger-action:focus-visible {
@@ -250,9 +253,8 @@
 }
 
 .organization-governance-danger-action:disabled {
-  color: color-mix(in srgb, var(--text-primary) 62%, var(--danger) 38%);
-  background: color-mix(in srgb, var(--danger) 42%, var(--bg-surface) 58%);
-  border-color: color-mix(in srgb, var(--danger) 42%, var(--border-subtle) 58%);
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 900px) {
@@ -261,7 +263,7 @@
   }
 
   .organization-governance-state-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -277,6 +279,11 @@
 
   .organization-governance-state-summary {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .organization-governance-state-summary > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--console-rule);
   }
 
   .organization-governance-node-row {
