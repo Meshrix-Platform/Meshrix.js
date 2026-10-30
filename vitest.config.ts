@@ -168,6 +168,7 @@ export default defineConfig({
     // budget that expires during correct work is not a gate.
     testTimeout: 300000,
     hookTimeout: 300000,
+    setupFiles: ["tests/lib/dom-storage-setup.ts"],
     // Script-style verifier/contract files are executed by tests/run.ts via
     // tools/registry/tests.registry.json, not by Vitest's file discovery.
     pool: "forks",
