@@ -8873,15 +8873,33 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "mode": {
+                    "enum": [
+                      "directory",
+                      "file"
+                    ]
+                  },
+                  "extensions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "includeHidden": {
+                    "type": "boolean"
                   }
-                }
+                },
+                "required": []
               }
             }
           }

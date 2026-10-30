@@ -175,7 +175,7 @@ const canChooseFiles = computed(() => props.canWriteJobs && !isBusy.value);
   display: grid;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
 }
@@ -187,8 +187,8 @@ const canChooseFiles = computed(() => props.canWriteJobs && !isBusy.value);
   gap: var(--space-3);
   min-width: 0;
   padding: var(--space-3-5) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--console-rule);
+  background: var(--console-frame);
 }
 
 .upload-file-list-title {
@@ -201,15 +201,15 @@ const canChooseFiles = computed(() => props.canWriteJobs && !isBusy.value);
   margin: 0;
   color: var(--text-primary);
   font-size: var(--text-2xl);
-  font-weight: 800;
+  font-weight: var(--font-semibold);
 }
 
 .upload-file-list-title span,
 .upload-file-job-summary {
   min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  font-weight: 700;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
 }
 
 .upload-file-list-body {
@@ -225,8 +225,8 @@ const canChooseFiles = computed(() => props.canWriteJobs && !isBusy.value);
   gap: var(--space-2);
   min-height: 72px;
   padding: var(--space-4) var(--space-4);
-  color: var(--text-muted);
-  font-weight: 700;
+  color: var(--console-ink-secondary);
+  font-weight: var(--font-medium);
 }
 
 .upload-file-list-empty img {
@@ -243,8 +243,8 @@ const canChooseFiles = computed(() => props.canWriteJobs && !isBusy.value);
   gap: var(--space-3);
   min-width: 0;
   padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-subtle);
+  border-top: 1px solid var(--console-rule);
+  background: var(--console-frame);
 }
 
 .upload-file-job-summary {

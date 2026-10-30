@@ -108,11 +108,14 @@ const toggleExpand = (node: TreeNode) => {
 <template>
   <div class="workspace-file-tree">
     <template v-if="flatNodes.length">
-      <div
+      <component
+        :is="node.type === 'directory' ? 'button' : 'div'"
         v-for="node in flatNodes"
         :key="node.relativePath"
         class="tree-node"
         :class="{ 'is-dir': node.type === 'directory' }"
+        :type="node.type === 'directory' ? 'button' : undefined"
+        :aria-expanded="node.type === 'directory' ? expandedDirs.has(node.relativePath) : undefined"
         :style="{ paddingLeft: `${node.depth * 20 + 12}px` }"
         @click="toggleExpand(node)"
       >
@@ -127,7 +130,7 @@ const toggleExpand = (node: TreeNode) => {
         </span>
         <span class="tree-node-name">{{ node.name }}</span>
         <span class="tree-node-size">{{ formatSize(node.sizeBytes) }}</span>
-      </div>
+      </component>
     </template>
     <ConsoleEmptyState v-else compact title="该工作空间没有文件。" />
   </div>
@@ -140,8 +143,8 @@ const toggleExpand = (node: TreeNode) => {
 
 .workspace-file-tree {
   font-family: var(--font-mono, monospace);
-  font-size: 0.85rem;
-  border: 1px solid var(--border-subtle);
+  font-size: var(--text-base);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   overflow: hidden;
@@ -150,19 +153,29 @@ const toggleExpand = (node: TreeNode) => {
 .tree-node {
   display: flex;
   align-items: center;
+  width: 100%;
+  min-height: 40px;
   padding: var(--space-1-5) var(--space-3);
-  cursor: pointer;
-  border-bottom: 1px solid var(--border-subtle);
-  transition: background-color 0.15s;
+  border: 0;
+  border-bottom: 1px solid var(--console-rule);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
+
+.tree-node.is-dir { cursor: pointer; }
 
 .tree-node:last-child {
   border-bottom: none;
 }
 
-.tree-node:hover {
-  background: var(--bg-subtle);
+.tree-node.is-dir:hover {
+  background: var(--console-hover);
 }
+
+.tree-node.is-dir:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 
 .tree-node-icon {
   display: flex;
@@ -171,7 +184,7 @@ const toggleExpand = (node: TreeNode) => {
   width: 20px;
   height: 20px;
   margin-right: var(--space-1-5);
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
 }
 
 .tree-node-name {
@@ -187,8 +200,8 @@ const toggleExpand = (node: TreeNode) => {
 }
 
 .tree-node-size {
-  color: var(--text-secondary);
-  font-size: 0.75rem;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   margin-left: var(--space-3);
 }
 </style>

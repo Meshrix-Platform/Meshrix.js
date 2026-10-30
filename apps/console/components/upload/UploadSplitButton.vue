@@ -59,7 +59,7 @@ useConsoleDocumentDismissController({
       :multiple="true"
       @select="emit('select', $event)"
     >
-      <img :src="uploadIconUrl" alt="" aria-hidden="true" />
+      <span class="upload-split-icon" :style="{ maskImage: `url('${uploadIconUrl}')` }" aria-hidden="true"></span>
       <span>{{ t("上传文件") }}</span>
     </BrowseSelectButton>
     <button
@@ -71,7 +71,7 @@ useConsoleDocumentDismissController({
       :aria-label="t('展开上传选项')"
       @click="toggleUploadMenu"
     >
-      <img :src="chevronDownIconUrl" alt="" aria-hidden="true" />
+      <span class="upload-split-icon" :style="{ maskImage: `url('${chevronDownIconUrl}')` }" aria-hidden="true"></span>
     </button>
     <div v-if="uploadMenuOpen" class="upload-split-menu" role="menu">
       <BrowseSelectButton
@@ -81,7 +81,7 @@ useConsoleDocumentDismissController({
         :disabled="disabled"
         @select="handleDirectorySelected"
       >
-        <img :src="folderIconUrl" alt="" aria-hidden="true" />
+        <span class="upload-split-icon" :style="{ maskImage: `url('${folderIconUrl}')` }" aria-hidden="true"></span>
         <span>{{ t("上传文件夹") }}</span>
       </BrowseSelectButton>
     </div>
@@ -91,18 +91,17 @@ useConsoleDocumentDismissController({
 <style scoped>
 .upload-split-button {
   --upload-split-control-height: 40px;
-  --upload-split-control-bg: var(--success);
-  --upload-split-control-bg-hover: color-mix(in srgb, var(--success) 25%, var(--success-border) 75%);
+  --upload-split-control-bg: var(--bg-surface);
+  --upload-split-control-bg-hover: var(--console-hover);
   --upload-split-control-color: var(--text-primary);
   --upload-split-control-icon-size: 18px;
   --upload-split-control-font-size: var(--text-lg);
-  --upload-split-control-font-weight: 800;
+  --upload-split-control-font-weight: var(--font-medium);
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
   min-width: 0;
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-xs);
 }
 
 .upload-split-button :deep(.browse-select-button) {
@@ -114,7 +113,7 @@ useConsoleDocumentDismissController({
   height: var(--upload-split-control-height);
   margin-left: 0;
   padding: 0 var(--space-4);
-  border-color: var(--upload-split-control-bg);
+  border-color: var(--console-rule);
   background: var(--upload-split-control-bg);
   color: var(--upload-split-control-color);
   font-size: var(--upload-split-control-font-size);
@@ -126,10 +125,16 @@ useConsoleDocumentDismissController({
 .upload-split-button :deep(.upload-split-main.el-button:focus-visible),
 .upload-split-arrow:hover,
 .upload-split-arrow:focus-visible {
-  border-color: var(--upload-split-control-bg-hover);
+  border-color: var(--border-strong);
   background: var(--upload-split-control-bg-hover);
   color: var(--upload-split-control-color);
-  outline: none;
+}
+
+.upload-split-button :deep(.upload-split-main.el-button:focus-visible),
+.upload-split-arrow:focus-visible,
+.upload-split-menu :deep(.upload-split-menu-item.el-button:focus-visible) {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .upload-split-button :deep(.upload-split-main.el-button.is-disabled),
@@ -156,17 +161,19 @@ useConsoleDocumentDismissController({
   padding: 0;
   border-width: 1px;
   border-style: solid;
-  border-inline-start-color: rgba(255, 255, 255, 0.3);
+  border-inline-start-color: var(--console-rule);
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
-.upload-split-button :deep(.upload-split-main.el-button img),
-.upload-split-arrow > img,
-.upload-split-menu :deep(.upload-split-menu-item.el-button img) {
+.upload-split-icon {
+  display: block;
   width: var(--upload-split-control-icon-size);
   height: var(--upload-split-control-icon-size);
   flex: 0 0 auto;
-  filter: brightness(0) invert(1);
+  background: currentColor;
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
 }
 
 .upload-split-menu {
@@ -197,22 +204,20 @@ useConsoleDocumentDismissController({
   height: var(--upload-split-control-height);
   margin-left: 0;
   padding: 0 var(--space-4);
-  border: 1px solid var(--upload-split-control-bg);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
   background: var(--upload-split-control-bg);
   color: var(--upload-split-control-color);
   font-size: var(--upload-split-control-font-size);
   font-weight: var(--upload-split-control-font-weight);
   line-height: 1;
-  box-shadow: var(--shadow-xs);
 }
 
 .upload-split-menu :deep(.upload-split-menu-item.el-button:hover),
 .upload-split-menu :deep(.upload-split-menu-item.el-button:focus-visible) {
-  border-color: var(--upload-split-control-bg-hover);
+  border-color: var(--border-strong);
   background: var(--upload-split-control-bg-hover);
   color: var(--upload-split-control-color);
-  outline: none;
 }
 
 .upload-split-menu :deep(.upload-split-menu-item.el-button.is-disabled),

@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:f6224a49aaf0e4de
+ * Hash: sha256:b3464e4dc4f3ddbe
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:f6224a49aaf0e4de";
+export const GENERATED_OPERATIONS_HASH = "sha256:b3464e4dc4f3ddbe";
 export const SERVER_API_OPERATIONS: any = [
   {
     "id": "readiness.baseline.status",
@@ -27388,6 +27388,37 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "directory",
+            "file"
+          ]
+        },
+        "extensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "includeHidden": {
+          "type": "boolean"
+        }
+      },
+      "required": []
+    },
     "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
@@ -27431,19 +27462,6 @@ export const SERVER_API_OPERATIONS: any = [
       "key": "runtime.path_browse",
       "maxParallel": 1,
       "cost": 2
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
     },
     "audit": {
       "enabled": true,

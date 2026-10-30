@@ -101,7 +101,7 @@ const activeStepLabel = computed(() => {
   align-items: center;
   min-width: 0;
   padding: var(--space-3-5) var(--space-4);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--console-rule);
 }
 
 .upload-file-row:first-child {
@@ -137,7 +137,7 @@ const activeStepLabel = computed(() => {
   min-width: 0;
   color: var(--text-primary);
   font-size: var(--text-2xl);
-  font-weight: 800;
+  font-weight: var(--font-semibold);
   line-height: var(--leading-snug);
   overflow-wrap: anywhere;
 }
@@ -145,9 +145,9 @@ const activeStepLabel = computed(() => {
 .upload-file-name-block small,
 .upload-file-progress-meta small,
 .upload-file-result-meta small {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  font-weight: 700;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
+  font-weight: var(--font-medium);
 }
 
 .upload-file-progress {
@@ -172,9 +172,9 @@ const activeStepLabel = computed(() => {
 .upload-file-progress-meta span,
 .upload-file-result-meta span {
   min-width: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-weight: 800;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -193,7 +193,8 @@ const activeStepLabel = computed(() => {
 }
 
 @media (max-width: 880px) {
-  .upload-file-row {
+  .upload-file-row,
+  .upload-file-row[data-mode="download"] {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-3);
   }

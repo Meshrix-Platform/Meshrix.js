@@ -60,11 +60,16 @@ function runItemAction(item: HistorySessionPanelItem) {
         :data-disabled="item.disabled"
         @click="selectItem(item)"
       >
-        <div class="history-session-main">
+        <button
+          class="history-session-main"
+          type="button"
+          :disabled="item.disabled"
+          @click.stop="selectItem(item)"
+        >
           <span class="history-session-label">{{ itemTitle(item) }}</span>
           <span v-if="itemMeta(item)" class="history-session-sublabel">{{ itemMeta(item) }}</span>
           <span v-if="item.preview" class="history-session-preview">{{ item.preview }}</span>
-        </div>
+        </button>
         <button
           v-if="item.actionLabel"
           class="history-session-action"

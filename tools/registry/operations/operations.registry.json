@@ -27384,6 +27384,37 @@
       "requiredScopes": [
         "runtime:admin"
       ],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "safetyConfirm": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "directory",
+              "file"
+            ]
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "includeHidden": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
       "trafficModel": "gateway_transit",
       "safety": {
         "risk": "safe_write",
@@ -27427,19 +27458,6 @@
         "key": "runtime.path_browse",
         "maxParallel": 1,
         "cost": 2
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {
-          "confirm": {
-            "type": "boolean"
-          },
-          "safetyConfirm": {
-            "type": "boolean"
-          }
-        }
       },
       "audit": {
         "enabled": true,

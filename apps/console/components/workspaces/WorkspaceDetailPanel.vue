@@ -57,7 +57,9 @@ const localDirectoryComponent = computed(() => {
 .ws-detail {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-5);
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -66,11 +68,18 @@ const localDirectoryComponent = computed(() => {
   overflow: visible;
 }
 
+.ws-detail > .surface-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .ws-detail .ws-id-list {
   list-style: none;
   padding: 0;
   margin: var(--space-1) 0;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -84,7 +93,7 @@ const localDirectoryComponent = computed(() => {
 }
 
 .ws-detail .ws-id-list code {
-  background: var(--bg-subtle);
+  background: var(--console-frame);
   padding: var(--space-px) var(--space-1-5);
   border-radius: var(--radius-xs);
 }
@@ -112,10 +121,10 @@ const localDirectoryComponent = computed(() => {
 }
 
 .ws-detail .config-json-preview {
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   line-height: 1.5;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-subtle);
+  background: var(--console-frame);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
   overflow: auto;

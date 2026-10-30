@@ -967,6 +967,14 @@
       "coverageContribution": false,
       "artifacts": [
         "build/dist/index.html"
+      ],
+      "triggerPaths": [
+        "apps/console",
+        "packages/ui-console",
+        "vite.config.ts",
+        "tsconfig.json",
+        "package.json",
+        "package-lock.json"
       ]
     },
     {
@@ -984,7 +992,13 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": true,
-      "artifacts": []
+      "artifacts": [],
+      "triggerPaths": [
+        "apps/console",
+        "packages/ui-console",
+        "tests/vitest/console",
+        "vitest.config.ts"
+      ]
     },
     {
       "id": "regression.backend-build",
@@ -3660,6 +3674,13 @@
       "artifacts": [
         "build/reports/console-admin-browser-visual.json",
         "build/reports/console-admin-browser-visual/screenshots"
+      ],
+      "triggerPaths": [
+        "apps/console",
+        "packages/ui-console",
+        "tools/server-scripts/verify-console-admin-browser-visual.ts",
+        "tools/server-scripts/lib/console-admin-browser-assertions.ts",
+        "tools/server-scripts/lib/console-admin-browser-fixture.ts"
       ]
     },
     {
@@ -3678,6 +3699,10 @@
       "coverageContribution": true,
       "artifacts": [
         "build/reports/console-design-tokens.json"
+      ],
+      "triggerPaths": [
+        "apps/console",
+        "tools/server-scripts/verify-console-design-tokens.ts"
       ]
     },
     {
@@ -3696,6 +3721,10 @@
       "coverageContribution": true,
       "artifacts": [
         "build/reports/console-component-reuse.json"
+      ],
+      "triggerPaths": [
+        "apps/console",
+        "tools/server-scripts/verify-console-component-reuse.ts"
       ]
     },
     {

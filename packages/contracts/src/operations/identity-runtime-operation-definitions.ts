@@ -457,7 +457,17 @@ export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS = Object.freeze([
       http: { method: "POST", path: "/api/runtime/path-browse", localInForwardMode: true },
       rpc: { method: "runtime.path_browse", body: "params" },
       cli: { command: ["runtime", "path-browse"], usage: "runtime path-browse --body request.json" },
-      requiredScopes: ["runtime:admin"]
+      requiredScopes: ["runtime:admin"],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          path: { type: "string" },
+          mode: { enum: ["directory", "file"] },
+          extensions: { type: "array", items: { type: "string" } },
+          includeHidden: { type: "boolean" }
+        }
+      }
     },
 {
       id: "runtime.mounts",

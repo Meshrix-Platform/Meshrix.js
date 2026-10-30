@@ -73,7 +73,7 @@ onMounted(() => {
 
     <!-- ─── Toolbar ──────────────────────────────────────────────────── -->
     <div class="ws-toolbar">
-      <h2 class="ws-toolbar-title">智能体工作空间</h2>
+      <h2 class="visually-hidden">智能体工作空间</h2>
       <div class="ws-toolbar-actions">
         <button class="tool-button" type="button" @click="panel = 'create'">新建工作空间</button>
       </div>
@@ -88,13 +88,7 @@ onMounted(() => {
           v-if="workspaces.length === 0"
           title="暂无工作空间"
           description="创建第一个工作空间来存放资产、检查点和共享配置。"
-        >
-          <template #action>
-            <button class="tool-button" type="button" @click="panel = 'create'">
-              新建工作空间
-            </button>
-          </template>
-        </ConsoleEmptyState>
+        />
         <SplitToggleCard
           v-for="ws in workspaces"
           :key="ws.workspaceId"
@@ -172,37 +166,50 @@ onMounted(() => {
 
 <style scoped>
 .workspaces-view {
-  display: flex; flex-direction: column; gap: var(--space-4);
-  padding: var(--space-4); min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  min-height: 0;
 }
 .ws-toolbar {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
 }
-.ws-toolbar-title { margin: 0; font-size: 1rem; font-weight: 600; }
-.ws-toolbar-actions { display: flex; gap: var(--space-2); }
+.ws-toolbar-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
 .ws-layout {
-  display: grid; grid-template-columns: 320px 1fr; gap: var(--space-4); min-height: 0; flex: 1;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.4fr);
+  gap: var(--space-6);
+  align-items: stretch;
+  max-height: calc(100dvh - var(--topbar-height) - var(--space-16) - var(--space-12));
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
 }
-.ws-layout.ws-layout-expanded-cards { grid-template-columns: minmax(0, 1fr); }
-@media (max-width: 900px) { .ws-layout { grid-template-columns: 1fr; } }
-.ws-list  { display: flex; flex-direction: column; gap: 0; overflow: auto; }
+.ws-layout.ws-layout-expanded-cards { grid-template-columns: minmax(0, 1fr); max-height: none; }
+@media (max-width: 980px) { .ws-layout { grid-template-columns: minmax(0, 1fr); max-height: none; } }
+.ws-list  { display: flex; flex-direction: column; gap: 0; min-width: 0; min-height: 0; overflow: auto; }
 .ws-layout.ws-layout-expanded-cards .ws-list { overflow: visible; }
 
 .ws-card {
   --split-toggle-card-radius: var(--radius-md);
   --split-toggle-card-bg: var(--bg-surface);
-  --split-toggle-card-open-bg: var(--brand-subtle);
-  --split-toggle-card-open-border-color: var(--accent);
-  --split-toggle-card-padding: var(--space-3);
+  --split-toggle-card-border-color: var(--console-rule);
+  --split-toggle-card-open-bg: var(--bg-surface);
+  --split-toggle-card-open-border-color: var(--console-rule);
+  --split-toggle-card-padding: var(--space-5);
   --split-toggle-card-main-gap: var(--space-1);
   --split-toggle-card-body-gap: var(--space-3);
-  --split-toggle-card-toggle-width: 58px;
+  --split-toggle-card-toggle-width: 44px;
   --split-toggle-card-toggle-padding: var(--space-6) 0;
   --split-toggle-card-toggle-hover-color: var(--accent);
   --split-toggle-card-focus-color: var(--accent);
   position: relative;
-  transition: border-color 0.15s, background-color 0.15s;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
 }
 .ws-card + .ws-card { margin-top: calc(-1 * var(--space-px)); }
 .ws-card:not(:first-of-type) {
@@ -213,15 +220,15 @@ onMounted(() => {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
-.ws-card:hover { --split-toggle-card-border-color: var(--brand-border); }
+.ws-card:hover { --split-toggle-card-border-color: var(--border-strong); }
 .ws-card.selected {
-  --split-toggle-card-border-color: var(--accent);
-  --split-toggle-card-bg: var(--brand-subtle);
+  --split-toggle-card-border-color: var(--border-strong);
+  --split-toggle-card-bg: var(--console-selected);
   z-index: 1;
 }
 .ws-card.expanded {
-  --split-toggle-card-open-border-color: var(--accent);
-  --split-toggle-card-open-bg: var(--brand-subtle);
+  --split-toggle-card-open-border-color: var(--console-rule);
+  --split-toggle-card-open-bg: var(--bg-surface);
   z-index: 2;
 }
 .ws-card-summary {
@@ -245,8 +252,8 @@ onMounted(() => {
 }
 .ws-card-title-row h3 {
   margin: 0;
-  color: var(--brand);
-  font-size: var(--text-2xl);
+  color: var(--text-primary);
+  font-size: var(--text-3xl);
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.2;
@@ -259,14 +266,17 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .ws-inherited-badge {
-  font-size: 0.7rem; color: var(--info); border: 1px solid var(--info);
-  padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-xs);
+  font-size: var(--text-md);
+  color: var(--console-ink-secondary);
+  padding: var(--space-px) var(--space-1-5);
+  border-radius: var(--radius-xs);
+  background: var(--console-frame);
 }
 .ws-card-meta-list {
   gap: var(--space-2);
 }
 .ws-card-meta-list > div {
-  grid-template-columns: minmax(112px, 160px) minmax(0, 1fr);
+  grid-template-columns: minmax(100px, 136px) minmax(0, 1fr);
 }
 .ws-card-meta-list dd {
   min-width: 0;
@@ -275,12 +285,11 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 .ws-card-actions {
   display: flex;
-  flex-direction: row-reverse;
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: var(--space-2);
@@ -310,11 +319,13 @@ onMounted(() => {
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-xs);
   font-size: var(--text-md);
-  white-space: nowrap;
+  max-width: min(420px, calc(100vw - var(--space-12)));
+  white-space: normal;
+  overflow-wrap: anywhere;
   pointer-events: none;
   opacity: 0;
   transform: translateY(4px);
-  transition: opacity 0.1s ease-out, transform 0.1s ease-out;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
   z-index: 100;
   box-shadow: var(--meshrix-copy-popover-shadow);
 }
@@ -336,34 +347,17 @@ onMounted(() => {
   color: var(--bg-surface);
 }
 .ws-card-expanded-slot { margin-top: 0; }
-.meshrix-modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(2px);
-  animation: fade-in 0.2s ease-out;
+@media (max-width: 600px) {
+  .ws-card { --split-toggle-card-padding: var(--space-4); }
+  .ws-card-meta-list > div { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+  .ws-card-actions .table-action { min-height: 40px; }
 }
-.meshrix-modal {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  width: 400px;
-  max-width: 90vw;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-  animation: slide-up 0.3s var(--ease-out);
-}
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(20px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-card,
+  .ws-copyable-wrapper::after,
+  .ws-copyable-code { transition: none; }
+  .ws-copyable-wrapper::after { transform: none; }
 }
 
 </style>
