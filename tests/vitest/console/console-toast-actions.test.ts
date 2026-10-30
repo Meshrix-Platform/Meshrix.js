@@ -18,6 +18,11 @@ import {
   unregisterConsoleConfirmHost,
 } from "../../../apps/console/composables/console-confirm-controller";
 import { consoleMessages, currentConsoleLocale } from "../../../apps/console/i18n/console";
+const canned1 = "";
+const canned2 = "list-items";
+
+
+
 
 function toastCopy() : any {
   return consoleMessages[currentConsoleLocale.value].toast;
@@ -115,7 +120,7 @@ describe("toast action", () : any => {
 describe("undo adoption on reversible publish drafts", () : any => {
   function publishFormWithOperation() : any {
     return {
-      operationKey: "",
+      operationKey: canned1,
       method: "",
       path: "",
       risk: "",
@@ -129,7 +134,7 @@ describe("undo adoption on reversible publish drafts", () : any => {
       savedCredentialOptions: [],
       operations: [
         {
-          operationKey: "list-items",
+          operationKey: canned2,
           method: "GET",
           path: "/api/items",
           risk: "read_only",

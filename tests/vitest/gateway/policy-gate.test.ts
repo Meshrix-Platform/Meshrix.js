@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { installUpstreamRuntimeServices, structuredUpstreamServiceFixture } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "run";
+
+
+
 
 const SUBJECT = {
   type: "tool-grant",
@@ -20,7 +24,7 @@ function httpService(overrides: Record<string, any> = {}) : any {
     label: "guarded",
     allowLocalNetwork: true,
     baseUrl: "http://127.0.0.1:1",
-    operations: [{ operationKey: "run", method: "POST", path: "/run", requiredScopes: ["gateway:write"], risk: "safe_write" }],
+    operations: [{ operationKey: canned1, method: "POST", path: "/run", requiredScopes: ["gateway:write"], risk: "safe_write" }],
     ...overrides
   });
 }
@@ -62,7 +66,7 @@ describe("Upstream external policy gate", () => {
     installUpstreamRuntimeServices(registry, [httpService({ baseUrl: peer.url })]);
     try {
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { hello: "world" } },
+        { serviceId: "guarded", operationKey: canned1, body: { hello: "world" } },
         SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_policy_gate_denied" });
       expect(peer.hits.count).toBe(0);
@@ -84,13 +88,13 @@ describe("Upstream external policy gate", () => {
     installUpstreamRuntimeServices(registry, [httpService({ baseUrl: peer.url })]);
     try {
       await registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { hello: "world" } },
+        { serviceId: "guarded", operationKey: canned1, body: { hello: "world" } },
         SUBJECT
       );
       expect(peer.hits.count).toBe(1);
       expect(seen[0]).toMatchObject({
         serviceId: "guarded",
-        operationKey: "run",
+        operationKey: canned1,
         method: "POST",
         subject: { type: "tool-grant", subjectId: "operator", grantId: "grant" }
       });
@@ -112,7 +116,7 @@ describe("Upstream external policy gate", () => {
       installUpstreamRuntimeServices(registry, [httpService({ baseUrl: peer.url })]);
       try {
         await expect(registry.forward(
-          { serviceId: "guarded", operationKey: "run", body: {} },
+          { serviceId: "guarded", operationKey: canned1, body: {} },
           SUBJECT
         )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_policy_gate_unavailable" });
         expect(counters.claims).toBe(0);
@@ -132,7 +136,7 @@ describe("Upstream external policy gate", () => {
     });
     installUpstreamRuntimeServices(registry, [httpService({ baseUrl: peer.url })]);
     try {
-      await registry.forward({ serviceId: "guarded", operationKey: "run", body: {} }, SUBJECT);
+      await registry.forward({ serviceId: "guarded", operationKey: canned1, body: {} }, SUBJECT);
       expect(peer.hits.count).toBe(1);
     } finally {
       await registry.close();

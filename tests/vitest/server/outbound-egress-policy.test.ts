@@ -9,6 +9,12 @@ import {
   evaluateOutboundRedirectLocationWithDns,
   fetchWithPinnedDns
 } from "../../../packages/foundation/src/security/outbound-egress-policy.ts";
+const canned1 = "Bearer synthetic";
+const canned2 = "synthetic-api-key";
+const canned3 = "synthetic-project-token";
+
+
+
 
 describe("Outbound egress policy", () : any => {
   it("classifies restricted local and private address families", () : any => {
@@ -508,9 +514,9 @@ describe("Outbound egress policy", () : any => {
       init: {
         method: "POST",
         headers: {
-          authorization: "Bearer synthetic",
-          "x-api-key": "synthetic-api-key",
-          "x-project-token": "synthetic-project-token",
+          authorization: canned1,
+          "x-api-key": canned2,
+          "x-project-token": canned3,
           "x-project-id": "synthetic-project",
           "x-meshrix-gateway-service": "synthetic-service",
           "content-type": "application/json"

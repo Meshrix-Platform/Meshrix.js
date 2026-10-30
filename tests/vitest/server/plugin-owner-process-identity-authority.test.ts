@@ -15,6 +15,15 @@ import {
 } from "../../../packages/foundation/src/security/process-identity/process-identity-core.ts";
 import { createPluginOwnerProcessIdentityAuthority } from "../../../packages/server-runtime/src/composition/plugin-owner-process-identity-authority.ts";
 import { createPluginInvocationAuthorizationAuthority } from "../../../packages/server-runtime/src/composition/plugin-invocation-authorization-authority.ts";
+const canned1 = "first";
+const canned2 = "second";
+const canned3 = "after-retire";
+const canned4 = "stale-generation";
+const canned5 = "lifecycle-retired";
+const canned6 = "c";
+
+
+
 
 const roots: any[] = [];
 const generationA: any = "a".repeat(64);
@@ -86,7 +95,7 @@ describe("Plugin owner process identity authority", () : any => {
       ownerId: "plugin-b",
       targetRef: "target-ref",
       identityContext,
-      idempotencyKey: "first",
+      idempotencyKey: canned1,
       deadline: future(),
       invocationOperationId: "fixture.operation",
       invocationAuthorization: await authorized("plugin-a")
@@ -94,7 +103,7 @@ describe("Plugin owner process identity authority", () : any => {
     const second: any = await ownerB.issueBinding({
       targetRef: "target-ref",
       identityContext,
-      idempotencyKey: "second",
+      idempotencyKey: canned2,
       deadline: future(),
       invocationOperationId: "fixture.operation",
       invocationAuthorization: await authorized("plugin-b")
@@ -110,7 +119,7 @@ describe("Plugin owner process identity authority", () : any => {
     await expect(ownerA.revokeAllBindings()).resolves.toMatchObject({ ok: true });
     const staleToken: any = await authorized("plugin-a");
     await expect(ownerA.issueBinding({
-      targetRef: "target-ref", identityContext, idempotencyKey: "after-retire", deadline: future(),
+      targetRef: "target-ref", identityContext, idempotencyKey: canned3, deadline: future(),
       invocationOperationId: "fixture.operation", invocationAuthorization: staleToken
     })).resolves.toMatchObject({ ok: false, reasonCode: "owner_process_binding_generation_retired" });
     await expect(ownerB.inspectBinding({
@@ -119,12 +128,12 @@ describe("Plugin owner process identity authority", () : any => {
     })).resolves.toMatchObject({ ok: true, status: "valid" });
     ownerALifecycle.setGeneration(2);
     await expect(ownerA.issueBinding({
-      targetRef: "target-ref", identityContext, idempotencyKey: "stale-generation", deadline: future(),
+      targetRef: "target-ref", identityContext, idempotencyKey: canned4, deadline: future(),
       invocationOperationId: "fixture.operation", invocationAuthorization: staleToken
     })).resolves.toMatchObject({ ok: false, reasonCode: "owner_process_binding_generation_retired" });
     ownerALifecycle.setState("removal_pending");
     await expect(ownerA.issueBinding({
-      targetRef: "target-ref", identityContext, idempotencyKey: "lifecycle-retired", deadline: future(),
+      targetRef: "target-ref", identityContext, idempotencyKey: canned5, deadline: future(),
       invocationOperationId: "fixture.operation", invocationAuthorization: staleToken
     })).resolves.toMatchObject({ ok: false, reasonCode: "owner_process_binding_generation_retired" });
     host.close();
@@ -146,7 +155,7 @@ describe("Plugin owner process identity authority", () : any => {
         bindingRef: "binding_legacy",
         targetRef: "target-ref",
         contextDigest: "d".repeat(64),
-        idempotencyKeyDigest: "c".repeat(64),
+        idempotencyKeyDigest: canned6.repeat(64),
         status: "valid",
         issuedAt: new Date().toISOString(),
         expiresAt: future(),

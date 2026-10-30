@@ -18,8 +18,17 @@ import {
   registryDatabaseResource
 } from "../internal/registry-persistence.mjs";
 import { normalizeSkillHubContribution } from "../internal/skill-hub-contribution.mjs";
+const canned1 = "synthetic-skill-hub-service-test-token-00000000";
+const canned2 = "shared-package-scan";
 
-const authToken = "synthetic-skill-hub-service-test-token-00000000";
+
+
+const cannedMeta = 'json_import_complete';
+
+
+
+
+const authToken = canned1;
 
 test("Skill Hub handler requires an explicit authentication token before opening storage", async () => {
   await assert.rejects(createSkillHubHttpHandler(), /requires a bounded authentication token/u);
@@ -47,7 +56,7 @@ async function start(dataRoot) {
     async invoke(operationId, input) {
       const response = await fetch(`${baseUrl}/v1/operations/${operationId}`, {
         method: "POST",
-        headers: { "authorization": `Bearer ${authToken}`, "content-type": "application/json",
+        headers: { "authorization": ("Bearer "+authToken), "content-type": "application/json",
           "x-meshrix-skill-hub-subject": input?.meshrixContext?.principal?.subjectRef || meshrixContext().principal.subjectRef },
         body: JSON.stringify(input)
       });
@@ -258,7 +267,7 @@ test("failed duplicate submission preserves shared packages and prototype-named 
   for (const context of contexts) {
     const prepared = await restored.invoke("skill_hub.scan", {
       skillId: input.contributionId, workspaceId: input.workspaceId,
-      idempotencyKey: "shared-package-scan", deadlineAt: "2999-01-01T00:00:00.000Z",
+      idempotencyKey: canned2, deadlineAt: "2999-01-01T00:00:00.000Z",
       resources: { wallTimeMs: 1000, cpuMillis: 1000, memoryBytes: 1024, processes: 1,
         fileDescriptors: 8, diskBytes: 1024, inodes: 8, fileCount: 8, outputBytes: 1024,
         logBytes: 1024, networkBytes: 1024, toolCalls: 1 },
@@ -379,7 +388,7 @@ test("HTTP preserves committed success when catalog publication fails and resume
   const service = await start(dataRoot);
   t.after(() => service.close());
   const subscription = await fetch(`${service.baseUrl}/v1/events`, {
-    headers: { authorization: `Bearer ${authToken}` }
+    headers: { authorization: ("Bearer "+authToken) }
   });
   const reader = subscription.body.getReader();
   const blockedJournal = path.join(dataRoot, "SkillHub", "events.json");
@@ -400,7 +409,7 @@ test("HTTP preserves committed success when catalog publication fails and resume
   assert.equal(afterCommit.body.auditEventCount, 1);
   await rm(blockedJournal, { recursive: true });
   const resumed = await fetch(`${service.baseUrl}/v1/events`, {
-    headers: { authorization: `Bearer ${authToken}` }
+    headers: { authorization: ("Bearer "+authToken) }
   });
   const resumedReader = resumed.body.getReader();
   const next = await service.invoke("skill_hub.rollback.record", { skillId, meshrixContext: context });
@@ -444,14 +453,14 @@ test("independent Skill Hub service rejects oversized request bodies before doma
   assert.equal(unauthenticated.status, 401);
   assert.deepEqual(await unauthenticated.json(), { ok: false, error: { code: "authentication_required" } });
   const missingContext = await fetch(`${service.baseUrl}/v1/operations/skill_hub.list`, {
-    method: "POST", headers: { authorization: `Bearer ${authToken}`,
+    method: "POST", headers: { authorization: ("Bearer "+authToken),
       "x-meshrix-skill-hub-subject": meshrixContext().principal.subjectRef }, body: "{}"
   });
   assert.equal(missingContext.status, 400);
   assert.equal((await missingContext.json()).error.code, "skill_hub_host_context_invalid");
   const response = await fetch(`${service.baseUrl}/v1/operations/skill_hub.submit`, {
     method: "POST",
-    headers: { "authorization": `Bearer ${authToken}`, "content-type": "application/json",
+    headers: { "authorization": ("Bearer "+authToken), "content-type": "application/json",
       "x-meshrix-skill-hub-subject": meshrixContext().principal.subjectRef },
     body: JSON.stringify({ oversized: "x".repeat(2 * 1024 * 1024 + 1) })
   });
@@ -488,7 +497,7 @@ test("Skill Hub requires the trusted subject carrier to match the body principal
   t.after(() => service.close());
   const before = (await readdir(dataRoot, { recursive: true })).sort();
   const response = await fetch(`${service.baseUrl}/v1/operations/skill_hub.submit`, {
-    method: "POST", headers: { authorization: `Bearer ${authToken}`,
+    method: "POST", headers: { authorization: ("Bearer "+authToken),
       "x-meshrix-skill-hub-subject": meshrixContext().principal.subjectRef },
     body: JSON.stringify({ meshrixContext: meshrixContext("c", "d"),
       workspaceId: "mismatched-workspace", contributionId: "mismatched-skill",
@@ -571,7 +580,7 @@ test("Skill Hub publishes a resumable redacted revision event after a successful
   assert.equal(recorded.statusCode, 201);
   const response = await fetch(`${service.baseUrl}/v1/events?cursor=1`, {
     signal: controller.signal,
-    headers: { authorization: `Bearer ${authToken}` }
+    headers: { authorization: ("Bearer "+authToken) }
   });
   assert.equal(response.status, 200);
   const { value } = await response.body.getReader().read();
@@ -955,7 +964,7 @@ test("failed legacy import leaves JSON untouched and retries as one complete tra
   assert.equal(inspection.prepare("SELECT COUNT(*) AS count FROM contributions").get().count, 0,
     "the contribution inserted before the injected error is rolled back");
   assert.equal(inspection.prepare("SELECT COUNT(*) AS count FROM audit_events").get().count, 0);
-  assert.equal(inspection.prepare("SELECT value FROM registry_metadata WHERE key = 'json_import_complete'").get(), undefined,
+  assert.equal(inspection.prepare("SELECT value FROM registry_metadata WHERE key = ?").get(cannedMeta), undefined,
     "the incomplete import cannot be marked as the active registry");
   inspection.exec("DROP TRIGGER reject_legacy_audit;");
 

@@ -1,20 +1,27 @@
 import { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "../../../packages/agents/src/upstream-gateway/publishing-application.ts";
+const canned1 = "raw-boundary-service";
+const canned2 = "raw-boundary-create";
+const canned3 = "echo";
+const canned4 = "not-materialized";
+
+
+
 
 function validCommand(baseUrl?: any) : any {
   return {
     schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
     action: "create",
-    serviceKey: "raw-boundary-service",
+    serviceKey: canned1,
     expectedServiceRevision: 0,
     expectedSetRevision: 0,
-    idempotencyKey: "raw-boundary-create",
+    idempotencyKey: canned2,
     descriptor: {
       serviceProtocol: "http",
       label: "Raw boundary",
       baseUrl,
       references: [],
       operations: [{
-        operationKey: "echo",
+        operationKey: canned3,
         method: "POST",
         path: "/echo",
         payloadTransport: {
@@ -49,7 +56,7 @@ export function createUpstreamPublishingHostileCorpus(baseUrl?: any) : any {
     ["control-character", control],
     ["unsafe-route", withOperation({ path: "/echo/../admin" })],
     ["unsafe-target", withDescriptor({ baseUrl: "file:///local/service" })],
-    ["unsafe-header", withDescriptor({ headers: { authorization: "not-materialized" } })],
+    ["unsafe-header", withDescriptor({ headers: { authorization: canned4 } })],
     ["unsafe-schema", withOperation({ requestSchema: { regex: ".*" } })],
     ["byte-limit", oversized],
     ["depth-limit", nested],

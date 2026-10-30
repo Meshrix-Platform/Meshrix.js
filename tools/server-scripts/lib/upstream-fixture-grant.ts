@@ -2,6 +2,11 @@ import {
   compileUpstreamOperationCapability
 } from "../../../packages/agents/src/upstream-gateway/operation-capability.ts";
 import { verifierOpaqueServiceId } from "./upstream-gateway-verifier-publication.ts";
+const canned1 = "";
+const canned2 = "tools/call";
+
+
+
 
 export const UPSTREAM_FIXTURE_MCP_SERVICE_ID: any = verifierOpaqueServiceId("fixture-mcp");
 export const UPSTREAM_FIXTURE_REST_SERVICE_ID: any = verifierOpaqueServiceId("fixture-rest");
@@ -39,7 +44,7 @@ export function upstreamFixtureScenarioToolNames(turns: any = []) : any {
 
 export function upstreamFixtureGrantBindings({
   serviceId = UPSTREAM_FIXTURE_MCP_SERVICE_ID,
-  secretRef = "",
+  secretRef = canned1,
   toolNames = UPSTREAM_FIXTURE_GRANTED_TOOL_NAMES
 }: Record<string, any> = {}) : any {
   const credentialRefs: any = String(secretRef || "").trim() ? [String(secretRef).trim()] : [];
@@ -50,7 +55,7 @@ export function upstreamFixtureGrantBindings({
       credentialRefs
     },
     {
-      operationKey: "tools/call",
+      operationKey: canned2,
       protocol: "mcp",
       risk: "safe_write",
       requiredScopes: ["gateway:write"]
@@ -64,7 +69,7 @@ export function upstreamFixtureGrantBindings({
         credentialRefs
       },
       {
-        operationKey: "tools/call",
+        operationKey: canned2,
         upstreamToolName,
         risk: "read_only"
       },

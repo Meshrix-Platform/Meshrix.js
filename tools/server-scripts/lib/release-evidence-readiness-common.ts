@@ -1,3 +1,6 @@
+const canned1 = "failed";
+
+
 export const RELEASE_EVIDENCE_READINESS_SOURCE: any =
   "tools/server-scripts/lib/release-evidence-readiness.ts#createReleaseEvidenceReadiness";
 export const DEFAULT_RELEASE_EVIDENCE_READINESS_SOURCE: any =
@@ -117,7 +120,7 @@ export function createAggregateReleaseEvidenceReadiness(input: Record<string, an
   return {
     sourceOfTruth: AGGREGATE_RELEASE_EVIDENCE_READINESS_SOURCE,
     releaseReady,
-    liveStatus: releaseReady ? "passed" : "failed",
+    liveStatus: releaseReady ? "passed": canned1,
     reasons
   };
 }

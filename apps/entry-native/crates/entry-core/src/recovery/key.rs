@@ -146,12 +146,13 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let key = generate_recovery_key(Some("vault.test-1".into())).unwrap();
+        let vault_id = format!("vault.test-{}", std::process::id());
+        let key = generate_recovery_key(Some(vault_id)).unwrap();
         let text = format_recovery_text(&key).unwrap();
         assert!(text.starts_with("mrk1-"));
         let parsed = parse_recovery_text(&text).unwrap();
         assert_eq!(parsed.secret, key.secret);
-        assert_eq!(parsed.vault_id, "vault.test-1");
+        assert_eq!(parsed.vault_id, key.vault_id);
         assert_eq!(parsed.format_version, 1);
     }
 

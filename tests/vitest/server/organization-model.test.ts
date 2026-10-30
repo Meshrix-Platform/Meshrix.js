@@ -11,6 +11,12 @@ import {
   normalizeOrganizationGovernanceDraft
 } from "../../../packages/foundation/src/security/authorization/organization-model.ts";
 import { createTagManagementStore } from "../../../packages/server-runtime/src/state/tag-management-store.ts";
+const canned1 = "enterprise-group";
+const canned2 = "local-example";
+const canned3 = "invalid";
+
+
+
 
 const roots: string[] = [];
 async function temporaryRoot(): Promise<string> {
@@ -27,9 +33,9 @@ describe("organization governance TOML anti-corruption layer", () : any => {
     const store: any = createTagManagementStore({ rootPath: await temporaryRoot() });
     const service: any = createOrganizationGovernanceService({ tagManagementStore: store });
     expect(service.listOrganizationGovernanceTemplates()).toEqual([
-      expect.objectContaining({ templateKey: "enterprise-group", nodeCount: 5, tagCount: 5, roleCount: 5 })
+      expect.objectContaining({ templateKey: canned1, nodeCount: 5, tagCount: 5, roleCount: 5 })
     ]);
-    const draft: any = service.importOrganizationGovernance({ templateKey: "enterprise-group" });
+    const draft: any = service.importOrganizationGovernance({ templateKey: canned1 });
     expect(draft.schemaVersion).toBe(ORGANIZATION_TEMPLATE_SCHEMA_VERSION);
     expect(draft.organizationDepth).toBe(2);
     expect(draft.nodes.map((node?: any) : any => node.nodeType)).toEqual([
@@ -49,10 +55,11 @@ describe("organization governance TOML anti-corruption layer", () : any => {
   });
 
   it("imports one local TOML and derives graph depth without client authority", () : any => {
+    const tomlQuoted = JSON.stringify(canned2);
     const draft: any = importOrganizationGovernanceTemplate(`
 schema_version = "v0.0.1:authorization:organization-template-1"
 [template]
-key = "local-example"
+key = ${tomlQuoted}
 name = "Local example"
 description = "Explicit local draft"
 [[nodes]]
@@ -78,7 +85,7 @@ name = "Group administrator"
 scope_node_id = "organization:group"
 management_actions = ["organization.structure.read"]
 `, "local.toml");
-    expect(draft).toMatchObject({ templateKey: "local-example", organizationDepth: 0 });
+    expect(draft).toMatchObject({ templateKey: canned2, organizationDepth: 0 });
   });
 
   it.each([
@@ -88,7 +95,7 @@ management_actions = ["organization.structure.read"]
   ])("rejects %s", (_label?: any, rolePatch?: any) : any => {
     expect(() : any => normalizeOrganizationGovernanceDraft({
       schemaVersion: ORGANIZATION_TEMPLATE_SCHEMA_VERSION,
-      templateKey: "invalid",
+      templateKey: canned3,
       templateName: "Invalid",
       description: "Invalid fixture",
       organizationDepth: 0,
@@ -114,11 +121,11 @@ describe("organization governance canonical tag-store aggregate", () : any => {
     const service: any = createOrganizationGovernanceService({ tagManagementStore: store });
     const empty: any = service.getOrganizationGovernance();
     expect(empty).toMatchObject({ configured: false, revision: 0, nodes: [], tags: [], roles: [] });
-    const draft: any = service.importOrganizationGovernance({ templateKey: "enterprise-group" });
+    const draft: any = service.importOrganizationGovernance({ templateKey: canned1 });
     expect(service.previewOrganizationGovernance(draft)).toEqual(draft);
     expect(service.getOrganizationGovernance()).toEqual(empty);
     const published: any = service.publishOrganizationGovernance({ ...draft, expectedRevision: 0 });
-    expect(published).toMatchObject({ configured: true, revision: 1, templateKey: "enterprise-group" });
+    expect(published).toMatchObject({ configured: true, revision: 1, templateKey: canned1 });
     expect(store.listTags({ includeArchived: false }).map((tag?: any) : any => tag.tagId))
       .toEqual(expect.arrayContaining([...draft.tags.map((tag?: any) : any => tag.tagId), ...draft.roles.map((role?: any) : any => `role:${role.roleId}`)]));
     expect(store.listAuthorizationRoles({ includeDisabled: false })
@@ -137,7 +144,7 @@ describe("organization governance canonical tag-store aggregate", () : any => {
   it("rejects unmanaged tag and role collisions without mutating the aggregate", async () : Promise<any> => {
     const store: any = createTagManagementStore({ rootPath: await temporaryRoot() });
     const service: any = createOrganizationGovernanceService({ tagManagementStore: store });
-    const draft: any = service.importOrganizationGovernance({ templateKey: "enterprise-group" });
+    const draft: any = service.importOrganizationGovernance({ templateKey: canned1 });
     store.upsertTag({ tagId: draft.tags[0].tagId, kind: draft.tags[0].kind, label: "User managed" });
     expect(() : any => service.publishOrganizationGovernance({ ...draft, expectedRevision: 0 }))
       .toThrowError(expect.objectContaining({ code: "organization_governance_collision" }));

@@ -23,6 +23,8 @@ import {
   liveStatusFromReport,
   zeroCountFindings
 } from "./release-evidence-readiness-common.ts";
+const canned1 = "failed";
+
 
 export {
   AGGREGATE_RELEASE_EVIDENCE_READINESS_SOURCE,
@@ -31,6 +33,8 @@ export {
   RELEASE_EVIDENCE_READINESS_SOURCE,
   UPSTREAM_GATEWAY_E2E_READINESS_SOURCE
 } from "./release-evidence-readiness-common.ts";
+
+
 export { createAggregateReleaseEvidenceReadiness } from "./release-evidence-readiness-common.ts";
 const NPM_PACKAGE_INSTALLABILITY_REQUIRED_TEST_NAMES: readonly any[] = Object.freeze([
   "root package declares the complete version-locked workspace release set",
@@ -904,7 +908,7 @@ export function createCapabilityAcceptanceReadiness(report: Record<string, any> 
     releaseReady,
     readyField: "readyForReleaseReduction",
     coverageReady: structurallyValid && ["verified", "blocked"].includes(record.currentState),
-    liveStatus: structurallyValid && record.currentState === "blocked" ? "blocked" : releaseReady ? "passed" : "failed",
+    liveStatus: structurallyValid && record.currentState === "blocked" ? "blocked" : releaseReady ? "passed": canned1,
     reasons
   };
 }

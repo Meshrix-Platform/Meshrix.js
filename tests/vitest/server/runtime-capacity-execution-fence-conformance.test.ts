@@ -282,14 +282,14 @@ describe("runtime capacity execution fence conformance", () : any => {
     const fixture: any = await setupFixture(store);
     const leases: any[] = [];
     for (let index: any = 0; index < 5; index += 1) {
-      const key: any = `batch-${index}`;
-      fixture.enqueue(key);
+      const slot: any = `batch-${index}`;
+      fixture.enqueue(slot);
       leases.push(fixture.claim("worker-1").claimed[0].lease);
     }
     for (let index: any = 0; index < 5; index += 1) {
-      const key: any = `batch-${index}`;
-      store.markInDoubt({ workItemId: key, leaseId: leases[index].leaseId });
-      store.recordSinkReceipt({ workItemId: key, generation: leases[index].leaseSeq, sinkId: "complete" });
+      const slot: any = `batch-${index}`;
+      store.markInDoubt({ workItemId: slot, leaseId: leases[index].leaseId });
+      store.recordSinkReceipt({ workItemId: slot, generation: leases[index].leaseSeq, sinkId: "complete" });
     }
     const bounded: any = store.reconcileInDoubt({ limit: 2 });
     expect(bounded.count).toBe(2);

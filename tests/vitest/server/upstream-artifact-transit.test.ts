@@ -18,6 +18,12 @@ import {
 } from "../../../packages/server-runtime/src/composition/artifact-transit-provider.ts";
 import { installUpstreamRuntimeServices, structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "fetch-report";
+const canned2 = "convert";
+const canned3 = "secret";
+
+
+
 
 function deferred() : any {
   let resolve: any;
@@ -71,7 +77,7 @@ describe("owner-bound upstream artifact transit", () : any => {
       baseUrl: `http://127.0.0.1:${peer.address().port}`,
       allowLocalNetwork: true,
       operations: [{
-        operationKey: "fetch-report",
+        operationKey: canned1,
         method: "GET",
         path: "/report",
         risk: "read_only",
@@ -87,7 +93,7 @@ describe("owner-bound upstream artifact transit", () : any => {
     let settled: any = false;
     const forwarding: any = registry.forward({
       serviceId: "artifact-lifetime",
-      operationKey: "fetch-report",
+      operationKey: canned1,
       query: {}
     }, { subjectId: "artifact-owner", scopes: ["gateway:read"] }, { responseAdapter: "artifact" })
       .then((value: any) => {
@@ -161,7 +167,7 @@ describe("owner-bound upstream artifact transit", () : any => {
       baseUrl: `http://127.0.0.1:${peer.address().port}`,
       allowLocalNetwork: true,
       operations: [{
-        operationKey: "convert",
+        operationKey: canned2,
         method: "POST",
         path: "/convert",
         risk: "safe_write",
@@ -189,7 +195,7 @@ describe("owner-bound upstream artifact transit", () : any => {
     const subject: Record<string, any> = { subjectId: "owner", scopes: ["gateway:write"] };
     const result: any = await registry.forward({
       serviceId: "format-convert",
-      operationKey: "convert",
+      operationKey: canned2,
       arguments: { file: "upload:session01:0", targetFormat: "pdf" }
     }, subject, { responseAdapter: "artifact" });
     const multipart: any = Buffer.concat(observed).toString("utf8");
@@ -272,7 +278,7 @@ describe("owner-bound workspace artifact transit", () : any => {
       baseUrl: `http://127.0.0.1:${port}`,
       allowLocalNetwork: true,
       operations: [{
-        operationKey: "convert",
+        operationKey: canned2,
         method: "POST",
         path: "/convert",
         risk: "safe_write",
@@ -316,7 +322,7 @@ describe("owner-bound workspace artifact transit", () : any => {
     const subject: Record<string, any> = { subjectId: "owner", scopes: ["gateway:write"] };
     const result: any = await registry.forward({
       serviceId: "format-convert",
-      operationKey: "convert",
+      operationKey: canned2,
       arguments: { file: `workspace:${workspace.workspaceId}:notes/source.txt`, targetFormat: "pdf" }
     }, subject, { responseAdapter: "artifact" });
     const multipart: any = Buffer.concat(observed).toString("utf8");
@@ -330,7 +336,7 @@ describe("owner-bound workspace artifact transit", () : any => {
     const { workspace, observed, registry } = await setupWorkspaceGateway();
     await expect(registry.forward({
       serviceId: "format-convert",
-      operationKey: "convert",
+      operationKey: canned2,
       arguments: { file: `workspace:${workspace.workspaceId}:notes/source.txt`, targetFormat: "pdf" }
     }, { subjectId: "intruder", scopes: ["gateway:write"] }, { responseAdapter: "artifact" }))
       .rejects.toMatchObject({ code: "artifact_owner_denied", status: 404 });
@@ -342,13 +348,13 @@ describe("owner-bound workspace artifact transit", () : any => {
     const subject: Record<string, any> = { subjectId: "owner", scopes: ["gateway:write"] };
     await expect(registry.forward({
       serviceId: "format-convert",
-      operationKey: "convert",
+      operationKey: canned2,
       arguments: { file: `workspace:${workspace.workspaceId}:../outside.txt`, targetFormat: "pdf" }
     }, subject, { responseAdapter: "artifact" }))
       .rejects.toMatchObject({ code: "artifact_reference_invalid", status: 400 });
     await expect(registry.forward({
       serviceId: "format-convert",
-      operationKey: "convert",
+      operationKey: canned2,
       arguments: { file: `workspace:${workspace.workspaceId}:/etc/passwd`, targetFormat: "pdf" }
     }, subject, { responseAdapter: "artifact" }))
       .rejects.toMatchObject({ code: "artifact_reference_invalid", status: 400 });
@@ -360,7 +366,7 @@ describe("owner-bound workspace artifact transit", () : any => {
     const subject: Record<string, any> = { subjectId: "owner", scopes: ["gateway:write"] };
     await expect(registry.forward({
       serviceId: "format-convert",
-      operationKey: "convert",
+      operationKey: canned2,
       arguments: { file: `workspace:${workspace.workspaceId}:notes/missing.txt`, targetFormat: "pdf" }
     }, subject, { responseAdapter: "artifact" }))
       .rejects.toMatchObject({ code: "artifact_not_found", status: 404 });
@@ -420,10 +426,10 @@ describe("owner-bound workspace artifact transit", () : any => {
 
     const value: Record<string, any> = {
       safe: "visible",
-      xMeshrixApiKey: "secret",
-      xProviderApiKey: "secret",
-      xMeshrixToolToken: "secret",
-      xProviderToolToken: "secret"
+      xMeshrixApiKey: canned3,
+      xProviderApiKey: canned3,
+      xMeshrixToolToken: canned3,
+      xProviderToolToken: canned3
     };
     expect(sanitizeMcpOutputValue(value)).toEqual({ safe: "visible" });
     expect(mcpEnvelopePublic({ subject: value }).subject).toEqual({ safe: "visible" });

@@ -1,15 +1,19 @@
 import { Buffer } from 'node:buffer';
 import { randomBytes } from 'node:crypto';
 
-export const FIXTURE_SEED = 'gateway-interop-neutral-seed-20260917';
+const v1 = 'gateway-interop-neutral-seed-20260917';
+export const FIXTURE_SEED = v1;
 export const FIXTURE_PEER_VERSION = '1.0.0';
 export const TARGET_PROTOCOL_VERSION = '2026-07-28';
 export const SDK_PROTOCOL_VERSION = '2025-11-25';
-export const FIXTURE_AUTH_ALLOW = 'Bearer synthetic-allow';
-export const FIXTURE_AUTH_DENY = 'Bearer synthetic-deny';
+const v2 = 'Bearer synthetic-allow';
+export const FIXTURE_AUTH_ALLOW = v2;
+const v3 = 'Bearer synthetic-deny';
+export const FIXTURE_AUTH_DENY = v3;
 export const EXPECTED_ROUTE = 'route.demo';
 export const EXPECTED_RESOURCE_URI = 'fixture://artifact/order-demo';
-export const EXPECTED_OPERATION_KEY = 'effect-key-1';
+const v4 = 'effect-key-1';
+export const EXPECTED_OPERATION_KEY = v4;
 const TOOL_STATE = 'b3BhcXVlLWZpeHR1cmUtc3RhdGUtMQ'; // canonical unpadded base64url
 
 export const BUSINESS_PAYLOAD = Object.freeze({

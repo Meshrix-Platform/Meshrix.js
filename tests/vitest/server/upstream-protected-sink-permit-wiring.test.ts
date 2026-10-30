@@ -59,8 +59,17 @@ import {
   structuredUpstreamServiceFixture
 } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "";
+const canned2 = "tools/call";
+const canned3 = "http-write";
+const canned4 = "rpc-write";
+const canned5 = "bearer";
+const canned6 = "tool-argument-is-not-a-credential";
 
-const SECRET_REF: any = "secret://upstream-final-effect/fixture";
+
+
+
+const FIXTURE_REF: any = "secret://upstream-final-effect/fixture";
 const SERVICE_ID: any = "final-effect-fixture";
 const SUBJECT: Readonly<Record<string, any>> = Object.freeze({
   generation: "17",
@@ -69,13 +78,13 @@ const SUBJECT: Readonly<Record<string, any>> = Object.freeze({
   type: "console-user"
 });
 const ECHO_TOOL_CAPABILITY: string = "cap:upstream:final-effect-fixture:tools-call-echo";
-const ECHO_CREDENTIAL_BINDING: string = `credential:${hash(SECRET_REF, 16)}`;
+const ECHO_REF: string = `credential:${hash(FIXTURE_REF, 16)}`;
 const SUBJECT_WITH_SCOPES: Readonly<Record<string, any>> = Object.freeze({
   ...SUBJECT,
   roleId: "owner",
   scopes: Object.freeze(["gateway:read", "gateway:write"]),
   dynamicCapabilities: Object.freeze([ECHO_TOOL_CAPABILITY]),
-  allowedSecretBindings: Object.freeze([ECHO_CREDENTIAL_BINDING])
+  allowedSecretBindings: Object.freeze([ECHO_REF])
 });
 const AUTH_SESSION: Readonly<Record<string, any>> = Object.freeze({
   sessionId: "final-effect-session",
@@ -112,8 +121,8 @@ const REAL_AUTHORITY_MUTATIONS: readonly any[] = Object.freeze([
   ["approval binding changes", "approval-binding-change"],
   ["risk binding changes", "risk-binding-change"]
 ]);
-const SYNTHETIC_CREDENTIAL: any = "fixture-bearer-material";
-const REAL_AUTH_USER_AGENT: any = "meshrix-final-effect-authority-acceptance";
+const CANNED_MATERIAL: any = "fixture-bearer-material";
+const CANNED_UA: any = "meshrix-final-effect-authority-acceptance";
 
 const cleanupTasks: any[] = [];
 
@@ -155,7 +164,7 @@ function consoleRequest({
   const headers: Record<string, any> = {
     host: "console.local",
     origin: "http://console.local",
-    "user-agent": REAL_AUTH_USER_AGENT
+    "user-agent": CANNED_UA
   };
   if (cookie) headers.cookie = cookie;
   if (csrf) headers["x-meshrix-csrf"] = csrf;
@@ -214,7 +223,7 @@ function protectedSinkAuthorityWithOmission(omission: any = "") : any {
 
 function authorizationResult({
   allowed = true,
-  authorityOmission = "",
+  authorityOmission = canned1,
   revoked = false
 }: Record<string, any> = {}) : any {
   if (!allowed) {
@@ -259,7 +268,7 @@ function serviceDescriptor(baseUrl?: any, {
     return structuredUpstreamServiceFixture({
       allowLocalNetwork: true,
       baseUrl,
-      credentialRefs: [SECRET_REF],
+      credentialRefs: [FIXTURE_REF],
       mcp: {
         protocolVersion: "2025-06-18",
         toolNamePrefix: SERVICE_ID,
@@ -268,7 +277,7 @@ function serviceDescriptor(baseUrl?: any, {
       },
       operations: [{
         method: "POST",
-        operationKey: "tools/call",
+        operationKey: canned2,
         path: "/",
         protocol: "mcp",
         requiredScopes: ["gateway:write"],
@@ -282,7 +291,7 @@ function serviceDescriptor(baseUrl?: any, {
   return structuredUpstreamServiceFixture({
     allowLocalNetwork: true,
     baseUrl,
-    credentialRefs: [SECRET_REF],
+    credentialRefs: [FIXTURE_REF],
     serviceId: SERVICE_ID,
     trafficPolicy: {
       burst: 20,
@@ -292,7 +301,7 @@ function serviceDescriptor(baseUrl?: any, {
     operations: [
       {
         method: httpMethod,
-        operationKey: "http-write",
+        operationKey: canned3,
         path: "/http-write",
         protocol: httpProtocol,
         ...(httpProtocol === "json-rpc"
@@ -303,7 +312,7 @@ function serviceDescriptor(baseUrl?: any, {
       },
       {
         method: "POST",
-        operationKey: "rpc-write",
+        operationKey: canned4,
         path: "/rpc-write",
         protocol: "json-rpc",
         requiredScopes: ["gateway:write"],
@@ -428,10 +437,10 @@ async function createCredentialBoundRegistry(events?: any, baseUrl?: any, rawSer
     dataDir: userDataPath,
     keyProvider: secretKeyProvider,
     payload: {
-      token: SYNTHETIC_CREDENTIAL
+      token: CANNED_MATERIAL
     },
     target: {
-      authType: "bearer",
+      authType: canned5,
       family: "upstream-final-effect-test",
       provider: "fixture",
       scope: {
@@ -443,7 +452,7 @@ async function createCredentialBoundRegistry(events?: any, baseUrl?: any, rawSer
           : ["gateway:write"],
         serviceId: SERVICE_ID
       },
-      secretRef: SECRET_REF
+      secretRef: FIXTURE_REF
     }
   });
   loadKey.mockClear();
@@ -633,9 +642,9 @@ function gatewayController({
 function startDispatch({
   downstreamInputTransform = null,
   events,
-  executionAuthorityOmission = "",
+  executionAuthorityOmission = canned1,
   finalGate = null,
-  finalAuthorityOmission = "",
+  finalAuthorityOmission = canned1,
   finalState = { allowed: true, revoked: false },
   handlerGate = null,
   includeTargetSelector = true,
@@ -1020,7 +1029,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
         executionMutation: phase === "execution" ? mutation : null,
         finalMutation:
           phase === "final-protected-sink" ? mutation : null,
-        operationKey: "http-write",
+        operationKey: canned3,
         permits,
         transport: "http"
       });
@@ -1077,7 +1086,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
         },
         input: {
           body: { message: "must-not-authorize-from-lookalike-facts" },
-          operationKey: "http-write",
+          operationKey: canned3,
           protectedSinkAuthority: completeLookingAuthority,
           serviceId: SERVICE_ID
         },
@@ -1165,7 +1174,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
       events,
       includeTargetSelector: false,
       operationContract,
-      operationKey: "http-write",
+      operationKey: canned3,
       permits,
       registry
     });
@@ -1206,7 +1215,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
     const started: any = startDispatch({
       events,
       handlerGate,
-      operationKey: "http-write",
+      operationKey: canned3,
       permits,
       registry
     });
@@ -1252,7 +1261,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
         finalGate,
         finalState,
         handlerGate,
-        operationKey: "http-write",
+        operationKey: canned3,
         permits,
         registry,
         signal: change === "cancellation" ? controller.signal : null
@@ -1307,7 +1316,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
     await expect(registry.forward(
       {
         body: { message: "missing-permit-request" },
-        operationKey: "http-write",
+        operationKey: canned3,
         serviceId: SERVICE_ID
       },
       SUBJECT_WITH_SCOPES
@@ -1338,10 +1347,10 @@ describe("governed upstream final-effect permit wiring", () : any => {
       const started: any = startDispatch({
         events,
         executionAuthorityOmission:
-          phase === "execution" ? authorityOmission : "",
+          phase === "execution" ? authorityOmission: canned1,
         finalAuthorityOmission:
-          phase === "final-protected-sink" ? authorityOmission : "",
-        operationKey: "http-write",
+          phase === "final-protected-sink" ? authorityOmission: canned1,
+        operationKey: canned3,
         permits,
         registry
       });
@@ -1389,7 +1398,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
       const started: any = startDispatch({
         events,
         finalState,
-        operationKey: "http-write",
+        operationKey: canned3,
         permits,
         registry
       });
@@ -1438,11 +1447,11 @@ describe("governed upstream final-effect permit wiring", () : any => {
             label: "mcp-protected-write",
             url: "https://tool-argument.invalid/",
             path: "/tool-argument-is-not-a-route",
-            headers: { authorization: "tool-argument-is-not-a-credential" }
+            headers: { authorization: canned6 }
           },
           toolName: "echo"
         },
-        operationKey: "tools/call",
+        operationKey: canned2,
         permits,
         registry
       });
@@ -1479,7 +1488,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
     const started: any = startDispatch({
       events,
       finalGate: gate,
-      operationKey: "http-write",
+      operationKey: canned3,
       permits,
       registry,
       signal: controller.signal
@@ -1516,7 +1525,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
     const started: any = startDispatch({
       events,
       handlerGate,
-      operationKey: "http-write",
+      operationKey: canned3,
       permits,
       registry
     });
@@ -1528,7 +1537,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
     const [substituted] = await Promise.allSettled([registry.forward(
       {
         ...started.input,
-        operationKey: "rpc-write"
+        operationKey: canned4
       },
       SUBJECT_WITH_SCOPES,
       { finalProtectedSinkPermit: permits[0] }
@@ -1644,7 +1653,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
       const stale: any = startDispatch({
         events,
         finalGate: gate,
-        operationKey: "http-write",
+        operationKey: canned3,
         permits,
         registry
       });
@@ -1702,7 +1711,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
 
       const fresh: any = startDispatch({
         events,
-        operationKey: "http-write",
+        operationKey: canned3,
         permits,
         registry
       });
@@ -1741,7 +1750,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
       await createCredentialBoundRegistry(events, peer.baseUrl);
     const first: any = startDispatch({
       events,
-      operationKey: "http-write",
+      operationKey: canned3,
       permits,
       registry
     });
@@ -1764,7 +1773,7 @@ describe("governed upstream final-effect permit wiring", () : any => {
 
     const fresh: any = startDispatch({
       events,
-      operationKey: "http-write",
+      operationKey: canned3,
       permits,
       registry
     });

@@ -16,6 +16,16 @@ import { createTagStoreAdapter } from "../../../packages/server-runtime/src/stat
 import { useIsolatedCapabilityKernelForVerifier } from "../../../tools/server-scripts/capability-kernel-test-env.ts";
 import { createUpstreamPublishingHostileCorpus } from "../../../tools/server-scripts/lib/upstream-publishing-hostile-corpus.ts";
 import { provisionVerifierLocalSecretKey } from "../../../tools/server-scripts/lib/local-secret-verifier-key.ts";
+const canned1 = "fixture-positive-mcp-context-header";
+const canned2 = "fixture-context-service";
+const canned3 = "synthetic-inline-credential";
+const canned4 = "synthetic-inline-token";
+const canned5 = "fixture-origin-bound-credential-create";
+const canned6 = "fixture-origin-bound-credential";
+const canned7 = "fixture-origin-bound-credential-port-change";
+
+
+
 
 const resources: any[] = [];
 
@@ -106,8 +116,8 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
       action: "create",
       expectedServiceRevision: 0,
       expectedSetRevision: 0,
-      idempotencyKey: "fixture-positive-mcp-context-header",
-      serviceKey: "fixture-context-service",
+      idempotencyKey: canned1,
+      serviceKey: canned2,
       descriptor: {
         serviceProtocol: "mcp",
         label: "Fixture context service",
@@ -140,8 +150,8 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
     const { server, session } = await startProductionServer();
     const collection: any = `${server.url}/api/gateway/v1/services`;
     const cases: Array<Record<string, string>> = [
-      { "x-api-key": "synthetic-inline-credential" },
-      { "x-project-token": "synthetic-inline-token" },
+      { "x-api-key": canned3 },
+      { "x-project-token": canned4 },
       { Authorization: ["Bearer", "synthetic-inline-credential"].join(" ") },
       { Host: "alternate.example.test" },
       { "x-fixture-context": "alpha\r\nbeta" }
@@ -153,8 +163,8 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
         action: "create",
         expectedServiceRevision: 0,
         expectedSetRevision: 0,
-        idempotencyKey: `fixture-rejected-mcp-header-${index}`,
-        serviceKey: `fixture-rejected-header-${index}`,
+        idempotencyKey: ("fixture-rejected-mcp-header-"+index),
+        serviceKey: ("fixture-rejected-header-"+index),
         descriptor: {
           serviceProtocol: "mcp",
           label: "Fixture rejected header",
@@ -197,8 +207,8 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
       action: "create",
       expectedServiceRevision: 0,
       expectedSetRevision: 0,
-      idempotencyKey: "fixture-origin-bound-credential-create",
-      serviceKey: "fixture-origin-bound-credential",
+      idempotencyKey: canned5,
+      serviceKey: canned6,
       descriptor: {
         serviceProtocol: "mcp",
         label: "Fixture origin-bound credential",
@@ -228,7 +238,7 @@ describe("upstream publishing hostile raw-byte boundary", () : any => {
       serviceId: published.serviceId,
       expectedServiceRevision: 1,
       expectedSetRevision: 1,
-      idempotencyKey: "fixture-origin-bound-credential-port-change",
+      idempotencyKey: canned7,
       descriptor: {
         serviceProtocol: "mcp",
         label: "Fixture origin-bound credential",

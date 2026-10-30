@@ -31,6 +31,12 @@ import type {
   PeerApplicationResultPart,
   PeerInboundOutcome
 } from "@meshrix/peer-client";
+const canned1 = "current";
+const canned2 = "revoked";
+const canned3 = "unavailable";
+
+
+
 
 const ADDRESS_AB: PeerApplicationAddress = Object.freeze({
   tenantId: "tenant.personal.1",
@@ -133,16 +139,16 @@ class MemoryJournal implements PeerApplicationJournal {
       this.failResultPartIndex = null;
       throw new Error("injected result-part write interruption");
     }
-    const key = `${operationKey}/${part.index}`;
-    const previous = this.resultParts.get(key);
+    const partRef = `${operationKey}/${part.index}`;
+    const previous = this.resultParts.get(partRef);
     if (previous && previous.text !== part.text) throw new Error("result part conflict");
-    this.resultParts.set(key, part);
+    this.resultParts.set(partRef, part);
   }
   async savePartialResultChunk(operationKey: string, index: number, text: string) {
-    const key = `${operationKey}/${index}`;
-    const previous = this.partialChunks.get(key);
+    const chunkRef = `${operationKey}/${index}`;
+    const previous = this.partialChunks.get(chunkRef);
     if (previous && previous.text !== text) throw new Error("partial result chunk conflict");
-    this.partialChunks.set(key, Object.freeze({ index, text }));
+    this.partialChunks.set(chunkRef, Object.freeze({ index, text }));
   }
   async listPartialResultChunks(operationKey: string) {
     return Object.freeze([...this.partialChunks.entries()]
@@ -248,7 +254,7 @@ class LinkedPeerPort implements PeerApplicationPeerPort {
   handler: ((delivery: PeerApplicationInbound) => Promise<PeerInboundOutcome>) | null = null;
   remote: LinkedPeerPort | null = null;
   reachable = true;
-  authority: "current" | "unavailable" | "revoked" = "current";
+  authority: canned1 | "unavailable" | "revoked" = "current";
   readonly pendingInbound: PeerApplicationInbound[] = [];
   readonly dropKinds = new Set<string>();
   readonly sendStates = new Map<string, StoredOutboxEntry["state"]>();
@@ -626,7 +632,7 @@ describe("Peer application execution journal", () => {
     const queued = (await journalB.listOperations()).find((record) => !record.promptReserved);
     if (!queued) throw new Error("the queued operation is missing");
 
-    peerB.authority = "revoked";
+    peerB.authority = canned2;
     agent.executions[0].resolve({ stopReason: "end_turn", text: "first done" });
     await waitFor(async () => (await engineB.getOperation(queued.operationId))?.status === "refused",
       "revoked queued request did not reach its retained refusal result");
@@ -640,7 +646,7 @@ describe("Peer application execution journal", () => {
   it("defers before acceptance during authority uncertainty and accepts the same request when authority returns", async () => {
     const agent = new QueueAgent();
     const { engineA, engineB, journalB, peerA, peerB } = linkedEngines({ agentB: agent });
-    peerB.authority = "unavailable";
+    peerB.authority = canned3;
     await engineA.submit({
       address: ADDRESS_AB,
       operationId: "op.authority-restored",
@@ -658,7 +664,7 @@ describe("Peer application execution journal", () => {
     }).map((item) => item.messageId);
     expect(originalRequestIds).toHaveLength(1);
 
-    peerB.authority = "current";
+    peerB.authority = canned1;
     await engineB.resume();
     await waitFor(() => agent.executions.length === 1, "authority restoration did not admit and run the same request");
     await waitFor(async () => (await engineB.getOperation("op.authority-restored"))?.promptReserved === true,
@@ -676,7 +682,7 @@ describe("Peer application execution journal", () => {
   it("rejects a revoked route before creating a receiver operation or starting ACP", async () => {
     const agent = new QueueAgent();
     const { engineA, engineB, journalB, peerA, peerB } = linkedEngines({ agentB: agent });
-    peerB.authority = "revoked";
+    peerB.authority = canned2;
     await engineA.submit({
       address: ADDRESS_AB,
       operationId: "op.authority-revoked",
@@ -866,10 +872,10 @@ describe("Peer application execution journal", () => {
     const syntheticKeys: string[] = [];
     const createdAt = new Date().toISOString();
     for (let index = 0; index < 32; index += 1) {
-      const key = `z.recovery.page.${index.toString().padStart(2, "0")}`;
-      syntheticKeys.push(key);
-      journal.operationRecoveries.set(key, Object.freeze({
-        key,
+      const pageRef = `z.recovery.page.${index.toString().padStart(2, "0")}`;
+      syntheticKeys.push(pageRef);
+      journal.operationRecoveries.set(pageRef, Object.freeze({
+        key: pageRef,
         role: "caller",
         operationId: `op.synthetic.recovery.${index}`,
         originAddress: ADDRESS_AB,

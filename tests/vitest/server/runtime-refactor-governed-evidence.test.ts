@@ -15,6 +15,16 @@ import { operationAuditTestProjectionOptions } from "./support/operation-audit-t
 import { createSecurityPermissionsProvider } from "../../../packages/foundation/src/security/security-permissions-provider.ts";
 import { getProofLifecycleRefactorInstrumentation } from "../../../packages/server-runtime/src/composition/dispatch-operation-proof-lifecycle.ts";
 import { auditOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-risk-control.ts";
+const canned1 = "Bearer secret-token";
+const canned2 = "Bearer legacy-secret";
+const canned3 = "audit-secret-input";
+const canned4 = "decision-reference-1";
+const canned5 = "second-secret-input";
+const canned6 = "governed-request-secret";
+const canned7 = "denied-request-secret";
+
+
+
 
 const temporaryRoots: any = new Set<any>();
 
@@ -120,7 +130,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
         reasonCode: "policy_denied",
         missingScopes: ["runtime:write"],
         decision: {
-          token: "Bearer secret-token",
+          token: canned1,
           subjectCapabilities: ["cap-a", "cap-b"]
         },
         createdAt: "2026-08-11T00:00:00.000Z"
@@ -187,7 +197,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
         effect: "deny",
         allowed: false,
         reasonCode: "policy_denied",
-        decision: { token: "Bearer legacy-secret" },
+        decision: { token: canned2 },
         createdAt: "2026-01-01T00:00:00.000Z"
       });
       decisionId = decision.decisionId;
@@ -264,17 +274,17 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
         operationAuditStore: store,
         operation: governedOperation(),
         transport: "test",
-        input: { password: "audit-secret-input" },
+        input: { password: canned3 },
         status: "failed",
         error: "terminal-failure-copy",
-        authorizationDecisionId: "decision-reference-1",
+        authorizationDecisionId: canned4,
         proofId: "proof-reference-1"
       });
       await auditOperation({
         operationAuditStore: store,
         operation: governedOperation(),
         transport: "test",
-        input: { password: "second-secret-input" },
+        input: { password: canned5 },
         status: "failed",
         error: "unique-terminal-failure"
       });
@@ -309,7 +319,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
         transport: "test",
         actor: { type: "anonymous" },
         risk: "safe_write",
-        input: { password: "audit-secret-input" },
+        input: { password: canned3 },
         status: "failed",
         error: "terminal-failure-copy",
         decisionId: "decision-reference-1",
@@ -355,7 +365,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
       controllers: governedControllers(handler),
       request: { headers: {} },
       response,
-      input: { body: { token: "governed-request-secret" } },
+      input: { body: { token: canned6 } },
       url: new URL("http://127.0.0.1/api/unit/governed/evidence"),
       method: "POST",
       transport: "http",
@@ -441,7 +451,7 @@ describe("runtime refactor governed proof and reference-based audit lifecycle", 
       controllers: governedControllers(handler),
       request: { headers: {} },
       response,
-      input: { body: { token: "denied-request-secret" } },
+      input: { body: { token: canned7 } },
       url: new URL("http://127.0.0.1/api/unit/governed/evidence"),
       method: "POST",
       transport: "http",

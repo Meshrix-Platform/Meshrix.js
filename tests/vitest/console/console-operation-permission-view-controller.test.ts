@@ -74,7 +74,8 @@ function makeGovernance(overrides: Partial<GovernanceSummary> = {}): GovernanceS
 
 function createOperationPermissionShell() : any {
   const isBusy: any = () => false;
-  const issuedToolToken: any = ref("issued-token");
+  const cannedIssued = "issued-token";
+  const issuedToolToken: any = ref(cannedIssued);
   const newGrantLabel: any = ref("默认智能体");
   const newGrantScopes: any = ref(["scope.read"]);
   const newGrantToolsets: any = ref(["toolset.read"]);

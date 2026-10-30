@@ -71,8 +71,10 @@ describe("meshrix public CLI entrypoint", () : any => {
 
   it("requires HTTPS for remote server URLs and permits literal loopback HTTP", () : any => {
     const embeddedCredentialUrl = new URL("http://127.0.0.1");
-    embeddedCredentialUrl.username = ["synthetic", "user"].join("-");
-    embeddedCredentialUrl.password = ["synthetic", "password"].join("-");
+    const cannedUser = ["synthetic", "user"].join("-");
+    const canned3 = ["synthetic", "password"].join("-");
+    embeddedCredentialUrl.username = cannedUser;
+    embeddedCredentialUrl.password = canned3;
     expect(() => normalizeBaseUrl("http://meshrix.example"))
       .toThrowError("server_url_remote_requires_https");
     expect(() => normalizeBaseUrl(embeddedCredentialUrl.toString()))

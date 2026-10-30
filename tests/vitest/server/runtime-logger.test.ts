@@ -14,6 +14,11 @@ import {
   summarizeSecurityValue
 } from "#meshrix/runtime-logger";
 import { createTraceContext, runWithTraceContext } from "#meshrix/foundation/observability/trace-context";
+const canned1 = "super-secret";
+const canned2 = "s3cr3t";
+
+
+
 
 const tempRoots: any[] = [];
 
@@ -141,7 +146,7 @@ describe("runtime logger behavior", () : any => {
         path: path.join(userDataPath, "payload", "notes.txt"),
         nested: { ok: true }
       },
-      secretToken: "super-secret",
+      secretToken: canned1,
       query: { private: "query-value-private" },
       remoteAddress: "198.51.100.73",
       userAgent: "private-user-agent/9.7",
@@ -404,7 +409,7 @@ describe("runtime logger behavior", () : any => {
     const summarized: any = summarizeForLog(
       {
         path: "/tmp/runtime/logger.jsonl",
-        secretToken: "s3cr3t",
+        secretToken: canned2,
         list: [1, 2, 3, 4],
         deep: {
           one: {

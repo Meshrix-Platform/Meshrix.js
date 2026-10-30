@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createServer } from "node:http";
 import { createLegacyMcpAdapter, LEGACY_MCP_VERSIONS } from "@meshrix/protocols/mcp/legacy";
 import { context, route } from "../support";
+const canned1 = "Bearer synthetic";
+
+
+
 
 function request(version: string, id: number) {
   return { context, route: route({ protocolVersion: version }), request: { id, method: "tools/call", params: { name: "demo" }, headers: {}, protocolVersion: version } };
@@ -17,7 +21,7 @@ describe("legacy sessions in the declared profiles", () => {
         return { status: 200, body: { result: { content: [{ type: "text", text: "ok" }] } } };
       } } });
       try {
-        await Promise.all(Array.from({ length: 20 }, (_, id) => adapter.invoke({ ...request(version, id), credential: { Authorization: "Bearer synthetic" } })));
+        await Promise.all(Array.from({ length: 20 }, (_, id) => adapter.invoke({ ...request(version, id), credential: { Authorization: canned1 } })));
         expect(calls.filter((call) => call.method === "initialize")).toHaveLength(1);
         expect(calls.filter((call) => call.method === "notifications/initialized")).toHaveLength(1);
         expect(calls.filter((call) => call.method === "tools/call")).toHaveLength(20);
@@ -54,7 +58,7 @@ describe("legacy sessions in the declared profiles", () => {
         return { status: response.status, headers: Object.fromEntries(response.headers), body: text ? JSON.parse(text) : null };
       } } });
       try {
-        const invoke = (id: number) => adapter.invoke({ ...request(version, id), credential: { Authorization: "Bearer synthetic" } });
+        const invoke = (id: number) => adapter.invoke({ ...request(version, id), credential: { Authorization: canned1 } });
         expect((await invoke(1)).status).toBe(200);
         expect((await invoke(2)).status).toBe(200);
         expect((await invoke(3)).status).toBe(404);

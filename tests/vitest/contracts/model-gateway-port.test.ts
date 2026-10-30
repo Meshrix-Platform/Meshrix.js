@@ -15,6 +15,12 @@ import {
   createDefaultDisabledModelGatewayAdapterConfig,
   isModelGatewayAdapterConfig
 } from "@meshrix/contracts/model-gateway/adapter-config";
+const canned1 = "idem-1";
+const canned2 = "idem-too-long";
+const canned3 = "idem-2";
+
+
+
 
 interface OpenApiOperation {
   parameters?: readonly unknown[];
@@ -213,7 +219,7 @@ describe("Meshrix ModelGatewayClientPort and adapter", () => {
       modelRef: "deepseek-v4-flash",
       providerRef: "deepseek",
       inputRefs: ["in-1"],
-      idempotencyKey: "idem-1",
+      idempotencyKey: canned1,
       deadlineMs: 60_000,
       stream: false
     });
@@ -225,7 +231,7 @@ describe("Meshrix ModelGatewayClientPort and adapter", () => {
       modelRef: "deepseek-v4-flash",
       providerRef: "deepseek",
       inputRefs: ["in-1"],
-      idempotencyKey: "idem-too-long",
+      idempotencyKey: canned2,
       deadlineMs: 2_147_483_648,
       stream: false
     })).toThrow("model_gateway_call_deadline_invalid");
@@ -235,7 +241,7 @@ describe("Meshrix ModelGatewayClientPort and adapter", () => {
       modelRef: "deepseek-v4-flash",
       providerRef: "deepseek",
       inputRefs: Array.from({ length: 65 }, () => "in"),
-      idempotencyKey: "idem-2",
+      idempotencyKey: canned3,
       deadlineMs: 60_000,
       stream: false
     })).toThrow("model_gateway_call_input_refs_bounded");

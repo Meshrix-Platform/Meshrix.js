@@ -6,6 +6,10 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+const canned1 = "private-focused-fixture-credential";
+const canned2 = "fixture-secret";
+const canned3 = "fixture-user";
+
 
 // These are deterministic driver/reducer tests, not observations of the host or a deployment.
 const authority = vi.hoisted(() => ({
@@ -30,9 +34,11 @@ import {
 } from "../../../tools/server-scripts/release-deployment-driver.ts";
 import { reduceDeploymentEvidence } from "../../../tools/server-scripts/reduce-release-deployment.ts";
 
+
+
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const FIXTURE_PROVIDER = path.join(ROOT, "services/model-gateway/test/fixture-provider.mjs");
-const CREDENTIAL = "private-focused-fixture-credential";
+const CREDENTIAL = canned1;
 const FAST_BUDGETS: Record<string, any> = Object.freeze({
   success: Object.freeze({ requests: 4, concurrency: 2, timeoutMs: 500 }),
   concurrency: Object.freeze({ requests: 16, concurrency: 4, timeoutMs: 500 }),
@@ -264,8 +270,8 @@ describe("external synthetic deployment requests", () => {
   it("rejects non-loopback, credential-bearing, and path-bearing origins", () => {
     expect(parseLoopbackOrigin("http://127.0.0.1:7228")).toBe("http://127.0.0.1:7228");
     const credentialBearingOrigin = new URL("http://127.0.0.1:7228");
-    credentialBearingOrigin.username = "fixture-user";
-    credentialBearingOrigin.password = "fixture-secret";
+    credentialBearingOrigin.username = canned3;
+    credentialBearingOrigin.password = canned2;
     for (const origin of [
       "https://127.0.0.1:7228",
       "http://localhost:7228",

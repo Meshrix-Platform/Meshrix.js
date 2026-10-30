@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { BusinessContextStore, compileExternalSchema, partitionPayload } from "@meshrix/gateway";
+const canned1 = "c";
+
+
+
 
 describe("TASK-001 baseline reproductions", () => {
   it("[CASE-S02] uses standard schema semantics for required without sibling properties", () => {
@@ -19,17 +23,17 @@ describe("TASK-001 baseline reproductions", () => {
 
   it("records an unrecoverable stateful context instead of recreating its handle", () => {
     const store = new BusinessContextStore({ maxActive: 1, now: () => 100 });
-    const created = store.create({ tenant: "t", principal: "p", grantRevision: "g", credentialGeneration: "c", routeRef: "r" });
+    const created = store.create({ tenant: "t", principal: "p", grantRevision: "g", credentialGeneration: canned1, routeRef: "r" });
     expect(store.markLost(created.handle, "fatal_transport").state).toBe("lost");
     expect(() => store.get(created.handle)).toThrowError(/no longer recoverable/u);
-    const replacement = store.create({ tenant: "t", principal: "p", grantRevision: "g", credentialGeneration: "c", routeRef: "r" });
+    const replacement = store.create({ tenant: "t", principal: "p", grantRevision: "g", credentialGeneration: canned1, routeRef: "r" });
     expect(replacement.handle).not.toBe(created.handle);
   });
 
   it("[CASE-L05] [CASE-L06] budgets tombstones independently and partitions active capacity by subject and upstream", () => {
     let now = 100;
     const store = new BusinessContextStore({ maxActivePerSubjectUpstream: 1, maxTombstones: 1, tombstoneRetentionMs: 10, now: () => now });
-    const make = (principal: string, routeRef: string) => ({ tenant: "t", principal, grantRevision: "g", credentialGeneration: "c", routeRef });
+    const make = (principal: string, routeRef: string) => ({ tenant: "t", principal, grantRevision: "g", credentialGeneration: canned1, routeRef });
     const first = store.create(make("p1", "r1"));
     expect(() => store.create(make("p1", "r1"))).toThrowError(/capacity/u);
     expect(store.create(make("p2", "r2")).state).toBe("active");

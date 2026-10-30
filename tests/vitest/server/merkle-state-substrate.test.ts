@@ -7,6 +7,14 @@ import {
   createPactiumStateSubstrate,
 } from "#meshrix/foundation/checkpoint/tree/merkle-state-substrate";
 import { createMeshrixPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-runtime";
+const canned1 = "docs/a.txt";
+const canned2 = "docs/b.txt";
+const canned3 = "docs/missing.txt";
+const canned4 = "publication-proof-a";
+const canned5 = "docs/empty";
+
+
+
 
 async function withTempSubstrate(testCase?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-merkle-state-vitest-"));
@@ -122,7 +130,7 @@ describe("merkle state substrate", () : any => {
       const indexBOnly: any = await substrate.merkleIndex.delete(indexAB.indexRootCid, "docs/a.txt");
 
       expect(await substrate.merkleIndex.get(indexAB.indexRootCid, "docs/a.txt")).toMatchObject({
-        key: "docs/a.txt",
+        key: canned1,
         valueRef: chunkA.cid,
       });
       expect(await substrate.merkleIndex.get(indexAB.indexRootCid, "missing")).toBeNull();
@@ -136,10 +144,10 @@ describe("merkle state substrate", () : any => {
         "docs/b.txt",
       ]);
       expect((await substrate.merkleIndex.diff(indexA.indexRootCid, indexAB.indexRootCid))).toEqual([
-        expect.objectContaining({ key: "docs/b.txt", action: "create" }),
+        expect.objectContaining({ key: canned2, action: "create" }),
       ]);
       expect((await substrate.merkleIndex.diff(indexAB.indexRootCid, indexBOnly.indexRootCid))).toEqual([
-        expect.objectContaining({ key: "docs/a.txt", action: "delete" }),
+        expect.objectContaining({ key: canned1, action: "delete" }),
       ]);
       expect(await substrate.merkleIndex.prove(indexAB.indexRootCid, "docs/a.txt")).toMatchObject({
         exists: true,
@@ -188,8 +196,8 @@ describe("merkle state substrate", () : any => {
         scope: "workspace/commit",
         operationId: "workspace.file.upload",
         mutations: [
-          { action: "put", key: "docs/a.txt", valueRef: manifest.rootCid, metadata: { op: "upload" } },
-          { action: "delete", key: "docs/missing.txt" },
+          { action: "put", key: canned1, valueRef: manifest.rootCid, metadata: { op: "upload" } },
+          { action: "delete", key: canned3 },
         ],
         contentRefs: [manifest.rootCid],
         payload: { actor: "unit" },
@@ -210,11 +218,11 @@ describe("merkle state substrate", () : any => {
         scope: "workspace/idempotent",
         operationId: "workspace.file.materialize",
         expectedCurrentRoot: "",
-        idempotencyKey: "publication-proof-a",
+        idempotencyKey: canned4,
         mutations: [
           {
             action: "put",
-            key: "docs/a.txt",
+            key: canned1,
             valueRef: manifest.rootCid,
             metadata: { op: "materialize" },
           },
@@ -309,7 +317,7 @@ describe("merkle state substrate", () : any => {
       await expect(substrate.stateCommit.commit({
         scope: "workspace/rollback",
         operationId: "workspace.rollback",
-        mutations: [{ action: "put", key: "docs/a.txt", valueRef: "ref:a" }]
+        mutations: [{ action: "put", key: canned1, valueRef: "ref:a" }]
       })).rejects.toThrow("injected state evidence failure");
       await expect(substrate.stateCommit.begin({ scope: "workspace/rollback" }))
         .resolves.toMatchObject({ currentRoot: "" });
@@ -337,21 +345,21 @@ describe("merkle state substrate", () : any => {
         scope,
         operationId: "workspace.integrity.first",
         mutations: [
-          { action: "put", key: "docs/a.txt", valueRef: "ref:a" },
-          { action: "put", key: "docs/empty", valueRef: "", metadata: { type: "directory" } },
+          { action: "put", key: canned1, valueRef: "ref:a" },
+          { action: "put", key: canned5, valueRef: "", metadata: { type: "directory" } },
         ],
       });
       await substrate.stateCommit.commit({
         scope,
         operationId: "workspace.integrity.second",
-        mutations: [{ action: "put", key: "docs/b.txt", valueRef: "ref:b" }],
+        mutations: [{ action: "put", key: canned2, valueRef: "ref:b" }],
       });
       expect(commit).toMatchObject({
         commitKind: "mutation",
         eventOffset: 0,
         mutations: expect.arrayContaining([
           expect.objectContaining({
-            key: "docs/empty",
+            key: canned5,
             valueRef: "meshrix:value-ref:none",
           }),
         ]),
@@ -388,7 +396,7 @@ describe("merkle state substrate", () : any => {
       const proofTampered: any = structuredClone(commit);
       proofTampered.mutations.push({
         action: "delete",
-        key: "docs/missing.txt",
+        key: canned3,
         valueRef: "",
         valueHash: "",
         metadata: {},
@@ -419,7 +427,8 @@ describe("merkle state substrate", () : any => {
       });
 
       await store("meshrix-state-commit", commit.commitId, commit);
-      const segmentKey: any = `event-log-segment:${scope}:0`;
+      const wireSeg = `event-log-segment:${scope}:0`;
+      const segmentKey: any = wireSeg;
       const originalSegment: any = await runtime.storage.getProtocolObject(
         "meshrix-event-log",
         segmentKey,
@@ -477,12 +486,12 @@ describe("merkle state substrate", () : any => {
         substrates[0].stateCommit.commit({
           scope: "workspace/state",
           operationId: "state.a",
-          mutations: [{ action: "put", key: "docs/a.txt", valueRef: "ref:a" }]
+          mutations: [{ action: "put", key: canned1, valueRef: "ref:a" }]
         }),
         substrates[1].stateCommit.commit({
           scope: "workspace/state",
           operationId: "state.b",
-          mutations: [{ action: "put", key: "docs/b.txt", valueRef: "ref:b" }]
+          mutations: [{ action: "put", key: canned2, valueRef: "ref:b" }]
         })
       ]).catch((error?: any) : any => {
         error.message = `state concurrency: ${error.message}`;
@@ -514,7 +523,7 @@ describe("merkle state substrate", () : any => {
     try {
       await expect(substrate.stateCommit.commit({
         scope: "workspace/json",
-        mutations: [{ action: "put", key: "docs/a.txt", valueRef: "ref:a" }]
+        mutations: [{ action: "put", key: canned1, valueRef: "ref:a" }]
       })).rejects.toMatchObject({ code: "pactium_transactional_storage_required" });
     } finally {
       await runtime.close();

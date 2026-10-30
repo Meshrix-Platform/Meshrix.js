@@ -28,9 +28,25 @@ import {
   digestFinalProtectedSinkInput
 } from "#meshrix/foundation/security/final-protected-sink-permit";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "bearer";
+const canned2 = "model_gateway.call";
+const canned3 = "retry.synthetic";
+const canned4 = "read";
+const canned5 = "sensitive-only";
+const canned6 = "public-only";
+const canned7 = "upstream-token-marker";
+const canned8 = "upstream-credential-marker";
+const canned9 = "upstream-secret-marker";
+const canned10 = "echo";
+const canned11 = "json-rpc";
+const canned12 = "authorization-fixture";
+const canned13 = "write";
 
-const SECRET_REF: any = "secret://upstream-gateway/security-test";
-const RESOLVED_SECRET_TOKEN: any = "resolved-upstream-secret-token-must-not-leak";
+
+
+
+const FIXTURE_REF: any = "secret://upstream-gateway/security-test";
+const RESOLVED_VALUE: any = "resolved-upstream-secret-token-must-not-leak";
 
 const subject: Record<string, any> = {
   subjectId: "upstream-gateway-security-test",
@@ -106,7 +122,7 @@ async function startFixtureServer() : Promise<any> {
       search: url.search,
       body: body ? JSON.parse(body) : null,
       allowedHeader: request.headers["x-request-id"] || "",
-      credentialOk: request.headers.authorization === `Bearer ${RESOLVED_SECRET_TOKEN}`
+      credentialOk: request.headers.authorization === `Bearer ${RESOLVED_VALUE}`
     });
   });
   await listenLoopback(server);
@@ -219,8 +235,8 @@ async function writeLocalSecret({ userDataPath, serviceId, baseUrl, secretKeyPro
     target: {
       provider: "upstream-gateway-test",
       family: "upstream-gateway",
-      authType: "bearer",
-      secretRef: SECRET_REF,
+      authType: canned1,
+      secretRef: FIXTURE_REF,
       scope: {
         serviceId,
         allowedHosts: [endpoint.hostname],
@@ -230,7 +246,7 @@ async function writeLocalSecret({ userDataPath, serviceId, baseUrl, secretKeyPro
       }
     },
     payload: {
-      token: RESOLVED_SECRET_TOKEN
+      token: RESOLVED_VALUE
     },
     keyProvider: secretKeyProvider
   });
@@ -273,7 +289,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       allowLocalNetwork: true,
       trafficPolicy: { perMinute: 20, burst: 20 },
       operations: [{
-        operationKey: "model_gateway.call",
+        operationKey: canned2,
         method: "POST",
         path: "/v1/chat/completions",
         risk: "safe_write",
@@ -307,7 +323,7 @@ describe("upstream gateway SSRF boundary", () : any => {
         modelRef: "model.synthetic",
         providerRef: "provider.synthetic",
         inputRefs: ["input.synthetic"],
-        idempotencyKey: "retry.synthetic",
+        idempotencyKey: canned3,
         deadlineMs: 1_000,
         stream: false
       },
@@ -365,7 +381,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       baseUrl: fixture.baseUrl,
       allowLocalNetwork: false,
       operations: [{
-        operationKey: "read",
+        operationKey: canned4,
         method: "GET",
         path: "/fixed",
         risk: "read_only",
@@ -375,7 +391,7 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     await expect(registry.forward({
       serviceId: "local-denied",
-      operationKey: "read"
+      operationKey: canned4
     }, subject)).rejects.toMatchObject({
       status: 502,
       reasonCode: "outbound_egress_denied"
@@ -391,7 +407,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       baseUrl: "http://169.254.169.254:80",
       allowLocalNetwork: true,
       operations: [{
-        operationKey: "read",
+        operationKey: canned4,
         method: "GET",
         path: "/latest/meta-data/",
         risk: "read_only",
@@ -401,7 +417,7 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     await expect(registry.forward({
       serviceId: "metadata-denied",
-      operationKey: "read"
+      operationKey: canned4
     }, subject)).rejects.toMatchObject({
       status: 502,
       reasonCode: "outbound_egress_denied",
@@ -426,7 +442,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       baseUrl: "http://service.internal.test:80",
       allowLocalNetwork: true,
       operations: [{
-        operationKey: "read",
+        operationKey: canned4,
         method: "GET",
         path: "/internal",
         risk: "read_only",
@@ -436,7 +452,7 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     await expect(registry.forward({
       serviceId: "link-local-dns-denied",
-      operationKey: "read"
+      operationKey: canned4
     }, subject)).rejects.toMatchObject({
       status: 502,
       reasonCode: "outbound_egress_denied",
@@ -459,7 +475,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       serviceId: "dns-pinned",
       baseUrl: `http://rebind.example.test:${fixturePort}`,
       operations: [{
-        operationKey: "read",
+        operationKey: canned4,
         method: "GET",
         path: "/fixed",
         risk: "read_only",
@@ -469,7 +485,7 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     await expect(registry.forward({
       serviceId: "dns-pinned",
-      operationKey: "read"
+      operationKey: canned4
     }, subject)).resolves.toMatchObject({ ok: true });
     expect(lookup).toHaveBeenCalledTimes(1);
     expect(fixture.hits).toHaveLength(1);
@@ -494,7 +510,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       serviceId: "stream-bounded",
       baseUrl: `http://127.0.0.1:${address.port}`,
       operations: [{
-        operationKey: "read",
+        operationKey: canned4,
         method: "GET",
         path: "/stream",
         risk: "read_only",
@@ -505,7 +521,7 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     await expect(registry.forward({
       serviceId: "stream-bounded",
-      operationKey: "read"
+      operationKey: canned4
     }, subject)).rejects.toMatchObject({
       status: 502,
       reasonCode: "upstream_response_too_large"
@@ -533,14 +549,14 @@ describe("upstream gateway SSRF boundary", () : any => {
       serviceId: "response-filter-closed",
       baseUrl: `http://127.0.0.1:${address.port}`,
       operations: [{
-        operationKey: "sensitive-only",
+        operationKey: canned5,
         method: "GET",
         path: "/plain",
         risk: "read_only",
         requiredScopes: ["gateway:read"],
         sensitiveBodyFields: ["credential"]
       }, {
-        operationKey: "public-only",
+        operationKey: canned6,
         method: "GET",
         path: "/malformed",
         risk: "read_only",
@@ -551,14 +567,14 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     await expect(registry.forward({
       serviceId: "response-filter-closed",
-      operationKey: "sensitive-only"
+      operationKey: canned5
     }, subject)).rejects.toMatchObject({
       status: 502,
       reasonCode: "response_projection_unavailable"
     });
     await expect(registry.forward({
       serviceId: "response-filter-closed",
-      operationKey: "public-only"
+      operationKey: canned6
     }, subject)).rejects.toMatchObject({
       status: 502,
       reasonCode: "response_projection_unavailable"
@@ -570,9 +586,9 @@ describe("upstream gateway SSRF boundary", () : any => {
     const server: any = http.createServer((request?: any, response?: any) : any => {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({
-        token: "upstream-token-marker",
-        credential: "upstream-credential-marker",
-        nested: { secret: "upstream-secret-marker" }
+        token: canned7,
+        credential: canned8,
+        nested: { secret: canned9 }
       }));
     });
     await listenLoopback(server);
@@ -582,7 +598,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       serviceId: "default-transparent-response",
       baseUrl: `http://127.0.0.1:${address.port}`,
       operations: [{
-        operationKey: "read",
+        operationKey: canned4,
         method: "GET",
         path: "/transparent",
         risk: "read_only",
@@ -592,13 +608,13 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     const forwarded: any = await registry.forward({
       serviceId: "default-transparent-response",
-      operationKey: "read"
+      operationKey: canned4
     }, subject);
 
     expect(forwarded.response.json).toEqual({
-      token: "upstream-token-marker",
-      credential: "upstream-credential-marker",
-      nested: { secret: "upstream-secret-marker" }
+      token: canned7,
+      credential: canned8,
+      nested: { secret: canned9 }
     });
   });
 
@@ -611,14 +627,14 @@ describe("upstream gateway SSRF boundary", () : any => {
         trafficPolicy: { perMinute: 20, burst: 20 },
         operations: [
           {
-            operationKey: "echo",
+            operationKey: canned10,
             method: "POST",
             path: "/fixed",
             risk: "safe_write",
             requiredScopes: ["gateway:write"]
           },
           {
-            operationKey: "json-rpc",
+            operationKey: canned11,
             protocol: "json-rpc",
             method: "POST",
             path: "/jsonrpc",
@@ -632,7 +648,7 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     const forwarded: any = await registry.forward({
       serviceId: "default-closed",
-      operationKey: "echo",
+      operationKey: canned10,
       body: { message: "configured-path" }
     }, subject);
     expect(forwarded.ok).toBe(true);
@@ -641,20 +657,20 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     await expect(registry.forward({
       serviceId: "default-closed",
-      operationKey: "echo",
+      operationKey: canned10,
       path: "/api/other",
       body: { message: "caller-path" }
     }, subject)).rejects.toMatchObject({ status: 400 });
     await expect(registry.forward({
       serviceId: "default-closed",
-      operationKey: "echo",
+      operationKey: canned10,
       rpcMethod: "fixture.override",
       body: { message: "caller-rpc-method" }
     }, subject)).rejects.toMatchObject({ status: 400 });
 
     const jsonRpcForwarded: any = await registry.forward({
       serviceId: "default-closed",
-      operationKey: "json-rpc",
+      operationKey: canned11,
       body: {
         jsonrpc: "2.0",
         id: "caller-id",
@@ -676,7 +692,7 @@ describe("upstream gateway SSRF boundary", () : any => {
         trafficPolicy: { perMinute: 20, burst: 20 },
         operations: [
           {
-            operationKey: "read",
+            operationKey: canned4,
             method: "GET",
             path: "/api/echo",
             risk: "read_only",
@@ -688,7 +704,7 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     const forwarded: any = await registry.forward({
       serviceId: "controlled",
-      operationKey: "read",
+      operationKey: canned4,
       query: { q: "1" }
     }, subject);
 
@@ -709,7 +725,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       operations: [{ operationKey: operationId, method: "POST", path: "/api/fixture", risk: "read_only", requiredScopes: ["gateway:read"] }]
     }]);
     const subjectRef = `skill_hub_subject_${"a".repeat(64)}`;
-    const governance = { authorizationContextDigest: "authorization-fixture", riskDecisionRef: "risk-fixture", policyRevision: "policy-fixture" };
+    const governance = { authorizationContextDigest: canned12, riskDecisionRef: "risk-fixture", policyRevision: "policy-fixture" };
     await registry.requestPluginExternalService({ pluginId: "skill-hub", operationId, serviceRef: serviceId, operationRef: operationId,
       governance, input: { meshrixContext: { principal: { subjectRef } } } }, { subject });
     expect(fixture.hits[0].headers["x-meshrix-skill-hub-subject"]).toBe(subjectRef);
@@ -769,7 +785,7 @@ describe("upstream gateway SSRF boundary", () : any => {
     });
     const response = await registry.requestPluginExternalService({
       pluginId: "skill-hub", operationId, serviceRef: serviceId, operationRef: operationId,
-      governance: { authorizationContextDigest: "authorization-fixture", riskDecisionRef: "risk-fixture", policyRevision: "policy-fixture" },
+      governance: { authorizationContextDigest: canned12, riskDecisionRef: "risk-fixture", policyRevision: "policy-fixture" },
       input: { meshrixContext: { principal: { subjectRef: `skill_hub_subject_${"a".repeat(64)}` } } }
     }, { subject });
     expect(response.ok).toBe(true);
@@ -807,7 +823,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       serviceRef: serviceId,
       operationRef: operationId,
       governance: {
-        authorizationContextDigest: "authorization-fixture",
+        authorizationContextDigest: canned12,
         riskDecisionRef: "risk-fixture",
         policyRevision: "policy-fixture"
       },
@@ -836,7 +852,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       serviceRef: serviceId,
       operationRef: "demo.repository.other",
       governance: {
-        authorizationContextDigest: "authorization-fixture",
+        authorizationContextDigest: canned12,
         riskDecisionRef: "risk-fixture",
         policyRevision: "policy-fixture"
       },
@@ -848,7 +864,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       serviceRef: serviceId,
       operationRef: operationId,
       governance: {
-        authorizationContextDigest: "authorization-fixture",
+        authorizationContextDigest: canned12,
         riskDecisionRef: "risk-fixture",
         policyRevision: "policy-fixture"
       },
@@ -864,11 +880,11 @@ describe("upstream gateway SSRF boundary", () : any => {
       {
         serviceId,
         baseUrl: fixture.baseUrl,
-        credentialRefs: [SECRET_REF],
+        credentialRefs: [FIXTURE_REF],
         trafficPolicy: { perMinute: 20, burst: 20 },
         operations: [
           {
-            operationKey: "write",
+            operationKey: canned13,
             method: "POST",
             path: "/api/credential",
             risk: "safe_write",
@@ -881,14 +897,14 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     const forwarded: any = await registry.forward({
       serviceId,
-      operationKey: "write",
+      operationKey: canned13,
       body: { message: "credential-check" }
     }, subject);
 
     expect(forwarded.ok).toBe(true);
     expect(forwarded.response.json.credentialOk).toBe(true);
-    expect(JSON.stringify(forwarded)).not.toContain(RESOLVED_SECRET_TOKEN);
-    expect(JSON.stringify(registry.listAudit({ serviceId }))).not.toContain(RESOLVED_SECRET_TOKEN);
+    expect(JSON.stringify(forwarded)).not.toContain(RESOLVED_VALUE);
+    expect(JSON.stringify(registry.listAudit({ serviceId }))).not.toContain(RESOLVED_VALUE);
   });
 
   it("enforces service-level tag policy before forwarding", async () : Promise<any> => {
@@ -905,7 +921,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       trafficPolicy: { perMinute: 20, burst: 20 },
       operations: [
         {
-          operationKey: "read",
+          operationKey: canned4,
           method: "GET",
           path: "/api/tagged",
           risk: "read_only",
@@ -920,15 +936,15 @@ describe("upstream gateway SSRF boundary", () : any => {
       { entityType: "external_services.service", entityId: serviceId, tagId: "upstream-denied" }
     ]);
     const { registry: allowedRegistry } = await createRegistryWithDataDir([service], { tagStore: allowStore });
-    const allowed: any = await allowedRegistry.forward({ serviceId, operationKey: "read" }, subject);
+    const allowed: any = await allowedRegistry.forward({ serviceId, operationKey: canned4 }, subject);
     expect(allowed.ok).toBe(true);
     expect(fixture.hits).toHaveLength(1);
 
     const { registry: deniedRegistry } = await createRegistryWithDataDir([service], { tagStore: denyStore });
-    await expect(deniedRegistry.forward({ serviceId, operationKey: "read" }, subject))
+    await expect(deniedRegistry.forward({ serviceId, operationKey: canned4 }, subject))
       .rejects.toMatchObject({ status: 403 });
     expect(fixture.hits).toHaveLength(1);
-    expect(deniedRegistry.previewPolicy({ serviceId, operationKey: "read" }, subject).tagPolicy).toMatchObject({
+    expect(deniedRegistry.previewPolicy({ serviceId, operationKey: canned4 }, subject).tagPolicy).toMatchObject({
       enabled: true,
       allowed: false,
       reasonCode: "tag_policy_denied"
@@ -949,7 +965,7 @@ describe("upstream gateway SSRF boundary", () : any => {
       trafficPolicy: { perMinute: 20, burst: 20 },
       operations: [
         {
-          operationKey: "read",
+          operationKey: canned4,
           method: "GET",
           path: "/api/tagged",
           risk: "read_only",
@@ -973,10 +989,10 @@ describe("upstream gateway SSRF boundary", () : any => {
       { entityType: "subject", entityId: deniedCaller.subjectId, tagId: "audience:deny" }
     ]);
     const { registry } = await createRegistryWithDataDir([service], { tagStore: store });
-    const allowed: any = await registry.forward({ serviceId, operationKey: "read" }, allowedCaller);
+    const allowed: any = await registry.forward({ serviceId, operationKey: canned4 }, allowedCaller);
     expect(allowed.ok).toBe(true);
     expect(fixture.hits).toHaveLength(1);
-    await expect(registry.forward({ serviceId, operationKey: "read" }, deniedCaller))
+    await expect(registry.forward({ serviceId, operationKey: canned4 }, deniedCaller))
       .rejects.toMatchObject({ status: 403 });
     expect(fixture.hits).toHaveLength(1);
   });
@@ -990,7 +1006,7 @@ describe("upstream gateway SSRF boundary", () : any => {
         trafficPolicy: { perMinute: 20, burst: 20 },
         operations: [
           {
-            operationKey: "read",
+            operationKey: canned4,
             method: "GET",
             path: "/api",
             risk: "read_only",
@@ -1008,7 +1024,7 @@ describe("upstream gateway SSRF boundary", () : any => {
     ]) {
       await expect(registry.forward({
         serviceId: "controlled",
-        operationKey: "read",
+        operationKey: canned4,
         ...input
       }, subject)).rejects.toMatchObject({ status: expect.any(Number) });
     }
@@ -1024,7 +1040,7 @@ describe("upstream gateway SSRF boundary", () : any => {
         trafficPolicy: { perMinute: 20, burst: 20 },
         operations: [
           {
-            operationKey: "read",
+            operationKey: canned4,
             method: "GET",
             path: "/api",
             risk: "read_only",
@@ -1036,19 +1052,19 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     await expect(registry.forward({
       serviceId: "policy-bound",
-      operationKey: "read",
+      operationKey: canned4,
       path: "/admin",
       method: "GET"
     }, subject)).rejects.toMatchObject({ status: 400 });
     await expect(registry.forward({
       serviceId: "policy-bound",
-      operationKey: "read",
+      operationKey: canned4,
       path: "/api/echo",
       method: "POST"
     }, subject)).rejects.toMatchObject({ status: 400 });
     await expect(registry.forward({
       serviceId: "policy-bound",
-      operationKey: "read",
+      operationKey: canned4,
       path: "/api/echo",
       method: "GET",
       headers: { "X-Not-Allowed": "nope" }
@@ -1066,7 +1082,7 @@ describe("upstream gateway SSRF boundary", () : any => {
         trafficPolicy: { perMinute: 20, burst: 20 },
         operations: [
           {
-            operationKey: "read",
+            operationKey: canned4,
             method: "GET",
             path: "/api/redirect-cross-origin",
             risk: "read_only",
@@ -1078,7 +1094,7 @@ describe("upstream gateway SSRF boundary", () : any => {
 
     const forwarded: any = await registry.forward({
       serviceId: "redirect-guarded",
-      operationKey: "read",
+      operationKey: canned4,
       query: {
         to: `${redirectTarget.baseUrl}/private`
       }

@@ -4,6 +4,11 @@ import {
   safeTargetUrl
 } from "../../../packages/agents/src/upstream-gateway/support.ts";
 import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
+const canned1 = "aggregate-limited";
+const canned2 = "pooled-echo";
+
+
+
 
 export function createRawMcpCaller({
   getServer,
@@ -205,7 +210,7 @@ export async function runAggregateTrafficPolicyWorkflow({
   await destructiveTest("endpoint pools share the service-level aggregate traffic policy", async () : Promise<any> => {
     const preview: any = await api("POST", "/api/gateway/v1/policy/preview", {
       serviceId: aggregateLimitedServiceId,
-      operationKey: "aggregate-limited"
+      operationKey: canned1
     });
     assert.equal(preview.status, 200);
     assert.equal(preview.payload.traffic.burst, 1);
@@ -216,12 +221,12 @@ export async function runAggregateTrafficPolicyWorkflow({
     const [first, rejected] = await Promise.all([
       api("POST", "/api/gateway/v1/forward", {
         serviceId: aggregateLimitedServiceId,
-        operationKey: "aggregate-limited",
+        operationKey: canned1,
         query: { i: "first", waitMs: "120" }
       }),
       api("POST", "/api/gateway/v1/forward", {
         serviceId: aggregateLimitedServiceId,
-        operationKey: "aggregate-limited",
+        operationKey: canned1,
         query: { i: "second", waitMs: "120" }
       })
     ].map((request?: any) : any => request.catch((error?: any) : any => ({ status: 0, payload: { error: error?.code || "request_failed" } }))));
@@ -250,7 +255,7 @@ export async function runEndpointPoolWorkflow({
   await test("endpoint pool opens circuit on failing upstream and shifts to healthy endpoint", async () : Promise<any> => {
     const first: any = await api("POST", "/api/gateway/v1/forward", {
       serviceId: loadBalancedServiceId,
-      operationKey: "pooled-echo",
+      operationKey: canned2,
       body: { message: "first-fails" }
     });
     assert.equal(first.status, 200, JSON.stringify(first.payload, null, 2));
@@ -261,7 +266,7 @@ export async function runEndpointPoolWorkflow({
 
     const second: any = await api("POST", "/api/gateway/v1/forward", {
       serviceId: loadBalancedServiceId,
-      operationKey: "pooled-echo",
+      operationKey: canned2,
       body: { message: "second-healthy" }
     });
     assert.equal(second.status, 200, JSON.stringify(second.payload, null, 2));
@@ -272,7 +277,7 @@ export async function runEndpointPoolWorkflow({
 
     const preview: any = await api("POST", "/api/gateway/v1/policy/preview", {
       serviceId: loadBalancedServiceId,
-      operationKey: "pooled-echo"
+      operationKey: canned2
     });
     assert.equal(preview.status, 200);
     assert.equal(preview.payload.traffic.routingAlgorithm, "weighted_endpoint_round_robin_with_circuit_breaker");

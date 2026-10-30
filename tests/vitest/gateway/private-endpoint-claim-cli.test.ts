@@ -5,6 +5,10 @@ import {
   type PrivateEndpointClaimCommandDependencies,
   type PrivateEndpointClaimResult,
 } from "../../../apps/mcp-gateway-installer/src/cli.ts";
+const canned1 = "https://account.meshrix.test";
+
+
+
 
 const RESULT: PrivateEndpointClaimResult = Object.freeze({
   outcome: "claimed",
@@ -29,7 +33,7 @@ describe("private endpoint claim CLI", () => {
 
     await runPrivateEndpointClaimCommand({
       configPath: RESULT.configPath,
-      authorityOrigin: "https://account.meshrix.test",
+      authorityOrigin: canned1,
     }, {
       claim,
       openBrowser: async (url) => { opened.push(url); },
@@ -38,7 +42,7 @@ describe("private endpoint claim CLI", () => {
 
     expect(claim).toHaveBeenCalledWith(expect.objectContaining({
       configPath: RESULT.configPath,
-      authorityOrigin: "https://account.meshrix.test",
+      authorityOrigin: canned1,
       openBrowser: expect.any(Function),
       onProgress: expect.any(Function),
     }));

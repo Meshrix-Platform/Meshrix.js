@@ -6,6 +6,10 @@ import {
 import {
   UPSTREAM_FIXTURE_TOOL_PREFIX
 } from "./upstream-fixture-grant.ts";
+const canned1 = "failed";
+
+
+
 
 export const DOWNSTREAM_AGENT_TOOL_LOOP_REPORT_PATH: any = "build/reports/downstream-agent-tool-loop.json";
 export const DOWNSTREAM_AGENT_TOOL_LOOP_SCHEMA_VERSION: any = "v0.0.1:downstream-gateway:agent-tool-loop-report-1";
@@ -322,7 +326,7 @@ export function createDownstreamAgentToolLoopReadiness(report: Record<string, an
     sourceOfTruth: DOWNSTREAM_AGENT_TOOL_LOOP_READINESS_SOURCE,
     report: DOWNSTREAM_AGENT_TOOL_LOOP_REPORT_PATH,
     releaseReady,
-    liveStatus: releaseReady ? "passed" : "failed",
+    liveStatus: releaseReady ? "passed": canned1,
     reasons,
     targets: [...DOWNSTREAM_AGENT_CLIENT_TARGETS],
     coreTurnIds: [...DOWNSTREAM_AGENT_CORE_TURN_IDS]

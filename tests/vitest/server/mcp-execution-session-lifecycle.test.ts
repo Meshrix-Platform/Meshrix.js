@@ -14,6 +14,19 @@ import { normalizeService } from "../../../packages/agents/src/upstream-gateway/
 import { executionSubject } from "../../helpers/mcp-downstream-request.ts";
 import { modernHttpRequest } from "../gateway/support.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "exec-stateful";
+const canned2 = "ephemeral-catalog";
+const canned3 = "exec-stateful-other";
+const canned4 = "exec-stateful-after-retire";
+const canned5 = "exec-http-stateful";
+const canned6 = "exec-http-stateful-generation-2";
+const canned7 = "ephemeral-http";
+const canned8 = "exec-api-key";
+const canned9 = "exec-other-grant";
+const canned10 = "discovery-lifecycle";
+
+
+
 
 const managers: any = new Set<any>();
 const servers: any = new Set<any>();
@@ -144,7 +157,7 @@ function statefulConfig(overrides: Record<string, any> = {}) : any {
     command: process.execPath,
     args: ["-e", statefulScript()],
     timeoutMs: 2000,
-    sessionKey: "exec-stateful",
+    sessionKey: canned1,
     sessionScope: "svc:lifecycle:exec:subject-1:grant-1",
     sessionKind: "stateful",
     ...overrides
@@ -192,14 +205,14 @@ describe("Stateful MCP execution session lifecycle", () : any => {
 
     const catalog: any = await manager.listTools({
       ...config,
-      sessionKey: "ephemeral-catalog",
+      sessionKey: canned2,
       sessionScope: "svc:lifecycle:discovery",
       sessionKind: "ephemeral"
     });
     expect(catalog.tools.map((tool?: any) : any => tool.name)).toContain("state.probe");
     await expect(manager.callTool({
       ...config,
-      sessionKey: "exec-stateful-other",
+      sessionKey: canned3,
       sessionScope: "svc:lifecycle:exec:subject-2:grant-2"
     }, { name: "state.probe" })).rejects.toMatchObject({
       code: "UPSTREAM_MCP_SESSION_CAPACITY"
@@ -223,7 +236,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     });
     const afterRetirement: any = await manager.callTool({
       ...config,
-      sessionKey: "exec-stateful-after-retire"
+      sessionKey: canned4
     }, { name: "state.probe" });
     expect(afterRetirement.result.structuredContent.value).toBe(0);
   });
@@ -272,7 +285,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
       transport: "streamable-http",
       url: fixture.url,
       timeoutMs: 1000,
-      sessionKey: "exec-http-stateful",
+      sessionKey: canned5,
       sessionScope: "svc:lifecycle:exec:subject-1:grant-1",
       sessionKind: "stateful",
       sessionGeneration: { serviceRevision: 1, credentialRevisions: [] }
@@ -299,7 +312,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
 
     const rebuilt: any = await manager.callTool({
       ...config,
-      sessionKey: "exec-http-stateful-generation-2",
+      sessionKey: canned6,
       sessionGeneration: { serviceRevision: 2, credentialRevisions: [] }
     }, { name: "state.probe" });
     expect(rebuilt.result.structuredContent.value).toBe(0);
@@ -399,7 +412,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
       transport: "streamable-http",
       url: fixture.url,
       timeoutMs: 1000,
-      sessionKey: "ephemeral-http",
+      sessionKey: canned7,
       sessionScope: "svc:lifecycle:discovery",
       sessionKind: "ephemeral"
     };
@@ -531,7 +544,7 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     for (let index = 0; index < 8; index += 1) {
       await expect(manager.callTool({
         ...held,
-        sessionKey: `exec-rejected-${index}`,
+        sessionKey: ("exec-rejected-"+index),
         sessionScope: `svc:lifecycle:exec:subject-new-${index}:grant-new-${index}`
       }, { name: "state.probe" })).rejects.toMatchObject({
         code: "UPSTREAM_MCP_SESSION_CAPACITY"
@@ -545,16 +558,16 @@ describe("Stateful MCP execution session lifecycle", () : any => {
     managers.add(manager);
     const grantConfig: any = statefulConfig();
     const apiKeyConfig: any = statefulConfig({
-      sessionKey: "exec-api-key",
+      sessionKey: canned8,
       sessionScope: "svc:lifecycle:exec:workload-principal-1:api-key-row-1"
     });
     const otherConfig: any = statefulConfig({
-      sessionKey: "exec-other-grant",
+      sessionKey: canned9,
       sessionScope: "svc:lifecycle:exec:subject-2:grant-2"
     });
     const discovery: any = {
       ...statefulConfig(),
-      sessionKey: "discovery-lifecycle",
+      sessionKey: canned10,
       sessionScope: "svc:lifecycle:discovery",
       sessionKind: "ephemeral"
     };

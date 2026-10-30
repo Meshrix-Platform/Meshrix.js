@@ -26,6 +26,14 @@ import {
   SqliteLockBackendError,
   SqliteLockManager
 } from "../../../packages/foundation/src/concurrency/sqlite-lock-manager.ts";
+const canned1 = "bounded";
+const canned2 = "stale";
+const canned3 = "identity";
+const canned4 = "fence_sqlite_0";
+const canned5 = "fence_postgres_0";
+
+
+
 
 const resources: any[] = [];
 
@@ -89,8 +97,8 @@ describe("memory lock manager", () : any => {
     const queued: any = manager.acquire("bounded", { waitMs: 1000 });
     await expect(manager.acquire("bounded", { waitMs: 1000 })).rejects.toBeInstanceOf(LockQueueFullError);
     const fencingError: any = await manager.release({
-      lockKey: "bounded",
-      fencingToken: "stale",
+      lockKey: canned1,
+      fencingToken: canned2,
       released: false
     }).catch((error?: any) : any => error);
     expect(fencingError).toBeInstanceOf(LockFencingError);
@@ -166,8 +174,8 @@ describe("SQLite lock manager", () : any => {
     const manager: any = createSqliteManager();
     const handle: any = await manager.acquire("identity");
     await expect(manager.release({
-      lockKey: "identity",
-      fencingToken: "fence_sqlite_0",
+      lockKey: canned3,
+      fencingToken: canned4,
       released: false
     })).rejects.toBeInstanceOf(LockFencingError);
     await manager.destroy();
@@ -412,10 +420,10 @@ class MockPgClient extends EventEmitter {
     if (sql.includes("CREATE TABLE IF NOT EXISTS _meshrix_lock_leases")) {
       return { rows: [] };
     }
-    const key: any = `${params[0]}\0${params[1]}`;
+    const slot: any = `${params[0]}\0${params[1]}`;
     const now: any = Date.now();
     if (sql.includes("INSERT INTO _meshrix_lock_leases")) {
-      const current: any = this.coordinator.locks.get(key);
+      const current: any = this.coordinator.locks.get(slot);
       if (current && current.expiresAt > now) return { rows: [] };
       const ttlMs: any = Number(params[3]);
       const lease: any = {
@@ -424,7 +432,7 @@ class MockPgClient extends EventEmitter {
         acquiredAt: new Date(now),
         expiresAt: now + ttlMs
       };
-      this.coordinator.locks.set(key, lease);
+      this.coordinator.locks.set(slot, lease);
       return { rows: [{
         owner_id: lease.ownerId,
         fencing_token: lease.fencingToken,
@@ -434,11 +442,11 @@ class MockPgClient extends EventEmitter {
       }] };
     }
     if (sql.includes("SELECT EXISTS") && sql.includes("_meshrix_lock_leases")) {
-      const lease: any = this.coordinator.locks.get(key);
+      const lease: any = this.coordinator.locks.get(slot);
       return { rows: [{ locked: Boolean(lease && lease.expiresAt > now) }] };
     }
     if (sql.includes("UPDATE _meshrix_lock_leases")) {
-      const lease: any = this.coordinator.locks.get(key);
+      const lease: any = this.coordinator.locks.get(slot);
       const ttlMs: any = Number(params[4]);
       if (!lease || lease.ownerId !== params[2] || lease.fencingToken !== String(params[3]) || lease.expiresAt <= now) {
         return { rows: [] };
@@ -448,11 +456,11 @@ class MockPgClient extends EventEmitter {
     }
     if (sql.includes("DELETE FROM _meshrix_lock_leases")) {
       if (this.failUnlock) throw new Error("sensitive backend detail");
-      const lease: any = this.coordinator.locks.get(key);
+      const lease: any = this.coordinator.locks.get(slot);
       const expiredDelete: any = sql.includes("expires_at <= clock_timestamp()");
       const matches: any = lease && lease.ownerId === params[2] && lease.fencingToken === String(params[3]);
       const eligible: any = matches && (expiredDelete ? lease.expiresAt <= now : lease.expiresAt > now);
-      if (eligible) this.coordinator.locks.delete(key);
+      if (eligible) this.coordinator.locks.delete(slot);
       return { rows: eligible ? [{ fencing_token: lease.fencingToken }] : [] };
     }
     throw new Error(`Unexpected PostgreSQL lock query: ${String(sql).slice(0, 40)}`);
@@ -909,8 +917,8 @@ describe("PostgreSQL lock manager", () : any => {
     const { manager } = createPostgresManager();
     await manager.acquire("identity");
     await expect(manager.release({
-      lockKey: "identity",
-      fencingToken: "fence_postgres_0",
+      lockKey: canned3,
+      fencingToken: canned5,
       released: false
     })).rejects.toBeInstanceOf(LockFencingError);
     expect(PostgresLockBackendError).toBeTypeOf("function");

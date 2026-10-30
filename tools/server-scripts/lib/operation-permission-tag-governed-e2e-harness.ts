@@ -24,11 +24,15 @@ import {
 import {
   createOperationPermissionTagGovernedE2eReportHarness
 } from "./operation-permission-tag-governed-e2e-report.ts";
+const canned1 = "echo";
+
 
 export {
   OPERATION_PERMISSION_TAG_GOVERNED_E2E,
   TAG_GOVERNED_ENTITY_REFS
 } from "./operation-permission-tag-governed-e2e-constants.ts";
+
+
 
 function parseSseBlock(block: any = "") : any {
   const dataLines: any = block
@@ -160,7 +164,7 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
         maxRisk: "repair_write",
         dynamicCapabilities: [upstreamOperationCapabilityId(
           { serviceId: OPERATION_PERMISSION_TAG_GOVERNED_E2E.serviceId },
-          { operationKey: "echo" }
+          { operationKey: canned1 }
         )],
         allowedServiceIds: [OPERATION_PERMISSION_TAG_GOVERNED_E2E.serviceId],
         scopeIds: ["gateway:read", "gateway:write", "gateway:maintain"],

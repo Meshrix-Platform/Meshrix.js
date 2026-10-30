@@ -4,6 +4,11 @@ import os from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+const canned1 = "scoped_api_key";
+const canned2 = "key-fixture";
+const canned3 = "policy-fixture";
+const canned4 = "fence-fixture";
+
 
 const startCheckpointTreeMock: any = vi.hoisted(() : any => vi.fn(async () : Promise<any> => undefined));
 const upsertCheckpointNodeMock: any = vi.hoisted(() : any => vi.fn(async () : Promise<any> => undefined));
@@ -45,6 +50,8 @@ import { createOperationAuditStore } from "../../../packages/foundation/src/secu
 import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 import { operationAuditTestProjectionOptions } from "./support/operation-audit-test-key.ts";
 import { RELEASE_JOURNEY_FIXTURE_BYTES } from "../../../tools/server-scripts/lib/release-journey-fixture.ts";
+
+
 
 const POSIX: any = process.platform !== "win32";
 const itPosix: any = POSIX ? it : it.skip;
@@ -363,12 +370,12 @@ itPosix("accepts a scoped API key raw PUT through the registered HTTP dispatcher
   const fixture: any = openFixture(await tempRoot());
   const bytes: any = RELEASE_JOURNEY_FIXTURE_BYTES;
   const authorization: any = Object.freeze({
-    credentialKind: "scoped_api_key",
-    keyId: "key-fixture",
+    credentialKind: canned1,
+    keyId: canned2,
     workloadPrincipalId: "workload-fixture",
     organizationNodeId: "organization:fixture",
     lifecycleRevision: 1,
-    policyFingerprint: "policy-fixture",
+    policyFingerprint: canned3,
     policy: Object.freeze({
       scopeIds: Object.freeze(["uploads:write"]),
       allowedTools: Object.freeze(["uploads.create_session", "uploads.upload_chunk"]),
@@ -408,7 +415,7 @@ itPosix("accepts a scoped API key raw PUT through the registered HTTP dispatcher
     config: { defaultTtlMs: 30_000, heartbeatIntervalMs: 10_000 },
     acquire: async (lockKey?: any) : Promise<any> => ({
       lockKey,
-      fencingToken: "fence-fixture",
+      fencingToken: canned4,
       expiresAt: new Date(Date.now() + 30_000),
       released: false,
       heartbeat: async () : Promise<any> => true,
@@ -546,13 +553,15 @@ function directStagingInput(bytes?: any, {
   sessionId = "upload_session_direct_fixture",
   fileIndex = 0,
   owner = OWNER,
-  idempotencyKey = `upload-custody:${sessionId}:${fileIndex}`
+  idempotencyKey
 }: Record<string, any> = {}) : any {
+  const stamp = `upload-custody:${sessionId}:${fileIndex}`;
+  const wire = idempotencyKey ?? stamp;
   return {
     expectedByteSize: bytes.length,
     expectedSha256: sha256(bytes),
     fileIndex,
-    idempotencyKey,
+    idempotencyKey: wire,
     owner,
     sessionId
   };

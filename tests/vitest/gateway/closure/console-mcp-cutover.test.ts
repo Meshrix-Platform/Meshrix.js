@@ -5,6 +5,10 @@ import { upstreamProjectedOperationId } from "../../../../packages/agents/src/up
 import { createUpstreamGatewayOperationExecutor } from "../../../../packages/server-runtime/src/composition/console-domain/operation-executors/upstream-gateway-executor.ts";
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "tools/call";
+
+
+
 
 describe("Console MCP final-effect transport", () => {
   it("[NODE011] defaults to denying a registered MCP write without a final protected-sink permit", async () => {
@@ -12,12 +16,12 @@ describe("Console MCP final-effect transport", () => {
     const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), mcpSessionManager: { listTools: async () => ({ tools: [{ name: "echo", inputSchema: { type: "object" } }] }),
       invokeGateway: async (_config, _input, options) => { await options?.beforeSend?.(); effects += 1; return { result: { content: [] } }; }, retireScope: async () => ({ retired: 0 }), close: async () => {} } });
     installUpstreamRuntimeServices(registry, [{ serviceId: "console", serviceProtocol: "mcp", label: "console", allowLocalNetwork: true,
-      operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"] }],
+      operations: [{ operationKey: canned1, protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"] }],
       mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18" }
     }]);
     const subject = { type: "tool-grant", subjectId: "operator", grantId: "grant", grant: { id: "grant", subjectId: "operator", dynamicCapabilities: ["cap:upstream:console:tools-call-echo"] }, scopes: ["gateway:write"], dynamicCapabilities: ["cap:upstream:console:tools-call-echo"] };
     try {
-      await expect(registry.forward({ serviceId: "console", operationKey: "tools/call", toolName: "echo", arguments: {} }, subject)).rejects.toMatchObject({ status: 403, reasonCode: "upstream_final_effect_authority_required" });
+      await expect(registry.forward({ serviceId: "console", operationKey: canned1, toolName: "echo", arguments: {} }, subject)).rejects.toMatchObject({ status: 403, reasonCode: "upstream_final_effect_authority_required" });
       expect(effects).toBe(0);
     } finally { await registry.close(); }
   });
@@ -52,7 +56,7 @@ describe("Console MCP final-effect transport", () => {
       }
     });
     installUpstreamRuntimeServices(registry, [{ serviceId: "console", serviceProtocol: "mcp", label: "console", allowLocalNetwork: true,
-      operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"], inputSchema: { type: "object", properties: { value: { type: "string" } } } }],
+      operations: [{ operationKey: canned1, protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"], inputSchema: { type: "object", properties: { value: { type: "string" } } } }],
       mcp: { transport: "http", url: `http://127.0.0.1:${address.port}/mcp`, protocolVersion: "2026-07-28" }
     }]);
     const subject = { type: "tool-grant", subjectId: "operator", grantId: "grant", grant: { id: "grant", subjectId: "operator", dynamicCapabilities: ["cap:upstream:console:tools-call-echo"] },
@@ -66,7 +70,7 @@ describe("Console MCP final-effect transport", () => {
       upstreamGatewayRegistryFor: () => registry
     });
     const invoke = (operationId: string, permit?: Record<string, unknown>, transport = "mcp", value: unknown = "synthetic") => executor({ operationId,
-      input: { serviceId: "console", operationKey: "tools/call", toolName: "echo", arguments: { value } },
+      input: { serviceId: "console", operationKey: canned1, toolName: "echo", arguments: { value } },
       context: { authSession: {}, subject, transport, finalProtectedSinkPermit: permit ?? null } });
     try {
       const first = await invoke("gateway.forward", { id: "permit-1" });

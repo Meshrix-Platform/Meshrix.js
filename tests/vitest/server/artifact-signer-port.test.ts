@@ -12,14 +12,18 @@ import {
 import {
   createMemoryLocalSecretKeyProvider
 } from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
+const canned1 = "ed25519";
+
+
+
 
 const roots: any[] = [];
-const secretRef: any = "secret://fixture/artifact-signing";
+const fixtureRef: any = "secret://fixture/artifact-signing";
 const target: Readonly<Record<string, any>> = Object.freeze({
   provider: "local-signing-key",
   family: "artifact-signing",
-  authType: "ed25519",
-  secretRef,
+  authType: canned1,
+  secretRef: fixtureRef,
   scope: {
     serviceId: "plugin-artifact:sample-plugin",
     scopes: ["artifact:sign"],
@@ -59,7 +63,7 @@ describe("ArtifactSignerPort", () : any => {
   it("returns only public verification facts and a context-bound receipt", async () : Promise<any> => {
     const { port } = await fixture();
     const input: Record<string, any> = {
-      secretRef,
+      secretRef: fixtureRef,
       purpose: "plugin-artifact.sample-plugin.bundle",
       payloadDigest: `sha256:${"a".repeat(64)}`,
       context: { publisherId: "fixture-publisher", releaseChannel: "test" }
@@ -86,14 +90,14 @@ describe("ArtifactSignerPort", () : any => {
       createPublicKey({ key: signed.publicKeyJwk, format: "jwk" }),
       Buffer.from(signed.signature, "base64url")
     )).toBe(true);
-    expect(JSON.stringify(signed)).not.toContain(secretRef);
+    expect(JSON.stringify(signed)).not.toContain(fixtureRef);
     expect(JSON.stringify(signed)).not.toContain("privateKeyJwk");
   });
 
   it("binds signatures to context and rejects unsupported purposes", async () : Promise<any> => {
     const { port } = await fixture();
     const request: Record<string, any> = {
-      secretRef,
+      secretRef: fixtureRef,
       purpose: "plugin-artifact.sample-plugin.artifact",
       payloadDigest: `sha256:${"b".repeat(64)}`
     };
@@ -116,7 +120,7 @@ describe("ArtifactSignerPort", () : any => {
     const { dataDir, secretKeyProvider } = await fixture();
     const wrongServicePort: any = createArtifactSignerPort({ dataDir, secretKeyProvider, pluginId: "sample-plugin", serviceId: "different-service", allowedPurposes: ["plugin-artifact.sample-plugin.artifact"] });
     const request: Record<string, any> = {
-      secretRef,
+      secretRef: fixtureRef,
       purpose: "plugin-artifact.sample-plugin.artifact",
       payloadDigest: `sha256:${"c".repeat(64)}`,
       context: { signatureKind: "artifact" }
@@ -126,7 +130,7 @@ describe("ArtifactSignerPort", () : any => {
       reasonCode: "service_id_mismatch"
     });
 
-    await revokeLocalSecret({ dataDir, secretRef, expectedRevision: 1 });
+    await revokeLocalSecret({ dataDir, secretRef: fixtureRef, expectedRevision: 1 });
     await expect(createArtifactSignerPort({ dataDir, secretKeyProvider, pluginId: "sample-plugin", allowedPurposes: [request.purpose] }).sign(request))
       .rejects.toMatchObject({ code: "local_secret_revoked" });
   });
@@ -142,7 +146,7 @@ describe("ArtifactSignerPort", () : any => {
       resolveSecretPayload: async () : Promise<any> => ({ payload: sharedPayload, revision: 7 })
     });
     await port.sign({
-      secretRef,
+      secretRef: fixtureRef,
       purpose: "plugin-artifact.sample-plugin.artifact",
       payloadDigest: `sha256:${"d".repeat(64)}`,
       context: { signatureKind: "artifact" }

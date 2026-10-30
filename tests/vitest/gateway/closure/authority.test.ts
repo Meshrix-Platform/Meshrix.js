@@ -3,6 +3,10 @@ import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
 import { context, descriptor, route, createTestGateway } from "../support";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
+const canned1 = "synthetic";
+
+
+
 
 const policy = createGatewayPolicy({ now: () => 1000 });
 const invocation = { routeRef: "A", method: "tools/call", params: { amount: 1 } };
@@ -48,9 +52,9 @@ describe("PR82 explicit grant and verified approval", () => {
     let revoked = false;
     const gateway = createTestGateway({
       admissionOptions: { maxInFlight: 1 },
-      descriptors: [descriptor({ route: route({ metadata: { credentialBinding: "synthetic" }, effectClass: "safe_write" }) })],
+      descriptors: [descriptor({ route: route({ metadata: { credentialBinding: canned1 }, effectClass: "safe_write" }) })],
       currentAuthority: { read: async ({ context: original }) => ({ ...original, grant: { ...original.grant, revoked } }) },
-      credentialProvider: { resolve: async () => { secrets += 1; return { Authorization: "synthetic" }; } },
+      credentialProvider: { resolve: async () => { secrets += 1; return { Authorization: canned1 }; } },
       upstream: { invoke: async () => { calls += 1; await hold; return { status: 200, body: { resultType: "complete", content: [{ type: "text", text: "ok" }] } }; } }
     });
     await gateway.start();
@@ -72,8 +76,8 @@ describe("PR82 explicit grant and verified approval", () => {
     const hold = new Promise<void>((resolve) => { release = resolve; });
     let reads = 0;
     let sends = 0;
-    const original = descriptor({ route: route({ logicalRoute: "bound", revision: "r1", metadata: { credentialBinding: "synthetic" }, effectClass: "read" }) });
-    const gateway = createTestGateway({ descriptors: [original], credentialProvider: { async resolve() { reads += 1; if (reads === 1) await hold; return { Authorization: "synthetic" }; } },
+    const original = descriptor({ route: route({ logicalRoute: "bound", revision: "r1", metadata: { credentialBinding: canned1 }, effectClass: "read" }) });
+    const gateway = createTestGateway({ descriptors: [original], credentialProvider: { async resolve() { reads += 1; if (reads === 1) await hold; return { Authorization: canned1 }; } },
       upstream: { async invoke() { sends += 1; return { status: 200, body: { resultType: "complete", content: [] } }; } } });
     await gateway.start();
     try {

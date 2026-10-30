@@ -1,4 +1,7 @@
-export const AUTHORIZED_VENDORED_PACKAGE_ROOT = "vendor";
+const canned1 = "vendor";
+
+
+export const AUTHORIZED_VENDORED_PACKAGE_ROOT = canned1;
 export const AUTHORIZED_VENDORED_TARBALL_PATTERN: RegExp =
   /^vendor\/pactium-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\.tgz$/u;
 

@@ -16,6 +16,12 @@ import {
 } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
 import { authHeaders } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/discovery.ts";
 import { resolveProxyCredentials } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
+const canned1 = "convert-full-access-debug";
+const canned2 = "Bearer x";
+const canned3 = "convert-require-approval-debug";
+
+
+
 
 // Client-side mirror of packages/agents/src/upstream-gateway/support.ts
 // safePublicToolSegment; the server remains the source of truth and the
@@ -279,7 +285,7 @@ export async function runMcpJourney({
   fixtureBytes,
   fixtureFileName,
   artifactReference,
-  operationKey = "convert-full-access-debug",
+  operationKey = canned1,
   expectedCoreTools = ["meshrix.discovery", "meshrix.gateway"],
   expectedOperationKeys = [
     "convert-require-approval-debug",
@@ -471,7 +477,7 @@ export async function probeApiKeyUploadRequest({
     const headers: Record<string, any> = {
       ...authHeaders(token, target, baseUrl)
     };
-    if (ambiguousCredential) headers.Authorization = "Bearer x";
+    if (ambiguousCredential) headers.Authorization = canned2;
     if (method === "POST") headers["Content-Type"] = "application/json";
     else if (method === "PUT") headers["Content-Type"] = "application/octet-stream";
     const response: any = await fetch(url, {
@@ -511,7 +517,7 @@ export async function runMcpApprovalRequest({
   baseUrl,
   serviceId,
   artifactReference,
-  operationKey = "convert-require-approval-debug",
+  operationKey = canned3,
   env = {},
   redact = (value?: any) : any => value,
   callTimeoutMs = 120000

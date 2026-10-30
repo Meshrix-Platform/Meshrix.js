@@ -7,6 +7,10 @@ import {
   filterJobsForCaller
 } from "../../../packages/protocols/http/controllers/jobs-controller-access.ts";
 import { createJobArtifactHandlers } from "../../../packages/protocols/http/controllers/jobs-controller-artifact-handlers.ts";
+const canned1 = "scoped_api_key";
+
+
+
 
 function responseRecorder() : any {
   return {
@@ -38,7 +42,7 @@ const JOB: Readonly<Record<string, any>> = Object.freeze({
 
 function scopedApiKeySession() : any {
   return apiKeyUploadAuthSession(Object.freeze({
-    credentialKind: "scoped_api_key",
+    credentialKind: canned1,
     workloadPrincipalId: "api-key-workload",
     organizationNodeId: "organization:fixture",
     lifecycleRevision: 1,

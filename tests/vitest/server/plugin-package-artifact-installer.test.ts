@@ -19,6 +19,11 @@ import {
 import { computePluginPackagePayloadDigest } from "../../../packages/foundation/src/module-system/plugin-package-validator.ts";
 import { loadPluginRegistry } from "../../../packages/foundation/src/module-system/plugin-registry.ts";
 import { activatePluginDeployment } from "../../../packages/foundation/src/module-system/plugin-runtime.ts";
+const canned1 = "secret://fixture/plugin-package-installer";
+const canned2 = "ed25519:unverified";
+
+
+
 
 const roots: any[] = [];
 const coreContractDigest: any = `sha256:${"c".repeat(64)}`;
@@ -139,7 +144,7 @@ async function host() : Promise<any> {
     artifactRoot: path.join(root, "artifacts"),
     trustedPublicKeys: { [keyId]: publicKey.export({ format: "jwk" }) },
     artifactSigner: artifactSigner(privateKey, keyId),
-    secretRef: "secret://fixture/plugin-package-installer",
+    secretRef: canned1,
     coreContractDigest
   });
   return { root, lifecycleStatePort, artifactAuthority };
@@ -186,7 +191,7 @@ describe("canonical plugin package artifact installer", () : any => {
       packageBytes({ runtimePluginId: "other-plugin" }),
       packageBytes({ runtimeModule: "./runtime.mjs" }),
       packageBytes({ contractDigest: `sha256:${"d".repeat(64)}` }),
-      packageBytes({ trust: { algorithm: "ed25519", publicKeyId: "ed25519:unverified", signature: "unverified" } })
+      packageBytes({ trust: { algorithm: "ed25519", publicKeyId: canned2, signature: "unverified" } })
     ]) {
       const context: any = await host();
       await expect(installPluginPackageArchive(installInput(bytes, context))).rejects.toMatchObject({

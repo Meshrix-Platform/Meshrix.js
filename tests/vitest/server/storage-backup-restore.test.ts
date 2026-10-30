@@ -37,6 +37,13 @@ import {
   PROTOCOL_STORAGE_CATEGORY
 } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
 import { createMeshrixPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-runtime";
+const canned1 = "abc";
+const canned5 = "33333333-3333-4333-8333-333333333333";
+const canned4 = "unverifiable-owner";
+const canned2 = "11111111-1111-4111-8111-111111111111";
+const canned3 = "22222222-2222-4222-8222-222222222222";
+const canned6 = "55555555-5555-4555-8555-555555555555";
+
 
 const tempRoots: any[] = [];
 
@@ -124,7 +131,7 @@ afterEach(async () : Promise<any> => {
 describe("storage backup restore", () : any => {
   it("createStorageBackup skips excluded top-level directories and classifies files", async () : Promise<any> => {
     const userDataPath: any = await tempDir("meshrix-backup-classify-");
-    await writeFixture(userDataPath, "auth/token.json", JSON.stringify({ token: "abc" }));
+    await writeFixture(userDataPath, "auth/token.json", JSON.stringify({ token: canned1 }));
     await writeFixture(userDataPath, "jobs/queue.json", JSON.stringify({ state: "queued" }));
     await writeFixture(userDataPath, "objects/index.dat", "objects");
     const pendingObjectPath: any = await writeFixture(
@@ -1175,6 +1182,14 @@ describe("storage backup restore", () : any => {
     ).href;
     const childSource: any = `
       import fs from "node:fs/promises";
+
+const canned1 = "abc";
+const canned2 = "11111111-1111-4111-8111-111111111111";
+const canned3 = "22222222-2222-4222-8222-222222222222";
+const canned4 = "unverifiable-owner";
+const canned5 = "33333333-3333-4333-8333-333333333333";
+const canned6 = "55555555-5555-4555-8555-555555555555";
+
       const { createMeshrixPactiumRuntime } = await import(process.env.PACTIUM_RUNTIME_MODULE_URL);
       const runtime = createMeshrixPactiumRuntime({
         dataDir: process.env.USER_DATA_PATH,
@@ -1287,7 +1302,7 @@ describe("storage backup restore", () : any => {
     await fs.writeFile(maintenancePath, JSON.stringify({
       schemaVersion: "v0.0.1:schema:definition-1",
       pid: stalePid,
-      token: "11111111-1111-4111-8111-111111111111",
+      token: canned2,
       processIdentity: "1".repeat(64),
       createdAt: new Date().toISOString()
     }), { mode: 0o600 });
@@ -1301,7 +1316,7 @@ describe("storage backup restore", () : any => {
     await fs.writeFile(maintenancePath, JSON.stringify({
       schemaVersion: "v0.0.1:schema:definition-1",
       pid: process.pid,
-      token: "22222222-2222-4222-8222-222222222222",
+      token: canned3,
       processIdentity: currentIdentity.value,
       processIdentitySource: currentIdentity.source,
       createdAt: new Date().toISOString()
@@ -1318,7 +1333,7 @@ describe("storage backup restore", () : any => {
     await fs.writeFile(maintenancePath, JSON.stringify({
       schemaVersion: "v0.0.1:schema:definition-1",
       pid: stalePid,
-      token: "unverifiable-owner",
+      token: canned4,
       processIdentity: "2".repeat(64),
       createdAt: new Date().toISOString()
     }), { mode: 0o600 });
@@ -1343,12 +1358,13 @@ describe("storage backup restore", () : any => {
     await fs.writeFile(runtimePath, JSON.stringify({
       schemaVersion: "v0.0.1:schema:definition-1",
       pid: stalePid,
-      token: "33333333-3333-4333-8333-333333333333",
+      token: canned5,
       processIdentity: "3".repeat(64),
       createdAt: new Date().toISOString()
     }), { mode: 0o600 });
 
-    const replacementToken: any = "44444444-4444-4444-8444-444444444444";
+    const minted = "44444444-4444-4444-8444-444444444444";
+    const replacementToken: any = minted;
     const originalLstatSync: any = fsSync.lstatSync.bind(fsSync);
     let replaced: any = false;
     vi.spyOn(fsSync, "lstatSync").mockImplementation((filePath?: any, options?: any) : any => {
@@ -1387,7 +1403,7 @@ describe("storage backup restore", () : any => {
     await fs.writeFile(runtimePath, JSON.stringify({
       schemaVersion: "v0.0.1:schema:definition-1",
       pid: process.pid,
-      token: "55555555-5555-4555-8555-555555555555",
+      token: canned6,
       processIdentity: differentProcessIdentity(currentIdentity.value),
       processIdentitySource: currentIdentity.source,
       createdAt: new Date().toISOString()

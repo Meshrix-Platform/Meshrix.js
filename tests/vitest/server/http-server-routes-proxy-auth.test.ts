@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { dispatchRegisteredHttpOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
 import { createOperationRouteIndex } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
+const canned1 = "unit.proxy";
+const canned2 = "fixture-secret";
+
+
+
 
 function proxyOperation() : any {
   return {
@@ -9,7 +14,7 @@ function proxyOperation() : any {
     public: false,
     readOnly: true,
     safety: { risk: "read_only" },
-    concurrency: { workloadClass: "parallel", key: "unit.proxy", maxParallel: 16, cost: 1 },
+    concurrency: { workloadClass: "parallel", key: canned1, maxParallel: 16, cost: 1 },
     http: {
       method: "POST",
       path: "/api/workspaces/:workspaceId/proxy",
@@ -56,7 +61,7 @@ describe("HTTP server registered API proxy governance", () : any => {
     const response: any = responseFixture();
     const operation: any = proxyOperation();
     const routeIndex: any = createOperationRouteIndex([operation]);
-    const requestBody: any = Buffer.from(JSON.stringify({ secretBindingId: "fixture-secret" }));
+    const requestBody: any = Buffer.from(JSON.stringify({ secretBindingId: canned2 }));
     const url: any = new URL("http://127.0.0.1/api/workspaces/workspace-allowed/proxy?serviceId=fixture-service");
 
     await expect(dispatchRegisteredHttpOperation({
@@ -79,7 +84,7 @@ describe("HTTP server registered API proxy governance", () : any => {
       input: expect.objectContaining({
         workspaceId: "workspace-allowed",
         serviceId: "fixture-service",
-        secretBindingId: "fixture-secret"
+        secretBindingId: canned2
       })
     }));
     expect(response.statusCode).toBe(204);

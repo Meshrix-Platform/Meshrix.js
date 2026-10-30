@@ -5,6 +5,11 @@ import { publicUpstreamMcpTool } from "../../../../packages/agents/src/upstream-
 import { createModernDownstreamAdapter } from "@meshrix/protocols/mcp/modern-downstream";
 import { context, createTestGateway, descriptor, modernHttpRequest, QueueUpstream, response, route } from "../support";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "tools/call";
+const canned2 = "synthetic-private";
+
+
+
 
 describe("PR82 externally validated MCP wire", () => {
   it("[GC-023 GC-024 GC-029] preserves the complete envelope and rejects unknown and private discriminants", () => {
@@ -28,7 +33,7 @@ describe("PR82 externally validated MCP wire", () => {
 
   it("[GC-031 partial] retains valid external JSON Schema 2020-12 keywords and validates the business object", () => {
     const schema = { type: "object", properties: { count: { type: "number", exclusiveMinimum: 0 }, node: { $ref: "#/$defs/node" } }, required: ["count"], $defs: { node: { type: "object", properties: { next: { $ref: "#/$defs/node" } } } } };
-    const projected = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(), service: { serviceId: "synthetic", operations: [{ operationKey: "tools/call", risk: "read_only" }] }, tool: { name: "recursive", inputSchema: schema, annotations: { readOnlyHint: true, arbitraryHint: "informational" } } });
+    const projected = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(), service: { serviceId: "synthetic", operations: [{ operationKey: canned1, risk: "read_only" }] }, tool: { name: "recursive", inputSchema: schema, annotations: { readOnlyHint: true, arbitraryHint: "informational" } } });
     expect(projected.inputSchema).toEqual(schema);
     expect(projected.annotations.arbitraryHint).toBe("informational");
     const validator = compileExternalSchema(projected.inputSchema);
@@ -38,7 +43,7 @@ describe("PR82 externally validated MCP wire", () => {
 
   it("[GC-028] retains the peer numeric code while peer text and data stay private, and tool isError remains a successful tool result", async () => {
     const upstream = new QueueUpstream([
-      response({ jsonrpc: "2.0", id: 1, error: { code: -32042, message: "Synthetic peer refusal <private-diagnostic>", data: { field: "value", credential: "synthetic-private", stack: "synthetic-stack" } } }),
+      response({ jsonrpc: "2.0", id: 1, error: { code: -32042, message: "Synthetic peer refusal <private-diagnostic>", data: { field: "value", credential: canned2, stack: "synthetic-stack" } } }),
       response({ jsonrpc: "2.0", id: 2, result: { resultType: "complete", isError: true, content: [{ type: "text", text: "business failure" }] } })
     ]);
     const gateway = createTestGateway({ descriptors: [descriptor({ route: route({ effectClass: "read" }) })], upstream });

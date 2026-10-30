@@ -165,7 +165,7 @@ async fn recover_fresh_profile_enrolls_from_text_alone() {
         route_id: "route.test".into(),
         tenant_id: "tenant.test".into(),
         mode: "personal".into(),
-        endpoint_spki_pin: "spki.test".into(),
+        endpoint_spki_pin: format!("spki.test-{}", std::process::id()).into(),
         principal_ref: "principal.test".into(),
         relay_service: "https://relay.test".into(),
         vault_id: vault_id.into(),
@@ -249,7 +249,7 @@ async fn recover_fresh_profile_requires_route_selection_for_multiple() {
         route_id: route.into(),
         tenant_id: "tenant.test".into(),
         mode: "personal".into(),
-        endpoint_spki_pin: "spki.test".into(),
+        endpoint_spki_pin: format!("spki.test-{}", std::process::id()).into(),
         principal_ref: "principal.test".into(),
         relay_service: "https://relay.test".into(),
         vault_id: vault_id.into(),
@@ -290,7 +290,8 @@ async fn recover_fresh_profile_requires_route_selection_for_multiple() {
 /// With no snapshot the outcome is `snapshot_missing`, not an error.
 #[tokio::test(flavor = "current_thread")]
 async fn recover_fresh_profile_reports_missing_snapshot() {
-    let key = generate_recovery_key(Some("vault.import.empty".into())).unwrap();
+    let vault_id = format!("vault.import-{}", std::process::id());
+        let key = generate_recovery_key(Some(vault_id)).unwrap();
     let text = format_recovery_text(&key).unwrap();
     let vault = std::sync::Arc::new(FakeVault {
         inner: Mutex::new(HashMap::new()),
@@ -327,7 +328,8 @@ async fn import_recovery_text_requires_access_provisioner() {
         },
     )
     .unwrap();
-    let key = generate_recovery_key(Some("vault.import.guard".into())).unwrap();
+    let vault_id = format!("vault.import-{}", std::process::id());
+        let key = generate_recovery_key(Some(vault_id)).unwrap();
     let text = format_recovery_text(&key).unwrap();
     let err = service
         .import_recovery_text(&text, Some("https://svc.test"), None)
@@ -368,7 +370,8 @@ async fn import_recovery_text_propagates_access_refusal() {
         },
     )
     .unwrap();
-    let key = generate_recovery_key(Some("vault.import.refused".into())).unwrap();
+    let vault_id = format!("vault.import-{}", std::process::id());
+        let key = generate_recovery_key(Some(vault_id)).unwrap();
     let text = format_recovery_text(&key).unwrap();
     let err = service
         .import_recovery_text(&text, Some("https://svc.test"), Some(&Refused))

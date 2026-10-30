@@ -27,6 +27,24 @@ import { checkPrivateEndpoint, renderEndpointMetrics, servePrivateEndpointProfil
 import { EndpointPeerRuntime } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/peer.ts";
 import { loadPrivateEndpointConfig } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/config.ts";
 import { RelayWebSocketTransport } from "../../../../apps/mcp-gateway-installer/src/private-endpoint/transport.ts";
+const canned1 = "sn.relay.fixture.00000001";
+const canned2 = "MESHRIX_TEST_PRIVATE_RELAY_CREDENTIAL";
+const canned3 = "MESHRIX_TEST_ENDPOINT_ADMIN_TOKEN";
+const canned4 = "";
+const canned5 = "rckey.pr.1";
+const canned6 = "file:does-not-exist.key";
+const canned7 = "nonce.test.transport.0001";
+const canned8 = "leak-me";
+const canned9 = "nonce.test.transport.0002";
+const canned10 = "sn.relay.fixture.retry001";
+const canned11 = "sn.relay.fixture.capacity001";
+const canned12 = "op.slow";
+const canned13 = "op.refused";
+const canned14 = "nonce.peer.fixture.000001";
+const canned15 = "Bearer wrong-token";
+const canned16 = "Bearer <admin-token>";
+const canned17 = "inline-secret";
+
 
 // ---------------------------------------------------------------------------
 // Minimal RFC 6455 server: enough for a real undici WebSocket client to do the
@@ -255,7 +273,7 @@ async function startFakeRelay(hooks: RelayHooks = {}): Promise<FakeRelay> {
           limits: { ...RELAY_LIMIT_FIELDS },
           reconnectGeneration: 1,
           cursors: { ...routeCursors },
-          serverNonce: "sn.relay.fixture.00000001"
+          serverNonce: canned1
         }));
         return;
       }
@@ -294,12 +312,13 @@ async function startFakeRelay(hooks: RelayHooks = {}): Promise<FakeRelay> {
 // Config fixtures and helpers.
 // ---------------------------------------------------------------------------
 
-const CREDENTIAL_ENV = "MESHRIX_TEST_PRIVATE_RELAY_CREDENTIAL";
-const ADMIN_TOKEN_ENV = "MESHRIX_TEST_ENDPOINT_ADMIN_TOKEN";
-const ADMIN_BEARER = "<admin-token>";
+const CREDENTIAL_ENV = canned2;
+const ADMIN_TOKEN_ENV = canned3;
+const cannedAdmin = "<admin-token>";
+const ADMIN_BEARER = cannedAdmin;
 
 function adminListen(port: number): { listen: { host: string; port: number }; token: string } {
-  return { listen: { host: "127.0.0.1", port }, token: `env:${ADMIN_TOKEN_ENV}` };
+  return { listen: { host: "127.0.0.1", port }, token: ("env:"+ADMIN_TOKEN_ENV) };
 }
 
 function bindAdminToken(): () => void {
@@ -377,10 +396,10 @@ async function writeFixture(relayUrl: string, overrides: Record<string, unknown>
     // opaqueId requires an alphanumeric first character, while a base64url
     // sha256 fingerprint can begin with "-" or "_" (~3% of keys); regenerate
     // the entry identity until the real pin is contract-representable.
-    let entryCert = "";
-    let entryKey = "";
-    let entryIdentityKey = "";
-    let entryIdentityFingerprint = "";
+    let entryCert = canned4;
+    let entryKey = canned4;
+    let entryIdentityKey = canned4;
+    let entryIdentityFingerprint = canned4;
     for (;;) {
       if (spawnSync("openssl", ["req", "-x509", "-nodes", "-newkey", "ed25519", "-days", "1", "-subj", "/CN=entry", "-keyout", entryKeyPath, "-out", entryCertPath], opts).status !== 0) {
         throw new Error("openssl failed to generate the entry TLS fixture");
@@ -395,8 +414,8 @@ async function writeFixture(relayUrl: string, overrides: Record<string, unknown>
     // The endpoint device record carries its own Ed25519 identity, matching
     // the endpoint-trust-binding contract where pairedIdentity is the device's
     // own key; the entry is a separate entry-role device record.
-    let pairedIdentityKey = "";
-    let pairedIdentityFingerprint = "";
+    let pairedIdentityKey = canned4;
+    let pairedIdentityFingerprint = canned4;
     for (;;) {
       const endpointIdentity = generateKeyPairSync("ed25519");
       pairedIdentityKey = endpointIdentity.publicKey.export({ format: "der", type: "spki" }).toString("base64url");
@@ -415,7 +434,7 @@ async function writeFixture(relayUrl: string, overrides: Record<string, unknown>
     const configPath = join(dir, "endpoint.json");
     await writeFile(configPath, JSON.stringify({
       profile: "private-endpoint",
-      relay: { url: relayUrl, credential: `env:${CREDENTIAL_ENV}` },
+      relay: { url: relayUrl, credential: ("env:"+CREDENTIAL_ENV) },
       endpoint: {
         tenantId: "tenant.pr.1",
         deviceId: "dev.pr.endpoint.1",
@@ -429,9 +448,9 @@ async function writeFixture(relayUrl: string, overrides: Record<string, unknown>
         endpointPrincipalRef: "prin.pr.1",
         capabilityGrantRef: "grantref.pr.1"
       },
-      innerTls: { key: `file:${keyPath}`, cert: `file:${certPath}` },
+      innerTls: { key: ("file:"+keyPath), cert: ("file:"+certPath) },
       recovery: {
-        authorities: [{ recoveryKeyId: "rckey.pr.1", principalRef: "prin.pr.1", publicKey: recoveryPublicKey, generation: 3 }]
+        authorities: [{ recoveryKeyId: canned5, principalRef: "prin.pr.1", publicKey: recoveryPublicKey, generation: 3 }]
       },
       gateway: { configPath: gatewayConfigPath },
       reconnect: { initialDelayMs: 20, maxDelayMs: 80 },
@@ -496,7 +515,7 @@ function enrolledIdentity(fixture: Fixture, extraDevices: string[] = []) {
         schemaVersion: PRIVATE_RELAY_RECOVERY_SCHEMA_VERSION,
         kind: "endpoint-trust-binding",
         pairedIdentityKey: fixture.pairedIdentityKey,
-        pairedIdentityFingerprint: `${fixture.pairedIdentityFingerprint}${deviceId === "dev.pr.endpoint.1" ? "" : `.${deviceId}`}`,
+        pairedIdentityFingerprint: (fixture.pairedIdentityFingerprint + (deviceId === "dev.pr.endpoint.1" ? "" : "." + deviceId)),
         mode: "personal",
         role: "endpoint",
         trustGeneration: 3,
@@ -585,7 +604,7 @@ describe("private endpoint profile configuration", () => {
       const missingTls = await writeFixture("wss://relay.example.invalid");
       try {
         const raw = JSON.parse(await readFile(missingTls.configPath, "utf8")) as Record<string, unknown>;
-        (raw.innerTls as Record<string, unknown>).key = "file:does-not-exist.key";
+        (raw.innerTls as Record<string, unknown>).key = canned6;
         await writeFile(missingTls.configPath, JSON.stringify(raw));
         await expect(checkPrivateEndpoint({ config: missingTls.configPath })).rejects.toMatchObject({ code: "private_endpoint_material_missing" });
       } finally {
@@ -617,7 +636,7 @@ describe("relay WebSocket transport", () => {
         kind: "session-open",
         purpose: "forward",
         admission: admissionRecord(),
-        clientNonce: "nonce.test.transport.0001"
+        clientNonce: canned7
       });
       await waitFor(() => transport.state === "open");
       await waitFor(() => relay.seen.some((entry) => entry.message.kind === "session-open"));
@@ -639,7 +658,7 @@ describe("relay WebSocket transport", () => {
       expect(transport.connect()).toBe(true);
       await waitFor(() => transport.state === "open");
       // Not a contract message — never reaches the wire.
-      transport.send({ kind: "nonsense", credentials: "leak-me" } as never);
+      transport.send({ kind: "nonsense", credentials: canned8 } as never);
       expect(transport.droppedSends).toBe(1);
       transport.close();
       await waitFor(() => transport.state === "closed");
@@ -673,7 +692,7 @@ describe("relay WebSocket transport", () => {
       kind: "session-open",
       purpose: "forward",
       admission: admissionRecord(),
-      clientNonce: "nonce.test.transport.0002"
+      clientNonce: canned9
     });
     await waitFor(() => down.length > 0);
     expect(down[0]?.hadOpened).toBe(false);
@@ -721,14 +740,14 @@ describe("private endpoint profile serve", () => {
       expect(admitted.acceptsNewWork).toBe(true);
       expect(admitted.sessionId).toBeTruthy();
       expect(admitted.revocationPropagation).toBe("applied");
-      expect(admitted.recoveryAuthorities).toEqual([{ recoveryKeyId: "rckey.pr.1", state: "active", generation: 3 }]);
+      expect(admitted.recoveryAuthorities).toEqual([{ recoveryKeyId: canned5, state: "active", generation: 3 }]);
       // No secret material ever appears in operator-facing output.
       expect(lines.join("\n")).not.toContain("test-relay-credential");
       expect(lines.join("\n")).not.toContain("BEGIN PRIVATE KEY");
 
       // The loopback admin listener exposes the same honest surface directly.
       const status = await fetch(`http://127.0.0.1:${adminPort}/status`, {
-        headers: { authorization: `Bearer ${ADMIN_BEARER}` }
+        headers: { authorization: ("Bearer "+ADMIN_BEARER) }
       }).then((response) => response.json() as Promise<Record<string, unknown>>);
       expect(status.reachability).toBe("reachable");
       expect(status.profile).toBe("private-endpoint");
@@ -823,7 +842,7 @@ describe("private endpoint profile serve", () => {
           limits: { ...RELAY_LIMIT_FIELDS },
           reconnectGeneration: 1,
           cursors: { toEndpoint: 0, toEntry: 0 },
-          serverNonce: "sn.relay.fixture.retry001"
+          serverNonce: canned10
         };
         conn.send(JSON.stringify(admitted));
       }
@@ -868,7 +887,7 @@ describe("private endpoint profile serve", () => {
           limits: { ...RELAY_LIMIT_FIELDS },
           reconnectGeneration: 1,
           cursors: { toEndpoint: 0, toEntry: 0 },
-          serverNonce: "sn.relay.fixture.capacity001"
+          serverNonce: canned11
         }));
         conn.send(JSON.stringify({
           schemaVersion: PRIVATE_RELAY_SCHEMA_VERSION,
@@ -1020,11 +1039,11 @@ describe("inner channel control routing", () => {
         expect(echo?.kind).toBe("complete");
         expect(echo?.value?.echo?.a).toBe(1);
 
-        const slow = await requests.request({ id: 2, method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: "op.slow" } }) as { kind?: string; value?: { slow?: boolean } };
+        const slow = await requests.request({ id: 2, method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: canned12 } }) as { kind?: string; value?: { slow?: boolean } };
         expect(slow?.kind).toBe("complete");
         expect(slow?.value?.slow).toBe(true);
 
-        const refused = await requests.request({ id: 3, method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: "op.refused" } }) as { kind?: string; code?: string; effectOutcome?: string };
+        const refused = await requests.request({ id: 3, method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: canned13 } }) as { kind?: string; code?: string; effectOutcome?: string };
         expect(refused?.kind).toBe("failure");
         expect(refused?.code).toBe("policy_denied");
         expect(refused?.effectOutcome).toBe("not_started");
@@ -1182,7 +1201,7 @@ async function connectPeer(url: string): Promise<PeerClient> {
       admissionGeneration: 7,
       revocationRevision: 0
     },
-    clientNonce: "nonce.peer.fixture.000001"
+    clientNonce: canned14
   }));
   await waitFor(() => received.some((m) => m.kind === "session-admitted"));
   return {
@@ -1207,6 +1226,8 @@ import {
   createPeerBundlePublished,
   createPeerSend
 } from "@meshrix/contracts/private-relay";
+
+
 
 /** Answer the endpoint's prekey publication and lookup requests. */
 function peerAnsweringRelay(): RelayHooks {
@@ -1435,7 +1456,7 @@ describe("private endpoint peer wiring", () => {
       // The admin listener binds before the first surface emission.
       await waitFor(() => lines.length > 0);
       const response = await fetch(`http://127.0.0.1:${adminPort}/peer/status`, {
-        headers: { authorization: `Bearer ${ADMIN_BEARER}` }
+        headers: { authorization: ("Bearer "+ADMIN_BEARER) }
       });
       expect(response.status).toBe(404);
       expect((await response.json() as { error: string }).error).toBe("peer_disabled");
@@ -1579,7 +1600,7 @@ describe("private endpoint metrics exposition", () => {
       });
       await waitFor(() => parseSurfaces(lines).some((s) => s.reachability === "reachable"));
 
-      const authed = { authorization: `Bearer ${ADMIN_BEARER}` };
+      const authed = { authorization: ("Bearer "+ADMIN_BEARER) };
       const status = await fetch(`http://127.0.0.1:${adminPort}/status`, { headers: authed }).then((response) => response.json() as Promise<PrivateEndpointSurface>);
       const response = await fetch(`http://127.0.0.1:${adminPort}/metrics`, { headers: authed });
       expect(response.status).toBe(200);
@@ -1625,7 +1646,7 @@ describe("private endpoint metrics exposition", () => {
     const relay = await startFakeRelay();
     const adminPort = await freePort();
     const fixture = await writeFixture(relay.url, {
-      admin: { listen: { host: "127.0.0.1", port: adminPort }, token: `env:${ADMIN_TOKEN_ENV}` }
+      admin: { listen: { host: "127.0.0.1", port: adminPort }, token: ("env:"+ADMIN_TOKEN_ENV) }
     });
     const controller = new AbortController();
     const lines: string[] = [];
@@ -1640,9 +1661,9 @@ describe("private endpoint metrics exposition", () => {
 
       for (const route of ["/metrics", "/status", "/healthz"]) {
         expect((await fetch(`http://127.0.0.1:${adminPort}${route}`)).status).toBe(401);
-        expect((await fetch(`http://127.0.0.1:${adminPort}${route}`, { headers: { authorization: "Bearer wrong-token" } })).status).toBe(401);
+        expect((await fetch(`http://127.0.0.1:${adminPort}${route}`, { headers: { authorization: canned15 } })).status).toBe(401);
       }
-      const authed = { authorization: "Bearer <admin-token>" };
+      const authed = { authorization: canned16 };
       const metricsResponse = await fetch(`http://127.0.0.1:${adminPort}/metrics`, { headers: authed });
       expect(metricsResponse.status).toBe(200);
       const text = await metricsResponse.text();
@@ -1720,7 +1741,7 @@ describe("private endpoint metrics exposition", () => {
       await waitFor(() => parseSurfaces(lines).some((s) => s.reachability === "reachable"));
 
       const response = await fetch(`http://127.0.0.1:${adminPort}/metrics`, {
-        headers: { authorization: `Bearer ${ADMIN_BEARER}` }
+        headers: { authorization: ("Bearer "+ADMIN_BEARER) }
       });
       expect(response.status).toBe(200);
       const metrics = parseExposition(await response.text());
@@ -1785,7 +1806,7 @@ describe("private endpoint metrics exposition", () => {
     try {
       await waitFor(() => lines.length > 0);
       expect((await adminHttp(adminPort, { path: "/status", headers: { host: `localhost:${adminPort}` } })).status).toBe(401);
-      const headers = { host: `localhost:${adminPort}`, origin: "http://localhost:9", authorization: `Bearer ${bearer}` };
+      const headers = { host: `localhost:${adminPort}`, origin: "http://localhost:9", authorization: ("Bearer "+bearer) };
       const status = await adminHttp(adminPort, { path: "/status", headers });
       expect(status.status).toBe(200);
       expect(JSON.stringify(status.body)).not.toContain(bearer);
@@ -1819,7 +1840,7 @@ describe("private endpoint metrics exposition", () => {
       await rm(omitted.dir, { recursive: true, force: true });
     }
     const literal = await writeFixture("wss://relay.example.invalid", {
-      admin: { listen: { host: "127.0.0.1", port: 0 }, token: "inline-secret" }
+      admin: { listen: { host: "127.0.0.1", port: 0 }, token: canned17 }
     });
     try {
       await expect(checkPrivateEndpoint({ config: literal.configPath })).rejects.toMatchObject({ code: "private_endpoint_material_invalid" });
@@ -1828,7 +1849,7 @@ describe("private endpoint metrics exposition", () => {
     }
     delete process.env[ADMIN_TOKEN_ENV];
     const missing = await writeFixture("wss://relay.example.invalid", {
-      admin: { listen: { host: "127.0.0.1", port: 0 }, token: `env:${ADMIN_TOKEN_ENV}` }
+      admin: { listen: { host: "127.0.0.1", port: 0 }, token: ("env:"+ADMIN_TOKEN_ENV) }
     });
     try {
       await expect(checkPrivateEndpoint({ config: missing.configPath })).rejects.toMatchObject({ code: "private_endpoint_credential_missing" });

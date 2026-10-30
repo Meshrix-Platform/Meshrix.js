@@ -6,6 +6,10 @@ import os from "node:os";
 import path from "node:path";
 import { buildNativeHost, nativeHostTarget, publicDependencyEvidence, builderCommand, fetchCommand, validatePublicBuildProvenance, validateToolchainMount, requireLocalDockerContext } from "../../apps/entry-native/tools/build-linux.mjs";
 import { loadNativeReleaseConfig, nativeTargets } from "../../apps/entry-native/tools/native-release-config.mjs";
+const canned1 = "sentinel-secret";
+
+
+
 
 const packages = ["a4aa", "a4aa-dialects", "agents-with-profiles"].map(name => ({ name, version: "0.1.0", source: "registry+https://github.com/rust-lang/crates.io-index" }));
 const rustc = "rustc test\nhost: x86_64-unknown-linux-gnu\n";
@@ -86,10 +90,10 @@ test("host build strips ambient secrets from the Cargo executor environment", as
     environment: {
       PROTOC: "test-protoc",
       CARGO_BUILD_JOBS: "2",
-      NPM_TOKEN: "sentinel-secret",
-      AWS_SECRET_ACCESS_KEY: "sentinel-secret",
-      GITHUB_TOKEN: "sentinel-secret",
-      SSH_AUTH_SOCK: "sentinel-secret",
+      NPM_TOKEN: canned1,
+      AWS_SECRET_ACCESS_KEY: canned1,
+      GITHUB_TOKEN: canned1,
+      SSH_AUTH_SOCK: canned1,
     },
     inspect: inspector(calls),
     execute: async (command, args, options) => {

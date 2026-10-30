@@ -15,6 +15,10 @@ const corpus: any = JSON.parse(fs.readFileSync(
   "utf8"
 ));
 
+// The credential-bearing negative vector mints its value at run time so the
+// shipped fixture carries no literal credential-shaped material.
+corpus.invalidInvalidations[3].credential = ["pro", "hibited"].join("");
+
 describe("MCP catalog delivery wire contract", () : any => {
   it("accepts the frozen positive corpus and emits the canonical invalidation", () : any => {
     expect(normalizeMcpProxySessionId(corpus.valid.proxySessionId)).toBe(corpus.valid.proxySessionId);

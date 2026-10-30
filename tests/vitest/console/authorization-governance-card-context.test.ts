@@ -7,15 +7,22 @@ import {
   provideAuthorizationGovernanceCardContext,
   useAuthorizationGovernanceCardContext,
 } from "../../../apps/console/composables/authorizationGovernanceCardContext";
+const canned1 = "{}";
+const canned2 = "role";
+const canned3 = "ready";
+const canned4 = "";
+
+
+
 
 function makePermissionsContext() : any {
   return {
     authorizationGovernance: { roles: [] },
-    authorizationGovernanceEditorBody: "{}",
-    authorizationGovernanceEditorKind: "role",
+    authorizationGovernanceEditorBody: canned1,
+    authorizationGovernanceEditorKind: canned2,
     authorizationGovernanceEditorKinds: [{ label: "Role", value: "role" }],
-    authorizationGovernanceEditorStatus: "ready",
-    authorizationGovernanceError: "",
+    authorizationGovernanceEditorStatus: canned3,
+    authorizationGovernanceError: canned4,
     authorizationGovernanceMetrics: { roles: 1 },
     authorizationGovernanceSaving: false,
     ignored: "ignore",

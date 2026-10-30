@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+const canned1 = "inventory-mcp";
+const canned90 = "replacement";
+const canned2 = "replacement";
+const canned3 = "list";
+const canned4 = "inventory";
+const canned5 = "passthrough";
+const canned6 = "get";
+
 
 const client: any = vi.hoisted(() : any => ({
   createUpstreamService: vi.fn(),
@@ -50,6 +58,10 @@ import {
   unregisterConsoleConfirmHost,
 } from "../../../apps/console/composables/console-confirm-controller";
 
+
+
+
+
 function publication(revision: number, digest: any = "a".repeat(64)) : any {
   return {
     publicationRef: `urn:meshrix:upstream-publication:${revision}`,
@@ -91,7 +103,7 @@ function portableMcpDocument(): Record<string, any> {
   return {
     kind: "meshrix.upstream-service",
     schemaVersion: "v0.0.1:upstream-service:portable-import-2",
-    serviceKey: "inventory-mcp",
+    serviceKey: canned1,
     descriptor: {
       serviceProtocol: "mcp",
       mcp: {
@@ -478,7 +490,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
 
     expect(loadDraft.attributes("disabled")).toBeDefined();
 
-    await textarea.setValue('{"kind":"wrong","schemaVersion":"v0.0.1:upstream-service:portable-import-2","serviceKey":"replacement","descriptor":{}}');
+    await textarea.setValue('{"kind":"wrong","schemaVersion":"v0.0.1:upstream-service:portable-import-2","serviceKey":"' + "replacement" + '","descriptor":{}}');
     await validate.trigger("click");
     await flushPromises();
     expect((serviceKey.element as HTMLInputElement).value).toBe("existing-draft");
@@ -488,13 +500,13 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     await textarea.setValue(JSON.stringify({
       kind: "meshrix.upstream-service",
       schemaVersion: "v0.0.1:upstream-service:portable-import-2",
-      serviceKey: "replacement",
+      serviceKey: canned90,
       descriptor: {
         serviceProtocol: "http",
         baseUrl: "https://service.invalid",
         tags: ["portable"],
         operations: [{
-          operationKey: "list", method: "GET", path: "/items",
+          operationKey: canned3, method: "GET", path: "/items",
           payloadTransport: {
             request: { mode: "structured_json", maxBytes: 1024, mediaTypes: ["application/json"] },
             response: { mode: "structured_json", maxBytes: 2048, mediaTypes: ["application/json"] }
@@ -557,12 +569,12 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     const fileText: any = JSON.stringify({
       kind: "meshrix.upstream-service",
       schemaVersion: "v0.0.1:upstream-service:portable-import-2",
-      serviceKey: "inventory",
+      serviceKey: canned4,
       descriptor: {
         serviceProtocol: "http",
         baseUrl: "https://service.invalid:443",
         operations: [{
-          operationKey: "list", method: "GET", path: "/items",
+          operationKey: canned3, method: "GET", path: "/items",
           payloadTransport: {
             request: { mode: "structured_json", maxBytes: 1024, mediaTypes: ["application/json"] },
             response: { mode: "structured_json", maxBytes: 2048, mediaTypes: ["application/json"] }
@@ -612,13 +624,13 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     await importer.find("textarea").setValue(JSON.stringify({
       kind: "meshrix.upstream-service",
       schemaVersion: "v0.0.1:upstream-service:portable-import-2",
-      serviceKey: "inventory",
+      serviceKey: canned4,
       descriptor: {
         serviceProtocol: "http",
         baseUrl: "https://service.invalid",
         healthPath: "/healthz",
         operations: [{
-          operationKey: "list", method: "GET", path: "/items",
+          operationKey: canned3, method: "GET", path: "/items",
           payloadTransport: {
             request: { mode: "structured_json", maxBytes: 1024, mediaTypes: ["application/json"] },
             response: { mode: "structured_json", maxBytes: 2048, mediaTypes: ["application/json"] }
@@ -653,7 +665,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       baseUrl: "https://service.invalid",
       healthPath: "/healthz",
       operations: [{
-        operationKey: "list", method: "GET", path: "/items",
+        operationKey: canned3, method: "GET", path: "/items",
         payloadTransport: {
           request: { mode: "structured_json", maxBytes: 1024, mediaTypes: ["application/json"] },
           response: { mode: "structured_json", maxBytes: 2048, mediaTypes: ["application/json"] }
@@ -765,12 +777,12 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     expect(() => parsePortableUpstreamServiceImport(JSON.stringify({
       kind: "meshrix.upstream-service",
       schemaVersion: "v0.0.1:upstream-service:portable-import-2",
-      serviceKey: "passthrough",
+      serviceKey: canned5,
       descriptor: {
         serviceProtocol: "http",
         baseUrl: "https://service.invalid:443",
         operations: [{
-          operationKey: "get",
+          operationKey: canned6,
           method: "GET",
           path: "/items",
           payloadTransport: {
@@ -802,7 +814,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       },
     };
     expect(parsePortableUpstreamServiceImport(JSON.stringify(document))).toMatchObject({
-      serviceKey: "inventory-mcp",
+      serviceKey: canned1,
       descriptor: {
         serviceProtocol: "mcp",
         allowLocalNetwork: false,
@@ -877,7 +889,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       tagPolicy: { requiredTags: ["catalog"] },
       circuitBreaker: { enabled: true },
       operations: [{
-        operationKey: "list",
+        operationKey: canned3,
         method: "POST",
         path: "/rpc",
         payloadTransport: {

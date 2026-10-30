@@ -18,6 +18,10 @@ import {
   serviceManifestSetDigest
 } from "../../../packages/foundation/src/storage/service-manifest-transaction.ts";
 import { openSqliteDatabase } from "../../../packages/foundation/src/storage/sqlite-database.ts";
+const canned2 = "not-persistable";
+const canned3 = "material-must-not-persist";
+const canned1 = "probe";
+
 
 const roots: any[] = [];
 
@@ -30,7 +34,7 @@ function manifest(label?: any, references: any = []) : any {
     schemaVersion: SERVICE_MANIFEST_SCHEMA_VERSION,
     references,
     payload: {
-      operations: [{ key: "probe", method: "POST" }],
+      operations: [{ key: canned1, method: "POST" }],
       label
     },
     metadata: { source: "verified-input" }
@@ -72,6 +76,11 @@ function startCommitCompetitor({ storageRoot, suffix, readyPath, releasePath }: 
     import { createHash } from "node:crypto";
     import { createServiceManifestStore } from "./packages/foundation/src/storage/service-manifest-store.ts";
     import { SERVICE_MANIFEST_SCHEMA_VERSION } from "./packages/foundation/src/storage/storage-ports.ts";
+
+const canned1 = "probe";
+const canned2 = "not-persistable";
+const canned3 = "material-must-not-persist";
+
     const [storageRoot, suffix, readyPath, releasePath] = process.argv.slice(1);
     await fs.writeFile(readyPath, "ready");
     while (true) {
@@ -87,7 +96,7 @@ function startCommitCompetitor({ storageRoot, suffix, readyPath, releasePath }: 
         manifest: {
           schemaVersion: SERVICE_MANIFEST_SCHEMA_VERSION,
           references: [],
-          payload: { operations: [{ key: "probe", method: "POST" }], label: suffix },
+          payload: { operations: [{ key: canned1, method: "POST" }], label: suffix },
           metadata: { source: "verified-input" }
         }
       });
@@ -179,7 +188,7 @@ describe("durable service manifest authority", () : any => {
         reference: "credential://vault/service-one",
         revision: 1,
         use: "request-auth",
-        operationKey: "probe",
+        operationKey: canned1,
         host: "service.example",
         protocol: "https",
         scopes: ["write", "read"]
@@ -494,7 +503,7 @@ describe("durable service manifest authority", () : any => {
       manifest: {
         schemaVersion: SERVICE_MANIFEST_SCHEMA_VERSION,
         references: [],
-        payload: { accessToken: "not-persistable" }
+        payload: { accessToken: canned2 }
       }
     })).rejects.toMatchObject({ code: "storage_manifest_sensitive_material" });
     await expect(store.commitManifestSet({
@@ -545,7 +554,7 @@ describe("durable service manifest authority", () : any => {
       manifest: {
         schemaVersion: SERVICE_MANIFEST_SCHEMA_VERSION,
         references: [],
-        payload: { password: "material-must-not-persist" },
+        payload: { password: canned3 },
         metadata: {}
       }
     })).rejects.toMatchObject({ code: "storage_manifest_sensitive_material" });

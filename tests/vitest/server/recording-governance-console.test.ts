@@ -91,6 +91,9 @@ function executionRecord(recordId: string, operationRef: string, revision: numbe
   };
 }
 
+const recAdmin = ["recording:admin"];
+const recRead = ["recording:read"];
+
 function session(scopes: string[] = [], tenantId = "default", roleId = "owner"): any {
   return {
     user: { userId: "u.test", username: "tester", roleId, tenantId, scopes },
@@ -245,7 +248,7 @@ describe("recording governance executor", (): any => {
     const out = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.get",
       input: {},
-      context: { authSession: session(["recording:read"]) }
+      context: { authSession: session(recRead) }
     });
     expect(out.status).toBe(503);
     expect(out.payload.code).toBe("recording_governance_unavailable");
@@ -256,7 +259,7 @@ describe("recording governance executor", (): any => {
     const out = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.get",
       input: {},
-      context: context(provider, session(["recording:read"]))
+      context: context(provider, session(recRead))
     });
     expect(out.status).toBe(200);
     expect(out.payload.snapshot.policy.policyRevision).toBe(1);
@@ -284,7 +287,7 @@ describe("recording governance executor", (): any => {
         expectedRevision: 1,
         policy: nextPolicy(current, { usage: categorySelection({ fieldAllow: ["ops.completed"] }) })
       },
-      context: context(provider, session(["recording:admin"]))
+      context: context(provider, session(recAdmin))
     });
     expect(out.status).toBe(200);
     expect(out.payload.published.policy.policyRevision).toBe(2);
@@ -298,7 +301,7 @@ describe("recording governance executor", (): any => {
     const denied = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.publish",
       input: { expectedRevision: 1, policy },
-      context: context(provider, session(["recording:read"]))
+      context: context(provider, session(recRead))
     });
     expect(denied.status).toBe(403);
     expect(denied.payload.code).toBe("recording_admin_scope_required");
@@ -306,7 +309,7 @@ describe("recording governance executor", (): any => {
     const roleDenied = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.publish",
       input: { expectedRevision: 1, policy },
-      context: context(provider, session(["recording:admin"], "default", "viewer"))
+      context: context(provider, session(recAdmin, "default", "viewer"))
     });
     expect(roleDenied.status).toBe(403);
     expect(roleDenied.payload.code).toBe("recording_policy_change_denied");
@@ -317,7 +320,7 @@ describe("recording governance executor", (): any => {
     const mismatched = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.get",
       input: { tenantId: "tenant-b" },
-      context: context(provider, session(["recording:read"], "tenant-a"))
+      context: context(provider, session(recRead, "tenant-a"))
     });
     expect(mismatched.status).toBe(403);
     expect(mismatched.payload.code).toBe("tenant_mismatch");
@@ -325,7 +328,7 @@ describe("recording governance executor", (): any => {
     const tenantA = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.get",
       input: {},
-      context: context(provider, session(["recording:read"], "tenant-a"))
+      context: context(provider, session(recRead, "tenant-a"))
     });
     expect(tenantA.status).toBe(200);
     const current = tenantA.payload.snapshot.policy;
@@ -335,14 +338,14 @@ describe("recording governance executor", (): any => {
         expectedRevision: 1,
         policy: nextPolicy(current, { usage: categorySelection({ fieldAllow: ["ops.completed"] }) })
       },
-      context: context(provider, session(["recording:admin"], "tenant-a"))
+      context: context(provider, session(recAdmin, "tenant-a"))
     });
     expect(published.status).toBe(200);
 
     const tenantB = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.get",
       input: {},
-      context: context(provider, session(["recording:read"], "tenant-b"))
+      context: context(provider, session(recRead, "tenant-b"))
     });
     expect(tenantB.status).toBe(200);
     expect(tenantB.payload.snapshot.policy.policyRevision).toBe(1);
@@ -352,7 +355,7 @@ describe("recording governance executor", (): any => {
     const provider = makeProvider();
     const current = provider.describe({ tenantId: "default" }).policy;
     const policy = nextPolicy(current, {});
-    const auth = session(["recording:admin"]);
+    const auth = session(recAdmin);
     const first = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.publish",
       input: { expectedRevision: 1, policy },
@@ -374,7 +377,7 @@ describe("recording governance executor", (): any => {
     const out = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.publish",
       input: { expectedRevision: 1, policy: { kind: "recording-policy" } },
-      context: context(provider, session(["recording:admin"]))
+      context: context(provider, session(recAdmin))
     });
     expect(out.status).toBe(400);
     expect(out.payload.code).toBe("recording_policy_invalid");
@@ -390,7 +393,7 @@ describe("recording governance executor", (): any => {
     const out = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.get",
       input: {},
-      context: context(provider, session(["recording:read"]))
+      context: context(provider, session(recRead))
     });
 
     expect(out.status).toBe(503);
@@ -406,7 +409,7 @@ describe("recording governance executor", (): any => {
     const out = await executeRecordingGovernanceOperation({
       operationId: "recording_governance.sink.health",
       input: { integrity: true },
-      context: context(provider, session(["recording:read"]))
+      context: context(provider, session(recRead))
     });
     expect(out.status).toBe(200);
     expect(out.payload.health.state.available).toBe(true);
@@ -418,7 +421,7 @@ describe("recording governance executor", (): any => {
 
   it("reports a degraded recorder truthfully and fails the policy read", async (): Promise<any> => {
     const provider = makeProvider();
-    const auth = session(["recording:read"]);
+    const auth = session(recRead);
     await executeRecordingGovernanceOperation({
       operationId: "recording_governance.policy.get",
       input: {},

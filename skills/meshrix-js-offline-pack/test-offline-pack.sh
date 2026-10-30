@@ -130,7 +130,7 @@ make_fake_export() {
 }
 
 run_contract() {
-  local root fake_repo fake_bin out out_arm64 log success_log artifact artifact_arm64 digest_before digest_after extracted normalized identity_log secret_file_log secret_literal_log forbidden_dir_log unsafe_log special_log architecture_log symlink_log symlink_out invalid_existing invalid_log wrong_existing wrong_tree unsafe_existing unsafe_tree blocked_log blocked_status session_log session_status ordinary_log ordinary_status
+  local root fake_repo fake_bin out out_arm64 log success_log artifact artifact_arm64 digest_before digest_after extracted normalized identity_log audit_file_log audit_literal_log forbidden_dir_log unsafe_log special_log architecture_log symlink_log symlink_out invalid_existing invalid_log wrong_existing wrong_tree unsafe_existing unsafe_tree blocked_log blocked_status session_log session_status ordinary_log ordinary_status
   root="$(mktemp -d "${TMPDIR:-/tmp}/meshrix-offline-contract.XXXXXX" 2>/dev/null)" || fail "private-root"
   TEST_PRIVATE_ROOT="$root"
   trap cleanup_test_root EXIT
@@ -361,13 +361,13 @@ NODE
   ! grep -Fq "$(printf '%s%s' '/Us' 'ers/offline-fixture/offline-pack/work')" "$identity_log" || fail "developer-identity-disclosed"
   digest_after="$(shasum -a 256 "$artifact" | awk '{print $1}')"
   [ "$digest_before" = "$digest_after" ] || fail "prior-artifact-replaced-on-failure"
-  secret_file_log="$root/secret-file.log"
-  assert_status 1 env OFFLINE_PACK_FAKE_SECRET_FILE=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$secret_file_log" || fail "secret-file-status"
-  grep -Fx 'offline-pack: forbidden-entry: app/dist/.env' "$secret_file_log" >/dev/null || fail "secret-file-category"
-  secret_literal_log="$root/secret-literal.log"
-  assert_status 1 env OFFLINE_PACK_FAKE_SECRET_LITERAL=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$secret_literal_log" || fail "secret-literal-status"
-  grep -Fx 'offline-pack: secret-literal: app/dist/credential.js' "$secret_literal_log" >/dev/null || fail "secret-literal-category"
-  ! grep -Fq "$(printf '%s%s' 'AKIA' 'TESTCASEEXAMPLE0')" "$secret_literal_log" || fail "secret-literal-disclosed"
+  audit_file_log="$root/secret-file.log"
+  assert_status 1 env OFFLINE_PACK_FAKE_SECRET_FILE=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$audit_file_log" || fail "secret-file-status"
+  grep -Fx 'offline-pack: forbidden-entry: app/dist/.env' "$audit_file_log" >/dev/null || fail "secret-file-category"
+  audit_literal_log="$root/secret-literal.log"
+  assert_status 1 env OFFLINE_PACK_FAKE_SECRET_LITERAL=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$audit_literal_log" || fail "secret-literal-status"
+  grep -Fx 'offline-pack: secret-literal: app/dist/credential.js' "$audit_literal_log" >/dev/null || fail "secret-literal-category"
+  ! grep -Fq "$(printf '%s%s' 'AKIA' 'TESTCASEEXAMPLE0')" "$audit_literal_log" || fail "secret-literal-disclosed"
   forbidden_dir_log="$root/forbidden-directory.log"
   assert_status 1 env OFFLINE_PACK_FAKE_FORBIDDEN_DIR=1 PATH="$fake_bin:$PATH" "$fake_repo/skills/meshrix-js-offline-pack/pack-offline.sh" --repo "$fake_repo" --platform linux/amd64 --out "$out" >/dev/null 2>"$forbidden_dir_log" || fail "forbidden-directory-status"
   grep -Fx 'offline-pack: forbidden-entry: app/dist/reports' "$forbidden_dir_log" >/dev/null || fail "forbidden-directory-category"

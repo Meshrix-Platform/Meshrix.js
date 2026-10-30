@@ -9,6 +9,10 @@ import {
   createUpstreamGatewayEnvelope,
   isGatewayStageResultStatus
 } from "@meshrix/contracts/agent-mcp-traffic";
+const canned1 = "idem-1";
+
+
+
 
 function refs(trafficModel: string, inputRefs: readonly string[]): Record<string, unknown> {
   return {
@@ -19,7 +23,7 @@ function refs(trafficModel: string, inputRefs: readonly string[]): Record<string
     inputRefs,
     policyRef: "policy-1",
     approvalBinding: "approval-1",
-    idempotencyKey: "idem-1",
+    idempotencyKey: canned1,
     deadlineMs: 60_000,
     cancellationRef: "cancel-1",
     streamingMode: "sse",
@@ -41,7 +45,7 @@ describe("Gateway envelope contract", () => {
         targetRef: "target-1",
         policyRef: "policy-1",
         approvalBinding: "approval-1",
-        idempotencyKey: "idem-1",
+        idempotencyKey: canned1,
         cancellationRef: "cancel-1",
         streamingMode: "sse",
         traceRefs: ["trace-1"],

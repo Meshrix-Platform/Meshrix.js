@@ -32,8 +32,8 @@ const server = createServer(async (request, response) => {
         replyDenied('empty_approval'); return;
       }
       const state = parsed.params?.requestState;
-      const key = `${parsed.params?.arguments?.operationKey ?? ''}:${state?.replace(/=+$/, '')}`;
-      if (state && parsed.params?.inputResponses && redeemed.has(key) && variant !== 'encoding-alias-replay') {
+      const dedupe = `${parsed.params?.arguments?.operationKey ?? ''}:${state?.replace(/=+$/, '')}`;
+      if (state && parsed.params?.inputResponses && redeemed.has(dedupe) && variant !== 'encoding-alias-replay') {
         replyDenied('replayed_continuation'); return;
       }
       if (state && variant === 'encoding-alias-replay') parsed.params.requestState = state.replace(/=+$/, '');

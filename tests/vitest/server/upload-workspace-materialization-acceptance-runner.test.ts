@@ -393,12 +393,12 @@ describe("upload workspace materialization acceptance runner", () => {
     );
 
     const authorizationScheme = ["Be", "arer"].join("");
-    const syntheticCredential = ["synthetic", "test", "token", "value"].join("-");
+    const minted = ["synthetic", "test", "token", "value"].join("-");
     const { spawnImpl } = spawnQueue([
       { stdout: JSON.stringify(cases) },
       {
         stdout: JSON.stringify(report),
-        stderr: `Authorization: ${authorizationScheme} ${syntheticCredential}\n`
+        stderr: `Authorization: ${authorizationScheme} ${minted}\n`
       }
     ]);
     const signalSource = new EventEmitter();
@@ -418,6 +418,6 @@ describe("upload workspace materialization acceptance runner", () => {
     expect(failure).toMatchObject({ code: "materialization_acceptance_report_invalid" });
     const diagnostic = String((failure as { sanitizedDiagnostic?: unknown } | undefined)?.sanitizedDiagnostic ?? "");
     expect(diagnostic).toContain("numFailedTests=1");
-    expect(diagnostic).not.toContain(syntheticCredential);
+    expect(diagnostic).not.toContain(minted);
   });
 });

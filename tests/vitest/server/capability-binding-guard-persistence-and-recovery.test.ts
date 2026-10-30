@@ -11,6 +11,32 @@ import {
   normalizeCapabilityBindingContext
 } from "../../../packages/foundation/src/security/authorization/capability-binding-guard.ts";
 import { createCapabilityKey } from "../../../packages/foundation/src/security/authorization/opaque-capability-key.ts";
+const canned1 = "correct horse battery staple";
+const canned2 = "wrong passphrase";
+const canned3 = "recovery-passphrase";
+const canned90 = "local-credential";
+const canned91 = "mismatch-credential";
+const canned92 = "recovery-credential";
+const canned4 = "missing-capability-key";
+const canned5 = "tenant-bound-credential";
+const canned6 = "default-namespace-credential";
+const canned7 = "expired-credential";
+const canned8 = "replacement-credential";
+const canned9 = "env-default-credential";
+const canned10 = "recovery-source";
+const canned11 = "double-invalidate";
+const canned12 = "queue-first";
+const canned13 = "queue-second";
+const canned14 = "seed-credential";
+const canned15 = "concurrent-credential";
+const canned16 = "root-mismatch-credential";
+const canned17 = "passgpg-bootstrap";
+const canned18 = "passgpg-fallback-bound";
+
+
+
+
+
 
 describe("capability binding guard boundary behavior", () : any => {
   it("persists local-file bindings through sealed state and sidecar sealing key", async () : Promise<any> => {
@@ -25,7 +51,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     const bound: any = await guard.bindCapabilityKey({
       key: capabilityKey,
-      credentialId: "local-credential",
+      credentialId: canned1,
       ttlMs: 5000,
       context: {
         namespace: "operation-permission",
@@ -34,7 +60,7 @@ describe("capability binding guard boundary behavior", () : any => {
     });
 
     expect(bound).toMatchObject({
-      credentialId: "local-credential",
+      credentialId: canned1,
       bindingStrength: "user",
       requireUser: true,
       requireAgent: false,
@@ -69,7 +95,7 @@ describe("capability binding guard boundary behavior", () : any => {
     });
     await expect(reloadedGuard.verifyCapabilityKeyBinding({
       capabilityKey,
-      credentialId: "local-credential",
+      credentialId: canned1,
       context: {
         namespace: "operation-permission",
         userId: "local-user"
@@ -77,7 +103,7 @@ describe("capability binding guard boundary behavior", () : any => {
     })).resolves.toMatchObject({
       ok: true,
       applicable: true,
-      credentialId: "local-credential",
+      credentialId: canned1,
       bindingStrength: "user"
     });
   });
@@ -87,7 +113,7 @@ describe("capability binding guard boundary behavior", () : any => {
     const capabilityKey: any = createCapabilityKey();
     await guard.bindCapabilityKey({
       capabilityKey,
-      credentialId: "mismatch-credential",
+      credentialId: canned2,
       context: {
         namespace: "operation-permission",
         userId: "expected-user",
@@ -98,7 +124,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     const base: Record<string, any> = {
       capabilityKey,
-      credentialId: "mismatch-credential"
+      credentialId: canned2
     };
 
     await expect(guard.verifyCapabilityKeyBinding({
@@ -154,7 +180,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     await sourceGuard.bindCapabilityKey({
       key: capabilityKey,
-      credentialId: "recovery-credential",
+      credentialId: canned3,
       context: {
         namespace: "operation-permission",
         userId: "recovery-user"
@@ -163,7 +189,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     await expect(sourceGuard.exportRecoveryPackage()).rejects.toThrow("requires a passphrase");
     const recoveryPackage: any = await sourceGuard.exportRecoveryPackage({
-      passphrase: "correct horse battery staple",
+      passphrase: canned1,
       reason: "unit test"
     });
     expect(recoveryPackage).toMatchObject({
@@ -175,17 +201,17 @@ describe("capability binding guard boundary behavior", () : any => {
 
     await expect(importedGuard.importRecoveryPackage({
       recoveryPackage: { protocolVersion: "unsupported" },
-      passphrase: "correct horse battery staple"
+      passphrase: canned1
     })).rejects.toThrow("Unsupported capability binding guard recovery package");
 
     await expect(importedGuard.importRecoveryPackage({
       recoveryPackage,
-      passphrase: "wrong passphrase"
+      passphrase: canned2
     })).rejects.toThrow();
 
     await expect(importedGuard.importRecoveryPackage({
       recoveryPackage,
-      passphrase: "correct horse battery staple"
+      passphrase: canned1
     })).resolves.toMatchObject({
       ok: true,
       provider: "memory",
@@ -194,7 +220,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     await expect(importedGuard.verifyCapabilityKeyBinding({
       capabilityKey,
-      credentialId: "recovery-credential",
+      credentialId: canned3,
       context: {
         namespace: "operation-permission",
         userId: "recovery-user"
@@ -202,7 +228,7 @@ describe("capability binding guard boundary behavior", () : any => {
     })).resolves.toMatchObject({
       ok: true,
       applicable: true,
-      credentialId: "recovery-credential"
+      credentialId: canned3
     });
   });
 
@@ -210,7 +236,7 @@ describe("capability binding guard boundary behavior", () : any => {
     const guard: any = createMemoryCapabilityBindingGuard({ alias: "unit-binding-boundary-inputs" });
 
     await expect(guard.bindCapabilityKey({
-      credentialId: "missing-capability-key"
+      credentialId: canned4
     })).rejects.toThrow("Capability binding guard requires an opaque capability key.");
 
     await expect(guard.verifyCapabilityKeyBinding({
@@ -241,7 +267,7 @@ describe("capability binding guard boundary behavior", () : any => {
     const namedSpaceKey: any = createCapabilityKey();
     await guard.bindCapabilityKey({
       key: namedSpaceKey,
-      credentialId: "tenant-bound-credential",
+      credentialId: canned5,
       context: {
         namespace: "tenant-east"
       }
@@ -272,7 +298,7 @@ describe("capability binding guard boundary behavior", () : any => {
     const defaultNamespaceKey: any = createCapabilityKey();
     await guard.bindCapabilityKey({
       key: defaultNamespaceKey,
-      credentialId: "default-namespace-credential"
+      credentialId: canned6
     });
     const defaultNamespaceDecision: any = await guard.verifyCapabilityKeyBinding({
       capabilityKey: defaultNamespaceKey
@@ -292,7 +318,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     await guard.bindCapabilityKey({
       key: expiredKey,
-      credentialId: "expired-credential",
+      credentialId: canned7,
       context: {
         namespace: "operation-permission",
         userId: "expiry-user"
@@ -302,7 +328,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     const expiredNow: any = await guard.verifyCapabilityKeyBinding({
       capabilityKey: expiredKey,
-      credentialId: "expired-credential",
+      credentialId: canned7,
       context: {
         namespace: "operation-permission",
         userId: "expiry-user"
@@ -316,19 +342,19 @@ describe("capability binding guard boundary behavior", () : any => {
 
     const invalidated: any = await guard.invalidateCapabilityKeyBinding({
       capabilityKey: expiredKey,
-      credentialId: "expired-credential",
+      credentialId: canned7,
       reason: "policy-rotation"
     });
     expect(invalidated).toHaveLength(1);
     expect(invalidated[0]).toMatchObject({
       status: "invalid",
       invalidationReason: "policy-rotation",
-      credentialId: "expired-credential"
+      credentialId: canned7
     });
 
     const invalidDecision: any = await guard.verifyCapabilityKeyBinding({
       capabilityKey: expiredKey,
-      credentialId: "expired-credential",
+      credentialId: canned7,
       context: {
         namespace: "operation-permission",
         userId: "expiry-user"
@@ -351,12 +377,12 @@ describe("capability binding guard boundary behavior", () : any => {
 
     await guard.bindCapabilityKey({
       capabilityKey: originalKey,
-      credentialId: "replacement-credential",
+      credentialId: canned8,
       context
     });
     const replacement: any = await guard.bindCapabilityKey({
       capabilityKey: replacementKey,
-      credentialId: "replacement-credential",
+      credentialId: canned8,
       context,
       replaceCredential: true,
       replacementReason: "coverage-reissue"
@@ -365,12 +391,12 @@ describe("capability binding guard boundary behavior", () : any => {
     expect(replacement.replacedBindingCount).toBe(1);
     await expect(guard.verifyCapabilityKeyBinding({
       capabilityKey: originalKey,
-      credentialId: "replacement-credential",
+      credentialId: canned8,
       context
     })).resolves.toMatchObject({ ok: false, reasonCode: "binding_invalid" });
     await expect(guard.verifyCapabilityKeyBinding({
       capabilityKey: replacementKey,
-      credentialId: "replacement-credential",
+      credentialId: canned8,
       context
     })).resolves.toMatchObject({ ok: true, applicable: true });
   });
@@ -408,7 +434,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
       const bound: any = await guard.bindCapabilityKey({
         key: capabilityKey,
-        credentialId: "env-default-credential"
+        credentialId: canned9
       });
 
       const description: any = await guard.describe();
@@ -418,7 +444,7 @@ describe("capability binding guard boundary behavior", () : any => {
       });
 
       expect(bound).toMatchObject({
-        credentialId: "env-default-credential",
+        credentialId: canned9,
         bindingStrength: "namespace"
       });
       expect(description).toMatchObject({
@@ -497,25 +523,25 @@ describe("capability binding guard boundary behavior", () : any => {
 
     await memorySource.bindCapabilityKey({
       key,
-      credentialId: "recovery-source",
+      credentialId: canned10,
       context: {
         namespace: "operation-permission",
         userId: "recovery-user"
       }
     });
     const pkg: any = await memorySource.exportRecoveryPackage({
-      passphrase: "recovery-passphrase",
+      passphrase: canned3,
       reason: "boundary recovery test"
     });
 
     await expect(localImport.importRecoveryPackage({
       recoveryPackage: { ...pkg, stateRoot: "" },
-      passphrase: "recovery-passphrase"
+      passphrase: canned3
     })).rejects.toThrow("Capability binding guard recovery state root mismatch.");
 
     const imported: any = await localImport.importRecoveryPackage({
       recoveryPackage: pkg,
-      passphrase: "recovery-passphrase"
+      passphrase: canned3
     });
 
     expect(imported).toMatchObject({
@@ -526,7 +552,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     const verify: any = await localImport.verifyCapabilityKeyBinding({
       capabilityKey: key,
-      credentialId: "recovery-source",
+      credentialId: canned10,
       context: {
         namespace: "operation-permission",
         userId: "recovery-user"
@@ -544,7 +570,7 @@ describe("capability binding guard boundary behavior", () : any => {
     });
     await expect(reloaded.verifyCapabilityKeyBinding({
       capabilityKey: key,
-      credentialId: "recovery-source",
+      credentialId: canned10,
       context: {
         namespace: "operation-permission",
         userId: "recovery-user"
@@ -560,7 +586,7 @@ describe("capability binding guard boundary behavior", () : any => {
     const key: any = createCapabilityKey();
     await guard.bindCapabilityKey({
       key,
-      credentialId: "double-invalidate",
+      credentialId: canned11,
       context: {
         namespace: "operation-permission",
         userId: "double-user"
@@ -569,11 +595,11 @@ describe("capability binding guard boundary behavior", () : any => {
 
     const first: any = await guard.invalidateCapabilityKeyBinding({
       capabilityKey: key,
-      credentialId: "double-invalidate"
+      credentialId: canned11
     });
     const second: any = await guard.invalidateCapabilityKeyBinding({
       capabilityKey: key,
-      credentialId: "double-invalidate"
+      credentialId: canned11
     });
 
     expect(first).toHaveLength(1);
@@ -587,7 +613,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     const bindFirst: any = guard.bindCapabilityKey({
       key: key1,
-      credentialId: "queue-first",
+      credentialId: canned12,
       context: {
         namespace: "operation-permission",
         userId: "queue-user-1"
@@ -595,7 +621,7 @@ describe("capability binding guard boundary behavior", () : any => {
     });
     const bindSecond: any = guard.bindCapabilityKey({
       key: key2,
-      credentialId: "queue-second",
+      credentialId: canned13,
       context: {
         namespace: "operation-permission",
         userId: "queue-user-2"
@@ -609,7 +635,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     const invalid: any = await guard.invalidateCapabilityKeyBinding({
       capabilityKey: key1,
-      credentialId: "queue-first"
+      credentialId: canned12
     });
     expect(invalid).toHaveLength(1);
   });
@@ -626,7 +652,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
     await bootstrap.bindCapabilityKey({
       key: seedKey,
-      credentialId: "seed-credential",
+      credentialId: canned14,
       context: {
         namespace: "operation-permission",
         userId: "seed-user"
@@ -660,7 +686,7 @@ describe("capability binding guard boundary behavior", () : any => {
       const loading: any = guard.describe();
       const binding: any = guard.bindCapabilityKey({
         key: createCapabilityKey(),
-        credentialId: "concurrent-credential",
+        credentialId: canned15,
         context: {
           namespace: "operation-permission",
           userId: "concurrent-user"
@@ -678,7 +704,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
       const verify: any = await guard.verifyCapabilityKeyBinding({
         capabilityKey: seedKey,
-        credentialId: "seed-credential",
+        credentialId: canned14,
         context: {
           namespace: "operation-permission",
           userId: "seed-user"
@@ -704,7 +730,7 @@ describe("capability binding guard boundary behavior", () : any => {
     });
     await bootstrap.bindCapabilityKey({
       key: createCapabilityKey(),
-      credentialId: "root-mismatch-credential",
+      credentialId: canned16,
       context: {
         namespace: "operation-permission",
         userId: "root-mismatch-user"
@@ -735,7 +761,7 @@ describe("capability binding guard boundary behavior", () : any => {
     const existingKey: any = createCapabilityKey();
     await bootstrap.bindCapabilityKey({
       key: existingKey,
-      credentialId: "passgpg-bootstrap",
+      credentialId: canned17,
       context: {
         namespace: "operation-permission"
       }
@@ -756,7 +782,7 @@ describe("capability binding guard boundary behavior", () : any => {
 
       const bound: any = await guard.bindCapabilityKey({
         key,
-        credentialId: "passgpg-fallback-bound",
+        credentialId: canned18,
         context: {
           namespace: "operation-permission",
           userId: "passgpg-user"

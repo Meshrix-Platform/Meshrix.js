@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
+const canned1 = "inventory";
+const canned2 = "inventory-mcp";
+
 
 const bridge: any = vi.hoisted(() : any => ({ getJson: vi.fn(), sendJson: vi.fn() }));
 
@@ -20,6 +23,8 @@ import type {
   UpstreamServiceReplaceCommand,
 } from "@meshrix/contracts/upstream-service-publishing";
 
+
+
 beforeEach(() : any => {
   vi.clearAllMocks();
   bridge.sendJson.mockResolvedValue({ ok: true });
@@ -39,7 +44,7 @@ describe("upstream service publishing client contract", () : any => {
       expect.objectContaining({
         schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
         action: "create",
-        serviceKey: "inventory",
+        serviceKey: canned1,
         expectedServiceRevision: 0,
         expectedSetRevision: 4,
         descriptor: { serviceProtocol: "http", references: [], operations: [] }
@@ -70,7 +75,7 @@ describe("upstream service publishing client contract", () : any => {
       "POST",
       expect.objectContaining({
         action: "create",
-        serviceKey: "inventory-mcp",
+        serviceKey: canned2,
         expectedSetRevision: 9,
         descriptor,
       })

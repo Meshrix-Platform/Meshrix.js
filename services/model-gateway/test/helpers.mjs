@@ -6,11 +6,13 @@ import path from "node:path";
 
 import { createModelGatewayHttpHandler } from "../internal/http-service.mjs";
 import { startFixtureProvider } from "./fixture-provider.mjs";
+const cannedA = "model-gateway-test-admin-secret-0000000000000000000000";
+
 
 export const ADMIN_CLIENTS = {
   "service-admin": {
     subject: "direct-client",
-    secret: "model-gateway-test-admin-secret-0000000000000000000000",
+    secret: cannedA,
     scopes: ["model:call", "model:manage", "ledger:read"]
   }
 };

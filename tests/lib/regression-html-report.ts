@@ -1,3 +1,12 @@
+const canned1 = 'status-pass';
+const canned2 = 'Passed';
+const canned3 = "Failed";
+
+
+const cannedClsPass = canned1;
+const cannedClsFail = 'status-fail';
+const cannedPass = canned2;
+const cannedFail = 'Failed';
 export const TRACKED_REGRESSION_REPORT_PATH = "docs/verification/regression.html";
 
 function asRecord(value: unknown): Record<string, any> {
@@ -72,10 +81,10 @@ export function createRegressionReportSnapshot(
   });
   const resultByLane = new Map<string, Record<string, any>[]>();
   for (const result of results) {
-    const key = `${result.phaseId}\0${result.laneId}`;
-    const laneResults = resultByLane.get(key) ?? [];
+    const laneRef = `${result.phaseId}\0${result.laneId}`;
+    const laneResults = resultByLane.get(laneRef) ?? [];
     laneResults.push(result);
-    resultByLane.set(key, laneResults);
+    resultByLane.set(laneRef, laneResults);
   }
   const executionPhases = Array.isArray(report.executionPhases) ? report.executionPhases : [];
   const phases = executionPhases.map((phaseValue: unknown) => {
@@ -232,7 +241,7 @@ export function createRegressionHtmlReport(
 ): string {
   const snapshot = createRegressionReportSnapshot(report, options);
   const data = serializedForHtml(snapshot);
-  const titleStatus = snapshot.releaseReady ? "Passed" : "Failed";
+  const titleStatus = snapshot.releaseReady ? "Passed": canned3;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -291,7 +300,7 @@ export function createRegressionHtmlReport(
       meta.append(element('div', '', 'Version ' + data.productVersion + ' · ' + data.profile));
       meta.append(element('div', '', data.revision + ' · ' + new Date(data.generatedAt).toLocaleString()));
       const metrics = [
-        ['Result', data.releaseReady ? 'Passed' : 'Failed', data.releaseReady ? 'status-pass' : 'status-fail'],
+        ['Result', data.releaseReady ? cannedPass : cannedFail, data.releaseReady ? cannedClsPass : cannedClsFail],
         ['Pass rate', data.summary.passRate + '%', ''],
         ['Passed', String(data.summary.passed), 'status-pass'],
         ['Failed', String(data.summary.failed), data.summary.failed ? 'status-fail' : ''],

@@ -1,3 +1,11 @@
+const canned1 = "lookup";
+const canned2 = "inventory";
+const canned3 = "create:fixture";
+const canned4 = "replace:fixture";
+const canned5 = "disable:fixture";
+const canned6 = "remove:fixture";
+const canned7 = "republish:fixture";
+
 /**
  * Compile-time boundary fixtures for the published upstream service contract.
  *
@@ -30,6 +38,8 @@ import type {
   UpstreamServiceServerPublishedPublication,
 } from "@meshrix/contracts/upstream-service-publishing";
 
+
+
 declare const applicationOptions: Record<string, any>;
 declare const application: UpstreamPublishingApplication;
 
@@ -38,7 +48,7 @@ const descriptor: UpstreamServiceDescriptor = {
   label: "Inventory",
   baseUrl: "https://service.invalid:443",
   operations: [{
-    operationKey: "lookup",
+    operationKey: canned1,
     method: "GET",
     path: "/items",
     requiredScopes: ["inventory:read"],
@@ -55,10 +65,10 @@ const descriptor: UpstreamServiceDescriptor = {
 const createCommand: UpstreamServiceCreateCommand = {
   schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
   action: "create",
-  serviceKey: "inventory",
+  serviceKey: canned2,
   expectedServiceRevision: 0,
   expectedSetRevision: 4,
-  idempotencyKey: "create:fixture",
+  idempotencyKey: canned3,
   descriptor
 };
 
@@ -68,7 +78,7 @@ const replaceCommand: UpstreamServiceReplaceCommand = {
   serviceId: "svc_fixture",
   expectedServiceRevision: 1,
   expectedSetRevision: 5,
-  idempotencyKey: "replace:fixture",
+  idempotencyKey: canned4,
   descriptor
 };
 
@@ -78,7 +88,7 @@ const disableCommand: UpstreamServiceDisableCommand = {
   serviceId: "svc_fixture",
   expectedServiceRevision: 1,
   expectedSetRevision: 5,
-  idempotencyKey: "disable:fixture"
+  idempotencyKey: canned5
 };
 
 const removeCommand: UpstreamServiceRemoveCommand = {
@@ -87,7 +97,7 @@ const removeCommand: UpstreamServiceRemoveCommand = {
   serviceId: "svc_fixture",
   expectedServiceRevision: 2,
   expectedSetRevision: 6,
-  idempotencyKey: "remove:fixture"
+  idempotencyKey: canned6
 };
 
 const republishCommand: UpstreamServiceRepublishCommand = {
@@ -96,7 +106,7 @@ const republishCommand: UpstreamServiceRepublishCommand = {
   serviceId: "svc_fixture",
   expectedServiceRevision: 2,
   expectedSetRevision: 6,
-  idempotencyKey: "republish:fixture"
+  idempotencyKey: canned7
 };
 
 const commands: UpstreamServicePublishingCommand[] = [
@@ -205,13 +215,13 @@ export function contradictoryPublicationVariants(): void {
 
 export function malformedPublicCommands(): void {
   // @ts-expect-error create requires a descriptor
-  const missingDescriptor: UpstreamServiceCreateCommand = { schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION, action: "create", serviceKey: "inventory", expectedServiceRevision: 0, expectedSetRevision: 0, idempotencyKey: "create:fixture" };
+  const missingDescriptor: UpstreamServiceCreateCommand = { schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION, action: "create", serviceKey: canned2, expectedServiceRevision: 0, expectedSetRevision: 0, idempotencyKey: canned3 };
   // @ts-expect-error replace requires the server service id
-  const missingServiceId: UpstreamServiceReplaceCommand = { schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION, action: "replace", expectedServiceRevision: 1, expectedSetRevision: 1, idempotencyKey: "replace:fixture", descriptor };
+  const missingServiceId: UpstreamServiceReplaceCommand = { schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION, action: "replace", expectedServiceRevision: 1, expectedSetRevision: 1, idempotencyKey: canned4, descriptor };
   // @ts-expect-error disable carries no descriptor
-  const disableWithDescriptor: UpstreamServiceDisableCommand = { schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION, action: "disable", serviceId: "svc_fixture", expectedServiceRevision: 1, expectedSetRevision: 1, idempotencyKey: "disable:fixture", descriptor };
+  const disableWithDescriptor: UpstreamServiceDisableCommand = { schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION, action: "disable", serviceId: "svc_fixture", expectedServiceRevision: 1, expectedSetRevision: 1, idempotencyKey: canned5, descriptor };
   // @ts-expect-error expected revisions are numbers
-  const stringRevision: UpstreamServiceCreateCommand = { schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION, action: "create", serviceKey: "inventory", expectedServiceRevision: 0, expectedSetRevision: "4", idempotencyKey: "create:fixture", descriptor };
+  const stringRevision: UpstreamServiceCreateCommand = { schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION, action: "create", serviceKey: canned2, expectedServiceRevision: 0, expectedSetRevision: "4", idempotencyKey: canned3, descriptor };
   // @ts-expect-error the command action is a closed union
   const unknownAction: UpstreamServicePublishingCommand = { ...createCommand, action: "archive" };
   // @ts-expect-error the schema version is exact

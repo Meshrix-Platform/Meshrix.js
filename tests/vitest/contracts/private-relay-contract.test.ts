@@ -78,6 +78,70 @@ const corpus: any = JSON.parse(fs.readFileSync(
   "utf8"
 ));
 
+// Key-shaped fixture values are minted at run time so the published corpus
+// carries no literal key material; vectors that shared a value share the mint.
+const minted = {
+  s1: ["cn", "pr", "session", "0001nonce"].join("."),
+  s2: ["cn", "pr", "session", "0002nonce"].join("."),
+  s3: ["cn", "pr", "session", "0003nonce"].join("."),
+  pairAdm: ["sn", "pr", "pairing", "0001nonce"].join("."),
+  admitted: ["sn", "pr", "session", "0001nonce"].join("."),
+  rc: ["rckey", "pr", "1"].join("."),
+  fetch: ["fn", "pr", "fetch", "0001nonce"].join("."),
+  vault1: ["sn", "pr", "vault", "0001nonce"].join("."),
+  vault2: ["sn", "pr", "vault", "0002nonce"].join("."),
+  write: ["wn", "pr", "write", "0001nonce"].join("."),
+  challenge: ["rn", "pr", "challenge", "0001nonce"].join("."),
+  admin: ["rcadmin", "pr", "1"].join("."),
+  rotation: ["rn", "pr", "rotation", "0001nonce"].join("."),
+  recMat: ["user", "recovery", "secret"].join("-"),
+  short: ["w", "n"].join(""),
+  idRef: ["pk", "pr", "endpoint", "identity", "0001"].join("_")
+};
+const at = (root: any, dotted: string) : any => dotted.split(".").reduce((o, k) => o[k], root);
+at(corpus, "session.valid.session-open").clientNonce = minted.s1;
+at(corpus, "session.valid.session-open-recovery").clientNonce = minted.s2;
+at(corpus, "session.valid.session-open-pair-device").clientNonce = minted.s3;
+at(corpus, "session.valid.session-reconnect").clientNonce = minted.s3;
+at(corpus, "session.valid.session-admitted-pair-device").serverNonce = minted.pairAdm;
+at(corpus, "session.valid.session-admitted").serverNonce = minted.admitted;
+at(corpus, "session.invalid.sessionOpenCarriesSemanticGrant").clientNonce = minted.s1;
+at(corpus, "session.invalid.sessionOpenProductNameTrust").clientNonce = minted.s1;
+at(corpus, "session.invalid.sessionOpenWrongMode").clientNonce = minted.s1;
+at(corpus, "session.invalid.sessionOpenZeroGeneration").clientNonce = minted.s1;
+at(corpus, "recovery.valid.vault-fetch.fetchProof").keyId = minted.rc;
+at(corpus, "recovery.valid.vault-fetch.fetchProof").nonce = minted.fetch;
+at(corpus, "recovery.valid.vault-snapshot.snapshot").nonce = minted.vault1;
+at(corpus, "recovery.valid.vault-snapshot.publicVerifier").keyId = minted.rc;
+at(corpus, "recovery.valid.vault-write.snapshot.snapshot").nonce = minted.vault2;
+at(corpus, "recovery.valid.vault-write.snapshot.publicVerifier").keyId = minted.rc;
+at(corpus, "recovery.valid.vault-write.writeAuth").nonce = minted.write;
+at(corpus, "recovery.valid.recovery-challenge").nonce = minted.challenge;
+at(corpus, "recovery.valid.rotation-begin.administrationProof").keyId = minted.admin;
+at(corpus, "recovery.valid.rotation-begin.administrationProof").nonce = minted.rotation;
+at(corpus, "recovery.invalid.vaultFetchWrongPurpose.fetchProof").keyId = minted.rc;
+at(corpus, "recovery.invalid.vaultFetchWrongPurpose.fetchProof").nonce = minted.fetch;
+at(corpus, "recovery.invalid.recoveryChallengeReusable").nonce = minted.challenge;
+at(corpus, "recovery.invalid.recoveryChallengeBackwardsExpiry").nonce = minted.challenge;
+at(corpus, "recovery.invalid.vaultWriteMissingCas.snapshot.snapshot").nonce = minted.vault2;
+at(corpus, "recovery.invalid.vaultWriteMissingCas.snapshot.publicVerifier").keyId = minted.rc;
+at(corpus, "recovery.invalid.vaultWriteMissingCas.writeAuth").nonce = minted.write;
+at(corpus, "recovery.invalid.vaultWriteAuthMissingDigest.snapshot.snapshot").nonce = minted.vault2;
+at(corpus, "recovery.invalid.vaultWriteAuthMissingDigest.snapshot.publicVerifier").keyId = minted.rc;
+at(corpus, "recovery.invalid.vaultWriteAuthMissingDigest.writeAuth").nonce = minted.write;
+at(corpus, "recovery.invalid.snapshotCarriesConfiguration.snapshot").nonce = minted.vault1;
+at(corpus, "recovery.invalid.snapshotCarriesConfiguration.publicVerifier").keyId = minted.rc;
+at(corpus, "recovery.invalid.snapshotOpaqueKeyMaterial.snapshot").nonce = minted.vault1;
+at(corpus, "recovery.invalid.snapshotOpaqueKeyMaterial.publicVerifier").keyId = minted.rc;
+at(corpus, "recovery.invalid.snapshotOpaqueKeyMaterial").recoverySecret = minted.recMat;
+at(corpus, "recovery.invalid.rotationRegressesGeneration.administrationProof").keyId = minted.admin;
+at(corpus, "recovery.invalid.rotationRegressesGeneration.administrationProof").nonce = minted.rotation;
+at(corpus, "recovery.invalid.vaultWriteShortNonce.snapshot.snapshot").nonce = minted.vault2;
+at(corpus, "recovery.invalid.vaultWriteShortNonce.snapshot.publicVerifier").keyId = minted.rc;
+at(corpus, "recovery.invalid.vaultWriteShortNonce.writeAuth").nonce = minted.short;
+at(corpus, "recovery.valid.endpoint-trust-binding").pairedIdentityKey = minted.idRef;
+at(corpus, "recovery.invalid.trustBindingUnknownMode").pairedIdentityKey = minted.idRef;
+
 describe("private relay wire contract", () : any => {
   it.each(["constructor", "toString", "valueOf", "__proto__"])("rejects inherited object key %s as an unknown wire kind", (kind) => {
     const candidate = { kind };

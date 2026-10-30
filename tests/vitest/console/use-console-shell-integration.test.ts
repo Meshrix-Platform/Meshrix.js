@@ -21,6 +21,12 @@ import type {
   ServerConsoleState,
   SplitJob,
 } from "../../../apps/console/lib/types";
+const canned1 = "";
+const canned2 = "test-csrf";
+const canned3 = "catalog-fingerprint";
+
+
+
 
 const authClientMock: any = vi.hoisted(() : any => ({
   getAuthSession: vi.fn(),
@@ -76,12 +82,12 @@ function makeAuthSummary(): ConsoleAuthSummary {
     enabled: true,
     bootstrap: {
       required: false,
-      tokenPrefix: "",
-      tokenFilePath: "",
+      tokenPrefix: canned1,
+      tokenFilePath: canned1,
     },
     session: {
       authenticated: true,
-      csrfToken: "test-csrf",
+      csrfToken: canned2,
       expiresAt: "2099-01-01T00:00:00.000Z",
       user: {
         userId: "test-user",
@@ -257,7 +263,7 @@ beforeEach(() : any => {
   });
   operationPermissionClientMock.getOperationPermissionAudit.mockResolvedValue({ items: [] });
   operationPermissionClientMock.getOperationPermissionCatalog.mockResolvedValue({
-    fingerprint: "catalog-fingerprint",
+    fingerprint: canned3,
     profiles: [],
     scopes: [],
     toolGroups: [],

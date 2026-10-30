@@ -3,6 +3,12 @@ import {
   installAuthenticatedFetch,
   installedAuthFor
 } from "../test-auth-helper.ts";
+const canned1 = "enterprise-group";
+const canned2 = "";
+const canned3 = "scoped_api_key";
+
+
+
 
 const consoleAuthByOrigin: any = new Map<any, any>();
 const organizationPublicationByOrigin: any = new Map<any, Promise<any>>();
@@ -53,7 +59,7 @@ async function ensurePublishedOrganizationScope(serviceUrl: string, authenticate
           "Content-Type": "application/json",
           ...authHeaders(authenticated, { method: "POST", safetyConfirm: false })
         },
-        body: JSON.stringify({ templateKey: "enterprise-group" })
+        body: JSON.stringify({ templateKey: canned1 })
       });
       if (imported.status !== 200 || !imported.payload?.draft) {
         throw new Error(`Verifier organization import failed: ${responseError(imported.payload, `HTTP ${imported.status}`)}`);
@@ -258,7 +264,7 @@ export async function issueVerifierMcpApiKey({
 }
 
 export function verifierMcpApiKeyHeaders({
-  apiKey = "",
+  apiKey = canned2,
   target = "",
   extraHeaders = {}
 }: Record<string, any> = {}) : any {
@@ -284,13 +290,13 @@ export function bindVerifierApiKey({
 }: Record<string, any> = {}) : any {
   if (!identityByToken || !token) return;
   identityByToken.set(token, Object.freeze({
-    credentialKind: "scoped_api_key",
+    credentialKind: canned3,
     keyId: String(record?.keyId || "")
   }));
 }
 
 export function verifierMcpRequestHeaders({
-  token = "",
+  token = canned2,
   target = "codex",
   extraHeaders = {}
 }: Record<string, any> = {}) : any {

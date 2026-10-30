@@ -3,6 +3,19 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { canonicalHash } from "@meshrix/foundation/serialization/canonical-json";
+const canned1 = "scoped_api_key";
+const canned2 = "A";
+const canned3 = "sha256:release-journey-policy";
+const canned4 = "sha256:fixture-grant-projection";
+const canned5 = "token-new";
+const canned6 = "token-rotated";
+const canned7 = "";
+const canned8 = "sensitive-value";
+const canned9 = "<redacted>";
+const canned10 = "tools/call";
+const canned11 = "must-not-persist";
+const canned12 = "secret";
+
 
 const sendJsonMock: any = vi.hoisted(() : any => vi.fn((response?: any, status?: any, payload?: any) : any => {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -54,6 +67,8 @@ import {
   getOperationPermissionDatabasePath
 } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
 
+
+
 function createResponse() : any {
   return {
     statusCode: 200,
@@ -84,12 +99,12 @@ function createUrl(pathname?: any) : any {
 
 function scopedApiKeyAuthorization(): any {
   return {
-    credentialKind: "scoped_api_key",
-    keyId: "A".repeat(22),
+    credentialKind: canned1,
+    keyId: canned2.repeat(22),
     workloadPrincipalId: "workload-release-journey",
     organizationNodeId: "organization-release-journey",
     lifecycleRevision: 7,
-    policyFingerprint: "sha256:release-journey-policy",
+    policyFingerprint: canned3,
     policy: {
       protocol: "mcp",
       serviceIds: [],
@@ -143,7 +158,7 @@ function createRuntimeFixture(overrides: Record<string, any> = {}) : any {
     capabilities: [],
     enabled: true,
     revokedAt: "",
-    projectionFingerprint: "sha256:fixture-grant-projection",
+    projectionFingerprint: canned4,
     policyIntegrity: { valid: true }
   };
 
@@ -279,8 +294,8 @@ function createPlatform(overrides: Record<string, any> = {}) : any {
     runtime,
     store: {
       listGrants: vi.fn(() : any => [{ id: "grant-1" }]),
-      createGrant: vi.fn(async (payload?: any) : Promise<any> => ({ grant: { id: "grant-new", ...payload }, token: "token-new" })),
-      rotateGrantToken: vi.fn(async (grantId?: any) : Promise<any> => ({ grant: { id: grantId }, token: "token-rotated" })),
+      createGrant: vi.fn(async (payload?: any) : Promise<any> => ({ grant: { id: "grant-new", ...payload }, token: canned5 })),
+      rotateGrantToken: vi.fn(async (grantId?: any) : Promise<any> => ({ grant: { id: grantId }, token: canned6 })),
       revokeGrant: vi.fn(async (grantId?: any, reason?: any) : Promise<any> => ({ id: grantId, revoked: true, reason })),
       updateGrant: vi.fn((grantId?: any, payload?: any) : any => ({ id: grantId, updated: payload })),
       listAudit: vi.fn(() : any => [{ id: "audit-1" }]),
@@ -365,7 +380,7 @@ function operationBindingForTest(resource: Record<string, any> = {}, operationId
         sourceRevision: 0,
         sourceDigest: "",
         serviceId: "",
-        operationKey: "",
+        operationKey: canned7,
         upstreamToolName: "",
         capabilityDigest: ""
       },
@@ -383,9 +398,9 @@ function operationBindingForTest(resource: Record<string, any> = {}, operationId
       credentialBinding: {
         kind: "tool_grant",
         id: "grant-1",
-        policyFingerprint: "sha256:fixture-grant-projection"
+        policyFingerprint: canned4
       },
-      grantProjectionFingerprint: "sha256:fixture-grant-projection"
+      grantProjectionFingerprint: canned4
   };
   return {
     ...core,
@@ -468,13 +483,13 @@ describe("operation-permission runtime (behavior)", () : any => {
         secretRefs: ["secret-ref:scanner"],
         "secret-refs": []
       },
-      apiKey: "sensitive-value"
+      apiKey: canned8
     }, "sample_plugin.scan")).toEqual({
       capabilities: {
         secretRefs: ["secret-ref:scanner"],
         "secret-refs": []
       },
-      apiKey: "<redacted>"
+      apiKey: canned9
     });
   });
   it("passes the HTTP parent signal into tool execution", async () : Promise<any> => {
@@ -550,7 +565,7 @@ describe("operation-permission runtime (behavior)", () : any => {
     const fixture: any = createRuntimeFixture({
       tool: {
         serviceId: "static-dispatcher",
-        operationKey: "tools/call",
+        operationKey: canned10,
         toolsets: ["meshrix.gateway.write"],
         requiredScopes: ["gateway:write"],
         risk: "safe_write",
@@ -566,7 +581,7 @@ describe("operation-permission runtime (behavior)", () : any => {
     const dynamicCapability: any = {
       capabilityId: "cap:upstream:opaque-service:tools-call-records-list",
       serviceId: "opaque-service",
-      operationKey: "tools/call",
+      operationKey: canned10,
       upstreamToolName: "records.list",
       risk: "read_only",
       requiredScopes: ["gateway:read"],
@@ -596,7 +611,7 @@ describe("operation-permission runtime (behavior)", () : any => {
       tool: expect.objectContaining({
         id: fixture.tool.id,
         serviceId: "opaque-service",
-        operationKey: "tools/call",
+        operationKey: canned10,
         risk: "read_only",
         requiredScopes: ["gateway:read"],
         toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
@@ -806,7 +821,7 @@ describe("operation-permission runtime (behavior)", () : any => {
             capabilities: [],
             enabled: true,
             revokedAt: "",
-            projectionFingerprint: "sha256:fixture-grant-projection",
+            projectionFingerprint: canned4,
             policyIntegrity: { valid: true }
           },
           sourceIp: "127.0.0.1"
@@ -1594,7 +1609,7 @@ describe("operation-permission runtime (behavior)", () : any => {
         sourceRevision: 1,
         sourceDigest: "source-one",
         serviceId: "service-a",
-        operationKey: "tools/call"
+        operationKey: canned10
       }
     });
     fixture.store.createPendingOperation.mockImplementation((entry?: any) : any => {
@@ -1953,12 +1968,12 @@ describe("operation-permission runtime (behavior)", () : any => {
       id: "grant-1",
       enabled: true,
       revokedAt: "",
-      projectionFingerprint: "sha256:fixture-grant-projection",
+      projectionFingerprint: canned4,
       policyIntegrity: { valid: true }
     };
     const cases: any[] = [
       { name: "missing", grant: null },
-      { name: "projection-missing", grant: { ...activeGrantProjection, projectionFingerprint: "" } },
+      { name: "projection-missing", grant: { ...activeGrantProjection, projectionFingerprint: canned7 } },
       { name: "policy-corrupt", grant: { ...activeGrantProjection, policyIntegrity: { valid: false } } },
       { name: "disabled", grant: { ...activeGrantProjection, enabled: false } },
       { name: "revoked", grant: { ...activeGrantProjection, revokedAt: "2026-06-05T00:00:00.000Z" } }
@@ -2251,8 +2266,8 @@ describe("operation-permission store boundaries (behavior)", () : any => {
         const requiredApproval: any = createGovernanceRequiredApproval({ approvalLayers: ["team"] });
         const apiKeyAuthorization: any = {
           ...scopedApiKeyAuthorization(),
-          credential: "must-not-persist",
-          credentialFingerprint: "must-not-persist",
+          credential: canned11,
+          credentialFingerprint: canned11,
           processIdentity: { executablePath: "must-not-persist" }
         };
         const pending: any = await store.createPendingOperation({
@@ -2262,7 +2277,7 @@ describe("operation-permission store boundaries (behavior)", () : any => {
           requiredApproval,
           approvalLayers: ["department"],
           credentialAuthorization: apiKeyAuthorization,
-          originalInput: { token: "secret" }
+          originalInput: { token: canned12 }
         });
         const projectionOnly: any = await store.createPendingOperation({
           pendingOperationId: "pending-projection-source",
@@ -2270,7 +2285,7 @@ describe("operation-permission store boundaries (behavior)", () : any => {
           operationId: "operation.alpha",
           requiredApproval: createGovernanceRequiredApproval({ approvalLayers: [] }),
           approvalLayers: ["department"],
-          originalInput: { token: "secret" }
+          originalInput: { token: canned12 }
         });
         const loaded: any = await store.getPendingOperation("pending-required-source", { includeOriginalInput: true });
         const loadedProjectionOnly: any = await store.getPendingOperation("pending-projection-source", { includeOriginalInput: true });

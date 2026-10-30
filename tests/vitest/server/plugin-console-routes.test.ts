@@ -15,6 +15,14 @@ import {
   configureRuntimeRouteGuard,
   installRuntimeRouteGuard,
 } from "../../../apps/console/router/runtime-route-guard";
+const canned1 = "sampleView";
+const canned2 = "sampleA";
+const canned3 = "sampleB";
+const canned4 = "sampleC";
+const canned5 = "workspacePanel";
+
+
+
 
 const View: Record<string, any> = { template: "<div />" };
 
@@ -36,7 +44,7 @@ function entry(patch: Partial<PluginConsoleEntry> = {}): PluginConsoleEntry {
     id: "admin.sample-plugin",
     pluginId: "sample-plugin",
     featureId: "sample-feature",
-    viewKey: "sampleView",
+    viewKey: canned1,
     routePath: "/admin/sample-plugin",
     componentId: "sample-plugin/AdminView",
     sandboxUrl: "",
@@ -90,21 +98,21 @@ describe("plugin console runtime routes", () : any => {
       entry({
         id: "admin.sample-a",
         featureId: "sample-feature-a",
-        viewKey: "sampleA",
+        viewKey: canned2,
         routePath: "/admin/sample-a",
         componentId: "sample-plugin/SampleAView",
       }),
       entry({
         id: "admin.sample-b",
         featureId: "sample-feature-b",
-        viewKey: "sampleB",
+        viewKey: canned3,
         routePath: "/admin/sample-b",
         componentId: "sample-plugin/SampleBView",
       }),
       entry({
         id: "admin.sample-c",
         featureId: "sample-feature-c",
-        viewKey: "sampleC",
+        viewKey: canned4,
         routePath: "/admin/sample-c",
         componentId: "sample-plugin/SampleCView",
       }),
@@ -206,7 +214,7 @@ describe("plugin console runtime routes", () : any => {
       id: "workspace.local-directory",
       pluginId: "sample-plugin",
       featureId: "sample-feature",
-      viewKey: "workspacePanel",
+      viewKey: canned5,
       routePath: undefined,
       slotId: "workspace.local-directory",
       componentId: "sample-plugin/WorkspacePanel",

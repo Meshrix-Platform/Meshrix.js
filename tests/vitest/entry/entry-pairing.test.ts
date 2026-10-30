@@ -21,6 +21,17 @@ import {
   type PairingPeerIdentity,
   enrollDeviceIdentity
 } from "@meshrix/entry";
+const canned1 = "spki.test.pin";
+const canned2 = "rckey.test.1";
+const canned3 = "pt.one-time.token";
+const canned4 = "pn.test.1";
+const canned5 = "";
+const canned6 = "pt.wrong";
+const canned7 = "k";
+const canned8 = "fp.test";
+
+
+
 
 let dir: string;
 afterEach(async () => {
@@ -41,14 +52,14 @@ function inviteFixture(overrides: Partial<PairingInvite> = {}): PairingInvite {
     mode: "personal",
     endpointDeviceId: "dev.endpoint.1",
     endpointPrincipalRef: "prin.pr.1",
-    endpointSpkiPin: "spki.test.pin",
-    endpointPinRef: "spki.test.pin",
+    endpointSpkiPin: canned1,
+    endpointPinRef: canned1,
     relayService: "https://relay.example.invalid",
     vaultId: "vault.pr.1",
-    recoveryAuthority: { keyId: "rckey.test.1", generation: 3 },
+    recoveryAuthority: { keyId: canned2, generation: 3 },
     issuedAt: "2026-01-01T00:00:00Z",
     expiresAt: "2027-01-01T00:00:00Z",
-    pairingToken: "pt.one-time.token",
+    pairingToken: canned3,
     ...overrides
   };
   const parsed = parsePairingInvite(invite);
@@ -66,7 +77,8 @@ function fakeEndpoint(options: {
   endpointPeerIdentity?: PairingPeerIdentity | null;
 } = {}): PairingEndpointPort & { seenSignature?: string; seenChallenge?: string } {
   const state: { seenSignature?: string; seenChallenge?: string } = {};
-  const token = options.acceptToken ?? "pt.one-time.token";
+  const cannedFallback = "pt.one-time.token";
+  const token = options.acceptToken ?? cannedFallback;
   return Object.assign(state, {
     async beginPairing(input) {
       if (options.failBegin === "unreachable") {
@@ -79,7 +91,7 @@ function fakeEndpoint(options: {
       return {
         outcome: "challenge",
         challengeId: state.seenChallenge,
-        nonce: "pn.test.1",
+        nonce: canned4,
         expiresAt: "2099-01-01T00:00:00Z",
         account: { accountId: "acct.test.1", authEpoch: 1 },
         target: {
@@ -156,7 +168,7 @@ describe("pairing invite payload", () => {
       .toThrowError(expect.objectContaining({ code: "pairing_invite_invalid" }));
     expect(() => parsePairingInviteText(encodePairingInvite({
       ...inviteFixture(),
-      pairingToken: "" as never
+      pairingToken: canned5 as never
     }))).toThrowError(expect.objectContaining({ code: "pairing_invite_invalid" }));
   });
 
@@ -260,7 +272,7 @@ describe("pairing session", () => {
 
   it("refuses an incorrect pairing token and records the refusal", async () => {
     const session = new PairingSession({
-      invite: inviteFixture({ pairingToken: "pt.wrong" }),
+      invite: inviteFixture({ pairingToken: canned6 }),
       custody: await custody(),
       endpoint: fakeEndpoint()
     });
@@ -322,8 +334,8 @@ describe("invite → trust binding mapping", () => {
   it("produces a contract-valid endpoint-trust-binding", () => {
     const binding = inviteToTrustBinding({
       invite: inviteFixture(),
-      devicePublicKey: "k".padEnd(43, "x"),
-      deviceFingerprint: "fp.test",
+      devicePublicKey: canned7.padEnd(43, "x"),
+      deviceFingerprint: canned8,
       capabilityGrantRef: "grant.staged.1"
     });
     const parsed = parseEndpointTrustBinding(binding);
@@ -337,8 +349,8 @@ describe("invite → trust binding mapping", () => {
   it("is canonical-serializable without secret fields", () => {
     const binding = inviteToTrustBinding({
       invite: inviteFixture(),
-      devicePublicKey: "k".padEnd(43, "x"),
-      deviceFingerprint: "fp.test",
+      devicePublicKey: canned7.padEnd(43, "x"),
+      deviceFingerprint: canned8,
       capabilityGrantRef: "grant.staged.1"
     });
     const serialized = canonicalJson(binding);

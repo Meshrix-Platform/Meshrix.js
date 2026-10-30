@@ -17,12 +17,17 @@ import {
   type OrganizationGovernanceTemplateDraft
 } from "../../../apps/console/lib/organization-governance-template-client.ts";
 import { getJson, postJson } from "@meshrix/ui-console/bridge-http";
+const canned1 = "enterprise-group";
+const canned2 = "";
+
+
+
 
 vi.mock("@meshrix/ui-console/bridge-http", () : any => ({ getJson: vi.fn(), postJson: vi.fn() }));
 
 const draft: OrganizationGovernanceTemplateDraft = {
   schemaVersion: ORGANIZATION_TEMPLATE_SCHEMA_VERSION,
-  templateKey: "enterprise-group",
+  templateKey: canned1,
   templateName: "Enterprise group",
   description: "Explicit hierarchy",
   organizationDepth: 0,
@@ -43,7 +48,7 @@ const emptySnapshot: any = {
   ...draft,
   configured: false,
   revision: 0,
-  templateKey: "",
+  templateKey: canned2,
   templateName: "",
   description: "",
   nodes: [], tags: [], roles: [], publishedAt: ""
@@ -54,11 +59,11 @@ describe("organization governance client", () : any => {
     vi.mocked(getJson).mockResolvedValue({ snapshot: emptySnapshot, templates: [] });
     vi.mocked(postJson).mockResolvedValue({ draft });
     await getOrganizationGovernance();
-    await importOrganizationGovernance({ templateKey: "enterprise-group" });
+    await importOrganizationGovernance({ templateKey: canned1 });
     await previewOrganizationGovernance(draft);
     await publishOrganizationGovernance({ ...draft, expectedRevision: 0 });
     expect(getJson).toHaveBeenCalledWith("/api/authorization/organization-governance");
-    expect(postJson).toHaveBeenNthCalledWith(1, "/api/authorization/organization-governance/import", { templateKey: "enterprise-group" });
+    expect(postJson).toHaveBeenNthCalledWith(1, "/api/authorization/organization-governance/import", { templateKey: canned1 });
     expect(postJson).toHaveBeenNthCalledWith(2, "/api/authorization/organization-governance/preview", draft);
     expect(postJson).toHaveBeenNthCalledWith(3, "/api/authorization/organization-governance/publish", { ...draft, expectedRevision: 0 }, { safetyConfirm: true });
   });
@@ -85,7 +90,7 @@ describe("organization governance console flow", () : any => {
   it("stores only the server-normalized built-in draft", async () : Promise<any> => {
     const storage: any = { getItem: vi.fn(() : any => null), setItem: vi.fn(), removeItem: vi.fn() };
     const client: any = {
-      get: vi.fn().mockResolvedValue({ snapshot: emptySnapshot, templates: [{ templateKey: "enterprise-group", templateName: "Enterprise group" }] }),
+      get: vi.fn().mockResolvedValue({ snapshot: emptySnapshot, templates: [{ templateKey: canned1, templateName: "Enterprise group" }] }),
       import: vi.fn().mockResolvedValue({ draft }),
       preview: vi.fn().mockResolvedValue({ preview: draft }),
       publish: vi.fn()
@@ -93,7 +98,7 @@ describe("organization governance console flow", () : any => {
     const controller: any = useConsoleOrganizationGovernanceController({ client, storage });
     await controller.refresh();
     await controller.importBuiltIn("enterprise-group");
-    expect(client.import).toHaveBeenCalledWith({ templateKey: "enterprise-group" });
+    expect(client.import).toHaveBeenCalledWith({ templateKey: canned1 });
     expect(controller.draft.value).toEqual(draft);
     expect(storage.setItem).toHaveBeenCalled();
   });
@@ -211,7 +216,7 @@ describe("organization governance console flow", () : any => {
     vi.mocked(getJson).mockResolvedValue({
       snapshot: emptySnapshot,
       templates: [{
-        templateKey: "enterprise-group",
+        templateKey: canned1,
         templateName: "Enterprise group",
         nodeCount: 5,
         tagCount: 5,

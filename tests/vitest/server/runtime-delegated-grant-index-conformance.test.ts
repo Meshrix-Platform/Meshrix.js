@@ -17,8 +17,9 @@ async function createStore() : Promise<any> {
   roots.push(userDataPath);
   const capabilityKeyProvider: any = {
     async issue({ credentialId }: Record<string, any>) : Promise<any> {
+      const stamp = `ock_${credentialId}_bounded_fixture`;
       return {
-        capabilityKey: `ock_${credentialId}_bounded_fixture`,
+        capabilityKey: stamp,
         credentialId,
         capabilitySetHash: "fixture",
         capabilityCount: 1,

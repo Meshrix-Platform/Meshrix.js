@@ -3,6 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createReadinessBaselineProvider } from "../../../packages/foundation/src/observability/readiness-baseline/baseline-provider.ts";
+const canned1 = "platform-acceptance-reducer";
+
+
+
 
 function collectKeys(value?: any, keys: any = new Set<any>()) : any {
   if (Array.isArray(value)) {
@@ -28,7 +32,7 @@ describe("readiness baseline public projection", () : any => {
         verificationMode: "runtime-observed",
         readiness: {
           status: "not-assessed",
-          authority: "platform-acceptance-reducer"
+          authority: canned1
         }
       });
       expect([...collectKeys(status)]).not.toEqual(expect.arrayContaining([

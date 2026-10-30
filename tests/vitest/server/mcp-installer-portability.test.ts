@@ -17,6 +17,10 @@ import {
 } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/scan-local.ts";
 import { run } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/connector-process.ts";
 import { summarizeMcpInstallerConvergenceReport } from "../../../tools/server-scripts/lib/mcp-installer-convergence-report.ts";
+const canned1 = "input";
+
+
+
 
 const discoveryEnvironment = {
   MESHRIX_MCP_URL: "http://meshrix.test:7228/mcp",
@@ -114,7 +118,7 @@ describe("portable MCP installer discovery", () => {
     const failedRunner = vi.fn(async () => ({ ok: false, stdout: "", stderr: "private detail" }));
     const port = createDeviceEnvironmentPort({ platform: "darwin", runCommand: failedRunner as any });
 
-    await expect(port.write({ ...discoveryEnvironment, MESHRIX_MCP_TOKEN: "input" }))
+    await expect(port.write({ ...discoveryEnvironment, MESHRIX_MCP_TOKEN: canned1 }))
       .rejects.toThrow("device_environment_key_not_owned");
     await expect(port.write({ ...discoveryEnvironment, MESHRIX_MCP_URL: 4 }))
       .rejects.toThrow("device_environment_value_invalid");

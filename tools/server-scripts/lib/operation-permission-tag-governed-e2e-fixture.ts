@@ -4,6 +4,11 @@ import { seedVerifierUpstreamServices } from "./upstream-gateway-verifier-public
 import {
   OPERATION_PERMISSION_TAG_GOVERNED_E2E
 } from "./operation-permission-tag-governed-e2e-constants.ts";
+const canned1 = "echo";
+const canned2 = "approval";
+
+
+
 
 export function createTagGovernedFixtureState() : any {
   return { echoCount: 0 };
@@ -74,7 +79,7 @@ export async function seedTagGovernedUpstreamService({
         healthPath: "/health",
         operations: [
           {
-            operationKey: "echo",
+            operationKey: canned1,
             method: "POST",
             path: "/echo",
             risk: "safe_write",
@@ -85,7 +90,7 @@ export async function seedTagGovernedUpstreamService({
             }
           },
           {
-            operationKey: "approval",
+            operationKey: canned2,
             method: "POST",
             path: "/echo",
             risk: "repair_write",

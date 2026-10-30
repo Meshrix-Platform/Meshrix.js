@@ -82,7 +82,7 @@ export function deepEqual(left, right) {
 export function stableJson(value) {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+    return `{${Object.keys(value).sort().map(field => `${JSON.stringify(field)}:${stableJson(value[field])}`).join(',')}}`;
   }
   return JSON.stringify(value);
 }

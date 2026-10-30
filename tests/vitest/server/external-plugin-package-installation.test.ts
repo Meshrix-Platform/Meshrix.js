@@ -13,6 +13,11 @@ import { loadPluginRegistry } from "../../../packages/foundation/src/module-syst
 import { activatePluginDeployment } from "../../../packages/foundation/src/module-system/plugin-runtime.ts";
 import { pluginArtifactCoreContractDigest } from "../../../packages/server-runtime/src/composition/plugin-artifact-core-contract.ts";
 import { createPluginContributionRegistry } from "../../../packages/server-runtime/src/composition/plugin-contribution-registry.ts";
+const canned1 = "secret://fixture/external-plugin-package";
+const canned2 = "secret://fixture/external-plugin-package-set";
+
+
+
 
 const resources: any[] = [];
 
@@ -62,7 +67,7 @@ async function installAndActivatePackage({ packagePath, pluginId, configuration 
     artifactRoot: path.join(root, "artifacts"),
     trustedPublicKeys: { [keyId]: publicKey.export({ format: "jwk" }) },
     artifactSigner: artifactSigner(privateKey, keyId),
-    secretRef: "secret://fixture/external-plugin-package",
+    secretRef: canned1,
     coreContractDigest
   });
   const lifecycleStatePort: any = await createPluginLifecycleStatePort({
@@ -108,7 +113,7 @@ async function installAndActivatePackages(packages?: any) : Promise<any> {
     artifactRoot: path.join(root, "artifacts"),
     trustedPublicKeys: { [keyId]: publicKey.export({ format: "jwk" }) },
     artifactSigner: artifactSigner(privateKey, keyId),
-    secretRef: "secret://fixture/external-plugin-package-set",
+    secretRef: canned2,
     coreContractDigest
   });
   const lifecycleStates: any = new Map<any, any>();

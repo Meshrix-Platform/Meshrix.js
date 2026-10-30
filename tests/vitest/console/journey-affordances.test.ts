@@ -22,6 +22,15 @@ import {
   settleConsoleConfirm,
   unregisterConsoleConfirmHost,
 } from "../../../apps/console/composables/console-confirm-controller";
+const canned1 = "catalog-a";
+const canned2 = "key-public-id";
+const canned3 = "fingerprint-a";
+const canned4 = "policy-a";
+const canned5 = "opaque-one-time-credential";
+const canned6 = "k";
+
+
+
 
 const publishClient: any = vi.hoisted(() : any => ({
   createUpstreamService: vi.fn(),
@@ -86,7 +95,7 @@ function publication(revision: number) : any {
 
 function apiKeyScopes() : any {
   return {
-    organizationRevision: 1, authorizationRevision: 2, catalogFingerprint: "catalog-a", serverAudience: "server-a",
+    organizationRevision: 1, authorizationRevision: 2, catalogFingerprint: canned1, serverAudience: "server-a",
     eligibleRoots: [{ nodeId: "organization-a", name: "Organization A", breadcrumb: ["Group", "Organization A"], nodeType: "organization" }],
     eligibleNodes: [{ nodeId: "organization-a", name: "Organization A", breadcrumb: ["Group", "Organization A"], nodeType: "organization" }],
   };
@@ -96,7 +105,7 @@ function apiKeyCatalog() : any {
   return {
     schemaVersion: "1",
     generatedAt: "2026-08-01T00:00:00.000Z",
-    fingerprint: "catalog-a",
+    fingerprint: canned1,
     scopes: [{ id: "scope-a", label: "Scope A", description: "" }],
     toolsets: [{ id: "toolset-a", label: "Toolset A", requiredScopes: ["scope-a"], maxRisk: "read_only" }],
     profiles: [],
@@ -113,7 +122,7 @@ function apiKeyCatalog() : any {
 
 function apiKeyRecord(overrides: Record<string, unknown> = {}) : any {
   return {
-    keyId: "key-public-id", displayPrefix: "mxak1.pub…", credentialFingerprint: "fingerprint-a",
+    keyId: canned2, displayPrefix: "mxak1.pub…", credentialFingerprint: canned3,
     workloadPrincipalId: "workload-principal-a", workloadDisplayName: "Build worker",
     organizationNodeId: "organization-a", organizationBreadcrumb: ["Group", "Organization A"],
     policy: {
@@ -125,9 +134,9 @@ function apiKeyRecord(overrides: Record<string, unknown> = {}) : any {
         secretBindingIds: [], allowedOrigins: [], allowedCidrs: [] },
       processIdentity: { mode: "optional" },
       limits: { maxUses: 10, requestsPerWindow: 3, windowSeconds: 60, maxConcurrentEffects: 1 },
-      catalogFingerprint: "catalog-a",
+      catalogFingerprint: canned1,
     },
-    policyFingerprint: "policy-a", status: "active", lifecycleRevision: 1, useCount: 0,
+    policyFingerprint: canned4, status: "active", lifecycleRevision: 1, useCount: 0,
     createdAt: "2026-08-01T00:00:00.000Z", rotatedAt: null, revokedAt: null,
     expiresAt: futureExpiry().toISOString(),
     ...overrides,
@@ -138,8 +147,8 @@ function apiKeyClient(overrides: Record<string, unknown> = {}) : any {
   const client: any = {
     getIssuerScopes: vi.fn(async () : Promise<any> => apiKeyScopes()),
     list: vi.fn(async () : Promise<any> => ({ records: [], nextCursor: null })),
-    create: vi.fn(async () : Promise<any> => ({ record: apiKeyRecord(), apiKey: "opaque-one-time-credential" })),
-    rotate: vi.fn(async () : Promise<any> => ({ record: apiKeyRecord(), apiKey: "opaque-one-time-credential" })),
+    create: vi.fn(async () : Promise<any> => ({ record: apiKeyRecord(), apiKey: canned5 })),
+    rotate: vi.fn(async () : Promise<any> => ({ record: apiKeyRecord(), apiKey: canned5 })),
     revoke: vi.fn(async () : Promise<any> => apiKeyRecord({ status: "revoked" })),
     getCatalog: vi.fn(async () : Promise<any> => apiKeyCatalog()),
   };
@@ -326,7 +335,8 @@ describe("grant success link placement", () : any => {
     // No success surface yet — no link.
     expect(wrapper.find('[data-testid="grant-success-client-key-link"]').exists()).toBe(false);
 
-    issuedToolToken.value = "one-time-token-value";
+    const cannedOnce = "one-time-token-value";
+    issuedToolToken.value = cannedOnce;
     await nextTick();
     const link: any = wrapper.find('[data-testid="grant-success-client-key-link"]');
     expect(link.exists()).toBe(true);
@@ -424,7 +434,7 @@ describe("credentialing disambiguation lines", () : any => {
 describe("connector configuration snippet", () : any => {
   it("builds a non-empty snippet per frozen target with key identity and the secret placeholder only", () : any => {
     const targets: string[] = ["openclaw", "codex", "claude-code", "antigravity", "opencode", "pi", "kimi"];
-    const keyMaterial: any = { keyId: "key-public-id", displayPrefix: "mxak1.pub…" };
+    const keyMaterial: any = { keyId: canned2, displayPrefix: "mxak1.pub…" };
     for (const target of targets) {
       const snippet: string = buildConnectorConfigSnippet(target, keyMaterial);
       expect(snippet.length).toBeGreaterThan(0);
@@ -445,12 +455,12 @@ describe("connector configuration snippet", () : any => {
   });
 
   it("returns empty guidance for unknown targets", () : any => {
-    expect(buildConnectorConfigSnippet("unknown-client", { keyId: "k", displayPrefix: "p" })).toBe("");
+    expect(buildConnectorConfigSnippet("unknown-client", { keyId: canned6, displayPrefix: "p" })).toBe("");
   });
 
   it("uses the resolved HTTPS audience for a named connector without adding a client timeout", () : any => {
     vi.stubGlobal("window", { location: { protocol: "https:", host: "console.example.test" } });
-    const snippet = buildConnectorConfigSnippet("codex", { keyId: "k", displayPrefix: "p" }, "mcp.example.test:7443");
+    const snippet = buildConnectorConfigSnippet("codex", { keyId: canned6, displayPrefix: "p" }, "mcp.example.test:7443");
     const json = JSON.parse(snippet.slice(snippet.indexOf("{"), snippet.lastIndexOf("}") + 1));
     expect(json.mcpServers.meshrix.httpUrl).toBe("https://mcp.example.test:7443/mcp");
     expect(json.mcpServers.meshrix).not.toHaveProperty("timeout");

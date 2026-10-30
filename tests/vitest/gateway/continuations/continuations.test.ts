@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createContinuationCodec } from "@meshrix/gateway";
 import { context, descriptor, QueueUpstream, key, response, createTestGateway as createGateway } from "../support";
+const canned1 = "old";
+const canned2 = "new";
+
+
+
 
 describe("gateway MRTR continuation binding", () => {
   it("[CASE-R01] wraps upstream requestState, restores it exactly, and carries input responses", async () => {
@@ -98,9 +103,9 @@ describe("gateway MRTR continuation binding", () => {
   it("supports key rotation without exposing plaintext state", () => {
     const oldKey = key();
     const nextKey = new Uint8Array(oldKey.map((value) => value ^ 0xff));
-    const oldCodec = createContinuationCodec({ key: oldKey, keyRevision: "old" });
+    const oldCodec = createContinuationCodec({ key: oldKey, keyRevision: canned1 });
     const token = oldCodec.seal({ generation: 1, tenant: "t", principal: "p", grantRevision: "g", routeRef: "r", endpointIdentity: "e", routeRevision: "v", method: "tools/call", params: { ok: true }, paramsDigest: "digest", upstreamState: { present: false }, effectClass: "read", oneTime: false, issuedAt: Date.now(), expiresAt: Date.now() + 10000 });
-    const rotated = createContinuationCodec({ key: nextKey, keyRevision: "new", previousKeys: [oldKey] });
+    const rotated = createContinuationCodec({ key: nextKey, keyRevision: canned2, previousKeys: [oldKey] });
     expect(rotated.open(token).routeRef).toBe("r");
     expect(token).not.toContain("digest");
   });

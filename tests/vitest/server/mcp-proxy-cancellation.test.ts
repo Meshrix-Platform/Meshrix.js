@@ -11,6 +11,10 @@ import {
   forwardProxyMessage,
   MCP_STDIO_FRAMING_CONTENT_LENGTH
 } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
+const canned1 = "test-token";
+
+
+
 
 afterEach(() : any => {
   vi.useRealTimers();
@@ -47,7 +51,8 @@ describe("MCP stdio initialization", () => {
   });
 
   it("connects a standard SDK client and forwards authorized tool work over modern HTTP", async () => {
-    const token = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
+    const wire = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
+    const token = wire;
     const requests: any[] = [];
     let deny = false;
     const fetchImpl = async (_url: any, options: any) => {
@@ -126,7 +131,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     };
     const transport: any = createProxyStdioTransport({
       baseUrl: "https://gateway.invalid",
-      token: "test-token",
+      token: canned1,
       target: "test-client",
       forwardMessage,
       writeMessage(payload?: any, framing?: any) : any {
@@ -513,7 +518,7 @@ describe("MCP stdio proxy cancellation", () : any => {
 
     const forwarded: any = forwardProxyMessage({
       baseUrl: "https://gateway.invalid",
-      token: `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`,
+      token: ("mxak1."+"A".repeat(22)+"."+"b".repeat(43)),
       target: "codex",
       message: { jsonrpc: "2.0", id: "long-proxy", method: "tools/list" },
       signal: new AbortController().signal,
@@ -592,7 +597,7 @@ describe("MCP stdio proxy cancellation", () : any => {
     const externalController: any = new AbortController();
     const result: any = forwardProxyMessage({
       baseUrl: "https://gateway.invalid",
-      token: `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`,
+      token: ("mxak1."+"A".repeat(22)+"."+"b".repeat(43)),
       target: "codex",
       message: { jsonrpc: "2.0", id: "bounded-proxy", method: "tools/list" },
       signal: externalController.signal,

@@ -5,6 +5,11 @@ import { createPlatformMcpGateway } from "@meshrix/server-runtime/composition/ga
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../support.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "tools/call";
+const canned2 = "tool_grant";
+
+
+
 
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { while (cleanup.length) await cleanup.pop()!(); });
@@ -35,7 +40,7 @@ describe("configured default platform upstream transport", () => {
     const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort() });
     cleanup.push(() => registry.close());
     installUpstreamRuntimeServices(registry, [{ serviceId: "synthetic", serviceProtocol: "mcp", label: "synthetic", allowLocalNetwork: true,
-      operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+      operations: [{ operationKey: canned1, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
       mcp: { transport: "http", url: `http://127.0.0.1:${address.port}/mcp`, protocolVersion: "2026-07-28", headers: { "X-Context-Scope": "synthetic" } }
     }]);
     const noOldForward = new Proxy(registry, { get(target, property) {
@@ -46,13 +51,13 @@ describe("configured default platform upstream transport", () => {
       id: "upstream.synthetic.tools-call",
       upstreamProjectedOperation: true,
       serviceId: "synthetic",
-      operationKey: "tools/call",
+      operationKey: canned1,
       protocol: "mcp",
       inputSchema: { type: "object" }
     };
     const platform = createPlatformMcpGateway({ upstreamGatewayRegistry: noOldForward,
       toolSkillManagementProvider: {
-        authorizeMcpClientRequest: async () => ({ ok: true, credentialKind: "tool_grant", grant: { id: "grant-1", revision: "grant-1", subjectId: "caller", scopes: ["gateway:read"], dynamicCapabilities: ["cap:upstream:synthetic:tools-call-echo"] }, subject: { type: "tool-grant", subjectId: "caller", grantId: "grant-1", scopes: ["gateway:read"], dynamicCapabilities: ["cap:upstream:synthetic:tools-call-echo"] } }),
+        authorizeMcpClientRequest: async () => ({ ok: true, credentialKind: canned2, grant: { id: "grant-1", revision: "grant-1", subjectId: "caller", scopes: ["gateway:read"], dynamicCapabilities: ["cap:upstream:synthetic:tools-call-echo"] }, subject: { type: "tool-grant", subjectId: "caller", grantId: "grant-1", scopes: ["gateway:read"], dynamicCapabilities: ["cap:upstream:synthetic:tools-call-echo"] } }),
         listVisibleTools: () => [internalMcpAuthorityRecord]
       }
     });
@@ -100,7 +105,7 @@ describe("configured default platform upstream transport", () => {
     const registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort() });
     cleanup.push(() => registry.close());
     installUpstreamRuntimeServices(registry, [{ serviceId: "legacy", serviceProtocol: "mcp", label: "legacy", allowLocalNetwork: true,
-      operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+      operations: [{ operationKey: canned1, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
       mcp: { transport: "http", url: `http://127.0.0.1:${address.port}/mcp`, protocolVersion: "2025-06-18" }
     }]);
     const platform = createPlatformMcpGateway({ upstreamGatewayRegistry: registry,

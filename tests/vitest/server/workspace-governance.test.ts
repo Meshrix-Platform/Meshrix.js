@@ -9,6 +9,10 @@ import {
 } from "../../../packages/agents/src/workspace-governance/index.ts";
 import { PLATFORM_CONSOLE_OPERATION_DEFINITIONS } from "../../../packages/contracts/src/operations/platform-console-operation-definitions.ts";
 import { executeWorkspaceGovernanceOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/runtime-admin-executors.ts";
+const canned1 = "unshare-alpha";
+
+
+
 
 async function withRegistry(testCase?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-governance-extra-"));
@@ -499,7 +503,7 @@ describe("workspace governance invalid input boundaries", () : any => {
       await expect(registry.recordIncompleteUnshare({
         workspaceId: "workspace-alpha",
         targetWorkspaceId: 42,
-        idempotencyKey: "unshare-alpha"
+        idempotencyKey: canned1
       })).rejects.toMatchObject({ code: "workspace_binding_invalid" });
 
       const missingRevocation: any = await registry.revokeShareGrants({

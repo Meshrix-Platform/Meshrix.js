@@ -6,6 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import { normalizeQueueDedupeKey } from "../../../packages/foundation/src/work-queue/index.ts";
 import { createQueueApplicationPort } from "../../../packages/server-runtime/src/composition/queue-application-port.ts";
+const canned1 = "close-drain";
+const canned2 = "late";
+const canned3 = "first";
+const canned4 = "second";
+const canned5 = "producer-only";
+
+
+
 
 async function waitForCompleted(queue?: any, workItemId?: any) : Promise<any> {
   for (let attempt: any = 0; attempt < 100; attempt += 1) {
@@ -32,7 +40,7 @@ describe("queue application port", () : any => {
         scope: { tenantId: "test", workspaceId: "close-drain" },
         handler: async () : Promise<any> => { startedResolve(); await gate; return { action: "completed" }; }
       });
-      await queue.enqueue({ dedupeKey: "close-drain", payloadRef: { kind: "test" }, ownerRef: { capability: "test-close-drain" } });
+      await queue.enqueue({ dedupeKey: canned1, payloadRef: { kind: "test" }, ownerRef: { capability: "test-close-drain" } });
       void queue.requestDispatch();
       await started;
       if (timeoutMs !== undefined) {
@@ -53,7 +61,7 @@ describe("queue application port", () : any => {
       await ownerClosing;
       expect(ownerClosed).toBe(true);
       expect(port.describe().queueCount).toBe(0);
-      expect(() : any => queue.enqueue({ dedupeKey: "late" })).toThrow(/closed/u);
+      expect(() : any => queue.enqueue({ dedupeKey: canned2 })).toThrow(/closed/u);
     } finally {
       release?.();
       await port.close();
@@ -143,8 +151,8 @@ describe("queue application port", () : any => {
       });
       const first: any = await register("first");
       const second: any = await register("second");
-      await first.enqueue({ dedupeKey: "first", ownerRef: {}, payloadRef: { kind: "test" } });
-      await second.enqueue({ dedupeKey: "second", ownerRef: {}, payloadRef: { kind: "test" } });
+      await first.enqueue({ dedupeKey: canned3, ownerRef: {}, payloadRef: { kind: "test" } });
+      await second.enqueue({ dedupeKey: canned4, ownerRef: {}, payloadRef: { kind: "test" } });
 
       await first.requestDispatch();
       await new Promise((resolve?: any) : any => setImmediate(resolve));
@@ -179,12 +187,12 @@ describe("queue application port", () : any => {
       const second: any = await register("second");
       const firstWork: any = await first.enqueue({
         scope: { tenantId: "attacker", workspaceId: "override" },
-        dedupeKey: "first",
+        dedupeKey: canned3,
         payloadRef: { kind: "test" },
         ownerRef: { capability: "test-boundary-first" }
       });
       const secondWork: any = await second.enqueue({
-        dedupeKey: "second",
+        dedupeKey: canned4,
         payloadRef: { kind: "test" },
         ownerRef: { capability: "test-boundary-second" }
       });
@@ -234,7 +242,7 @@ describe("queue application port", () : any => {
         handler: async () : Promise<any> => { handled += 1; return { action: "completed" }; }
       });
       const admitted: any = await queue.enqueue({
-        dedupeKey: "producer-only",
+        dedupeKey: canned5,
         payloadRef: { kind: "test" },
         ownerRef: { capability: "test-producer-only" }
       });

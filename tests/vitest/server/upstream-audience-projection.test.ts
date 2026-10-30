@@ -12,12 +12,25 @@ import { createToolSkillManagementProvider } from "../../../packages/capabilitie
 import { apiKeyAuthorizationEvaluationInput } from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution.ts";
 import { installUpstreamRuntimeServices, structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "read";
+const canned2 = "catalog";
+const canned3 = "scoped_api_key";
+const canned4 = "opaque-key-id";
+const canned5 = "policy-fingerprint";
+const canned6 = "tools/call";
+const canned7 = "catalog-a";
+const canned8 = "catalog-4";
+const canned9 = "catalog-5";
+const canned10 = "authorization-fixture";
+
+
+
 
 function serviceEntry({
   serviceId = "svc_audience_a",
   tagPolicy = null,
   operations = [{
-    operationKey: "read",
+    operationKey: canned1,
     method: "GET",
     path: "/read",
     risk: "read_only",
@@ -148,14 +161,14 @@ describe("upstream audience projection", () : any => {
       },
       processIdentity: { mode: "optional" },
       limits: { maxUses: 10, requestsPerWindow: 10, windowSeconds: 60, maxConcurrentEffects: 2 },
-      catalogFingerprint: "catalog"
+      catalogFingerprint: canned2
     };
     const evaluation: any = apiKeyAuthorizationEvaluationInput({
-      credentialKind: "scoped_api_key",
-      keyId: "opaque-key-id",
+      credentialKind: canned3,
+      keyId: canned4,
       workloadPrincipalId: "workload-principal",
       organizationNodeId: "organization-node",
-      policyFingerprint: "policy-fingerprint",
+      policyFingerprint: canned5,
       policy: basePolicy
     });
     expect(evaluateAudienceDecision({
@@ -166,11 +179,11 @@ describe("upstream audience projection", () : any => {
     })).toMatchObject({ allowed: true, reasonCode: "audience_allowed" });
     expect(evaluateAudienceDecision({
       ...apiKeyAuthorizationEvaluationInput({
-        credentialKind: "scoped_api_key",
-        keyId: "opaque-key-id",
+        credentialKind: canned3,
+        keyId: canned4,
         workloadPrincipalId: "workload-principal",
         organizationNodeId: "organization-node",
-        policyFingerprint: "policy-fingerprint",
+        policyFingerprint: canned5,
         policy: { ...basePolicy, serviceIds: ["different-service"] }
       }),
       operation,
@@ -193,7 +206,7 @@ describe("upstream audience projection", () : any => {
         serviceProtocol: "mcp",
         label: "MCP audience fixture",
         allowLocalNetwork: true,
-        operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+        operations: [{ operationKey: canned6, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
         mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18" }
       }]);
       const { items } = await registry.listMcpTools({ serviceId: "svc_mcp_audience" });
@@ -346,7 +359,7 @@ describe("upstream audience projection", () : any => {
     const first: any = compileAudienceProjection({
       sourceRevision: 3,
       sourceDigest: candidate.setDigest,
-      catalogFingerprint: "catalog-a",
+      catalogFingerprint: canned7,
       snapshot: candidate,
       projectedOperations: projection.operations,
       grants: [
@@ -375,7 +388,7 @@ describe("upstream audience projection", () : any => {
     const second: any = compileAudienceProjection({
       sourceRevision: 3,
       sourceDigest: candidate.setDigest,
-      catalogFingerprint: "catalog-a",
+      catalogFingerprint: canned7,
       snapshot: candidate,
       projectedOperations: projection.operations,
       previousProjection: first,
@@ -402,7 +415,7 @@ describe("upstream audience projection", () : any => {
     const replay: any = compileAudienceProjection({
       sourceRevision: 3,
       sourceDigest: candidate.setDigest,
-      catalogFingerprint: "catalog-a",
+      catalogFingerprint: canned7,
       snapshot: candidate,
       projectedOperations: projection.operations,
       previousProjection: second,
@@ -445,14 +458,14 @@ describe("upstream audience projection", () : any => {
     const first: any = compileAudienceProjection({
       sourceRevision: 4,
       sourceDigest: firstSnapshot.setDigest,
-      catalogFingerprint: "catalog-4",
+      catalogFingerprint: canned8,
       snapshot: firstSnapshot,
       projectedOperations: firstOperations,
       grants: [audienceGrant]
     });
     const secondSnapshot: any = snapshot(5, [serviceEntry({
       operations: [{
-        operationKey: "read",
+        operationKey: canned1,
         method: "GET",
         path: "/read",
         risk: "read_only",
@@ -465,7 +478,7 @@ describe("upstream audience projection", () : any => {
     const second: any = compileAudienceProjection({
       sourceRevision: 5,
       sourceDigest: secondSnapshot.setDigest,
-      catalogFingerprint: "catalog-5",
+      catalogFingerprint: canned9,
       snapshot: secondSnapshot,
       projectedOperations: secondOperations,
       grants: [audienceGrant],
@@ -513,7 +526,7 @@ describe("upstream audience projection", () : any => {
         label: "Plugin MCP fixture",
         allowLocalNetwork: true,
         trafficPolicy: { perMinute: 20, burst: 20 },
-        operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+        operations: [{ operationKey: canned6, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
         mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18", toolsCacheTtlMs: 60_000 }
       }]);
       const catalog: any = await registry.listMcpTools({ serviceId: "svc_plugin_mcp" });
@@ -525,7 +538,7 @@ describe("upstream audience projection", () : any => {
         serviceRef: "svc_plugin_mcp",
         operationRef: "tools/call",
         governance: {
-          authorizationContextDigest: "authorization-fixture",
+          authorizationContextDigest: canned10,
           riskDecisionRef: "risk-fixture",
           policyRevision: "policy-fixture"
         }

@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+const canned1 = "not-allowed";
+
 
 vi.mock("../../../packages/foundation/src/storage/storage-lifecycle-lock.ts", () : any => ({
   acquireStorageMaintenanceLock: vi.fn(async () : Promise<any> => ({
@@ -29,6 +31,8 @@ import {
   runStorageMaintenanceMutation,
   storageMaintenanceLaneStatus
 } from "../../../packages/foundation/src/storage/storage-maintenance-coordinator.ts";
+
+
 
 const roots: any[] = [];
 
@@ -264,7 +268,7 @@ describe("storage backup retention", () : any => {
       .rejects.toMatchObject({ code: "storage_retention_policy_invalid" });
     const receipt: any = createStorageReceipt({ kind: "backup-retention", status: "applied" });
     expect(assertPrivacySafeStorageEvidence(receipt)).toBe(true);
-    expect(() : any => assertPrivacySafeStorageEvidence({ secret: "not-allowed" }))
+    expect(() : any => assertPrivacySafeStorageEvidence({ secret: canned1 }))
       .toThrow(expect.objectContaining({ code: "storage_receipt_privacy_violation" }));
   });
 

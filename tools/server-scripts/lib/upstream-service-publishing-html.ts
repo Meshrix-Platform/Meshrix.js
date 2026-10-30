@@ -4,6 +4,14 @@ import {
   readPngDimensions
 } from "./release-journey-visual-contract.ts";
 import { RELEASE_JOURNEY_STEPS } from "./release-journey-report.ts";
+const canned1 = "已认证的 Meshrix.js 工作台";
+const canned2 = "生成 API Key";
+const canned3 = "Failed";
+const canned4 = "status-badge--neutral";
+const canned5 = "non-authoritative-failure";
+
+
+
 
 export const UPSTREAM_SERVICE_PUBLISHING_HTML_REPORT_PATH: any =
   "build/reports/upstream-service-publishing.html";
@@ -99,13 +107,13 @@ const FLOW: readonly any[] = Object.freeze([
 ]);
 
 const VISUAL_TITLES: Readonly<Record<string, any>> = Object.freeze({
-  "console-authenticated": "已认证的 Meshrix.js 工作台",
+  "console-authenticated": canned1,
   "console-organization-permissions": "已发布的组织与权限配置",
   "console-upstream-basic-config": "上游服务基础配置",
   "console-upstream-operation-config": "上游操作配置",
   "console-upstream-published": "已发布上游服务及运行时健康状态",
   "console-published-tool": "工具目录中的已发布操作",
-  "console-api-key-generated": "生成 API Key",
+  "console-api-key-generated": canned2,
   "console-downstream-agent-configured": "配置到下游智能体",
   "console-operation-approval-pending": "待处理的 Operation Permission 审批",
   "console-operation-approval-completed": "已完成的 Operation Permission 审批",
@@ -462,7 +470,7 @@ export function renderUpstreamServicePublishingHtml(
         <td><code>${escapeHtml(assertion.requirement)}</code></td>
         <td>${escapeHtml(assertion.phase)}</td>
         <td><span class="pass">${bilingual(
-          assertion.passed === true ? "Passed" : "Failed",
+          assertion.passed === true ? "Passed": canned3,
           assertion.passed === true ? "通过" : "失败"
         )}</span></td>
       </tr>`).join("");
@@ -506,7 +514,7 @@ export function renderUpstreamServicePublishingHtml(
     const detected: any = target.status === "detected";
     return `<tr data-client-status="${detected ? "detected" : "not-detected"}">
       <td><strong>${escapeHtml(target.label)}</strong></td>
-      <td><span class="status-badge ${detected ? "status-badge--pass" : "status-badge--neutral"}">${bilingual(detected ? "Detected" : "Not detected", detected ? "已发现" : "未发现")}</span></td>
+      <td><span class="status-badge ${detected ? "status-badge--pass": canned4}">${bilingual(detected ? "Detected" : "Not detected", detected ? "已发现" : "未发现")}</span></td>
       <td>${detected ? bilingual("Installed", "已安装") : "—"}</td>
       <td>${detected && row?.upload === "passed" ? bilingual("Passed", "通过") : "—"}</td>
       <td>${detected && row?.toolsList === "passed" ? bilingual("Passed", "通过") : "—"}</td>
@@ -1764,7 +1772,7 @@ function renderFailedUpstreamServicePublishingHtml(journeyReport?: any) : any {
     @media print { .language-switch { display: none; } }
   </style>
 </head>
-<body data-report-portability="single-file" data-report-authority="non-authoritative-failure" data-release-evidence="rejected" data-report-status="failed">
+<body data-report-portability="single-file" data-report-authority="${canned5}" data-release-evidence="rejected" data-report-status="failed">
   <nav class="language-switch" aria-label="Language / 语言">
     <button type="button" data-language="zh-CN" aria-pressed="false">中文</button>
     <button type="button" data-language="en" aria-pressed="true">English</button>

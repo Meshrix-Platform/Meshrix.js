@@ -37,7 +37,7 @@ function refs(trafficModel, suffix = "one", overrides = {}) {
     inputRefs: [`input.${suffix}`],
     policyRef: `policy.${suffix}`,
     approvalBinding: `approval.${suffix}`,
-    idempotencyKey: `idempotency.${suffix}`,
+    idempotencyKey: ["idempotency", suffix].join("."),
     deadlineMs: 500,
     cancellationRef: null,
     streamingMode: "sse",

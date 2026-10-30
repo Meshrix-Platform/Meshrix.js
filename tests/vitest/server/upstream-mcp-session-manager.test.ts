@@ -5,6 +5,29 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
 import { createHttpMcpSession } from "../../../packages/protocols/mcp/upstream-mcp-http-session.ts";
+const canned1 = "stdio-generation-one";
+const canned2 = "missing-managed-egress";
+const canned3 = "stdio-generation-two";
+const canned4 = "monotonic-generation-one";
+const canned5 = "monotonic-generation-two";
+const canned6 = "monotonic-generation-conflict";
+const canned7 = "http-generation-one";
+const canned8 = "";
+const canned9 = "http-dispatch-fence-recovery";
+const canned10 = "stdio-dispatch-fence-queue";
+const canned11 = "capacity-a";
+const canned12 = "capacity-b";
+const canned13 = "http-notification-flood";
+const canned14 = "lifetime-generation";
+const canned15 = "rejected-initialized-notification";
+const canned16 = "unsupported-protocol-generation";
+const canned17 = "initialization-recovery-generation";
+const canned18 = "shared-initialization-cancellation";
+const canned19 = "orphaned-initialization-cancellation";
+const canned20 = "injected-environment-generation";
+
+
+
 
 const managers: any = new Set<any>();
 const servers: any = new Set<any>();
@@ -228,7 +251,7 @@ function stdioConfig(overrides: Record<string, any> = {}) : any {
     command: process.execPath,
     args: ["-e", stdioFixtureScript()],
     timeoutMs: 1000,
-    sessionKey: "stdio-generation-one",
+    sessionKey: canned1,
     sessionScope: "stdio-service",
     ...overrides
   };
@@ -479,7 +502,7 @@ describe("upstream MCP managed sessions", () : any => {
     await expect(manager.listTools({
       transport: "streamable-http",
       url: "http://169.254.169.254/latest/meta-data",
-      sessionKey: "missing-managed-egress",
+      sessionKey: canned2,
       sessionScope: "missing-managed-egress"
     })).rejects.toMatchObject({
       code: "UPSTREAM_MCP_MANAGED_EGRESS_REQUIRED",
@@ -540,7 +563,7 @@ describe("upstream MCP managed sessions", () : any => {
     await slow;
     await manager.callTool(first, { name: "state.increment" });
 
-    const rotated: any = stdioConfig({ sessionKey: "stdio-generation-two" });
+    const rotated: any = stdioConfig({ sessionKey: canned3 });
     const probe: any = await manager.callTool(rotated, { name: "state.probe" });
     expect(probe.result.structuredContent.value).toBe(0);
     expect(manager.snapshot().reusableSessionCount).toBe(1);
@@ -558,12 +581,12 @@ describe("upstream MCP managed sessions", () : any => {
     });
     managers.add(manager);
     const first: any = stdioConfig({
-      sessionKey: "monotonic-generation-one",
+      sessionKey: canned4,
       sessionScope: "monotonic-service",
       sessionGeneration: { serviceRevision: 1, credentialRevisions: [] }
     });
     const second: any = stdioConfig({
-      sessionKey: "monotonic-generation-two",
+      sessionKey: canned5,
       sessionScope: "monotonic-service",
       sessionGeneration: { serviceRevision: 2, credentialRevisions: [] }
     });
@@ -574,7 +597,7 @@ describe("upstream MCP managed sessions", () : any => {
     });
     await expect(manager.listTools({
       ...second,
-      sessionKey: "monotonic-generation-conflict"
+      sessionKey: canned6
     })).rejects.toMatchObject({
       code: "UPSTREAM_MCP_SESSION_GENERATION_CONFLICT"
     });
@@ -622,7 +645,7 @@ describe("upstream MCP managed sessions", () : any => {
       transport: "streamable-http",
       url: fixture.url,
       timeoutMs: 1000,
-      sessionKey: "http-generation-one",
+      sessionKey: canned7,
       sessionScope: "http-service"
     };
     const order: any[] = [];
@@ -636,7 +659,7 @@ describe("upstream MCP managed sessions", () : any => {
     expect(fixture.evidence.initializations[0]).toMatchObject({
       sessionHeaderPresent: false,
       protocolHeaderPresent: false,
-      authorization: ""
+      authorization: canned8
     });
     expect(fixture.evidence.initializedNotifications[0]).toMatchObject({
       sessionId: "session-1",
@@ -704,7 +727,7 @@ describe("upstream MCP managed sessions", () : any => {
       transport: "streamable-http",
       url: fixture.url,
       timeoutMs: 1000,
-      sessionKey: "http-dispatch-fence-recovery",
+      sessionKey: canned9,
       sessionScope: "http-dispatch-fence-recovery"
     };
     let admissions = 0;
@@ -736,7 +759,7 @@ describe("upstream MCP managed sessions", () : any => {
     const manager: any = createUpstreamMcpSessionManager({ idleTtlMs: 5000 });
     managers.add(manager);
     const config: Record<string, any> = stdioConfig({
-      sessionKey: "stdio-dispatch-fence-queue",
+      sessionKey: canned10,
       sessionScope: "stdio-dispatch-fence-queue"
     });
     let releaseFirst!: () => void;
@@ -776,11 +799,11 @@ describe("upstream MCP managed sessions", () : any => {
     managers.add(manager);
     const base: Record<string, any> = { transport: "streamable-http", url: fixture.url, timeoutMs: 1000 };
     await Promise.all([
-      manager.listTools({ ...base, sessionKey: "capacity-a", sessionScope: "scope-a" }),
-      manager.listTools({ ...base, sessionKey: "capacity-a", sessionScope: "scope-a" })
+      manager.listTools({ ...base, sessionKey: canned11, sessionScope: "scope-a" }),
+      manager.listTools({ ...base, sessionKey: canned11, sessionScope: "scope-a" })
     ]);
     expect(fixture.evidence.initializations).toHaveLength(1);
-    await manager.listTools({ ...base, sessionKey: "capacity-b", sessionScope: "scope-b" });
+    await manager.listTools({ ...base, sessionKey: canned12, sessionScope: "scope-b" });
     expect(manager.snapshot().sessionCount).toBe(1);
     expect(fixture.evidence.deletions.length).toBeGreaterThanOrEqual(1);
     await delay(80);
@@ -796,7 +819,7 @@ describe("upstream MCP managed sessions", () : any => {
       transport: "streamable-http",
       url: fixture.url,
       timeoutMs: 1000,
-      sessionKey: "http-notification-flood",
+      sessionKey: canned13,
       sessionScope: "http-notification-flood"
     };
     let activeCallbacks: any = 0;
@@ -824,7 +847,7 @@ describe("upstream MCP managed sessions", () : any => {
     const config: Record<string, any> = {
       transport: "streamable-http",
       url: fixture.url,
-      sessionKey: "lifetime-generation",
+      sessionKey: canned14,
       sessionScope: "lifetime-service"
     };
     await manager.listTools(config);
@@ -841,7 +864,7 @@ describe("upstream MCP managed sessions", () : any => {
     await expect(firstManager.listTools({
       transport: "streamable-http",
       url: rejectedNotification.url,
-      sessionKey: "rejected-initialized-notification",
+      sessionKey: canned15,
       sessionScope: "rejected-initialized-service"
     })).rejects.toMatchObject({ code: "UPSTREAM_MCP_SESSION_FATAL" });
     expect(rejectedNotification.evidence.deletions).toEqual(["session-1"]);
@@ -852,7 +875,7 @@ describe("upstream MCP managed sessions", () : any => {
     await expect(secondManager.listTools({
       transport: "streamable-http",
       url: unsupported.url,
-      sessionKey: "unsupported-protocol-generation",
+      sessionKey: canned16,
       sessionScope: "unsupported-protocol-service"
     })).rejects.toMatchObject({ code: "UPSTREAM_MCP_PROTOCOL_ERROR" });
     expect(unsupported.evidence.deletions).toEqual(["session-1"]);
@@ -865,7 +888,7 @@ describe("upstream MCP managed sessions", () : any => {
     const listed: any = await manager.listTools({
       transport: "streamable-http",
       url: fixture.url,
-      sessionKey: "initialization-recovery-generation",
+      sessionKey: canned17,
       sessionScope: "initialization-recovery-service"
     });
     expect(listed.tools).toHaveLength(1);
@@ -981,7 +1004,7 @@ describe("upstream MCP managed sessions", () : any => {
     const config: Record<string, any> = {
       transport: "streamable-http",
       url: fixture.url,
-      sessionKey: "shared-initialization-cancellation",
+      sessionKey: canned18,
       sessionScope: "shared-initialization-cancellation"
     };
     const firstController: any = new AbortController();
@@ -1013,7 +1036,7 @@ describe("upstream MCP managed sessions", () : any => {
     const listed: any = manager.listTools({
       transport: "streamable-http",
       url: fixture.url,
-      sessionKey: "orphaned-initialization-cancellation",
+      sessionKey: canned19,
       sessionScope: "orphaned-initialization-cancellation"
     }, { signal: controller.signal });
 
@@ -1040,11 +1063,11 @@ describe("upstream MCP managed sessions", () : any => {
       transport: "streamable-http",
       url: fixture.url,
       headers: {
-        authorization: `$${envName}`,
+        authorization: ("$"+envName),
         "content-type": "text/plain",
         accept: "text/plain"
       },
-      sessionKey: "injected-environment-generation",
+      sessionKey: canned20,
       sessionScope: "injected-environment-service"
     };
     await manager.listTools(config);

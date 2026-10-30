@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { transitionState, validateStateMachineDefinition, isTerminalStatus, listAllowedEvents } from '../../../packages/foundation/src/workflow/state-machine/engine/state-machine-core.ts';
 import { ERROR_CODES } from '../../../packages/foundation/src/workflow/state-machine/engine/state-machine-errors.ts';
+const canned1 = 'secret123';
+
+
+
 
 const mockDefinition: Record<string, any> = {
   machineId: 'test.machine',
@@ -100,7 +104,7 @@ describe('State Machine Core', () : any => {
       eventType: 'begin',
       metadata: {
         normalField: 'hello',
-        token: 'secret123',
+        token: canned1,
         path: '/tmp/meshrix-redaction-fixture'
       },
       now: '2023-01-01'

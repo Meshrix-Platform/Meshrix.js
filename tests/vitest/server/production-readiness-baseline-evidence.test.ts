@@ -4,6 +4,10 @@ import {
   evaluateReadinessGuard
 } from "../../../packages/foundation/src/observability/readiness-baseline/readiness-guard-evaluator.ts";
 import { READINESS_SCOPES } from "../../../packages/foundation/src/observability/readiness-baseline/readiness-scope-registry.ts";
+const canned1 = "failed";
+
+
+
 
 /**
  * Pure unit: simulate evaluateScopeEvidence semantics from
@@ -93,7 +97,7 @@ function evaluateScopeEvidence(scope?: any, evidencePlan?: any, commandResults?:
 
   let status: any;
   if (scope.baselineV0_1Required) {
-    status = failureReasons.length === 0 ? "passed" : "failed";
+    status = failureReasons.length === 0 ? "passed": canned1;
   } else {
     status = "not_in_baseline_v0_1";
   }

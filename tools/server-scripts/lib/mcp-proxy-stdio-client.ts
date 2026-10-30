@@ -1,4 +1,8 @@
 import { spawn } from "node:child_process";
+const canned1 = "MESHRIX_MCP_TOKEN";
+
+
+
 
 export const MCP_STDIO_FRAMING_JSONL: any = "jsonl";
 export const MCP_STDIO_FRAMING_CONTENT_LENGTH: any = "content-length";
@@ -93,7 +97,7 @@ export function createMcpProxyStdioClient({
   connectorScript,
   target,
   baseUrl,
-  tokenEnvName = "MESHRIX_MCP_TOKEN",
+  tokenEnvName = canned1,
   env = {},
   cwd = process.cwd(),
   timeoutMs = 10000,

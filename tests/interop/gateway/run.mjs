@@ -1,3 +1,6 @@
+const canned1 = 'gateway-interop-neutral-seed-20260917';
+
+const cannedSeed = canned1;
 import { writeFile } from 'node:fs/promises';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,6 +23,8 @@ import { compareBusinessPayload } from './oracles/payload.mjs';
 import { runSchemaVectors } from './oracles/schema.mjs';
 import { checkStrictObservation } from './oracles/strict.mjs';
 import { checkContextIsolation, checkSecurityObservation } from './oracles/security.mjs';
+
+
 
 export const CASE_IDS = Object.freeze(['CASE-O01', 'CASE-O02', 'CASE-O03', 'CASE-O04', 'CASE-O05', 'CASE-O06', 'CASE-O07', 'CASE-O08']);
 
@@ -396,7 +401,7 @@ function buildReport(mode, cases, cleanup, candidate = {}, peerVersions = {}, co
     mode,
     profile: mode === 'reference' ? 'independent-process-reference'
       : candidate.kind === 'reference-fixture' ? 'framework-network-control' : 'installed-candidate-network',
-    seed: 'gateway-interop-neutral-seed-20260917',
+    seed: cannedSeed,
     specification: { protocol: '2026-07-28', schemaDialect: '2020-12' },
     peer: {
       sdk: mode === 'reference' ? peerVersions.sdk ?? '@modelcontextprotocol/sdk@1.29.0' : 'not_run',

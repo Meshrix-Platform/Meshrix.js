@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthorizationEngine, evaluateAuthorizationPolicy } from "../../../packages/foundation/src/security/authorization/authorization-engine.ts";
 import { createPolicyEnforcementPoint } from "../../../packages/foundation/src/security/authorization/pdp/policy-enforcement-point.ts";
+const canned1 = "binding-a";
+
+
+
 
 function baseGrant() : any {
   return {
@@ -278,10 +282,11 @@ describe("runtime refactor authorization compiler", () : any => {
       compiledFactsCacheLimit: 8,
       compiledFactsCacheWeightLimit: 1024
     });
+    const bindings = Array.from({ length: 96 }, (_, index) => `binding-${index.toString().padStart(3, "0")}-${"x".repeat(24)}`);
     const input: any = {
       grant: {
         ...baseGrant(),
-        allowedSecretBindings: Array.from({ length: 96 }, (_, index) => `binding-${index.toString().padStart(3, "0")}-${"x".repeat(24)}`)
+        allowedSecretBindings: bindings
       },
       tool: baseTool(),
       subject: baseSubject(),
@@ -308,7 +313,7 @@ describe("runtime refactor authorization compiler", () : any => {
       tool: baseTool(),
       subject: baseSubject(),
       operation: { id: "kernel.workspace.read" },
-      context: { resource: { secretBindingId: "binding-a" } }
+      context: { resource: { secretBindingId: canned1 } }
     };
 
     expect(await engine.evaluate(input)).toMatchObject({ allowed: true });

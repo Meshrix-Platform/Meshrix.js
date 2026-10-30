@@ -20,6 +20,11 @@ import { compileUpstreamOperationProjection, createUpstreamGatewayRegistry } fro
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../support.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "scoped_api_key";
+const canned2 = "tools/call";
+
+
+
 
 const cleanup: Array<() => Promise<unknown>> = [];
 
@@ -91,7 +96,7 @@ describe("platform MCP key selection closure", () => {
     }));
     const provider = createToolSkillManagementProvider({ operationPermissionPlatform: { catalog: () => ({ tools }) } });
     const authorization = {
-      credentialKind: "scoped_api_key",
+      credentialKind: canned1,
       apiKeyAuthorization: { policy: {
         protocol: "mcp", allowedTools, deniedTools, scopeIds: ["gateway:read"], toolsetIds: ["gateway-read"],
         maximumRisk: "low", resources: { mode: "unrestricted" },
@@ -148,7 +153,7 @@ describe("platform MCP key selection closure", () => {
         label: "Inventory read",
         allowLocalNetwork: true,
         // Keep the internal read-only projection as a separate lower-risk path; the writer below uses the portable MCP default.
-        operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+        operations: [{ operationKey: canned2, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
         mcp: { transport: "http", url: `http://127.0.0.1:${address.port}/mcp`, protocolVersion: "2026-07-28", headers: { "X-Fixture-Service": "reader" } },
       },
       {

@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
 import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
 import { context, createTestGateway, descriptor, route } from "../support";
+const canned1 = "auth-1";
+
+
+
 
 async function until(predicate: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 250; attempt += 1) {
@@ -41,7 +45,7 @@ describe("bounded repeated gateway lifecycle measurements", () => {
         await gateway.catalogStore.preflightSchema({ type: "object" });
         expect(gateway.stats().catalogRetention).toMatchObject({ schemaWorkers: { workers: 1, active: 0 } });
         for (let index = 0; index < 40; index += 1) {
-          const business = gateway.createContext({ tenant: "synthetic", principal: `cycle-${cycle}-${index}`, grantRevision: "grant-1", credentialGeneration: "auth-1", routeRef: "resource" });
+          const business = gateway.createContext({ tenant: "synthetic", principal: `cycle-${cycle}-${index}`, grantRevision: "grant-1", credentialGeneration: canned1, routeRef: "resource" });
           gateway.contextStore.close(business.handle);
         }
         const subscription = gateway.subscribe(context, ["resource/updated"]);

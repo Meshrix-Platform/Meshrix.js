@@ -1,3 +1,6 @@
+const canned1 = "read";
+const canned2 = "probe";
+
 #!/usr/bin/env node
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -22,6 +25,8 @@ import { createJobProjectionStore } from "../../../packages/server-runtime/src/j
 import { createUploadNoRunCustody } from "../../../packages/server-runtime/src/jobs/upload-no-run-custody.ts";
 import { createUploadSessionStore } from "../../../packages/server-runtime/src/state/upload-session-store.ts";
 import { externalMemoryGrowth } from "./resource-discipline-analysis.ts";
+
+
 
 const MIB: any = 1024 * 1024;
 const rootPath: any = path.resolve(String(process.argv[2] || ""));
@@ -448,7 +453,7 @@ function endpointSelectionDuration(endpointCount?: any, iterations?: any) : any 
     persist: () : any => {}
   });
   const service: any = endpointService(endpointCount);
-  const operation: Record<string, any> = { operationKey: "read", protocol: "http" };
+  const operation: Record<string, any> = { operationKey: canned1, protocol: "http" };
   for (const endpoint of service.endpoints) {
     endpointCircuits.set(`svc_resource::read::${endpoint.endpointId}`, {
       consecutiveFailures: 3,
@@ -540,7 +545,7 @@ function manifest(label?: any) : any {
     schemaVersion: SERVICE_MANIFEST_SCHEMA_VERSION,
     references: [],
     payload: {
-      operations: [{ key: "probe", method: "POST" }],
+      operations: [{ key: canned2, method: "POST" }],
       label
     },
     metadata: { source: "synthetic-resource-gate" }

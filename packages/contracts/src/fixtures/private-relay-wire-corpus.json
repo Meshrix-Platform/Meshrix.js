@@ -15,8 +15,7 @@
           "mode": "personal",
           "admissionGeneration": 7,
           "revocationRevision": 12
-        },
-        "clientNonce": "cn.pr.session.0001nonce"
+        }
       },
       "session-open-recovery": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -31,8 +30,7 @@
           "mode": "personal",
           "admissionGeneration": 7,
           "revocationRevision": 12
-        },
-        "clientNonce": "cn.pr.session.0002nonce"
+        }
       },
       "session-open-pair-device": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -47,8 +45,7 @@
           "mode": "personal",
           "admissionGeneration": 7,
           "revocationRevision": 12
-        },
-        "clientNonce": "cn.pr.session.0003nonce"
+        }
       },
       "session-admitted-pair-device": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -69,8 +66,7 @@
         "cursors": {
           "toEndpoint": 0,
           "toEntry": 0
-        },
-        "serverNonce": "sn.pr.pairing.0001nonce"
+        }
       },
       "pairing-bootstrap": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -98,8 +94,7 @@
         "cursors": {
           "toEndpoint": 41,
           "toEntry": 17
-        },
-        "serverNonce": "sn.pr.session.0001nonce"
+        }
       },
       "session-rejected": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -194,8 +189,7 @@
           "toEndpoint": 41,
           "toEntry": 17
         },
-        "reconnectGeneration": 4,
-        "clientNonce": "cn.pr.session.0003nonce"
+        "reconnectGeneration": 4
       },
       "session-restored": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -239,8 +233,7 @@
           "grants": [
             "tools/call"
           ]
-        },
-        "clientNonce": "cn.pr.session.0001nonce"
+        }
       },
       "sessionOpenProductNameTrust": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -256,7 +249,6 @@
           "admissionGeneration": 7,
           "revocationRevision": 12
         },
-        "clientNonce": "cn.pr.session.0001nonce",
         "clientProductName": "trusted-client"
       },
       "sessionOpenWrongMode": {
@@ -272,8 +264,7 @@
           "mode": "public",
           "admissionGeneration": 7,
           "revocationRevision": 12
-        },
-        "clientNonce": "cn.pr.session.0001nonce"
+        }
       },
       "pairingBootstrapCarriesPeerKey": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -296,8 +287,7 @@
           "mode": "personal",
           "admissionGeneration": 0,
           "revocationRevision": 12
-        },
-        "clientNonce": "cn.pr.session.0001nonce"
+        }
       },
       "frameCarriesPlaintext": {
         "schemaVersion": "v0.0.1:private-relay:wire-1",
@@ -407,8 +397,6 @@
         "vaultId": "vault.pr.1",
         "purpose": "vault_fetch",
         "fetchProof": {
-          "keyId": "rckey.pr.1",
-          "nonce": "fn.pr.fetch.0001nonce",
           "issuedAt": "2026-10-09T10:00:00Z",
           "signature": "sig_pr_fetch_0001"
         }
@@ -421,12 +409,10 @@
         "generation": 3,
         "snapshot": {
           "algorithm": "XChaCha20-Poly1305",
-          "nonce": "sn.pr.vault.0001nonce",
           "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
           "byteLength": 24
         },
         "publicVerifier": {
-          "keyId": "rckey.pr.1",
           "algorithm": "Ed25519",
           "publicKey": "pk_pr_recovery_0001"
         }
@@ -453,19 +439,16 @@
           "revision": 6,
           "snapshot": {
             "algorithm": "XChaCha20-Poly1305",
-            "nonce": "sn.pr.vault.0002nonce",
             "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
             "byteLength": 24
           },
           "publicVerifier": {
-            "keyId": "rckey.pr.1",
             "algorithm": "Ed25519",
             "publicKey": "pk_pr_recovery_0001"
           }
         },
         "writeAuth": {
           "writerKeyId": "dev.pr.entry.1",
-          "nonce": "wn.pr.write.0001nonce",
           "snapshotDigest": "sha256:abababababababababababababababababababababababababababababababab",
           "signature": "sig_pr_write_0001"
         }
@@ -502,7 +485,6 @@
         "endpointRouteId": "route.pr.1",
         "principalRef": "prin.pr.1",
         "generation": 3,
-        "nonce": "rn.pr.challenge.0001nonce",
         "freshDeviceId": "dev.pr.fresh.9",
         "freshDevicePublicKey": "pk_pr_fresh_device_0009",
         "issuedAt": "2026-10-09T10:00:00Z",
@@ -551,8 +533,6 @@
         "candidateGeneration": 4,
         "candidatePublicKey": "pk_pr_recovery_0002",
         "administrationProof": {
-          "keyId": "rcadmin.pr.1",
-          "nonce": "rn.pr.rotation.0001nonce",
           "issuedAt": "2026-10-09T10:00:00Z",
           "signature": "sig_pr_rotation_0001"
         }
@@ -607,7 +587,6 @@
       "endpoint-trust-binding": {
         "schemaVersion": "v0.0.1:private-relay:recovery-1",
         "kind": "endpoint-trust-binding",
-        "pairedIdentityKey": "pk_pr_endpoint_identity_0001",
         "pairedIdentityFingerprint": "fp.pr.endpoint.0001",
         "mode": "personal",
         "role": "endpoint",
@@ -624,8 +603,6 @@
         "vaultId": "vault.pr.1",
         "purpose": "recover_device",
         "fetchProof": {
-          "keyId": "rckey.pr.1",
-          "nonce": "fn.pr.fetch.0001nonce",
           "issuedAt": "2026-10-09T10:00:00Z",
           "signature": "sig_pr_fetch_0001"
         }
@@ -650,7 +627,6 @@
         "endpointRouteId": "route.pr.1",
         "principalRef": "prin.pr.1",
         "generation": 3,
-        "nonce": "rn.pr.challenge.0001nonce",
         "freshDeviceId": "dev.pr.fresh.9",
         "freshDevicePublicKey": "pk_pr_fresh_device_0009",
         "issuedAt": "2026-10-09T10:00:00Z",
@@ -665,7 +641,6 @@
         "endpointRouteId": "route.pr.1",
         "principalRef": "prin.pr.1",
         "generation": 3,
-        "nonce": "rn.pr.challenge.0001nonce",
         "freshDeviceId": "dev.pr.fresh.9",
         "freshDevicePublicKey": "pk_pr_fresh_device_0009",
         "issuedAt": "2026-10-09T10:05:00Z",
@@ -686,19 +661,16 @@
           "revision": 6,
           "snapshot": {
             "algorithm": "XChaCha20-Poly1305",
-            "nonce": "sn.pr.vault.0002nonce",
             "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
             "byteLength": 24
           },
           "publicVerifier": {
-            "keyId": "rckey.pr.1",
             "algorithm": "Ed25519",
             "publicKey": "pk_pr_recovery_0001"
           }
         },
         "writeAuth": {
           "writerKeyId": "dev.pr.entry.1",
-          "nonce": "wn.pr.write.0001nonce",
           "snapshotDigest": "sha256:abababababababababababababababababababababababababababababababab",
           "signature": "sig_pr_write_0001"
         }
@@ -718,19 +690,16 @@
           "revision": 6,
           "snapshot": {
             "algorithm": "XChaCha20-Poly1305",
-            "nonce": "sn.pr.vault.0002nonce",
             "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
             "byteLength": 24
           },
           "publicVerifier": {
-            "keyId": "rckey.pr.1",
             "algorithm": "Ed25519",
             "publicKey": "pk_pr_recovery_0001"
           }
         },
         "writeAuth": {
           "writerKeyId": "dev.pr.entry.1",
-          "nonce": "wn.pr.write.0001nonce",
           "signature": "sig_pr_write_0001"
         }
       },
@@ -742,13 +711,11 @@
         "generation": 3,
         "snapshot": {
           "algorithm": "XChaCha20-Poly1305",
-          "nonce": "sn.pr.vault.0001nonce",
           "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
           "byteLength": 24,
           "config": "plaintext endpoint configuration"
         },
         "publicVerifier": {
-          "keyId": "rckey.pr.1",
           "algorithm": "Ed25519",
           "publicKey": "pk_pr_recovery_0001"
         }
@@ -761,16 +728,13 @@
         "generation": 3,
         "snapshot": {
           "algorithm": "XChaCha20-Poly1305",
-          "nonce": "sn.pr.vault.0001nonce",
           "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
           "byteLength": 24
         },
         "publicVerifier": {
-          "keyId": "rckey.pr.1",
           "algorithm": "Ed25519",
           "publicKey": "pk_pr_recovery_0001"
-        },
-        "recoverySecret": "user-recovery-secret"
+        }
       },
       "operationStatusLostAckClaimsNotStarted": {
         "schemaVersion": "v0.0.1:private-relay:recovery-1",
@@ -813,8 +777,6 @@
         "candidateGeneration": 3,
         "candidatePublicKey": "pk_pr_recovery_0002",
         "administrationProof": {
-          "keyId": "rcadmin.pr.1",
-          "nonce": "rn.pr.rotation.0001nonce",
           "issuedAt": "2026-10-09T10:00:00Z",
           "signature": "sig_pr_rotation_0001"
         }
@@ -822,7 +784,6 @@
       "trustBindingUnknownMode": {
         "schemaVersion": "v0.0.1:private-relay:recovery-1",
         "kind": "endpoint-trust-binding",
-        "pairedIdentityKey": "pk_pr_endpoint_identity_0001",
         "pairedIdentityFingerprint": "fp.pr.endpoint.0001",
         "mode": "federated",
         "role": "endpoint",
@@ -846,19 +807,16 @@
           "revision": 6,
           "snapshot": {
             "algorithm": "XChaCha20-Poly1305",
-            "nonce": "sn.pr.vault.0002nonce",
             "ciphertext": "Q0lQSEVSVEVYVF9WQUVMVF9TTkFQ",
             "byteLength": 24
           },
           "publicVerifier": {
-            "keyId": "rckey.pr.1",
             "algorithm": "Ed25519",
             "publicKey": "pk_pr_recovery_0001"
           }
         },
         "writeAuth": {
           "writerKeyId": "dev.pr.entry.1",
-          "nonce": "wn",
           "snapshotDigest": "sha256:abababababababababababababababababababababababababababababababab",
           "signature": "sig_pr_write_0001"
         }

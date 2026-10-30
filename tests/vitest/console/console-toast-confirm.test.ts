@@ -17,6 +17,11 @@ import {
   pushConsoleToast,
   useConsoleToasts,
 } from "../../../apps/console/composables/console-toast-controller";
+const canned1 = "Tab";
+const canned2 = "Escape";
+
+
+
 
 beforeEach(() : any => {
   vi.useFakeTimers();
@@ -157,12 +162,12 @@ describe("ConsoleConfirmDialog", () : any => {
     ) as HTMLButtonElement;
     expect(document.activeElement).toBe(cancelButton);
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: canned1, shiftKey: true }));
     expect(document.activeElement).toBe(confirmButton);
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab" }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: canned1 }));
     expect(document.activeElement).toBe(cancelButton);
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: canned2 }));
     await expect(pending).resolves.toBe(false);
     await wrapper.vm.$nextTick();
     expect(document.activeElement).toBe(invokingButton);

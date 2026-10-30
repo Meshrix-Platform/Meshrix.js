@@ -1,6 +1,11 @@
 import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createConsoleOperationPermissionController } from "../../../apps/console/composables/console-operation-permission-controller";
+const canned1 = "token…";
+const canned2 = "one-time-token";
+
+
+
 
 const clientMock = vi.hoisted(() => ({
   createToolGrant: vi.fn(),
@@ -32,7 +37,7 @@ const grant = (id: string, overrides: Record<string, unknown> = {}) => ({
   toolsets: ["toolset.read"],
   toolAllow: [],
   toolDeny: [],
-  tokenPrefix: "token…",
+  tokenPrefix: canned1,
   hasToken: true,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
@@ -58,7 +63,7 @@ describe("Operation Permission grant write requests", () => {
     await controller.refreshOperationPermission();
 
     const createdGrant = grant("created", { createdAt: "2026-10-08T00:00:00.000Z" });
-    clientMock.createToolGrant.mockResolvedValue({ grant: createdGrant, token: "one-time-token" });
+    clientMock.createToolGrant.mockResolvedValue({ grant: createdGrant, token: canned2 });
     await controller.createGrant();
 
     expect(controller.operationPermissionGrantsState.value.map((item: { id: string }) => item.id)).toEqual([

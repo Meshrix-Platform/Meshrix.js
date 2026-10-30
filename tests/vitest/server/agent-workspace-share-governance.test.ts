@@ -8,6 +8,13 @@ import { createWorkspaceGovernanceRegistry } from "../../../packages/agents/src/
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { createSystemControllerWorkspaceRuntimeHandlers } from "../../../packages/protocols/http/controllers/system-controller-workspace-runtime-handlers.ts";
 import { executeAgentWorkspaceManagementOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/agent-workspace-management-executor.ts";
+const canned1 = "unshare:fixture";
+const canned2 = "unshare:intent-write-failure";
+const canned3 = "unshare:acl-restart";
+const canned4 = "unshare:concurrent-duplicate";
+
+
+
 
 const temporaryRoots: any[] = [];
 
@@ -323,7 +330,7 @@ describe("agent workspace governed sharing", () : any => {
         return complete(input);
       }
     };
-    const input: any = shareInput({ reason: "access_removed", idempotencyKey: "unshare:fixture" });
+    const input: any = shareInput({ reason: "access_removed", idempotencyKey: canned1 });
     const interrupted: any = await executeAgentWorkspaceManagementOperation({
       operationId: "agent_workspaces.unshare",
       input,
@@ -373,7 +380,7 @@ describe("agent workspace governed sharing", () : any => {
 
     const response: any = await executeAgentWorkspaceManagementOperation({
       operationId: "agent_workspaces.unshare",
-      input: shareInput({ idempotencyKey: "unshare:intent-write-failure" }),
+      input: shareInput({ idempotencyKey: canned2 }),
       context
     });
 
@@ -402,7 +409,7 @@ describe("agent workspace governed sharing", () : any => {
       }
       return { ok: true, workspace: { workspaceId: targetWorkspaceId } };
     });
-    const input: any = shareInput({ idempotencyKey: "unshare:acl-restart" });
+    const input: any = shareInput({ idempotencyKey: canned3 });
 
     const interrupted: any = await executeAgentWorkspaceManagementOperation({
       operationId: "agent_workspaces.unshare",
@@ -439,7 +446,7 @@ describe("agent workspace governed sharing", () : any => {
       if (aclRecipients.delete(targetWorkspaceId)) actualAclRemovals += 1;
       return { ok: true, workspace: { workspaceId: targetWorkspaceId } };
     });
-    const input: any = shareInput({ idempotencyKey: "unshare:concurrent-duplicate" });
+    const input: any = shareInput({ idempotencyKey: canned4 });
 
     const responses: any = await Promise.all([
       executeAgentWorkspaceManagementOperation({ operationId: "agent_workspaces.unshare", input, context }),

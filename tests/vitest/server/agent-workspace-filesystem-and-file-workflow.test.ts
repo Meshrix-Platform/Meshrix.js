@@ -75,8 +75,8 @@ function createMerkleState() : any {
       )),
       prefix: vi.fn(async (root?: any, prefix?: any) : Promise<any> => (
         prefix === "empty" ? [] : [
-          { key: `${prefix || "root"}/alpha`, valueRef: `${root}-alpha` },
-          { key: `${prefix || "root"}/beta`, valueRef: `${root}-beta` }
+          { key: (prefix || "root") + "/alpha", valueRef: `${root}-alpha` },
+          { key: (prefix || "root") + "/beta", valueRef: `${root}-beta` }
         ]
       )),
       prove: vi.fn(async () : Promise<any> => ({ proofHash: "proof-hash" }))

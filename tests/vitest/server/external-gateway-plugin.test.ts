@@ -30,6 +30,7 @@ function channel(adapter: "caddy" | "nginx" | "direct") {
 }
 
 function downstream(trafficModel: "workspace_application" | "gateway_transit") {
+  const stamp = "idempotency." + trafficModel;
   return createDownstreamGatewayEnvelope({
     operationId: `operation.${trafficModel}`,
     subjectRef: "subject.ref",
@@ -38,7 +39,7 @@ function downstream(trafficModel: "workspace_application" | "gateway_transit") {
     inputRefs: [],
     policyRef: "policy.ref",
     approvalBinding: "approval.ref",
-    idempotencyKey: `idempotency.${trafficModel}`,
+    idempotencyKey: stamp,
     deadlineMs: 100,
     cancellationRef: null,
     streamingMode: "sse",

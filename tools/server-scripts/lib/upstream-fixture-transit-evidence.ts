@@ -1,4 +1,8 @@
 import crypto from "node:crypto";
+const canned1 = "failed";
+
+
+
 
 export const UPSTREAM_FIXTURE_TRANSIT_REPORT_PATH: any = "build/reports/upstream-fixture-transit.json";
 export const UPSTREAM_FIXTURE_TRANSIT_SCHEMA_VERSION: any = "v0.0.1:upstream-gateway:fixture-transit-report-1";
@@ -204,7 +208,7 @@ export function createUpstreamFixtureTransitReadiness(report: Record<string, any
     sourceOfTruth: UPSTREAM_FIXTURE_TRANSIT_READINESS_SOURCE,
     report: UPSTREAM_FIXTURE_TRANSIT_REPORT_PATH,
     releaseReady,
-    liveStatus: releaseReady ? "passed" : "failed",
+    liveStatus: releaseReady ? "passed": canned1,
     reasons,
     requiredToolNames: [...UPSTREAM_FIXTURE_REQUIRED_TOOL_NAMES],
     schemaParityToolNames: [...UPSTREAM_FIXTURE_SCHEMA_PARITY_TOOL_NAMES]

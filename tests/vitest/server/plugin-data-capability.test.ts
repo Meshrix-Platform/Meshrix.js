@@ -10,7 +10,8 @@ import { stagePluginArtifactVerificationFixture } from "../../../tools/server-sc
 import { createTestPluginProcessHost } from "./support/test-plugin-process-host.ts";
 
 const roots: any[] = [];
-const captureKey: any = Symbol.for("meshrix.plugin-data-capability.capture");
+const captureSym: any = Symbol.for("meshrix.plugin-data-capability.capture");
+const captureKey: any = captureSym;
 
 async function fixtureRoot() : Promise<any> {
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-data-test-"));

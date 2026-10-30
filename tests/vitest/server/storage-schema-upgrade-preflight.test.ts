@@ -11,6 +11,8 @@ import {
   inspectStorageSchemaCompatibility
 } from "../../../packages/foundation/src/storage/schema-manager.ts";
 
+
+
 describe("storage schema upgrade preflight", () : any => {
   it("opens the primary metadata database with durable WAL commits", () : any => {
     const directory: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-storage-durability-"));
@@ -79,8 +81,8 @@ describe("storage schema upgrade preflight", () : any => {
       initializeStorageSchema(db);
       db.exec("DROP TABLE storage_upload_consumption_receipts");
       db.prepare(
-        "UPDATE storage_schema_meta SET value = '1' WHERE key = 'schema_revision'"
-      ).run();
+        "UPDATE storage_schema_meta SET value = '1' WHERE key = ?"
+      ).run("schema_revision");
       db.pragma("user_version = 1");
 
       expect(inspectStorageSchemaCompatibility(db)).toMatchObject({
@@ -123,8 +125,8 @@ describe("storage schema upgrade preflight", () : any => {
     const future: any = new Database(":memory:");
     try {
       initializeStorageSchema(future);
-      future.prepare("UPDATE storage_schema_meta SET value = ? WHERE key = 'schema_revision'")
-        .run(String(STORAGE_SCHEMA_REVISION + 1));
+      future.prepare("UPDATE storage_schema_meta SET value = ? WHERE key = ?")
+        .run(String(STORAGE_SCHEMA_REVISION + 1), "schema_revision");
       expect(() : any => assertStorageSchemaUpgradePreflight(future)).toThrow(
         expect.objectContaining({ code: "storage_schema_future_revision" })
       );

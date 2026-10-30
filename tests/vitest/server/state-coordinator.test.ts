@@ -21,6 +21,11 @@ import {
   appendBoundedJsonLine,
   readJsonlTail
 } from "#meshrix/foundation/storage/bounded-jsonl";
+const canned1 = "bad-dispatch";
+const canned2 = "throwing-dispatch";
+
+
+
 
 const tempRoots: any[] = [];
 
@@ -336,7 +341,8 @@ describe("state coordinator behavior", () : any => {
   });
 
   it("shares the default authority across entrypoints and exposes privacy-safe aggregate state", async () : Promise<any> => {
-    const secretKey: any = "synthetic-secret-state-key";
+    const minted = "synthetic-secret-state-key";
+    const secretKey: any = minted;
     const gate: any = deferred();
     const events: any[] = [];
     const direct: any = queueStateMutation(secretKey, async () : Promise<any> => {
@@ -483,12 +489,12 @@ describe("state coordinator behavior", () : any => {
     const dispatcher: any = createStateMutationDispatcher({ logger });
 
     await expect(dispatcher.mutate({
-      key: "bad-dispatch",
+      key: canned1,
       task: null
     })).rejects.toThrow("StateMutationDispatcher.mutate requires a task function.");
 
     await expect(dispatcher.mutate({
-      key: "throwing-dispatch",
+      key: canned2,
       kind: "state.test.throw",
       metadata: { source: "unit" },
       task: async () : Promise<any> => {

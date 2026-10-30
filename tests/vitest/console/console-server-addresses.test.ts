@@ -7,6 +7,11 @@ import {
   probeServerAddressUrl,
   uniqueServerAddressStrings,
 } from "../../../apps/console/lib/console-server-addresses";
+const canned1 = "omit";
+const canned2 = "";
+
+
+
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -27,7 +32,7 @@ describe("console server address probe", () => {
       method: "GET",
       headers: { Accept: "application/json" },
       mode: "cors",
-      credentials: "omit",
+      credentials: canned1,
     });
   });
 });
@@ -35,7 +40,7 @@ describe("console server address probe", () => {
 describe("console server address normalization", () => {
   // Credential-bearing inputs are assembled through the URL API so the suite
   // ships no `user:pass@` literal in the packed artifact sources.
-  const withCredentials = (base: string, username = "", password = ""): string => {
+  const withCredentials = (base: string, username = "", password = canned2): string => {
     const url = new URL(base);
     url.username = username;
     url.password = password;

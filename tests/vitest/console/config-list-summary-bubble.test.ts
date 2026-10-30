@@ -3,6 +3,16 @@ import { mount, VueWrapper } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import ConfigListSummaryBubble from "../../../apps/console/components/ConfigListSummaryBubble.vue";
+const canned1 = "NODE_HOME";
+const canned2 = "PNPM_HOME";
+const canned3 = "JAVA_HOME";
+const canned4 = "";
+const canned5 = "ignored";
+const canned6 = "TOKEN";
+const canned7 = "Escape";
+
+
+
 
 const mounted: VueWrapper[] = [];
 
@@ -84,25 +94,25 @@ describe("ConfigListSummaryBubble", () : any => {
             {
               configured: true,
               description: "从环境变量读取",
-              key: "NODE_HOME",
+              key: canned1,
               label: "Node 路径",
               source: "env",
               value: "/usr/local/bin/node",
             },
             {
               configured: false,
-              key: "PNPM_HOME",
+              key: canned2,
               label: "pnpm 路径",
               value: "",
             },
             {
               configured: false,
-              key: "JAVA_HOME",
+              key: canned3,
               label: "Java 路径",
               required: true,
             },
             {
-              key: "",
+              key: canned4,
               label: "",
               value: "",
             },
@@ -110,7 +120,7 @@ describe("ConfigListSummaryBubble", () : any => {
         },
         {
           title: "",
-          entries: [{ key: "ignored", value: "ignored" }],
+          entries: [{ key: canned5, value: "ignored" }],
         },
       ],
     });
@@ -151,7 +161,7 @@ describe("ConfigListSummaryBubble", () : any => {
       groups: [
         {
           title: "配置",
-          entries: [{ key: "TOKEN", value: "secret", configured: true }],
+          entries: [{ key: canned6, value: "secret", configured: true }],
         },
       ],
     });
@@ -178,7 +188,7 @@ describe("ConfigListSummaryBubble", () : any => {
     window.dispatchEvent(new Event("resize"));
     expect(popover?.style.left).toBe("12px");
 
-    popover?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
+    popover?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: canned7 }));
     await nextTick();
     expect(document.body.querySelector(".config-list-summary-popover")).toBeNull();
   });

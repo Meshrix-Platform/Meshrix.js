@@ -15,6 +15,12 @@ import {
   sandboxDigest
 } from "../../../packages/foundation/src/execution-sandbox/index.ts";
 import { createSandboxExecutionBroker } from "../../../packages/server-runtime/src/execution-sandbox/broker.ts";
+const canned1 = "d";
+const canned2 = "grant-ref";
+const canned3 = "0";
+
+
+
 
 const roots: any[] = [];
 const restrictions: any[] = [
@@ -125,12 +131,12 @@ function request(inputDigest?: any, approvalRef: any = "approval-ref") : any {
       approvalSourceDigest: "c".repeat(64),
       approvalRequestDigest: "",
       approvalExpiresAt: "2099-01-01T00:00:00.000Z",
-      authorizationContextDigest: "d".repeat(64),
+      authorizationContextDigest: canned1.repeat(64),
       riskDecisionRef: "risk-ref",
       policyRevision: "policy-current",
       authorized: true
     },
-    idempotencyKey: `configured-${crypto.randomUUID()}`,
+    idempotencyKey: ("configured-"+crypto.randomUUID()),
     deadlineAt: new Date(Date.now() + 60_000).toISOString()
   };
 }
@@ -143,7 +149,7 @@ function currentGovernance(approvalRef: any = "approval-ref") : any {
     approvalSourceDigest: "c".repeat(64),
     approvalRequestDigest: "",
     approvalExpiresAt: "2099-01-01T00:00:00.000Z",
-    authorizationContextDigest: "d".repeat(64),
+    authorizationContextDigest: canned1.repeat(64),
     riskDecisionRef: "risk-ref",
     policyRevision: "policy-current",
     authorized: true,
@@ -289,7 +295,7 @@ describe("profile-bound configured sandbox workloads", () : any => {
       subjectRef: "subject-ref",
       tenantRef: "tenant-ref",
       workspaceRef: "workspace-ref",
-      authorizationRef: "grant-ref",
+      authorizationRef: canned2,
       approvalRef: "approval-ref",
       policyRevision: "policy-current",
       sandboxAvailable: true
@@ -303,7 +309,7 @@ describe("profile-bound configured sandbox workloads", () : any => {
       [{
         handle: "opaque-package",
         promotionDigest,
-        authorizationDigest: "0".repeat(64),
+        authorizationDigest: canned3.repeat(64),
         files: [opaqueFile]
       }],
       { currentGovernance: currentGovernance(substitutedApprovalRef), pluginId: "sample-plugin" }

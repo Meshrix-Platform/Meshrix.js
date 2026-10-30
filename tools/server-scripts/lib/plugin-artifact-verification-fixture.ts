@@ -5,6 +5,10 @@ import path from "node:path";
 
 import { createPluginArtifactAuthority } from "../../../packages/foundation/src/module-system/plugin-artifact-authority.ts";
 import { createPluginLifecycleStatePort } from "../../../packages/foundation/src/module-system/plugin-lifecycle-state-port.ts";
+const canned1 = "secret://verification/plugin-artifact";
+
+
+
 
 function canonicalJson(value?: any) : any {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -82,7 +86,7 @@ export async function stagePluginArtifactVerificationFixture({
     artifactRoot,
     trustedPublicKeys,
     artifactSigner: signer,
-    secretRef: "secret://verification/plugin-artifact",
+    secretRef: canned1,
     coreContractDigest
   });
   const manifests: any = new Map<any, any>();

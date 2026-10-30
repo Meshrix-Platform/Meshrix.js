@@ -10,6 +10,11 @@ import {
   useConsoleToasts,
 } from "../../../apps/console/composables/console-toast-controller";
 import { consoleMessages, currentConsoleLocale } from "../../../apps/console/i18n/console";
+const canned1 = "";
+const canned2 = "none";
+const canned3 = "list-items";
+const canned4 = "list";
+
 
 const client: any = vi.hoisted(() : any => ({
   createUpstreamService: vi.fn(),
@@ -35,16 +40,18 @@ vi.mock("@meshrix/ui-console/page-refresh", async (importOriginal?: any) : Promi
 
 import { unregisterConsoleConfirmHost } from "../../../apps/console/composables/console-confirm-controller";
 
+
+
 function emptyForm(): any {
   return {
-    serviceKey: "",
+    serviceKey: canned1,
     label: "",
     description: "",
     serviceProtocol: "",
     baseUrl: "",
     operations: [],
     references: [],
-    operationKey: "",
+    operationKey: canned1,
     method: "",
     path: "",
     risk: "",
@@ -54,8 +61,8 @@ function emptyForm(): any {
     responseMaxBytes: "",
     requestMediaTypes: "",
     responseMediaTypes: "",
-    credentialMode: "none",
-    credentialSelection: "",
+    credentialMode: canned2,
+    credentialSelection: canned1,
     savedCredentialOptions: [],
   };
 }
@@ -408,7 +415,7 @@ describe("PublishServiceForm preserved behaviors", () : any => {
   it("keeps the removeOperation undo toast and in-place restore", async () : Promise<any> => {
     const { wrapper, form } = await mountForm({
       operations: [{
-        operationKey: "list-items",
+        operationKey: canned3,
         method: "GET",
         path: "/api/items",
         payloadTransport: { request: { mode: "structured_json" } },
@@ -431,7 +438,7 @@ describe("PublishServiceForm preserved behaviors", () : any => {
   it("leaves the Advanced JSON tab unchanged", async () : Promise<any> => {
     const { wrapper } = await mountForm({
       operations: [{
-        operationKey: "list",
+        operationKey: canned4,
         method: "GET",
         path: "/items",
         requiresApproval: false,

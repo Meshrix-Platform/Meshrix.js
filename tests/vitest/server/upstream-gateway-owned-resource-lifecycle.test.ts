@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+const canned1 = "tools/call";
+
 
 const gatewayRuntimeFactory: any = vi.hoisted(() : any => vi.fn());
 const securityAlertStoreFactory: any = vi.hoisted(() : any => vi.fn());
@@ -14,6 +16,8 @@ vi.mock("../../../packages/agents/src/upstream-gateway/registry-runtime.ts", () 
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
+
+
 
 function gatewayRuntimeFixture() : any {
   return {
@@ -87,7 +91,7 @@ describe("upstream gateway owned-resource lifecycle", () : any => {
       serviceProtocol: "mcp",
       label: "Lifecycle",
       allowLocalNetwork: true,
-      operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"], inputSchema: { type: "object" } }],
+      operations: [{ operationKey: canned1, protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"], inputSchema: { type: "object" } }],
       mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18" }
     }]);
     const subject = {
@@ -99,7 +103,7 @@ describe("upstream gateway owned-resource lifecycle", () : any => {
       dynamicCapabilities: ["cap:upstream:lifecycle:tools-call-echo"]
     };
 
-    const call = registry.forward({ serviceId: "lifecycle", operationKey: "tools/call", toolName: "echo", arguments: {} }, subject);
+    const call = registry.forward({ serviceId: "lifecycle", operationKey: canned1, toolName: "echo", arguments: {} }, subject);
     await validationStarted;
     const closing = registry.close();
     await expect(call).rejects.toThrow();

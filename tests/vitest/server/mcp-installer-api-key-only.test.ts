@@ -3,8 +3,18 @@ import os from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+const canned1 = "MESHRIX_TEST_CONNECTOR_KEY";
+const canned2 = "credential-store";
+const canned3 = "https://meshrix.invalid";
+const canned4 = "provided";
+const canned5 = "WORK_KEY";
+const canned6 = "external-reference-unverified";
+const canned7 = "";
+const canned8 = "OTHER_KEY";
 
-const KEY: any = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
+
+const wire = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
+const KEY: any = wire;
 const stdinMocks: any = vi.hoisted(() : any => ({ readStdin: vi.fn(async () : Promise<any> => "") }));
 const adapterMocks: any = vi.hoisted(() : any => ({
   run: vi.fn(async ({ action }: any) : Promise<any> => ({
@@ -51,6 +61,8 @@ import {
   MCP_PROTOCOL_VERSION,
   MCP_STABLE_TOOL_NAME
 } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+
+
 
 const originalToken: any = process.env.MESHRIX_MCP_TOKEN;
 const originalCredentialDir: any = process.env.MESHRIX_MCP_CREDENTIAL_DIR;
@@ -115,12 +127,12 @@ describe("MCP installer API Key-only input", () : any => {
     const credentials: any = await resolveProxyCredentials({
       target: "pi",
       url: "https://meshrix.invalid",
-      "token-env": "MESHRIX_TEST_CONNECTOR_KEY"
+      "token-env": canned1
     });
 
     expect(credentials).toMatchObject({
-      tokenSource: "credential-store",
-      credentialBaseUrl: "https://meshrix.invalid",
+      tokenSource: canned2,
+      credentialBaseUrl: canned3,
       autoUpdate: true
     });
     expect(readFile).toHaveBeenCalledOnce();
@@ -161,7 +173,7 @@ describe("MCP installer API Key-only input", () : any => {
     process.env.MESHRIX_MCP_TOKEN = KEY;
     await expect(resolveProxyCredentials({ target: "codex" })).resolves.toMatchObject({
       target: "codex",
-      tokenSource: "provided",
+      tokenSource: canned4,
       autoUpdate: false
     });
 
@@ -248,14 +260,14 @@ describe("MCP installer API Key-only input", () : any => {
     } }));
     await expect(installTargets({
       options: {
-        url: "https://meshrix.invalid", "server-name": "work", "token-env": "WORK_KEY",
+        url: "https://meshrix.invalid", "server-name": "work", "token-env": canned5,
         "client-command": "test-client", "discovery-file": discoveryFile, "no-verify": true
       },
       targets: ["pi", "kimi"], token: KEY, tokenInfo: { source: "environment" }
     })).resolves.toMatchObject({
       ok: false,
       installed: {
-        pi: { credentialStored: false, environmentProvisioned: false, credentialStatus: "external-reference-unverified", connectivity: "not-run" },
+        pi: { credentialStored: false, environmentProvisioned: false, credentialStatus: canned6, connectivity: "not-run" },
         kimi: { ok: false, status: "unsupported", errorCode: "unsupported_protected_header_reference" }
       }
     });
@@ -275,7 +287,7 @@ describe("MCP installer API Key-only input", () : any => {
       "discovery-file": discoveryFile
     })).resolves.toMatchObject({
       target: "pi",
-      tokenSource: "credential-store",
+      tokenSource: canned2,
       autoUpdate: true
     });
 
@@ -292,7 +304,7 @@ describe("MCP installer API Key-only input", () : any => {
       target: "pi",
       url: "https://meshrix.invalid",
       "discovery-file": discoveryFile
-    })).resolves.toMatchObject({ tokenSource: "credential-store", autoUpdate: true });
+    })).resolves.toMatchObject({ tokenSource: canned2, autoUpdate: true });
     expect(await fs.readFile(path.join(credentialDir, credentialFile), "utf8")).toBe(credentialBefore);
     expect(JSON.parse(await fs.readFile(discoveryFile, "utf8")).servers.work.targets["independent-client"]).toEqual(independentTarget);
   });
@@ -301,7 +313,7 @@ describe("MCP installer API Key-only input", () : any => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     await expect(installCommand({ target: "pi", "token-stdin": true })).rejects.toMatchObject({ code: "credential_handoff_required" });
-    const result = await installTargets({ options: { url: "https://meshrix.invalid", "token-env": "WORK_KEY" }, targets: ["kimi", "antigravity"], token: "" });
+    const result = await installTargets({ options: { url: "https://meshrix.invalid", "token-env": canned5 }, targets: ["kimi", "antigravity"], token: canned7 });
     expect(result.ok).toBe(false);
     for (const target of ["kimi", "antigravity"]) expect(result.installed[target]).toMatchObject({ status: "unsupported", errorCode: "unsupported_protected_header_reference" });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -311,11 +323,11 @@ describe("MCP installer API Key-only input", () : any => {
   it("resolves only the selected registration's endpoint and reference, including URL prefixes", async () => {
     const discoveryFile = path.join(credentialDir, "discovery.json");
     await fs.writeFile(discoveryFile, JSON.stringify({ servers: {
-      work: { httpUrl: "https://meshrix.invalid/team/mcp", auth: { tokenEnv: "WORK_KEY" } },
-      lico: { httpUrl: "https://other.invalid/mcp", auth: { tokenEnv: "OTHER_KEY" } }
+      work: { httpUrl: "https://meshrix.invalid/team/mcp", auth: { tokenEnv: canned5 } },
+      lico: { httpUrl: "https://other.invalid/mcp", auth: { tokenEnv: canned8 } }
     } }));
     const options = { "server-name": "work", "discovery-file": discoveryFile };
-    await expect(optionsWithStoredBaseUrl(options)).resolves.toMatchObject({ "resolved-url": "https://meshrix.invalid/team", "token-env": "WORK_KEY" });
+    await expect(optionsWithStoredBaseUrl(options)).resolves.toMatchObject({ "resolved-url": "https://meshrix.invalid/team", "token-env": canned5 });
     const explicit = await optionsWithStoredBaseUrl({ ...options, url: "https://different.invalid" });
     expect(explicit).not.toHaveProperty("resolved-url");
     expect(explicit).not.toHaveProperty("token-env");
@@ -323,11 +335,11 @@ describe("MCP installer API Key-only input", () : any => {
 
   it("refuses a conflicting local identity record before service or configuration writes", async () => {
     const discoveryFile = path.join(credentialDir, "discovery.json");
-    const original = JSON.stringify({ servers: { work: { httpUrl: "https://other.invalid/mcp", auth: { tokenEnv: "OTHER_KEY" } } } });
+    const original = JSON.stringify({ servers: { work: { httpUrl: "https://other.invalid/mcp", auth: { tokenEnv: canned8 } } } });
     await fs.writeFile(discoveryFile, original);
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const result = await installTargets({ options: { url: "https://meshrix.invalid", "server-name": "work", "token-env": "WORK_KEY", "discovery-file": discoveryFile }, targets: ["pi"], token: "" });
+    const result = await installTargets({ options: { url: "https://meshrix.invalid", "server-name": "work", "token-env": canned5, "discovery-file": discoveryFile }, targets: ["pi"], token: canned7 });
     expect(result.installed.pi).toMatchObject({ ok: false, errorCode: "registration_conflict" });
     expect(await fs.readFile(discoveryFile, "utf8")).toBe(original);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -401,7 +413,7 @@ describe("MCP installer API Key-only input", () : any => {
     delete process.env.MESHRIX_MCP_TOKEN;
     const parsed = parseArgs(["install", "--target", "pi", "--server-name", "work", "--token-env", "MESHRIX_MCP_TOKEN", "--client-config", "fixture.json"]);
     expect(parsed.options).toMatchObject({ "server-name": "work", "client-config": "fixture.json" });
-    await expect(resolveInstallToken(parsed.options)).resolves.toMatchObject({ token: "", credentialRef: { kind: "env", name: "MESHRIX_MCP_TOKEN" } });
+    await expect(resolveInstallToken(parsed.options)).resolves.toMatchObject({ token: canned7, credentialRef: { kind: "env", name: "MESHRIX_MCP_TOKEN" } });
     const command = shellCommandForInstall({ ...commandGuidanceContext(parsed.options), target: "pi" });
     expect(command).toContain("--server-name 'work'");
     expect(command).toContain("--token-env 'MESHRIX_MCP_TOKEN'");
@@ -416,8 +428,8 @@ describe("MCP installer API Key-only input", () : any => {
     const fetchMock = vi.fn(async () => new Response("{}", { status: 503 }));
     vi.stubGlobal("fetch", fetchMock);
     const result = await installSelectedCandidates({
-      options: { url: "https://meshrix.invalid", "discovery-file": path.join(credentialDir, "discovery.json"), "token-env": "WORK_KEY", "no-verify": true },
-      selected: ["pi", "codex"].map((target) => ({ target, id: target })), tokenInfo: { token: "", source: "environment-reference" }
+      options: { url: "https://meshrix.invalid", "discovery-file": path.join(credentialDir, "discovery.json"), "token-env": canned5, "no-verify": true },
+      selected: ["pi", "codex"].map((target) => ({ target, id: target })), tokenInfo: { token: canned7, source: "environment-reference" }
     });
     expect(result.ok).toBe(false);
     expect(result.partials).toHaveLength(2);

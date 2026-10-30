@@ -36,6 +36,10 @@ import {
 import {
   terminateOwnedCrashChild
 } from "./support/upload-workspace-materialization-crash-lifecycle.ts";
+const canned1 = "changed";
+
+
+
 
 const OPERATION_ID: any = "jobs.upload_workspace_materialize";
 const CRASH_ADMISSION_USERNAME: any =
@@ -1129,10 +1133,12 @@ async function createFixture() : Promise<any> {
   return fixture;
 }
 
+const singleFile = "single-file";
+
 async function createCompletedUpload(
   fixture?: any,
   bytes?: any,
-  seed: any = "single-file",
+  seed: any = singleFile,
   owner: any = fixture.owner
 ) : Promise<any> {
   const created: any =
@@ -2408,7 +2414,7 @@ describe(
             if (fact === "subject") {
               await fixture.consoleAuth.updateUser(
                 fixture.owner.subjectId,
-                { attributes: { authorityGeneration: "changed" } }
+                { attributes: { authorityGeneration: canned1 } }
               );
             } else if (fact === "workload") {
               fixture.consoleAuth.revokeSession(

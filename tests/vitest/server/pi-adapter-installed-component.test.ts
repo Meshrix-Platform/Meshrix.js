@@ -8,6 +8,10 @@ import { invokeAdapter } from "@meshrix/client-adapter-kit";
 import packageManifest from "../../../package.json";
 
 import { resolveInstalledClientAdapter } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.ts";
+const canned1 = "${MESHRIX_MCP_TOKEN}";
+
+
+
 
 const temporaryRoots: string[] = [];
 
@@ -48,7 +52,7 @@ describe("Pi adapter installed component", () => {
     const registered = JSON.parse(await fs.readFile(mcpPath, "utf8"));
     expect(registered.mcpServers.lico).toEqual({
       url: `${request.baseUrl}/mcp`,
-      headers: { "X-Meshrix.js-Api-Key": "${MESHRIX_MCP_TOKEN}" }
+      headers: { "X-Meshrix.js-Api-Key": canned1 }
     });
     expect(registered.mcpServers.other).toEqual({ command: "other" });
     expect(await fs.readFile(settingsPath, "utf8")).toBe(settings);

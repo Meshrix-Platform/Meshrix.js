@@ -1,3 +1,6 @@
+const canned1 = "failed";
+
+
 export const UPSTREAM_MCP_GATEWAY_REPORT_PATH: any = "build/reports/upstream-mcp-gateway-e2e.json";
 export const UPSTREAM_MCP_GATEWAY_SCHEMA_VERSION: any = "v0.0.1:upstream-gateway:mcp-e2e-report-1";
 export const UPSTREAM_MCP_GATEWAY_VERIFIER: any = "tools/server-scripts/verify-upstream-mcp-gateway-e2e.ts";
@@ -124,7 +127,7 @@ export function createUpstreamMcpGatewayReadiness(report: Record<string, any> = 
     releaseReady,
     readyField: "summary.releaseReady",
     coverageReady: releaseReady,
-    liveStatus: releaseReady ? "passed" : "failed",
+    liveStatus: releaseReady ? "passed": canned1,
     reasons,
     requiredTestNames: [...UPSTREAM_MCP_GATEWAY_REQUIRED_TEST_NAMES]
   };

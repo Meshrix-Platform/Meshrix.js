@@ -9,6 +9,13 @@ import { startProcessPeer } from '../peers/process-peer.mjs';
 import { answersFor } from './reference.mjs';
 import { EXPECTED_RESOURCE_URI, FIXTURE_AUTH_ALLOW, FIXTURE_AUTH_DENY, TARGET_PROTOCOL_VERSION } from '../peers/fixture.mjs';
 import { compareBusinessPayload, comparePromptPayload, compareResourcePayload } from '../oracles/payload.mjs';
+const canned1 = 'effect-key-1';
+const canned2 = 'effect-key-denied';
+const canned3 = 'effect-key-';
+
+
+
+
 
 async function within(promise, ms, reason) {
   let timer;
@@ -124,7 +131,7 @@ export async function runNetworkCandidate(config, ledger) {
         (mapping.promptName && selectedPrompt?.name !== mapping.promptName)) throw new Error('declared_public_mapping_missing');
     if (binding.manifest && (initialize.serverInfo?.name !== binding.manifest.serverInfo.name ||
         initialize.serverInfo?.version !== binding.manifest.serverInfo.version)) throw new Error('candidate_runtime_identity_mismatch');
-    const argumentsObject = { objective: 'prepare artifact', operationKey: 'effect-key-1', route: 'route.demo' };
+    const argumentsObject = { objective: 'prepare artifact', operationKey: canned1, route: 'route.demo' };
     const toolParams = { name: selectedTool?.name, arguments: argumentsObject,
       _meta: { 'business-id': 'order-demo', 'com.example/traceId': 'business-trace' } };
     const initial = await allowed.request('tools/call', toolParams);
@@ -140,7 +147,7 @@ export async function runNetworkCandidate(config, ledger) {
     const replayOriginal = await replay(initial.requestState);
     const replayAlias = await replay(`${initial.requestState}${'='.repeat((4 - initial.requestState.length % 4) % 4)}`);
     const protectedProbe = async (suffix, meta) => {
-      const params = { ...toolParams, arguments: { ...argumentsObject, operationKey: `effect-key-${suffix}` },
+      const params = { ...toolParams, arguments: { ...argumentsObject, operationKey: canned3 + suffix },
         _meta: { ...toolParams._meta, ...meta } };
       try {
         const challenge = await allowed.request('tools/call', params);
@@ -154,11 +161,11 @@ export async function runNetworkCandidate(config, ledger) {
     const emptyPermission = await protectedProbe('empty-permission', { 'interop-permissions': [] });
     const emptyApproval = await protectedProbe('empty-approval', { 'interop-destructive': true, 'interop-approvals': [] });
     const beforeDenied = await peer.snapshot();
-    const deniedInitial = await denied.request('tools/call', { ...toolParams, arguments: { ...argumentsObject, operationKey: 'effect-key-denied' } });
+    const deniedInitial = await denied.request('tools/call', { ...toolParams, arguments: { ...argumentsObject, operationKey: canned2 } });
     let deniedReason = null;
     try {
       await denied.request('tools/call', {
-        ...toolParams, arguments: { ...argumentsObject, operationKey: 'effect-key-denied' },
+        ...toolParams, arguments: { ...argumentsObject, operationKey: canned2 },
         requestState: deniedInitial.requestState, inputResponses: answersFor(deniedInitial)
       });
     } catch (error) { deniedReason = cleanReason(error); }

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { createAuthorizationEngine } from "../../../packages/foundation/src/security/authorization/authorization-engine.ts";
+const canned1 = "private-binding";
+
+
+
 
 async function evaluate(input: Record<string, any> = {}) : Promise<any> {
   return createAuthorizationEngine().evaluate({
@@ -84,7 +88,7 @@ describe("authorization resource context mapping", () : any => {
       },
       input: {
         resourceContext: {
-          authBindingId: "private-binding"
+          authBindingId: canned1
         }
       }
     });

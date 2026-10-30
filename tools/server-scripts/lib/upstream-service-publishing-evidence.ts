@@ -1,4 +1,9 @@
 import { assertNoSensitiveReportLeak, reportPayloadDigest } from "./sensitive-report-scan.ts";
+const canned1 = "disconnected_fenced";
+const canned2 = "auth.unauthenticated.denied";
+
+
+
 
 export const UPSTREAM_SERVICE_PUBLISHING_REPORT_PATH: any = "build/reports/upstream-service-publishing.json";
 export const UPSTREAM_SERVICE_PUBLISHING_REPORT_SCHEMA_VERSION: any =
@@ -61,7 +66,7 @@ const EDGE_OUTCOMES: Readonly<Record<string, any>> = Object.freeze({
 });
 const PROTOCOL_COHORTS: Readonly<Record<string, any>> = Object.freeze({
   "affected-ack": "acknowledged",
-  "api-key-disconnect": "disconnected_fenced",
+  "api-key-disconnect": canned1,
   "ack-timeout": "timed_out_fenced",
   "reconnect-fence": "disconnected_fenced"
 });
@@ -279,7 +284,7 @@ export const UPSTREAM_SERVICE_PUBLISHING_OBSERVATION_EVENTS: any = Object.freeze
 );
 
 const BOUNDARY_EVENT: Readonly<Record<string, any>> = Object.freeze({
-  authentication: "auth.unauthenticated.denied",
+  authentication: canned2,
   "control-plane": "create.accepted",
   "raw-parser": "raw.hostile-corpus.rejected",
   compiler: "create.accepted",

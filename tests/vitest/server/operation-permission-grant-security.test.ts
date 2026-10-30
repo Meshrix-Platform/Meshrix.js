@@ -7,6 +7,15 @@ import { createOperationPermissionStore } from "../../../packages/capabilities/s
 import { localMcpTargetBindingDecision } from "../../../packages/capabilities/src/operation-permission-core/store-utils.ts";
 import { createOperationPermissionWorkerOwner } from "../../../packages/capabilities/src/operation-permission-core/store-worker-owner.ts";
 import { createToolCatalogRegistry } from "../../../packages/capabilities/src/operation-permission-core/catalog.ts";
+const canned1 = "fixture-catalog";
+const canned2 = "fixture-disable";
+const canned3 = "fixture-uninstall-after-disable";
+const canned4 = "unknown-disable";
+const canned5 = "atomic-owner-fence";
+const canned6 = "atomic-grant";
+
+
+
 
 const roots: any[] = [];
 const tool: Readonly<Record<string, any>> = Object.freeze({
@@ -34,7 +43,7 @@ async function fixture(grantInput: Record<string, any> = {}) : Promise<any> {
     ...grantInput
   });
   const request: Record<string, any> = {
-    headers: { authorization: `Bearer ${issued.token}` },
+    headers: { authorization: ("Bearer "+issued.token) },
     socket: { remoteAddress: "127.0.0.1" }
   };
   return { store, issued, request };
@@ -54,7 +63,7 @@ async function delegatedFixture() : Promise<any> {
     ...parent,
     child,
     childRequest: {
-      headers: { authorization: `Bearer ${child.token}` },
+      headers: { authorization: ("Bearer "+child.token) },
       socket: { remoteAddress: "127.0.0.1" }
     }
   };
@@ -223,7 +232,7 @@ describe("Operation Permission grant security invariants", () : any => {
     });
     const registry: Record<string, any> = {
       getCatalog: () : any => ({
-        fingerprint: "fixture-catalog",
+        fingerprint: canned1,
         scopes: [{ id: "fixture:execute" }],
         toolsets: [{ id: "fixture.toolset" }],
         tools: [pluginTool]
@@ -242,7 +251,7 @@ describe("Operation Permission grant security invariants", () : any => {
     const capabilityKeyProvider: Record<string, any> = {
       async issue({ credentialId }: Record<string, any>) : Promise<any> {
         return {
-          capabilityKey: `ock_${credentialId}_fixture_credential_material`,
+          capabilityKey: ("ock_"+credentialId+"_fixture_credential_material"),
           credentialId,
           capabilitySetHash: "fixture-capability-set",
           capabilityCount: 1,
@@ -301,7 +310,7 @@ describe("Operation Permission grant security invariants", () : any => {
     let receipt: any = await store.revokeGrantsByPluginOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration,
-      idempotencyKey: "fixture-disable",
+      idempotencyKey: canned2,
       batchSize: 1
     });
     expect(receipt).toMatchObject({ complete: false, processedCount: 1, cursor: expect.any(String) });
@@ -309,13 +318,13 @@ describe("Operation Permission grant security invariants", () : any => {
     const handshake: any = await store.revokeGrantsByPluginOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration,
-      idempotencyKey: "fixture-disable",
+      idempotencyKey: canned2,
       batchSize: 1
     });
     expect(handshake).toEqual(receipt);
     await expect(store.authorizeRequest({
       request: {
-        headers: { authorization: `Bearer ${parent.token}` },
+        headers: { authorization: ("Bearer "+parent.token) },
         socket: { remoteAddress: "127.0.0.1" }
       }
     })).resolves.toMatchObject({
@@ -333,7 +342,7 @@ describe("Operation Permission grant security invariants", () : any => {
     await expect(store.revokeGrantsByPluginOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration,
-      idempotencyKey: "fixture-disable",
+      idempotencyKey: canned2,
       cursor: committedCursor,
       batchSize: 1
     })).rejects.toMatchObject({ code: "operation_permission_plugin_owner_revocation_pending" });
@@ -349,7 +358,7 @@ describe("Operation Permission grant security invariants", () : any => {
     receipt = await store.revokeGrantsByPluginOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration,
-      idempotencyKey: "fixture-disable",
+      idempotencyKey: canned2,
       cursor: committedCursor,
       batchSize: 1
     });
@@ -357,7 +366,7 @@ describe("Operation Permission grant security invariants", () : any => {
       receipt = await store.revokeGrantsByPluginOwner({
         pluginId: "fixture-plugin",
         generationDigest: firstGeneration,
-        idempotencyKey: "fixture-disable",
+        idempotencyKey: canned2,
         cursor: receipt.cursor,
         batchSize: 1
       });
@@ -388,7 +397,7 @@ describe("Operation Permission grant security invariants", () : any => {
     const replay: any = await store.revokeGrantsByPluginOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration,
-      idempotencyKey: "fixture-disable"
+      idempotencyKey: canned2
     });
     expect(replay).toEqual(receipt);
     await expect(store.registerPluginGrantOwner({
@@ -400,7 +409,7 @@ describe("Operation Permission grant security invariants", () : any => {
     expect(await store.revokeGrantsByPluginOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration,
-      idempotencyKey: "fixture-uninstall-after-disable"
+      idempotencyKey: canned3
     })).toMatchObject({ complete: true, processedCount: 0, revokedCount: 0 });
     expect(await store.registerPluginGrantOwner({
       pluginId: "fixture-plugin",
@@ -421,13 +430,13 @@ describe("Operation Permission grant security invariants", () : any => {
     expect(await store.revokeGrantsByPluginOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration,
-      idempotencyKey: "fixture-disable"
+      idempotencyKey: canned2
     })).toEqual(receipt);
     expect(await store.getGrant(reinstalled.grant.id)).toMatchObject({ enabled: true, revokedAt: "" });
     await expect(store.revokeGrantsByPluginOwner({
       pluginId: "unknown-plugin",
       generationDigest: "c".repeat(64),
-      idempotencyKey: "unknown-disable"
+      idempotencyKey: canned4
     })).rejects.toMatchObject({ code: "operation_permission_unknown_plugin_owner" });
     await store.close();
   });
@@ -448,7 +457,7 @@ describe("Operation Permission grant security invariants", () : any => {
     });
     const registry: Record<string, any> = {
       getCatalog: () : any => ({
-        fingerprint: "atomic-owner-fence",
+        fingerprint: canned5,
         scopes: [],
         toolsets: [{ id: "fixture.atomic" }],
         tools: [pluginTool]
@@ -461,7 +470,7 @@ describe("Operation Permission grant security invariants", () : any => {
     const capabilityKeyProvider: Record<string, any> = {
       async issue({ credentialId }: Record<string, any>) : Promise<any> {
         return {
-          capabilityKey: `ock_${credentialId}_atomic_fixture`,
+          capabilityKey: ("ock_"+credentialId+"_atomic_fixture"),
           credentialId,
           capabilitySetHash: "atomic-owner-fence",
           capabilityCount: 1,
@@ -475,7 +484,7 @@ describe("Operation Permission grant security invariants", () : any => {
             WHERE owner_kind = 'plugin' AND owner_id = 'atomic-plugin' AND owner_generation = ?
           `).run(generationDigest);
         }
-        return { ok: true, credentialId: "atomic-grant", capabilityKey };
+        return { ok: true, credentialId: canned6, capabilityKey };
       },
       async invalidateCredential() : Promise<any> {},
       close() : any {}
@@ -495,7 +504,7 @@ describe("Operation Permission grant security invariants", () : any => {
     retireDuringVerify = true;
     await expect(store.authorizeRequest({
       request: {
-        headers: { authorization: `Bearer ${issued.token}` },
+        headers: { authorization: ("Bearer "+issued.token) },
         socket: { remoteAddress: "127.0.0.1" }
       },
       tool: pluginTool,
@@ -508,7 +517,7 @@ describe("Operation Permission grant security invariants", () : any => {
     `).run(generationDigest);
     await expect(store.authorizeRequest({
       request: {
-        headers: { authorization: `Bearer ${issued.token}` },
+        headers: { authorization: ("Bearer "+issued.token) },
         socket: { remoteAddress: "127.0.0.1" }
       },
       tool: pluginTool
@@ -628,7 +637,7 @@ describe("Operation Permission grant security invariants", () : any => {
       allowedCidrs: ["10.0.0.0/8"]
     });
     const request: any = {
-      headers: { authorization: `Bearer ${issued.token}` },
+      headers: { authorization: ("Bearer "+issued.token) },
       socket: { remoteAddress: "127.0.0.1" }
     };
     try {

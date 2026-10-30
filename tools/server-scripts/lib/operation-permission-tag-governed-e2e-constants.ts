@@ -1,8 +1,12 @@
 import { verifierOpaqueServiceId } from "./upstream-gateway-verifier-publication.ts";
+const canned1 = "v0.0.1:mcp:interface-1";
+
+
+
 
 export const OPERATION_PERMISSION_TAG_GOVERNED_E2E: Readonly<Record<string, any>> = Object.freeze({
   reportPath: "build/reports/operation-permission-tag-governed-e2e.json",
-  mcpInterfaceVersion: "v0.0.1:mcp:interface-1",
+  mcpInterfaceVersion: canned1,
   allowTag: "governance:e2e-allow",
   denyTag: "governance:e2e-deny",
   serviceId: verifierOpaqueServiceId("verify-tag-governed-external-service"),

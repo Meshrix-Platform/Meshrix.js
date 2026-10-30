@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createPluginControlledExecutionAuthority } from "../../../packages/server-runtime/src/composition/plugin-controlled-execution-authority.ts";
 import { createPluginInvocationAuthorizationAuthority } from "../../../packages/server-runtime/src/composition/plugin-invocation-authorization-authority.ts";
+const canned1 = "private-idempotency-value";
+
+
+
 
 const roots: any[] = [];
 const generationA: any = "a".repeat(64);
@@ -70,7 +74,7 @@ async function request(authority?: any, overrides: Record<string, any> = {}) : P
     principal: { subjectRef: "subject" },
     inputDigest: "d".repeat(64),
     governance: { authorized: false },
-    idempotencyKey: "private-idempotency-value",
+    idempotencyKey: canned1,
     deadlineAt: new Date(Date.now() + 5_000).toISOString(),
     ...overrides
   };

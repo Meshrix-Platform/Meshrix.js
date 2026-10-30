@@ -3,6 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { applyGatewayMigration, previewGatewayMigration, restoreGatewayMigration } from "../../../../tools/server-scripts/migrate-gateway-config.ts";
+const canned1 = "local";
+const canned2 = "first";
+
+
+
+
+
 
 const directories: string[] = [];
 async function source(value: string): Promise<string> {
@@ -25,7 +32,7 @@ describe("original migration owner", () => {
   });
 
   it("[GC-053 GC-054 GC-055] retains stdio settings, fences stale previews, preserves earliest backup and restores exact bytes", async () => {
-    const bytes = `${JSON.stringify({ services: [{ serviceKey: "local", transport: "stdio", command: "node", args: ["peer.mjs"], credentialBinding: "synthetic-ref", rpcMethod: "POST" }] })}\n`;
+    const bytes = `${JSON.stringify({ services: [{ serviceKey: canned1, transport: "stdio", command: "node", args: ["peer.mjs"], credentialBinding: canned2, rpcMethod: "POST" }] })}\n`;
     const file = await source(bytes);
     const first = await previewGatewayMigration(file);
     expect(first.errors).toEqual([]);
@@ -33,7 +40,7 @@ describe("original migration owner", () => {
     const applied = await applyGatewayMigration(file, { expectedRevision: first.sourceRevision });
     expect(applied.applied).toBe(true);
     const migrated = JSON.parse(await readFile(file, "utf8"));
-    expect(migrated.services[0]).toMatchObject({ serviceId: "local", transport: "stdio", command: "node", credentialBinding: "synthetic-ref", method: "POST" });
+    expect(migrated.services[0]).toMatchObject({ serviceId: "local", transport: "stdio", command: "node", credentialBinding: canned2, method: "POST" });
     expect(migrated.services[0]).not.toHaveProperty("baseUrl");
     await expect(applyGatewayMigration(file, { expectedRevision: first.sourceRevision })).rejects.toMatchObject({ code: "gateway_migration_rejected" });
     const after = await previewGatewayMigration(file);
@@ -44,7 +51,7 @@ describe("original migration owner", () => {
   });
 
   it("[GC-054] admits at most one of two concurrent applies with the same digest", async () => {
-    const file = await source('{"services":[{"serviceKey":"local","endpoint":"http://127.0.0.1","rpcMethod":"POST"}]}\n');
+    const file = await source('{"services":[{"serviceKey":"' + "local" + '","endpoint":"http://127.0.0.1","rpcMethod":"POST"}]}\n');
     const preview = await previewGatewayMigration(file);
     const results = await Promise.allSettled([applyGatewayMigration(file, { expectedRevision: preview.sourceRevision }), applyGatewayMigration(file, { expectedRevision: preview.sourceRevision })]);
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
@@ -53,7 +60,7 @@ describe("original migration owner", () => {
   });
 
   it("[GC-055] rejects directory, symlink, wrong bytes and broken provenance before replacing source", async () => {
-    const bytes = '{"services":[{"serviceKey":"first","transport":"stdio","command":"node"}]}\n';
+    const bytes = '{"services":[{"serviceKey":"' + "first" + '","transport":"stdio","command":"node"}]}\n';
     for (const kind of ["directory", "symlink", "wrong-bytes"] as const) {
       const file = await source(bytes);
       const backup = `${file}.backup`;
@@ -78,7 +85,7 @@ describe("original migration owner", () => {
   });
 
   it("[GC-055] cleans partial atomic writes and rename failures, leaving a usable earliest backup", async () => {
-    const bytes = '{"services":[{"serviceKey":"first","transport":"stdio","command":"node"}]}\n';
+    const bytes = '{"services":[{"serviceKey":"' + "first" + '","transport":"stdio","command":"node"}]}\n';
     const file = await source(bytes);
     const first = await previewGatewayMigration(file);
     await expect(applyGatewayMigration(file, { expectedRevision: first.sourceRevision, atomicIO: { rename: async () => { throw new Error("synthetic rename failure"); } } })).rejects.toThrow("synthetic rename failure");

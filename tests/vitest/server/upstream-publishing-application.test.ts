@@ -11,6 +11,26 @@ import type { UpstreamServiceCreateCommand } from "@meshrix/contracts/upstream-s
 import { normalizeService } from "../../../packages/agents/src/upstream-gateway/support.ts";
 import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.ts";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+const canned1 = "inventory";
+const canned2 = "create-inventory";
+const canned3 = "lookup";
+const canned4 = "http-standard-port-reload";
+const canned5 = "read";
+const canned6 = "json-rpc-port";
+const canned7 = "mcp-default-port";
+const canned8 = "fixture-material";
+const canned9 = "replace-inventory";
+const canned10 = "disable-inventory";
+const canned11 = "remove-inventory";
+const canned12 = "list";
+const canned13 = "local-denied";
+const canned14 = "local-allowed";
+const canned15 = "local-retarget";
+const canned16 = "public-inventory";
+const canned17 = "public-ok";
+
+
+
 
 const roots: any[] = [];
 
@@ -24,10 +44,10 @@ function command(overrides: Record<string, any> = {}) : string {
   const base: UpstreamServiceCreateCommand = {
     schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
     action: "create",
-    serviceKey: "inventory",
+    serviceKey: canned1,
     expectedServiceRevision: 0,
     expectedSetRevision: 0,
-    idempotencyKey: "create-inventory",
+    idempotencyKey: canned2,
     descriptor: {
       serviceProtocol: "http",
       label: "Inventory",
@@ -40,7 +60,7 @@ function command(overrides: Record<string, any> = {}) : string {
         protocol: "https"
       }],
       operations: [{
-        operationKey: "lookup",
+        operationKey: canned3,
         method: "GET",
         path: "/items",
         payloadTransport: structuredJsonPayloadTransport()
@@ -105,7 +125,7 @@ describe("upstream publishing application", () : any => {
       label: "Inventory",
       operations: [{
         method: "GET",
-        operationKey: "lookup",
+        operationKey: canned3,
         path: "/items",
         payloadTransport: structuredJsonPayloadTransport()
       }],
@@ -134,14 +154,14 @@ describe("upstream publishing application", () : any => {
   it("publishes HTTP, JSON-RPC, and MCP URLs with omitted or standard ports and reloads normalized HTTP state", async () : Promise<any> => {
     const descriptors: Array<Record<string, any>> = [
       {
-        serviceKey: "http-standard-port-reload",
+        serviceKey: canned4,
         url: "https://api.example:443/v1",
         descriptor: {
           serviceProtocol: "http",
           label: "HTTP standard port reload",
           baseUrl: "https://api.example:443/v1",
           operations: [{
-            operationKey: "read",
+            operationKey: canned5,
             method: "GET",
             path: "/v1",
             payloadTransport: structuredJsonPayloadTransport()
@@ -149,7 +169,7 @@ describe("upstream publishing application", () : any => {
         }
       },
       {
-        serviceKey: "json-rpc-port",
+        serviceKey: canned6,
         url: "https://rpc.example:443/rpc",
         descriptor: {
           serviceProtocol: "json-rpc",
@@ -157,7 +177,7 @@ describe("upstream publishing application", () : any => {
           baseUrl: "https://rpc.example/rpc",
           endpoints: [{ endpointId: "primary", baseUrl: "https://rpc.example:443/rpc", weight: 1 }],
           operations: [{
-            operationKey: "lookup",
+            operationKey: canned3,
             method: "POST",
             path: "/rpc",
             jsonRpcMethod: "catalog.lookup",
@@ -166,7 +186,7 @@ describe("upstream publishing application", () : any => {
         }
       },
       {
-        serviceKey: "mcp-default-port",
+        serviceKey: canned7,
         url: "https://mcp.example/mcp",
         descriptor: {
           serviceProtocol: "mcp",
@@ -184,7 +204,7 @@ describe("upstream publishing application", () : any => {
       const { application, storageRoot, store } = await harness();
       const result: any = await application.execute(command({
         serviceKey: entry.serviceKey,
-        idempotencyKey: `create-${entry.serviceKey}`,
+        idempotencyKey: ("create-"+entry.serviceKey),
         descriptor: entry.descriptor
       }), subject());
       expect(result).toMatchObject({ ok: true, state: "publishing", serviceRevision: 1 });
@@ -216,14 +236,15 @@ describe("upstream publishing application", () : any => {
   });
 
   it("rejects embedded credentials and malformed ports at HTTP, JSON-RPC endpoint, and MCP publishing boundaries", async () : Promise<any> => {
-    const credentials = `${["fixture", "placeholder"].join(":")}@`;
+    const at = `${["fixture", "placeholder"].join(":")}@`;
+    const credentials = at;
     const invalidDescriptors: Array<{ descriptor: Record<string, any>; message: string }> = [
       {
         descriptor: {
           serviceProtocol: "http",
           label: "Invalid HTTP URL",
           baseUrl: `https://${credentials}api.example/v1`,
-          operations: [{ operationKey: "read", method: "GET", path: "/v1", payloadTransport: structuredJsonPayloadTransport() }]
+          operations: [{ operationKey: canned5, method: "GET", path: "/v1", payloadTransport: structuredJsonPayloadTransport() }]
         },
         message: "descriptor.baseUrl must use an HTTP(S) URL without embedded credentials."
       },
@@ -234,7 +255,7 @@ describe("upstream publishing application", () : any => {
           baseUrl: "https://rpc.example/rpc",
           endpoints: [{ endpointId: "primary", baseUrl: "https://rpc.example:65536/rpc", weight: 1 }],
           operations: [{
-            operationKey: "lookup",
+            operationKey: canned3,
             method: "POST",
             path: "/rpc",
             jsonRpcMethod: "catalog.lookup",
@@ -312,7 +333,7 @@ describe("upstream publishing application", () : any => {
         reference: "credential://vault/inventory",
         revision: 1,
         use: "request-auth",
-        secretValue: "fixture-material"
+        secretValue: canned8
       },
       {
         type: "certificate",
@@ -401,7 +422,7 @@ describe("upstream publishing application", () : any => {
       serviceId: created.serviceId,
       expectedServiceRevision: 1,
       expectedSetRevision: 1,
-      idempotencyKey: "replace-inventory"
+      idempotencyKey: canned9
     });
     await expect(application.execute(replace, subject("developer-two"))).rejects.toMatchObject({
       code: "upstream_publishing_owner_required",
@@ -427,7 +448,7 @@ describe("upstream publishing application", () : any => {
       descriptor: undefined,
       expectedServiceRevision: 1,
       expectedSetRevision: 1,
-      idempotencyKey: "disable-inventory"
+      idempotencyKey: canned10
     }), subject());
     expect(disabled).toMatchObject({ state: "disabled", serviceRevision: 2, setRevision: 2 });
 
@@ -438,7 +459,7 @@ describe("upstream publishing application", () : any => {
       descriptor: undefined,
       expectedServiceRevision: 2,
       expectedSetRevision: 2,
-      idempotencyKey: "remove-inventory"
+      idempotencyKey: canned11
     }), subject());
     expect(removed).toMatchObject({ state: "removed", serviceRevision: 3, setRevision: 3 });
     const tombstone: any = (await store.getCandidateSnapshot()).getService(created.serviceId).manifest;
@@ -463,7 +484,7 @@ describe("upstream publishing application", () : any => {
         serviceProtocol: "http",
         baseUrl: "https://service.invalid:443",
         operations: [{
-          operationKey: "read",
+          operationKey: canned5,
           method: "GET",
           path: "/read",
           shell: "tool",
@@ -537,7 +558,7 @@ describe("upstream publishing application", () : any => {
       tagPolicy: { requiredTags: ["catalog"] },
       circuitBreaker: { enabled: true, failureThreshold: 3 },
       operations: [{
-        operationKey: "list", method: "POST", path: "/rpc", requiredScopes: ["catalog:read"],
+        operationKey: canned12, method: "POST", path: "/rpc", requiredScopes: ["catalog:read"],
         jsonRpcMethod: "catalog.list",
         requestSchema: { type: "object" }, responseSchema: { type: "object" },
         payloadTransport: structuredJsonPayloadTransport({ requestMaxBytes: 4096, responseMaxBytes: 4096 })
@@ -566,7 +587,7 @@ describe("upstream publishing application", () : any => {
       ...(allowLocalNetwork === undefined ? {} : { allowLocalNetwork }),
       references: [],
       operations: [{
-        operationKey: "read", method: "GET", path: "/read",
+        operationKey: canned5, method: "GET", path: "/read",
         payloadTransport: structuredJsonPayloadTransport()
       }]
     });
@@ -586,7 +607,7 @@ describe("upstream publishing application", () : any => {
     ] as const) {
       key += 1;
       await expect(application.execute(
-        command({ descriptor: httpDescriptor(baseUrl, allowLocalNetwork), idempotencyKey: `target-${key}` }),
+        command({ descriptor: httpDescriptor(baseUrl, allowLocalNetwork), idempotencyKey: ("target-"+key) }),
         actor
       )).rejects.toMatchObject({
         code: "upstream_publishing_target_restricted",
@@ -604,20 +625,20 @@ describe("upstream publishing application", () : any => {
       ...(allowLocalNetwork === undefined ? {} : { allowLocalNetwork }),
       references: [],
       operations: [{
-        operationKey: "read", method: "GET", path: "/read",
+        operationKey: canned5, method: "GET", path: "/read",
         payloadTransport: structuredJsonPayloadTransport()
       }]
     });
     const maintainer = subject("maintainer-one", ["gateway:write", "gateway:maintain"]);
 
     await expect(application.execute(
-      command({ descriptor: descriptor(true), idempotencyKey: "local-denied" }),
+      command({ descriptor: descriptor(true), idempotencyKey: canned13 }),
       maintainer
     )).rejects.toMatchObject({ code: "upstream_publishing_scope_required", statusCode: 403 });
     expect(commitManifestSet).not.toHaveBeenCalled();
 
     const created: any = await application.execute(
-      command({ descriptor: descriptor(true), idempotencyKey: "local-allowed" }),
+      command({ descriptor: descriptor(true), idempotencyKey: canned14 }),
       subject("maintainer-one", ["gateway:admin"])
     );
     expect(created.ok).toBe(true);
@@ -630,13 +651,13 @@ describe("upstream publishing application", () : any => {
       serviceId: created.serviceId,
       expectedServiceRevision: created.serviceRevision,
       expectedSetRevision: created.setRevision,
-      idempotencyKey: "local-retarget",
+      idempotencyKey: canned15,
       descriptor: {
         serviceProtocol: "http",
         baseUrl: ["http://", "10.0.0.9", "/"].join(""),
         references: [],
         operations: [{
-          operationKey: "read", method: "GET", path: "/read",
+          operationKey: canned5, method: "GET", path: "/read",
           payloadTransport: structuredJsonPayloadTransport()
         }]
       }
@@ -651,15 +672,15 @@ describe("upstream publishing application", () : any => {
       baseUrl: "https://service.invalid:443",
       references: [],
       operations: [{
-        operationKey: "read", method: "GET", path: "/read",
+        operationKey: canned5, method: "GET", path: "/read",
         payloadTransport: structuredJsonPayloadTransport()
       }]
     };
     const published: any = await application.execute(
       command({
-        serviceKey: "public-inventory",
+        serviceKey: canned16,
         descriptor: publicDescriptor,
-        idempotencyKey: "public-ok",
+        idempotencyKey: canned17,
         expectedSetRevision: created.setRevision
       }),
       maintainer

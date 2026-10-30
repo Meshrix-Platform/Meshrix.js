@@ -10,6 +10,10 @@ import { createPluginPackageCustody } from "#meshrix/foundation/module-system/pl
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+const canned1 = "secrets/github-token";
+
+
+
 
 function sha256(bytes?: any) : any {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
@@ -156,7 +160,7 @@ describe("github release plugin package acquisition", () : any => {
 
     const authed: any = await acquisition.acquire({
       ...publicSource,
-      credentialRef: "secrets/github-token"
+      credentialRef: canned1
     });
     assert.equal(authed.archiveDigest, sha256(assetBytes));
   });
@@ -182,13 +186,14 @@ describe("github release plugin package acquisition", () : any => {
       calls.push({ url: String(url), status: response.status, location: response.headers.get("location"), authorization: init.headers?.Authorization });
       return response;
     };
+    const minted = "token-for-test";
     const github: any = createGitHubReleasePluginPackageAcquisition({
       fetchImpl,
       lookup: async (host?: any) : Promise<any> => {
         dnsHosts.push(host);
         return publicDnsLookup(host);
       },
-      resolveCredentialRef: async () : Promise<any> => "token-for-test",
+      resolveCredentialRef: async () : Promise<any> => minted,
       allowedHosts: ["api.github.com", "objects.githubusercontent.com"],
       maxRetries: 0
     });
@@ -197,7 +202,7 @@ describe("github release plugin package acquisition", () : any => {
       release: "v1.0.0",
       asset: "sample-plugin.tar.gz",
       expectedDigest: sha256(assetBytes),
-      credentialRef: "secrets/github-token"
+      credentialRef: canned1
     });
     const a: any = await github.acquire(source);
     assert.equal(a.byteLength, assetBytes.length, JSON.stringify(calls));
@@ -401,7 +406,7 @@ describe("github release plugin package acquisition", () : any => {
       release: "v1.0.0",
       asset: "sample-plugin.tar.gz",
       expectedDigest: sha256(assetBytes),
-      credentialRef: "secrets/github-token"
+      credentialRef: canned1
     };
     const credentialed: any = createGitHubReleasePluginPackageAcquisition({
       maxRetries: 0,

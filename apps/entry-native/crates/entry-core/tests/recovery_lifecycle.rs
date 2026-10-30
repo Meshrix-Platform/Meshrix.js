@@ -119,7 +119,8 @@ fn make_bundle(label: &str) -> meshrix_entry_core::recovery::bundle::EntryRecove
 
 #[test]
 fn recovery_material_roundtrip_preserves_derived_keys() {
-    let key = generate_recovery_key(Some("vault.test.1".into())).unwrap();
+    let vault_id = format!("vault.test-{}", std::process::id());
+        let key = generate_recovery_key(Some(vault_id)).unwrap();
     let material = derive_recovery_material(&key.secret).unwrap();
     let blob = serialize_recovery_material(&material);
     let restored = deserialize_recovery_material(&blob).unwrap();
@@ -132,7 +133,8 @@ fn recovery_material_roundtrip_preserves_derived_keys() {
 
 #[test]
 fn recovery_material_rejects_tampered_key_id() {
-    let key = generate_recovery_key(Some("vault.test.1".into())).unwrap();
+    let vault_id = format!("vault.test-{}", std::process::id());
+        let key = generate_recovery_key(Some(vault_id)).unwrap();
     let material = derive_recovery_material(&key.secret).unwrap();
     let blob = serialize_recovery_material(&material);
     let mut parsed: Value = serde_json::from_slice(&blob).unwrap();
@@ -143,7 +145,8 @@ fn recovery_material_rejects_tampered_key_id() {
 
 #[test]
 fn synchronizer_publishes_then_fetches_its_own_snapshot() {
-    let key = generate_recovery_key(Some("vault.test.sync".into())).unwrap();
+    let vault_id = format!("vault.test-{}", std::process::id());
+    let key = generate_recovery_key(Some(vault_id.clone())).unwrap();
     let material = derive_recovery_material(&key.secret).unwrap();
     let mut sync = SnapshotSynchronizer::new(
         RecoveryVaultClient::new(FakeVault::new()),
@@ -151,12 +154,12 @@ fn synchronizer_publishes_then_fetches_its_own_snapshot() {
     );
     let bundle = make_bundle("alpha");
     let outcome = sync
-        .publish("vault.test.sync", &bundle, &material, 1, None, &[])
+        .publish(&vault_id, &bundle, &material, 1, None, &[])
         .unwrap();
     assert!(matches!(outcome, PublishOutcome::Committed { revision: 1, .. }));
 
     let fetched = sync
-        .fetch_snapshot("vault.test.sync", &material, None, &[], true)
+        .fetch_snapshot(&vault_id, &material, None, &[], true)
         .unwrap();
     match fetched {
         SyncFetchOutcome::Snapshot { bundle, revision, generation, .. } => {
@@ -170,7 +173,8 @@ fn synchronizer_publishes_then_fetches_its_own_snapshot() {
 
 #[test]
 fn synchronizer_conflict_reconciles_one_write() {
-    let key = generate_recovery_key(Some("vault.test.conflict".into())).unwrap();
+    let vault_id = format!("vault.test-{}", std::process::id());
+    let key = generate_recovery_key(Some(vault_id.clone())).unwrap();
     let material = derive_recovery_material(&key.secret).unwrap();
     let vault = std::sync::Arc::new(FakeVault::new());
     let mut sync_a = SnapshotSynchronizer::new(
@@ -183,12 +187,12 @@ fn synchronizer_conflict_reconciles_one_write() {
     );
     // A commits revision 1.
     assert!(matches!(
-        sync_a.publish("vault.test.conflict", &make_bundle("a1"), &material, 1, None, &[]).unwrap(),
+        sync_a.publish(&vault_id, &make_bundle("a1"), &material, 1, None, &[]).unwrap(),
         PublishOutcome::Committed { revision: 1, .. }
     ));
     // B's journal still believes 0 — its write conflicts, fetches, merges, retries.
     let outcome = sync_b
-        .publish("vault.test.conflict", &make_bundle("b1"), &material, 1, None, &[])
+        .publish(&vault_id, &make_bundle("b1"), &material, 1, None, &[])
         .unwrap();
     assert!(matches!(outcome, PublishOutcome::Committed { revision: 2, .. }));
 }
@@ -202,11 +206,12 @@ impl VaultTransport for FakeVaultHandle {
 
 #[test]
 fn rotation_manager_stages_marks_and_completes() {
-    let key = generate_recovery_key(Some("vault.test.rot".into())).unwrap();
+    let vault_id = format!("vault.test-{}", std::process::id());
+    let key = generate_recovery_key(Some(vault_id.clone())).unwrap();
     let incumbent = derive_recovery_material(&key.secret).unwrap();
     let mut manager = RecoveryRotationManager::new(InMemoryRotationStore::new());
     let staged = manager
-        .begin(&incumbent, 1, "prin.test", "vault.test.rot", &["route.a".into(), "route.b".into()], None)
+        .begin(&incumbent, 1, "prin.test", &vault_id, &["route.a".into(), "route.b".into()], None)
         .unwrap();
     assert_eq!(staged.rotation.state, "staged");
     assert_eq!(staged.rotation.candidate_generation, 2);
@@ -223,17 +228,18 @@ fn rotation_manager_stages_marks_and_completes() {
 
 #[test]
 fn rotation_manager_aborts_nonterminal() {
-    let key = generate_recovery_key(Some("vault.test.rot2".into())).unwrap();
+    let vault_id = format!("vault.test-{}", std::process::id());
+    let key = generate_recovery_key(Some(vault_id.clone())).unwrap();
     let incumbent = derive_recovery_material(&key.secret).unwrap();
     let mut manager = RecoveryRotationManager::new(InMemoryRotationStore::new());
     let staged = manager
-        .begin(&incumbent, 1, "prin.test", "vault.test.rot2", &["route.a".into()], None)
+        .begin(&incumbent, 1, "prin.test", &vault_id, &["route.a".into()], None)
         .unwrap();
     let aborted = manager.abort(&staged.rotation.rotation_id).unwrap();
     assert_eq!(aborted.state, "aborted");
     // A second begin must not collide with the aborted record.
     assert!(manager
-        .begin(&incumbent, 1, "prin.test", "vault.test.rot2", &["route.a".into()], None)
+        .begin(&incumbent, 1, "prin.test", &vault_id, &["route.a".into()], None)
         .is_ok());
 }
 
@@ -346,7 +352,8 @@ async fn begin_rotation_requires_existing_recovery() {
 
 #[test]
 fn format_recovery_text_renders_grouped_secret() {
-    let key = generate_recovery_key(Some("vault.fmt".into())).unwrap();
+    let vault_id = format!("vault.test-{}", std::process::id());
+        let key = generate_recovery_key(Some(vault_id)).unwrap();
     let text = format_recovery_text(&key).unwrap();
     assert!(text.starts_with("mrk1"));
 }

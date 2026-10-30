@@ -7,6 +7,14 @@ import { createMemoryHistory, createRouter, type Router } from "vue-router";
 import ApiKeyDistributionView from "../../../apps/console/views/admin/ApiKeyDistributionView.vue";
 import { setConsoleLocaleState } from "../../../apps/console/i18n/console";
 import type { ApiKeyMcpToolSelection, ApiKeyPolicy, ApiKeyRecord } from "../../../apps/console/lib/api-key-distribution-client";
+const canned1 = "catalog-a";
+const canned2 = "active";
+const canned3 = "key-public-id";
+const canned4 = "fingerprint-a";
+const canned5 = "policy-a";
+
+
+
 
 const ONE_TIME_SENTINEL = "opaque-one-time-credential";
 const ROTATED_SENTINEL = "opaque-rotated-credential";
@@ -34,15 +42,15 @@ const policy: ApiKeyPolicy = {
   },
   processIdentity: { mode: "optional" },
   limits: { maxUses: 10, requestsPerWindow: 3, windowSeconds: 60, maxConcurrentEffects: 1 },
-  catalogFingerprint: "catalog-a",
+  catalogFingerprint: canned1,
 };
 
-function record(revision = 1, status: ApiKeyRecord["status"] = "active"): ApiKeyRecord {
+function record(revision = 1, status: ApiKeyRecord["status"] = canned2): ApiKeyRecord {
   return {
-    keyId: "key-public-id", displayPrefix: "mxak1.pub…", credentialFingerprint: "fingerprint-a",
+    keyId: canned3, displayPrefix: "mxak1.pub…", credentialFingerprint: canned4,
     workloadPrincipalId: "workload-principal-a", workloadDisplayName: "Build worker",
     organizationNodeId: "organization-a", organizationBreadcrumb: ["Group", "Organization A"],
-    policy, policyFingerprint: "policy-a", status, lifecycleRevision: revision, useCount: 2,
+    policy, policyFingerprint: canned5, status, lifecycleRevision: revision, useCount: 2,
     createdAt: "2026-08-01T00:00:00.000Z", rotatedAt: null, revokedAt: null,
     expiresAt: "2026-09-01T00:00:00.000Z",
   };

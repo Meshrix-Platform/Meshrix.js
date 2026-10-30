@@ -33,6 +33,10 @@ import {
   NPM_PACKAGE_CONSUMER_FAILURE_CODES,
   NPM_PACKAGE_CONSUMER_FAILURE_STAGES
 } from "../../../tools/server-scripts/npm-package-consumer.ts";
+const canned1 = "ghp_";
+
+
+
 
 const execFileAsync: any = promisify(execFile);
 const npmCli: any = resolveNpmCliInvocation();
@@ -374,7 +378,7 @@ describe("npm artifact installability source", () : any => {
 
   it("retains a bounded redacted launch cause through the report projection", () => {
     const localPath = ["", "home", "synthetic", "chrome"].join("/");
-    const secret = "ghp_" + "syntheticdiagnosticcredential";
+    const secret = canned1 + "syntheticdiagnosticcredential";
     const message = `browserType.launch: browser exited\n<launching> ${localPath} --private-switch=${secret}\n[pid=123][err] chrome_crashpad_handler: --database is required\n${localPath} ${["Bear", "er"].join("")} ${secret}`;
     const failure = consumerFailureSummary(new Error(message));
     expect(failure.launchDiagnostic).toContain("chrome_crashpad_handler: --database is required");

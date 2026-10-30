@@ -10,6 +10,12 @@ import {
   createProcessIdentityService,
   generateProcessIdentityClientKeyPair
 } from "../../../packages/foundation/src/security/process-identity/index.ts";
+const canned1 = "claim-token";
+const canned2 = "capacity-fingerprint";
+const canned3 = "capacity-app";
+
+
+
 
 function request(headers: Record<string, any> = {}) : any {
   return {
@@ -25,7 +31,7 @@ describe("process identity nonce capacity", () : any => {
     const capabilityBindingGuard: any = createMemoryCapabilityBindingGuard();
     const serviceOptions: Record<string, any> = {
       dataDir,
-      claimToken: "claim-token",
+      claimToken: canned1,
       capabilityKeyProvider,
       capabilityBindingGuard,
       maxNonceCache: 3,
@@ -37,13 +43,13 @@ describe("process identity nonce capacity", () : any => {
       const claimed: any = await service.bootstrapClaim({
         request: request(),
         input: {
-          claimToken: "claim-token",
+          claimToken: canned1,
           clientId: "capacity-client",
           installationId: "capacity-installation",
           clientFingerprint: {
-            fingerprintId: "capacity-fingerprint",
+            fingerprintId: canned2,
             machineInstanceId: "capacity-machine",
-            appInstanceId: "capacity-app",
+            appInstanceId: canned3,
             runtimeInstanceId: "capacity-runtime"
           },
           processPublicKeyPem: keyPair.publicKeyPem,

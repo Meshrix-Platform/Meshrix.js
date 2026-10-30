@@ -25,6 +25,11 @@ import {
   PLUGIN_LIFECYCLE_ACTIVATION_CHANGES_TRAFFIC,
   createPluginActivationResult
 } from "@meshrix/contracts/plugins/plugin-confinement-contract";
+const canned1 = "none";
+const canned2 = "restart";
+
+
+
 
 const capabilities = {
   loadDistribution: "bounded",
@@ -144,8 +149,8 @@ describe("Gateway channel contract", () => {
         adapter,
         endpointRef: `${adapter}-operator-endpoint`,
         instanceOwnership: "operator_existing",
-        configurationAuthority: "none",
-        lifecycleAuthority: "none",
+        configurationAuthority: canned1,
+        lifecycleAuthority: canned1,
         implicitFallback: false
       }).instanceOwnership).toBe("operator_existing");
     }
@@ -153,8 +158,8 @@ describe("Gateway channel contract", () => {
       adapter: "direct",
       endpointRef: "direct-operator-endpoint",
       instanceOwnership: "operator_endpoint",
-      configurationAuthority: "none",
-      lifecycleAuthority: "none",
+      configurationAuthority: canned1,
+      lifecycleAuthority: canned1,
       implicitFallback: false
     }).implicitFallback).toBe(false);
     expect(assertGatewayChannel({
@@ -171,8 +176,8 @@ describe("Gateway channel contract", () => {
       adapter: "nginx",
       endpointRef: "nginx-operator-endpoint",
       instanceOwnership: "operator_existing",
-      configurationAuthority: "none",
-      lifecycleAuthority: "restart",
+      configurationAuthority: canned1,
+      lifecycleAuthority: canned2,
       implicitFallback: false
     })).toThrow("gateway_external_attachment_authority_forbidden");
     expect(EXTERNAL_GATEWAY_WORKSPACE_PORT).toBe("none");

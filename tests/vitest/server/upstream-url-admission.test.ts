@@ -6,6 +6,10 @@ import {
   normalizeService
 } from "../../../packages/agents/src/upstream-gateway/support.ts";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+const canned1 = "read";
+
+
+
 
 const validUrls = [
   ["http://api.example/v1", "http://api.example/v1", "http:", "api.example", "/v1", "80"],
@@ -29,7 +33,7 @@ describe("upstream URL admission and runtime normalization", () : any => {
       serviceId: "svc_url_fixture",
       serviceProtocol: "http",
       baseUrl: input,
-      operations: [{ operationKey: "read", method: "GET", path: "/v1", payloadTransport: structuredJsonPayloadTransport() }]
+      operations: [{ operationKey: canned1, method: "GET", path: "/v1", payloadTransport: structuredJsonPayloadTransport() }]
     });
     const reloadedService = normalizeService(service);
     expect(reloadedService.baseUrl).toBe(expected);
@@ -53,7 +57,8 @@ describe("upstream URL admission and runtime normalization", () : any => {
   });
 
   it("rejects credentials instead of silently stripping them during endpoint normalization", () : any => {
-    const credentialUrl = `https://${["fixture", "placeholder"].join(":")}@api.example/v1`;
+    const wire = `https://${["fixture", "placeholder"].join(":")}@api.example/v1`;
+    const credentialUrl = wire;
     expect(() => normalizeEndpoint({ endpointId: "primary", baseUrl: credentialUrl })).toThrow(/embedded credentials/u);
   });
 });

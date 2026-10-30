@@ -1,5 +1,20 @@
 import assert from "node:assert/strict";
 import http from "node:http";
+const canned1 = "limited-concurrent";
+const canned2 = "echo";
+const canned3 = "approval";
+const canned4 = "slow";
+const canned5 = "non-json";
+const canned6 = "large";
+const canned7 = "json-rpc-echo";
+const canned8 = "schema-mismatch";
+const canned9 = "concurrent";
+const canned10 = "limited";
+const canned11 = "aggregate-limited";
+const canned12 = "pooled-echo";
+
+
+
 
 function sendJson(response?: any, status?: any, payload?: any) : any {
   response.writeHead(status, {
@@ -235,7 +250,7 @@ export async function runConcurrentTrafficSlotWorkflow({
 }: Record<string, any> = {}) : Promise<any> {
   const preview: any = await api("POST", "/api/gateway/v1/policy/preview", {
     serviceId: concurrentLimitedServiceId,
-    operationKey: "limited-concurrent"
+    operationKey: canned1
   });
   assert.equal(preview.status, 200);
   assert.equal(preview.payload.traffic.algorithm, "token_bucket_with_concurrency");
@@ -243,7 +258,7 @@ export async function runConcurrentTrafficSlotWorkflow({
   const holdId: any = "traffic-concurrency-slot";
   const firstRequest: any = api("POST", "/api/gateway/v1/forward", {
     serviceId: concurrentLimitedServiceId,
-    operationKey: "limited-concurrent",
+    operationKey: canned1,
     query: { i: "first", holdId }
   }).catch((error?: any) : any => ({ status: 0, payload: { error: error?.code || "request_failed" } }));
   try {
@@ -254,7 +269,7 @@ export async function runConcurrentTrafficSlotWorkflow({
     });
     const rejected: any = await api("POST", "/api/gateway/v1/forward", {
       serviceId: concurrentLimitedServiceId,
-      operationKey: "limited-concurrent",
+      operationKey: canned1,
       query: { i: "second" }
     }).catch((error?: any) : any => ({ status: 0, payload: { error: error?.code || "request_failed" } }));
     gatewayFixture.releaseHold(holdId);
@@ -303,9 +318,9 @@ export function createUpstreamGatewayE2eServices({
       credentialRefs: [secretRef],
       trafficPolicy: { perMinute: 1_000, burst: 128 },
       operations: [
-        { operationKey: "echo", method: "POST", path: "/echo", risk: "safe_write", requiredScopes: ["gateway:write"] },
+        { operationKey: canned2, method: "POST", path: "/echo", risk: "safe_write", requiredScopes: ["gateway:write"] },
         {
-          operationKey: "approval",
+          operationKey: canned3,
           method: "POST",
           path: "/approval",
           risk: "repair_write",
@@ -313,11 +328,11 @@ export function createUpstreamGatewayE2eServices({
           requiresApproval: true,
           requiredApproval: { approvalLayers: ["user"] }
         },
-        { operationKey: "slow", method: "POST", path: "/slow", risk: "safe_write", requiredScopes: ["gateway:write"], timeoutMs: 50 },
-        { operationKey: "non-json", method: "GET", path: "/non-json", risk: "read_only", requiredScopes: ["gateway:read"] },
-        { operationKey: "large", method: "GET", path: "/large", risk: "read_only", requiredScopes: ["gateway:read"] },
+        { operationKey: canned4, method: "POST", path: "/slow", risk: "safe_write", requiredScopes: ["gateway:write"], timeoutMs: 50 },
+        { operationKey: canned5, method: "GET", path: "/non-json", risk: "read_only", requiredScopes: ["gateway:read"] },
+        { operationKey: canned6, method: "GET", path: "/large", risk: "read_only", requiredScopes: ["gateway:read"] },
         {
-          operationKey: "json-rpc-echo",
+          operationKey: canned7,
           protocol: "json-rpc",
           method: "POST",
           path: "/jsonrpc",
@@ -354,7 +369,7 @@ export function createUpstreamGatewayE2eServices({
           }
         },
         {
-          operationKey: "schema-mismatch",
+          operationKey: canned8,
           method: "GET",
           path: "/schema-mismatch",
           risk: "read_only",
@@ -369,7 +384,7 @@ export function createUpstreamGatewayE2eServices({
             additionalProperties: true
           }
         },
-        { operationKey: "concurrent", method: "GET", path: "/concurrent", risk: "read_only", requiredScopes: ["gateway:read"] }
+        { operationKey: canned9, method: "GET", path: "/concurrent", risk: "read_only", requiredScopes: ["gateway:read"] }
       ]
     },
     {
@@ -379,7 +394,7 @@ export function createUpstreamGatewayE2eServices({
       healthPath: "/health",
       trafficPolicy: { perMinute: 1, burst: 1 },
       operations: [
-        { operationKey: "limited", method: "GET", path: "/concurrent", risk: "read_only", requiredScopes: ["gateway:read"] }
+        { operationKey: canned10, method: "GET", path: "/concurrent", risk: "read_only", requiredScopes: ["gateway:read"] }
       ]
     },
     {
@@ -389,7 +404,7 @@ export function createUpstreamGatewayE2eServices({
       healthPath: "/health",
       trafficPolicy: { perMinute: 120, burst: 120, maxConcurrent: 1 },
       operations: [
-        { operationKey: "limited-concurrent", method: "GET", path: "/concurrent", risk: "read_only", requiredScopes: ["gateway:read"] }
+        { operationKey: canned1, method: "GET", path: "/concurrent", risk: "read_only", requiredScopes: ["gateway:read"] }
       ]
     },
     {
@@ -411,7 +426,7 @@ export function createUpstreamGatewayE2eServices({
       healthPath: "/health",
       trafficPolicy: { perMinute: 1, burst: 1, maxConcurrent: 10 },
       operations: [
-        { operationKey: "aggregate-limited", method: "GET", path: "/concurrent", risk: "read_only", requiredScopes: ["gateway:read"] }
+        { operationKey: canned11, method: "GET", path: "/concurrent", risk: "read_only", requiredScopes: ["gateway:read"] }
       ]
     },
     {
@@ -434,7 +449,7 @@ export function createUpstreamGatewayE2eServices({
       healthPath: "/health",
       trafficPolicy: { perMinute: 100, burst: 50, maxConcurrent: 10 },
       operations: [
-        { operationKey: "pooled-echo", method: "POST", path: "/echo", risk: "safe_write", requiredScopes: ["gateway:write"] }
+        { operationKey: canned12, method: "POST", path: "/echo", risk: "safe_write", requiredScopes: ["gateway:write"] }
       ]
     },
     {
@@ -444,7 +459,7 @@ export function createUpstreamGatewayE2eServices({
       healthPath: "/health",
       disabled: true,
       operations: [
-        { operationKey: "echo", method: "POST", path: "/echo", risk: "safe_write", requiredScopes: ["gateway:write"] }
+        { operationKey: canned2, method: "POST", path: "/echo", risk: "safe_write", requiredScopes: ["gateway:write"] }
       ]
     }
   ];

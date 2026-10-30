@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   handlePluginConsoleRequest
 } from "../../../apps/server/runtime/http-server-plugin-console-sandbox.ts";
+const canned1 = "demo";
+
+
+
 
 const DIGEST: any = `sha256:${"a".repeat(64)}`;
 const SANDBOX_URL: any = `/api/plugins/v1/console-sandboxes/demo/1/${"a".repeat(64)}/YWRtaW4uZGVtbw.html`;
@@ -11,7 +15,7 @@ const ENTRY: Readonly<Record<string, any>> = Object.freeze({
   id: "admin.demo",
   pluginId: "demo",
   featureId: "demo-feature",
-  viewKey: "demo",
+  viewKey: canned1,
   routePath: "/admin/demo",
   slotId: "",
   componentId: "demo/DemoView",

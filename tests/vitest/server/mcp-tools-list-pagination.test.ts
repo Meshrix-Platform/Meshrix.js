@@ -2,6 +2,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import http from "node:http";
 
 import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
+const canned1 = "cursor-whitespace";
+const canned2 = "null-cursor";
+const canned3 = "cursor-invalid";
+const canned4 = "cursor-repeat";
+const canned5 = "http-cursor-whitespace";
+
+
+
 
 const managers: any = new Set<any>();
 
@@ -59,7 +67,7 @@ describe("Upstream MCP tools/list pagination", () : any => {
         { cursor: undefined, tools: [{ name: "one" }], nextCursor: "  page-two  " },
         { cursor: "  page-two  ", tools: [{ name: "two" }] }
       ])],
-      sessionKey: "cursor-whitespace",
+      sessionKey: canned1,
       sessionScope: "cursor-whitespace"
     });
     expect(listed.tools.map((tool?: any) : any => tool.name)).toEqual(["one", "two"]);
@@ -105,7 +113,7 @@ describe("Upstream MCP tools/list pagination", () : any => {
       transport: "streamable-http",
       url: "http://127.0.0.1:9/mcp",
       timeoutMs: 1000,
-      sessionKey: "null-cursor",
+      sessionKey: canned2,
       sessionScope: "null-cursor"
     })).rejects.toMatchObject({
       code: "upstream_mcp_tools_list_cursor_invalid"
@@ -120,7 +128,7 @@ describe("Upstream MCP tools/list pagination", () : any => {
       args: ["-e", scriptForCursors([
         { cursor: undefined, tools: [{ name: "one" }], nextCursor: 12 }
       ])],
-      sessionKey: "cursor-invalid",
+      sessionKey: canned3,
       sessionScope: "cursor-invalid"
     })).rejects.toMatchObject({
       code: "upstream_mcp_tools_list_cursor_invalid"
@@ -136,7 +144,7 @@ describe("Upstream MCP tools/list pagination", () : any => {
         { cursor: undefined, tools: [{ name: "one" }], nextCursor: "loop" },
         { cursor: "loop", tools: [{ name: "two" }], nextCursor: "loop" }
       ])],
-      sessionKey: "cursor-repeat",
+      sessionKey: canned4,
       sessionScope: "cursor-repeat"
     })).rejects.toMatchObject({
       code: "upstream_mcp_tools_list_cursor_repeated"
@@ -212,7 +220,7 @@ describe("Upstream MCP tools/list pagination", () : any => {
         transport: "streamable-http",
         url: `http://127.0.0.1:${address.port}/mcp`,
         timeoutMs: 2000,
-        sessionKey: "http-cursor-whitespace",
+        sessionKey: canned5,
         sessionScope: "http-cursor-whitespace"
       });
       expect(listed.tools.map((tool?: any) : any => tool.name)).toEqual(["one", "two"]);

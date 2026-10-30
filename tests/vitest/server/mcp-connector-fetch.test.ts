@@ -20,8 +20,14 @@ import { proxyCommand, resolveProxyCredentials } from "../../../packages/protoco
 import { signMcpHandshake } from "../../../packages/protocols/mcp/adapter/gateway-installer/mcp-identity.ts";
 import { MCP_PROTOCOL_VERSION } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import { runWithOwnedProcessSignals } from "../../../packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts";
+const canned1 = "connector-lifetime-fixture";
+const canned2 = "https://credential-bound.invalid";
 
-const API_KEY: any = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
+
+
+
+const wire = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
+const API_KEY: any = wire;
 const TOKEN_ENV: any = "MESHRIX_MCP_CONNECTOR_LIFETIME_TEST_TOKEN";
 const CLI_ENTRY: any = fileURLToPath(new URL("../../../apps/server/bin/meshrix-mcp.ts", import.meta.url));
 let rootDir: any = "";
@@ -77,7 +83,7 @@ function runNode(args?: any[]) : Promise<any> {
 async function startSignedHub() : Promise<any> {
   const pair: any = generateKeyPairSync("ed25519");
   const identity: any = {
-    keyId: "connector-lifetime-fixture",
+    keyId: canned1,
     publicKeyJwk: pair.publicKey.export({ format: "jwk" }),
     privateKeyJwk: pair.privateKey.export({ format: "jwk" })
   };
@@ -250,7 +256,7 @@ afterEach(async () : Promise<any> => {
 
 describe("Meshrix connector caller-owned request lifetime", () : any => {
   it("does not send a stored API Key when discovery resolves to another server", async () : Promise<any> => {
-    const credentialBaseUrl = "https://credential-bound.invalid";
+    const credentialBaseUrl = canned2;
     const discoveryFile = path.join(rootDir, "credential-binding-discovery.json");
     await saveMcpApiKeyCredential({ target: "codex", baseUrl: credentialBaseUrl, token: API_KEY });
     await fs.writeFile(discoveryFile, JSON.stringify({

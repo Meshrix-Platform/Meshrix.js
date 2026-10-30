@@ -3,6 +3,10 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import { MCP_TARGET_LABELS } from "../../../packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts";
+const canned1 = "pre-issued-api-key";
+
+
+
 
 export async function createMatrixTargetEnvironment({
   workDir,
@@ -77,7 +81,7 @@ export async function installMatrixTargetWithApiKey({
     target,
     label: MCP_TARGET_LABELS[target] || target,
     status: "installed",
-    credentialSource: "pre-issued-api-key",
+    credentialSource: canned1,
     postInstallVerification: "deferred_to_mcp_acceptance_matrix"
   };
 }

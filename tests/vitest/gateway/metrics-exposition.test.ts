@@ -4,6 +4,10 @@ import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upst
 import { renderUpstreamGatewayMetricsExposition } from "../../../packages/agents/src/upstream-gateway/metrics-exposition.ts";
 import { installUpstreamRuntimeServices, structuredUpstreamServiceFixture } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "run";
+
+
+
 
 const SUBJECT = {
   type: "tool-grant",
@@ -38,7 +42,7 @@ describe("Upstream gateway metrics exposition", () => {
       allowLocalNetwork: true,
       baseUrl: `http://127.0.0.1:${address.port}`,
       operations: [{
-        operationKey: "run",
+        operationKey: canned1,
         method: "POST",
         path: "/run",
         risk: "read_only",
@@ -46,8 +50,8 @@ describe("Upstream gateway metrics exposition", () => {
       }]
     })]);
     try {
-      await registry.forward({ serviceId: "guarded", operationKey: "run", body: { n: 1 } }, SUBJECT);
-      await registry.forward({ serviceId: "guarded", operationKey: "run", body: { n: 2 } }, SUBJECT);
+      await registry.forward({ serviceId: "guarded", operationKey: canned1, body: { n: 1 } }, SUBJECT);
+      await registry.forward({ serviceId: "guarded", operationKey: canned1, body: { n: 2 } }, SUBJECT);
       const metrics = registry.getMetrics();
       expect(metrics.totalForwardCount).toBe(2);
       expect(metrics.byService.guarded).toBe(2);

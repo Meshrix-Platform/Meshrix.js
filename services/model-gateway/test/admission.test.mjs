@@ -6,6 +6,9 @@ import test from "node:test";
 
 import { createModelGatewayApplication } from "../internal/application.mjs";
 import { ADMIN_CLIENTS, provision, provisionModel, startService } from "./helpers.mjs";
+const cannedB = "model-gateway-test-second-secret-000000000000000000";
+const cannedDurableQuota = "durable-quota";
+
 
 async function openAiCall(service, body, headers = {}) {
   return fetch(`${service.baseUrl}/v1/chat/completions`, {
@@ -557,7 +560,7 @@ test("aggregate per-subject bound denies only the saturated subject", async (t) 
     ...ADMIN_CLIENTS,
     "second-client": {
       subject: "second-subject",
-      secret: "model-gateway-test-second-secret-000000000000000000",
+      secret: cannedB,
       scopes: ["model:call"]
     }
   };
@@ -628,7 +631,7 @@ test("cross-model subject quota persists over restart and denies zero provider e
   const dataRoot = first.dataRoot;
   await provision(first);
   await provisionModel(first, { modelId: "model-2", revisionRef: "price-2" });
-  const allowed = await openAiCall(first, CALL, { "idempotency-key": "durable-quota" });
+  const allowed = await openAiCall(first, CALL, { "idempotency-key": cannedDurableQuota });
   assert.equal(allowed.status, 200);
   await allowed.json();
   const denied = await openAiCall(first, { ...CALL, model: "model-2" });
@@ -641,7 +644,7 @@ test("cross-model subject quota persists over restart and denies zero provider e
   const afterRestart = await openAiCall(second, { ...CALL, model: "model-2" });
   assert.equal(afterRestart.status, 429);
   assert.equal(second.fixture.openAiCalls(), 0, "restart must preserve quota reservations");
-  const replay = await openAiCall(second, CALL, { "idempotency-key": "durable-quota" });
+  const replay = await openAiCall(second, CALL, { "idempotency-key": cannedDurableQuota });
   assert.equal(replay.status, 200);
   assert.equal(second.fixture.openAiCalls(), 0, "a completed replay consumes no new quota or paid effect");
 });

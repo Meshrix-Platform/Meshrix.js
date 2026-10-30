@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { context, createTestGateway, descriptor, route } from "../support";
+const canned1 = "auth-1";
+
+
+
 
 describe("combined bounded state under concurrent neutral traffic", () => {
   it("[GC-047 GC-048 GC-049 GC-050 partial] drains isolated queues, contexts and validators without cross-peer starvation", async () => {
@@ -11,7 +15,7 @@ describe("combined bounded state under concurrent neutral traffic", () => {
     await gateway.start();
     try {
       for (let index = 0; index < 1000; index += 1) {
-        const created = gateway.createContext({ tenant: "synthetic", principal: `subject-${index}`, grantRevision: "grant-1", credentialGeneration: "auth-1", routeRef: "peer-0" });
+        const created = gateway.createContext({ tenant: "synthetic", principal: `subject-${index}`, grantRevision: "grant-1", credentialGeneration: canned1, routeRef: "peer-0" });
         gateway.contextStore.close(created.handle);
       }
       for (let wave = 0; wave < 10; wave += 1) {

@@ -10,6 +10,23 @@ import {
   createMemoryCapabilityBindingGuard,
   normalizeCapabilityBindingContext
 } from "../../../packages/foundation/src/security/authorization/capability-binding-guard.ts";
+const canned1 = "correct horse battery staple";
+const canned2 = "wrong passphrase";
+const canned90 = "missing-key";
+const canned91 = "subject-hit-key";
+const canned3 = "subject-hit-credential";
+const canned4 = "credential-hit-key-1";
+const canned5 = "shared-credential";
+const canned6 = "credential-hit-key-2";
+const canned7 = "recovery-memory-key";
+const canned8 = "recovery-memory-credential";
+const canned9 = "lock-timeout-key";
+const canned10 = "lock-timeout-credential";
+
+
+
+
+
 const tempRoots: any[] = [];
 
 async function tempDir(prefix?: any) : Promise<any> {
@@ -53,37 +70,37 @@ describe("capability binding guard behavior", () : any => {
 
     const emptyGuard: any = createMemoryCapabilityBindingGuard({ alias: "subject hash empty result" });
     await expect(emptyGuard.invalidateCapabilityKeyBinding({})).resolves.toEqual([]);
-    await expect(emptyGuard.invalidateCapabilityKeyBinding({ capabilityKey: "missing-key" })).resolves.toEqual([]);
+    await expect(emptyGuard.invalidateCapabilityKeyBinding({ capabilityKey: canned1 })).resolves.toEqual([]);
     await expect(emptyGuard.describe()).resolves.toMatchObject({
       provider: "memory",
       securityMode: "memory",
       statePath: ""
     });
 
-    const keyGuard: any = createMemoryCapabilityBindingGuard({ alias: "subject hash key hit" });
-    await keyGuard.bindCapabilityKey({
-      key: "subject-hit-key",
-      credentialId: "subject-hit-credential",
+    const firstGuard: any = createMemoryCapabilityBindingGuard({ alias: "subject hash key hit" });
+    await firstGuard.bindCapabilityKey({
+      key: canned2,
+      credentialId: canned3,
       context: {
         namespace: "operation-permission",
         userId: "subject-hit-user"
       }
     });
 
-    const keyInvalidated: any = await keyGuard.invalidateCapabilityKeyBinding({
-      capabilityKey: "subject-hit-key",
+    const keyInvalidated: any = await firstGuard.invalidateCapabilityKeyBinding({
+      capabilityKey: canned2,
       reason: "key-revocation"
     });
     expect(keyInvalidated).toHaveLength(1);
     expect(keyInvalidated[0]).toMatchObject({
-      credentialId: "subject-hit-credential",
+      credentialId: canned3,
       invalidationReason: "key-revocation",
       status: "invalid"
     });
 
-    await expect(keyGuard.verifyCapabilityKeyBinding({
-      capabilityKey: "subject-hit-key",
-      credentialId: "subject-hit-credential",
+    await expect(firstGuard.verifyCapabilityKeyBinding({
+      capabilityKey: canned2,
+      credentialId: canned3,
       context: {
         namespace: "operation-permission",
         userId: "subject-hit-user"
@@ -93,25 +110,25 @@ describe("capability binding guard behavior", () : any => {
       reasonCode: "binding_invalid"
     });
 
-    const credentialGuard: any = createMemoryCapabilityBindingGuard({ alias: "subject hash credential hit" });
-    await credentialGuard.bindCapabilityKey({
-      key: "credential-hit-key-1",
-      credentialId: "shared-credential",
+    const secondGuard: any = createMemoryCapabilityBindingGuard({ alias: "subject hash credential hit" });
+    await secondGuard.bindCapabilityKey({
+      key: canned4,
+      credentialId: canned5,
       context: {
         namespace: "operation-permission",
         userId: "shared-user"
       }
     });
-    await credentialGuard.bindCapabilityKey({
-      key: "credential-hit-key-2",
-      credentialId: "shared-credential",
+    await secondGuard.bindCapabilityKey({
+      key: canned6,
+      credentialId: canned5,
       context: {
         namespace: "operation-permission"
       }
     });
 
-    const credentialInvalidated: any = await credentialGuard.invalidateCapabilityKeyBinding({
-      credentialId: "shared-credential",
+    const credentialInvalidated: any = await secondGuard.invalidateCapabilityKeyBinding({
+      credentialId: canned5,
       reason: "credential-revocation"
     });
     expect(credentialInvalidated).toHaveLength(2);
@@ -125,8 +142,8 @@ describe("capability binding guard behavior", () : any => {
   it("rejects unsupported recovery packages and passphrase failures", async () : Promise<any> => {
     const memoryGuard: any = createMemoryCapabilityBindingGuard({ alias: "recovery failure memory" });
     await memoryGuard.bindCapabilityKey({
-      key: "recovery-memory-key",
-      credentialId: "recovery-memory-credential",
+      key: canned7,
+      credentialId: canned8,
       context: {
         namespace: "operation-permission",
         userId: "recovery-memory-user"
@@ -138,18 +155,18 @@ describe("capability binding guard behavior", () : any => {
     );
 
     const recoveryPackage: any = await memoryGuard.exportRecoveryPackage({
-      passphrase: "correct horse battery staple",
+      passphrase: canned1,
       reason: "unit test"
     });
 
     await expect(memoryGuard.importRecoveryPackage({
       recoveryPackage: { protocolVersion: "unsupported" },
-      passphrase: "correct horse battery staple"
+      passphrase: canned1
     })).rejects.toThrow("Unsupported capability binding guard recovery package.");
 
     await expect(memoryGuard.importRecoveryPackage({
       recoveryPackage,
-      passphrase: "wrong passphrase"
+      passphrase: canned2
     })).rejects.toThrow();
 
     await expect(memoryGuard.importRecoveryPackage({
@@ -160,7 +177,7 @@ describe("capability binding guard behavior", () : any => {
           algorithm: "bogus"
         }
       },
-      passphrase: "correct horse battery staple"
+      passphrase: canned1
     })).rejects.toThrow();
 
     const localDataDir: any = await tempDir("meshrix-cap-binding-recovery-local-");
@@ -171,7 +188,7 @@ describe("capability binding guard behavior", () : any => {
     });
     await expect(localGuard.importRecoveryPackage({
       recoveryPackage,
-      passphrase: "correct horse battery staple"
+      passphrase: canned1
     })).resolves.toMatchObject({
       ok: true,
       provider: "local-file",
@@ -179,8 +196,8 @@ describe("capability binding guard behavior", () : any => {
     });
 
     await expect(localGuard.verifyCapabilityKeyBinding({
-      capabilityKey: "recovery-memory-key",
-      credentialId: "recovery-memory-credential",
+      capabilityKey: canned7,
+      credentialId: canned8,
       context: {
         namespace: "operation-permission",
         userId: "recovery-memory-user"
@@ -188,7 +205,7 @@ describe("capability binding guard behavior", () : any => {
     })).resolves.toMatchObject({
       ok: true,
       applicable: true,
-      credentialId: "recovery-memory-credential"
+      credentialId: canned8
     });
   });
 
@@ -218,8 +235,8 @@ describe("capability binding guard behavior", () : any => {
 
     try {
       await expect(lockGuard.bindCapabilityKey({
-        key: "lock-timeout-key",
-        credentialId: "lock-timeout-credential",
+        key: canned9,
+        credentialId: canned10,
         context: {
           namespace: "operation-permission",
           userId: "lock-timeout-user"

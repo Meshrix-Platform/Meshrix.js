@@ -6,6 +6,12 @@ import {
   normalizeUpstreamMcpHttpRequestHeaders,
   resolveUpstreamCredentialMaterial
 } from "@meshrix/contracts/upstream-service-publishing";
+const canned1 = "synthetic-credential";
+const canned2 = "records.read";
+const canned3 = "synthetic-material";
+const canned4 = "tools/call";
+const canned5 = "records.write";
+
 
 const secretResolution: any = vi.hoisted(() : any => ({
   resolve: vi.fn(async ({ secretRef, expectedRevision }: Record<string, any>) : Promise<any> => ({
@@ -31,12 +37,14 @@ import {
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
+
+
 describe("upstream publishing sensitive-reference custody", () : any => {
   it("shares literal context and resolved-header rules with target-neutral runtimes", () : any => {
     expect(normalizeUpstreamMcpContextHeaders({ "X-Workspace": "$WORKSPACE_ID" })).toEqual({
       "x-workspace": "$WORKSPACE_ID"
     });
-    expect(() => normalizeUpstreamMcpContextHeaders({ "X-Api-Key": "synthetic-credential" }))
+    expect(() => normalizeUpstreamMcpContextHeaders({ "X-Api-Key": canned1 }))
       .toThrow(expect.objectContaining({ code: "upstream_mcp_headers_invalid" }));
     expect(() => normalizeUpstreamMcpContextHeaders({ Host: "alternate.example.test" }))
       .toThrow(expect.objectContaining({ code: "upstream_mcp_headers_invalid" }));
@@ -58,24 +66,24 @@ describe("upstream publishing sensitive-reference custody", () : any => {
         reference: "secret://vault/first",
         revision: 3,
         origin: "https://service.invalid",
-        operationKey: "records.read",
+        operationKey: canned2,
         scopes: ["records:read"]
       },
       {
         reference: "secret://vault/second",
         revision: 4,
         origin: "https://service.invalid",
-        operationKey: "records.read",
+        operationKey: canned2,
         scopes: ["records:write"]
       }
     ];
-    const resolveSecretPayload = vi.fn(async () : Promise<any> => ({ payload: { headers: { "x-api-key": "synthetic-material" } } }));
+    const resolveSecretPayload = vi.fn(async () : Promise<any> => ({ payload: { headers: { "x-api-key": canned3 } } }));
 
     await expect(resolveUpstreamCredentialMaterial({
       bindings,
       targetOrigin: "https://service.invalid",
       tenantId: "synthetic-tenant",
-      operationKey: "records.read",
+      operationKey: canned2,
       requiredScopes: ["records:read"],
       resolveSecretPayload
     })).rejects.toMatchObject({ status: 403, reasonCode: "upstream_credential_binding_denied" });
@@ -105,7 +113,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
       bindings: [binding],
       targetOrigin: "https://service.invalid",
       tenantId: "synthetic-tenant",
-      operationKey: "records.read",
+      operationKey: canned2,
       requiredScopes: ["records:read"],
       signal,
       resolveSecretPayload
@@ -152,7 +160,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
         toolNamePrefix: "sensitive-reference-fixture"
       },
       operations: [{
-        operationKey: "tools/call",
+        operationKey: canned4,
         protocol: "mcp",
         requiredScopes: ["gateway:execute"],
         risk: "read_only"
@@ -170,7 +178,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
       expect(JSON.stringify(publicServices)).not.toContain("credential://vault/fixture");
       await expect(registry.forward({
         serviceId: "sensitive-reference-fixture",
-        operationKey: "tools/call",
+        operationKey: canned4,
         toolName: "records.read",
         arguments: {}
       }, { scopes: [] })).rejects.toMatchObject({ status: 403 });
@@ -188,7 +196,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
       reference: "secret://vault/fixture",
       revision: 7,
       use: "request-auth",
-      operationKey: "records.read",
+      operationKey: canned2,
       origin: "https://service.invalid",
       host: "service.invalid",
       protocol: "https",
@@ -202,14 +210,14 @@ describe("upstream publishing sensitive-reference custody", () : any => {
 
     const unrelated: any = await resolveCredentialMaterial({
       service,
-      operation: { operationKey: "records.write", requiredScopes: ["records:write"] }
+      operation: { operationKey: canned5, requiredScopes: ["records:write"] }
     });
     expect(unrelated).toMatchObject({ credentialRefCount: 0, resolvedCredentialRefCount: 0 });
     expect(secretResolution.resolve).not.toHaveBeenCalled();
 
     await expect(resolveCredentialMaterial({
       service,
-      operation: { operationKey: "records.read", requiredScopes: [] }
+      operation: { operationKey: canned2, requiredScopes: [] }
     })).rejects.toMatchObject({ reasonCode: "upstream_credential_binding_denied" });
     expect(secretResolution.resolve).not.toHaveBeenCalled();
 
@@ -218,13 +226,13 @@ describe("upstream publishing sensitive-reference custody", () : any => {
         ...service,
         credentialReferences: [{ ...binding, reference: "credential://provider/fixture" }]
       },
-      operation: { operationKey: "records.read", requiredScopes: ["records:read"] }
+      operation: { operationKey: canned2, requiredScopes: ["records:read"] }
     })).rejects.toMatchObject({ reasonCode: "upstream_credential_authority_unsupported" });
     expect(secretResolution.resolve).not.toHaveBeenCalled();
 
     const material: any = await resolveCredentialMaterial({
       service,
-      operation: { operationKey: "records.read", requiredScopes: ["records:read"] }
+      operation: { operationKey: canned2, requiredScopes: ["records:read"] }
     });
     expect(material).toMatchObject({ credentialRefCount: 1, resolvedCredentialRefCount: 1 });
     expect(secretResolution.resolve).toHaveBeenCalledWith(expect.objectContaining({
@@ -242,7 +250,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
     secretResolution.resolve.mockClear();
     const otherOrigin: any = await resolveCredentialMaterial({
       service,
-      operation: { operationKey: "records.read", requiredScopes: ["records:read"] },
+      operation: { operationKey: canned2, requiredScopes: ["records:read"] },
       targetUrl: new URL("https://service.invalid:8443/api")
     });
     expect(otherOrigin).toMatchObject({ credentialRefCount: 0, resolvedCredentialRefCount: 0 });
@@ -266,7 +274,7 @@ describe("upstream publishing sensitive-reference custody", () : any => {
           url: "https://service.invalid:443/mcp"
         }
       },
-      operation: { operationKey: "tools/call", requiredScopes: ["gateway:read"] }
+      operation: { operationKey: canned4, requiredScopes: ["gateway:read"] }
     });
 
     expect(config.headers).toHaveProperty("authorization");

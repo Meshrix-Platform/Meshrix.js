@@ -11,6 +11,11 @@ import path from "node:path";
 import { afterEach } from "vitest";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "read";
+const canned2 = "write";
+
+
+
 
 const roots: any[] = [];
 
@@ -30,7 +35,7 @@ function serviceEntry({
   revision = 1,
   disabled = false,
   operations = [{
-    operationKey: "read",
+    operationKey: canned1,
     method: "GET",
     path: "/read",
     risk: "read_only",
@@ -289,7 +294,7 @@ describe("upstream manifest snapshot commit", () : any => {
       serviceEntry({
         revision: 3,
         operations: [{
-          operationKey: "write",
+          operationKey: canned2,
           method: "POST",
           path: "/write",
           risk: "safe_write",
@@ -478,7 +483,7 @@ describe("upstream manifest snapshot commit", () : any => {
     const candidate: any = snapshot(4, [serviceEntry({
       revision: 4,
       operations: [{
-        operationKey: "read",
+        operationKey: canned1,
         method: "GET",
         path: "/read",
         risk: "read_only",

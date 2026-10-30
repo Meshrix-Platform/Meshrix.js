@@ -9,6 +9,13 @@ import {
 } from "../../../packages/protocols/http/http-utils.ts";
 import { createHttpServerRequestHandler } from "../../../apps/server/runtime/http-server-routes.ts";
 import { UPLOAD_SESSION_MAX_CHUNK_BYTES } from "../../../packages/server-runtime/src/state/upload-session-admission.ts";
+const canned1 = "subject-a";
+const canned2 = "subject-b";
+const canned3 = "tenant-a";
+const canned4 = "tenant-b";
+
+
+
 
 class CapturedResponse extends EventEmitter {
   chunks: any;
@@ -239,14 +246,14 @@ describe("HTTP request body admission", () : any => {
     const held: any = readRequestBody(heldRequest, {
       admissionController: admission,
       contentLength: 4,
-      subjectKey: "subject-a"
+      subjectKey: canned1
     });
 
     expect(admission.getUsage().inFlightBytes).toBe(4);
     await expect(readRequestBody(Readable.from([Buffer.from("abc")]), {
       admissionController: admission,
       contentLength: 3,
-      subjectKey: "subject-b"
+      subjectKey: canned2
     })).rejects.toMatchObject({
       code: "request_body_global_byte_capacity_exceeded",
       statusCode: 429
@@ -259,7 +266,7 @@ describe("HTTP request body admission", () : any => {
     await expect(readRequestBody(Readable.from([Buffer.from("abc")]), {
       admissionController: admission,
       contentLength: 3,
-      subjectKey: "subject-b"
+      subjectKey: canned2
     })).resolves.toEqual(Buffer.from("abc"));
     expect(admission.getUsage().inFlightRequests).toBe(0);
   });
@@ -273,7 +280,7 @@ describe("HTTP request body admission", () : any => {
     await expect(readRequestBody(Readable.from([]), {
       admissionController: admission,
       contentLength: DEFAULT_MAX_BODY_BYTES + 1,
-      subjectKey: "subject-a"
+      subjectKey: canned1
     })).rejects.toMatchObject({
       code: "request_body_too_large",
       statusCode: 413
@@ -298,7 +305,7 @@ describe("HTTP request body admission", () : any => {
       admissionController: admission,
       contentLength: 0,
       maxBytes: 8,
-      subjectKey: "subject-a"
+      subjectKey: canned1
     })).rejects.toMatchObject({
       code: "request_body_global_byte_capacity_exceeded",
       statusCode: 429
@@ -322,7 +329,7 @@ describe("HTTP request body admission", () : any => {
     const reading: any = readRequestBody(disconnectedRequest, {
       admissionController: admission,
       contentLength: 5,
-      subjectKey: "subject-a"
+      subjectKey: canned1
     });
 
     expect(admission.getUsage().inFlightBytes).toBe(5);
@@ -350,15 +357,15 @@ describe("HTTP request body admission", () : any => {
     const held: any = readRequestBody(heldRequest, {
       admissionController: requestAdmission,
       contentLength: 4,
-      tenantKey: "tenant-a",
-      subjectKey: "subject-a"
+      tenantKey: canned3,
+      subjectKey: canned1
     });
 
     await expect(readRequestBody(Readable.from([Buffer.from("x")]), {
       admissionController: requestAdmission,
       contentLength: 1,
-      tenantKey: "tenant-a",
-      subjectKey: "subject-b"
+      tenantKey: canned3,
+      subjectKey: canned2
     })).rejects.toMatchObject({
       code: "request_body_tenant_request_capacity_exceeded",
       statusCode: 429
@@ -366,8 +373,8 @@ describe("HTTP request body admission", () : any => {
     await expect(readRequestBody(Readable.from([Buffer.from("data")]), {
       admissionController: requestAdmission,
       contentLength: 4,
-      tenantKey: "tenant-b",
-      subjectKey: "subject-b"
+      tenantKey: canned4,
+      subjectKey: canned2
     })).resolves.toEqual(Buffer.from("data"));
 
     expect(requestAdmission.getUsage()).toMatchObject({
@@ -398,8 +405,8 @@ describe("HTTP request body admission", () : any => {
       admissionController: requestAdmission,
       contentLength: 0,
       maxBytes: 8,
-      tenantKey: "tenant-a",
-      subjectKey: "subject-a"
+      tenantKey: canned3,
+      subjectKey: canned1
     })).rejects.toMatchObject({
       code: "request_body_tenant_byte_capacity_exceeded",
       statusCode: 429

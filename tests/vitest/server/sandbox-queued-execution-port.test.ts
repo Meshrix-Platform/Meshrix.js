@@ -4,6 +4,11 @@ import {
   SANDBOX_EXECUTION_QUEUE_DEFINITION_ID,
   createQueuedSandboxExecutionPort
 } from "../../../packages/server-runtime/src/execution-sandbox/queued-execution-port.ts";
+const canned1 = "private-idempotency-value";
+const canned2 = "replay-key";
+
+
+
 
 function queueApplicationFixture() : any {
   let registration: any;
@@ -58,7 +63,7 @@ describe("queued SandboxExecutionPort", () : any => {
     const port: any = await createQueuedSandboxExecutionPort({ broker, queueApplicationPort });
     const request: Record<string, any> = {
       schemaVersion: "fixture/1",
-      idempotencyKey: "private-idempotency-value",
+      idempotencyKey: canned1,
       deadlineAt: "2099-01-01T00:00:00.000Z",
       payload: { protected: "must-not-enter-queue" }
     };
@@ -91,7 +96,7 @@ describe("queued SandboxExecutionPort", () : any => {
     const port: any = await createQueuedSandboxExecutionPort({ broker, queueApplicationPort });
     const request: Record<string, any> = {
       schemaVersion: "fixture/1",
-      idempotencyKey: "replay-key",
+      idempotencyKey: canned2,
       deadlineAt: "2099-01-01T00:00:00.000Z"
     };
 

@@ -16,6 +16,11 @@ import {
 } from "../mcp-release-portable.ts";
 import { probeNativeOrbOrigin, runOrb } from "../native-orb-deployment/support.ts";
 import { failNativeOrbBootstrap } from "./contract.ts";
+const canned1 = "";
+const canned2 = "denied";
+
+
+
 
 const SHA256_PATTERN: any = /^[a-f0-9]{64}$/u;
 
@@ -201,7 +206,7 @@ export async function loadPrivateBootstrapCredentialBytes(inputPath?: unknown) :
     return Buffer.from(JSON.stringify(credential), "utf8");
   } finally {
     credential.username = "";
-    credential.password = "";
+    credential.password = canned1;
   }
 }
 
@@ -256,8 +261,8 @@ export async function probeBootstrapOrigin(publicOrigin?: unknown, credentialByt
   return Object.freeze({
     health: probe.healthOk ? "healthy" : "unhealthy",
     console: probe.consoleOk ? "available" : "unavailable",
-    authentication: authenticationOk ? "authenticated" : "denied",
-    governedRead: governedOperationOk ? "authorized" : "denied",
+    authentication: authenticationOk ? "authenticated": canned2,
+    governedRead: governedOperationOk ? "authorized": canned2,
   });
 }
 

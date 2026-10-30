@@ -3,12 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applyGatewayMigration, previewGatewayMigration } from "../../../../tools/server-scripts/migrate-gateway-config.ts";
+const canned1 = "demo";
+
+
+
 
 describe("gateway configuration migration", () => {
   it("[CASE-D01] [CASE-D02] previews changes without writing and applies with revision fencing and backup", async () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-gateway-migration-"));
     const input = join(directory, "gateway.json");
-    await writeFile(input, `${JSON.stringify({ services: [{ serviceKey: "demo", endpoint: "https://example.com", rpcMethod: "POST" }] })}\n`, { mode: 0o600 });
+    await writeFile(input, `${JSON.stringify({ services: [{ serviceKey: canned1, endpoint: "https://example.com", rpcMethod: "POST" }] })}\n`, { mode: 0o600 });
     const preview = await previewGatewayMigration(input);
     expect(preview.changed).toEqual(["services[0].serviceKey->serviceId", "services[0].endpoint->baseUrl", "services[0].rpcMethod->method", "schemaVersion"]);
     expect(JSON.parse(await readFile(input, "utf8"))).not.toHaveProperty("schemaVersion");

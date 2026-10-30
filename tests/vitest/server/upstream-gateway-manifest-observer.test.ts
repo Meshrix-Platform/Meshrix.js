@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import { createUpstreamManifestObserver } from "../../../packages/agents/src/upstream-gateway/manifest-observer.ts";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+const canned1 = "read";
+const canned2 = "tools/call";
+
+
+
 
 function record({
   revision = 1,
   state = "publishing",
   serviceProtocol = "http",
   operations = [{
-    operationKey: "read",
+    operationKey: canned1,
     method: "GET",
     path: "/read",
     payloadTransport: structuredJsonPayloadTransport()
@@ -63,7 +68,7 @@ describe("upstream manifest observer", () : any => {
           reference: "secret://vault/read",
           revision: 3,
           use: "request-auth",
-          operationKey: "read",
+          operationKey: canned1,
           host: "service.invalid",
           protocol: "https",
           scopes: Object.freeze(["gateway:read"])
@@ -80,11 +85,11 @@ describe("upstream manifest observer", () : any => {
     expect(Object.isFrozen(accepted.serviceEntries[0])).toBe(true);
     expect(accepted.serviceEntries[0][1]).toMatchObject({
       serviceRevision: 1,
-      operations: [{ operationKey: "read", method: "GET", path: "/read" }],
+      operations: [{ operationKey: canned1, method: "GET", path: "/read" }],
       credentialReferences: [{
         reference: "secret://vault/read",
         revision: 3,
-        operationKey: "read",
+        operationKey: canned1,
         origin: "https://service.invalid",
         host: "service.invalid",
         protocol: "https",
@@ -103,8 +108,8 @@ describe("upstream manifest observer", () : any => {
       readerPort: {
         getSnapshot: async () : Promise<any> => snapshot(1, [record({
           operations: [
-            { operationKey: "read", method: "GET", path: "/first" },
-            { operationKey: "read", method: "GET", path: "/second" }
+            { operationKey: canned1, method: "GET", path: "/first" },
+            { operationKey: canned1, method: "GET", path: "/second" }
           ]
         })])
       },
@@ -138,7 +143,7 @@ describe("upstream manifest observer", () : any => {
       serviceProtocol: "mcp",
       mcp: { transport: "http" },
       operations: [{
-        operationKey: "tools/call",
+        operationKey: canned2,
         protocol: "mcp"
       }]
     });
@@ -316,7 +321,7 @@ describe("upstream manifest observer", () : any => {
     const candidates: any[] = [];
     const current: any = snapshot(1, [record({
       operations: [{
-        operationKey: "read",
+        operationKey: canned1,
         method: "POST",
         path: "/read",
         requestSchema: { type: "object", properties: { query: { type: "string" } } },

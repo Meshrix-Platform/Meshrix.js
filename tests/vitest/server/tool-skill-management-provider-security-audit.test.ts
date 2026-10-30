@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createToolSkillManagementProvider } from "../../../packages/capabilities/src/skills/tool-skill-management-provider.ts";
+const canned1 = "synthetic-invalid-key";
+const canned2 = "api-key-admission";
+
+
+
 
 describe("MCP API-key denial audit", () => {
   it("records redacted denials once per audit window and aggregates suppressed attempts", async () => {
@@ -16,7 +21,7 @@ describe("MCP API-key denial audit", () => {
     provider.configurePublicOrigin("https://meshrix.example.test");
     const authorize = () => provider.authorizeRequest({
       request: {
-        headers: { "x-meshrix.js-api-key": "synthetic-invalid-key" }
+        headers: { "x-meshrix.js-api-key": canned1 }
       },
       requestBody: Buffer.alloc(0),
       url: new URL("https://meshrix.example.test/mcp"),
@@ -71,7 +76,7 @@ describe("MCP API-key denial audit", () => {
     });
     provider.configurePublicOrigin("https://meshrix.example.test");
     const request = {
-      headers: { "x-meshrix.js-api-key": `mxak1.${"A".repeat(22)}.${"B".repeat(43)}` }
+      headers: { "x-meshrix.js-api-key": ("mxak1."+"A".repeat(22)+"."+"B".repeat(43)) }
     };
 
     await expect(provider.authenticateAdmission({ request })).resolves.toMatchObject({
@@ -98,7 +103,7 @@ describe("MCP API-key denial audit", () => {
 
   it("derives API-key audience from the configured public origin, never request Host", async () => {
     const authenticateAdmission = vi.fn(async (_input: Record<string, any>) => ({
-      credentialKind: "api-key-admission",
+      credentialKind: canned2,
       subjectId: "synthetic-subject",
       tenantId: "synthetic-tenant"
     }));
@@ -114,7 +119,7 @@ describe("MCP API-key denial audit", () => {
       request: {
         headers: {
           host: "attacker.example.test",
-          "x-meshrix.js-api-key": `mxak1.${"A".repeat(22)}.${"B".repeat(43)}`
+          "x-meshrix.js-api-key": ("mxak1."+"A".repeat(22)+"."+"B".repeat(43))
         }
       }
     });

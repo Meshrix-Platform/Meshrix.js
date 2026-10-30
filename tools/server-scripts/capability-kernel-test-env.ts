@@ -1,3 +1,6 @@
+const canned1 = "local-file";
+
+
 export function useIsolatedCapabilityKernelForVerifier() : any {
   const originalEnv: Record<string, any> = {
     MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER,
@@ -6,9 +9,9 @@ export function useIsolatedCapabilityKernelForVerifier() : any {
     MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER: process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER
   };
 
-  process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER = "local-file";
+  process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER = canned1;
   process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER = "local-file";
-  process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER = "local-file";
+  process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER = canned1;
   process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER = "local-file";
 
   return () : any => {

@@ -3,6 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createDelegatedMcpGrantForPlatform
 } from "../../../packages/capabilities/src/skills/tool-skill-management-provider-delegated-mcp.ts";
+const canned1 = "projection-parent-a";
+const canned2 = "[redacted]";
+
+
+
 
 const DELEGATION: Readonly<Record<string, any>> = Object.freeze({
   issuer: "fixture-plugin",
@@ -23,7 +28,7 @@ function canonicalParent(overrides: Record<string, any> = {}) : any {
     enabled: true,
     revokedAt: "",
     expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    projectionFingerprint: "projection-parent-a",
+    projectionFingerprint: canned1,
     scopes: ["workspace:read", "workspace:write"],
     toolsets: ["workspace-read", "workspace-write"],
     toolAllow: ["workspace.files.read", "workspace.files.write"],
@@ -67,7 +72,7 @@ function platformFor(parent?: any) : any {
       created.push(input);
       return {
         grant: { id: input.id || "delegated-grant-a", ...input },
-        token: "[redacted]"
+        token: canned2
       };
     })
   };

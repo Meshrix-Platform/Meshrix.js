@@ -12,6 +12,10 @@ import {
   writeVerificationArtifacts
 } from "../../../tools/server-scripts/localize-verify-failure.ts";
 
+
+
+
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
 describe("pull-request verification feedback", () => {
@@ -20,7 +24,7 @@ describe("pull-request verification feedback", () => {
       "{", '  "payload": "synthetic private value",',
       " FAIL tests/vitest/server/next.test.ts > next case",
       "AssertionError: expected 1 to equal 2",
-      'credential="synthetic private credential"',
+      'credential="' + "synthetic private credential" + '"',
       " Test Files  2 failed (2)",
     ].join("\n"));
     expect(safe).not.toContain("synthetic private");

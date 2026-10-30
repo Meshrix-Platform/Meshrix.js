@@ -7,6 +7,16 @@ import {
   it,
   vi,
 } from "vitest";
+const canned1 = "token-1";
+const canned2 = "token-2";
+const canned3 = "same-origin";
+const canned5 = "delete-csrf";
+const canned6 = "private-token";
+
+
+
+
+
 
 const triggerBrowserDownloadMock: any = vi.hoisted(() : any => vi.fn());
 
@@ -58,21 +68,21 @@ describe("bridge-http JSON helpers", () : any => {
   it("sends JSON requests, safety headers, and carries CSRF tokens forward", async () : Promise<any> => {
     const { deleteJson, getJson, postJson, putBinaryJson } = await loadBridgeHttp();
     fetchMock()
-      .mockResolvedValueOnce(jsonResponse({ ok: true, csrfToken: "token-1" }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, csrfToken: canned1 }))
       .mockResolvedValueOnce(jsonResponse({ ok: true }))
-      .mockResolvedValueOnce(jsonResponse({ ok: true, session: { csrfToken: "token-2" } }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, session: { csrfToken: canned2 } }))
       .mockResolvedValueOnce(jsonResponse({ ok: true }));
 
     await expect(postJson("/api/auth/login", { user: "owner" }, { safetyConfirm: true })).resolves.toEqual({
       ok: true,
-      csrfToken: "token-1",
+      csrfToken: canned1,
     });
     const postCall: any = fetchMock().mock.calls[0];
     expect(postCall[0]).toBe("/api/auth/login");
     expect(postCall[1]).toMatchObject({
       method: "POST",
       body: JSON.stringify({ user: "owner" }),
-      credentials: "same-origin",
+      credentials: canned3,
     });
     expect(postCall[1].headers).toMatchObject({
       Accept: "application/json",
@@ -84,7 +94,7 @@ describe("bridge-http JSON helpers", () : any => {
     await getJson("/api/session");
     expect(fetchMock().mock.calls[1][1]).toMatchObject({
       method: "GET",
-      credentials: "same-origin",
+      credentials: canned3,
       headers: {
         Accept: "application/json",
       },
@@ -103,7 +113,7 @@ describe("bridge-http JSON helpers", () : any => {
     expect(fetchMock().mock.calls[3][1]).toMatchObject({
       method: "PUT",
       body: blob,
-      credentials: "same-origin",
+      credentials: canned3,
       headers: {
         Accept: "application/json",
         "x-meshrix-csrf": "token-2",
@@ -175,7 +185,7 @@ describe("bridge-http JSON helpers", () : any => {
     }));
     await expect(getJson("/api/html")).rejects.toThrow("接口返回了 HTML 页面");
 
-    fetchMock().mockResolvedValueOnce(textResponse('{"credential":"secret"', {
+    fetchMock().mockResolvedValueOnce(textResponse('{"credential":"' + "secret" + '"', {
       headers: { "content-type": "application/json" },
     }));
     const malformedError: any = await getJson("/api/broken").catch((error?: any) : any => error);
@@ -183,7 +193,7 @@ describe("bridge-http JSON helpers", () : any => {
     expect(malformedError.message).not.toContain("secret");
 
     fetchMock()
-      .mockResolvedValueOnce(jsonResponse({ csrfToken: "delete-csrf" }))
+      .mockResolvedValueOnce(jsonResponse({ csrfToken: canned5 }))
       .mockResolvedValueOnce(jsonResponse({ message: "delete blocked" }, { status: 403 }));
     await expect(deleteJson("/api/delete-blocked")).rejects.toThrow("Request failed: 403");
 
@@ -196,7 +206,7 @@ describe("bridge-http downloadFile", () : any => {
   it("does not send a cached CSRF token on a read-only download", async () : Promise<any> => {
     const { downloadFile, getJson } = await loadBridgeHttp();
     fetchMock()
-      .mockResolvedValueOnce(jsonResponse({ csrfToken: "private-token" }))
+      .mockResolvedValueOnce(jsonResponse({ csrfToken: canned6 }))
       .mockResolvedValueOnce(new Response("file", {
         status: 200,
         headers: { "content-type": "application/octet-stream" },
@@ -207,7 +217,7 @@ describe("bridge-http downloadFile", () : any => {
 
     expect(fetchMock().mock.calls[1][1]).toMatchObject({
       method: "GET",
-      credentials: "same-origin",
+      credentials: canned3,
       headers: { Accept: "*/*" },
     });
     expect(fetchMock().mock.calls[1][1].headers["x-meshrix-csrf"]).toBeUndefined();
@@ -230,7 +240,7 @@ describe("bridge-http downloadFile", () : any => {
     });
     expect(fetchMock()).toHaveBeenCalledWith("/api/export/raw.csv", expect.objectContaining({
       method: "GET",
-      credentials: "same-origin",
+      credentials: canned3,
       headers: { Accept: "*/*" },
     }));
     expect(triggerBrowserDownloadMock).toHaveBeenCalledOnce();

@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "convert";
+const canned2 = "caller-secret-must-not-forward";
+
+
+
 
 const cleanup: any[] = [];
 
@@ -38,7 +43,7 @@ function registryFor(baseUrl?: any, maxBytes: any = 1024 * 1024) : any {
     baseUrl,
     allowLocalNetwork: true,
     operations: [{
-      operationKey: "convert",
+      operationKey: canned1,
       method: "POST",
       path: "/convert",
       risk: "safe_write",
@@ -74,11 +79,11 @@ describe("native upstream payload transit", () : any => {
     const received: any[] = [];
     const result: any = await registry.forwardHttpStream({
       serviceId: "binary-fixture",
-      operationKey: "convert",
+      operationKey: canned1,
       requestHeaders: {
         "content-type": "application/octet-stream",
         "content-encoding": "identity",
-        authorization: "caller-secret-must-not-forward",
+        authorization: canned2,
         host: "caller.invalid"
       },
       contentLength: null,
@@ -110,7 +115,7 @@ describe("native upstream payload transit", () : any => {
     const registry: any = registryFor(baseUrl, 8);
     const invoke: any = (contentLength?: any, requestStream?: any) : any => registry.forwardHttpStream({
       serviceId: "binary-fixture",
-      operationKey: "convert",
+      operationKey: canned1,
       requestHeaders: { "content-type": "application/octet-stream" },
       contentLength,
       requestStream
@@ -139,7 +144,7 @@ describe("native upstream payload transit", () : any => {
     const controller: any = new AbortController();
     await expect(registry.forwardHttpStream({
       serviceId: "binary-fixture",
-      operationKey: "convert",
+      operationKey: canned1,
       requestHeaders: { "content-type": "application/octet-stream" },
       contentLength: 1,
       requestStream: Readable.from([Buffer.from("x")])
@@ -175,7 +180,7 @@ describe("native upstream payload transit", () : any => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const forwarding: any = registry.forwardHttpStream({
       serviceId: "binary-fixture",
-      operationKey: "convert",
+      operationKey: canned1,
       requestHeaders: { "content-type": "application/octet-stream" },
       contentLength: 1,
       requestStream: Readable.from([Buffer.from("x")])

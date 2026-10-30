@@ -25,6 +25,13 @@ import {
   createSqliteWorkQueueStore,
   createFixedQueueTimeSource
 } from "../../../packages/foundation/src/work-queue/index.ts";
+const canned1 = "fixed-seed";
+const canned2 = "payload-bound";
+const canned3 = "payload-invalid";
+const canned4 = "immutable-request";
+
+
+
 
 const roots: any[] = [];
 
@@ -217,7 +224,7 @@ describe("work queue scheduling policy", () : any => {
       initialDelayMs: 100,
       multiplier: 2,
       maxDelayMs: 10_000,
-      retrySeed: "fixed-seed",
+      retrySeed: canned1,
       maxJitterBps: 2000
     };
     const first: any = computeDeterministicRetryDelay(input);
@@ -695,7 +702,7 @@ describe("work queue scheduling policy", () : any => {
     const base: any = fixture.registry.resolveQueueDefinitionForEnqueue({
       queueDefinitionId: fixture.definition.queueDefinitionId,
       scope: {},
-      dedupeKey: "payload-bound"
+      dedupeKey: canned2
     });
     expect(() : any => fixture.store.enqueue({
       ...base,
@@ -711,7 +718,7 @@ describe("work queue scheduling policy", () : any => {
     expect(() : any => fixture.store.enqueue({
       ...base,
       workItemId: "payload-invalid",
-      dedupeKey: "payload-invalid",
+      dedupeKey: canned3,
       payloadRef: circular
     })).toThrow(expect.objectContaining({ code: "work_queue_payload_ref_invalid" }));
     expect(fixture.store.inspect({ queueDefinitionId: fixture.definition.queueDefinitionId }).items)
@@ -749,7 +756,7 @@ describe("work queue scheduling policy", () : any => {
     const request: any = fixture.registry.resolveQueueDefinitionForEnqueue({
       queueDefinitionId: fixture.definition.queueDefinitionId,
       scope: { tenantId: "tenant-a" },
-      dedupeKey: "immutable-request"
+      dedupeKey: canned4
     });
     fixture.store.enqueue({
       ...request,

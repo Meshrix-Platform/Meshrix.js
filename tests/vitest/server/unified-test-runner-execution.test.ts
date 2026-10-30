@@ -30,6 +30,11 @@ import {
   type TestExecutionPhase,
   type TestSuiteEntry
 } from "../../../tools/scripts/lib/unified-test-runner-execution.ts";
+const canned1 = "fingerprint-a";
+const canned2 = "fingerprint-b";
+
+
+
 
 function suite(id: string): TestSuiteEntry {
   return {
@@ -124,7 +129,7 @@ describe("unified test runner execution lifecycle", () : any => {
   it("reuses a passed result only when its recorded input fingerprint matches", async () => {
     const rootDir = path.resolve("test-root");
     const temporarySuite = { ...suite("fixture.temp-files"), sideEffects: "temp-files" };
-    const fingerprint = "fingerprint-a";
+    const fingerprint = canned1;
 
     expect(await isCachedTestResultReusable(
       temporarySuite,
@@ -135,7 +140,7 @@ describe("unified test runner execution lifecycle", () : any => {
     // A changed input, an unrecorded fingerprint, and an absent expectation all refuse reuse.
     expect(await isCachedTestResultReusable(
       temporarySuite,
-      { status: "passed", inputFingerprint: "fingerprint-b" },
+      { status: "passed", inputFingerprint: canned2 },
       { rootDir, inputFingerprint: fingerprint }
     )).toBe(false);
     expect(await isCachedTestResultReusable(
@@ -152,7 +157,7 @@ describe("unified test runner execution lifecycle", () : any => {
 
   it("validates prepared release archives even when the input fingerprint matches", async () => {
     const rootDir = path.resolve("test-root");
-    const fingerprint = "fingerprint-a";
+    const fingerprint = canned1;
     const cached = { status: "passed", inputFingerprint: fingerprint };
     const prepareSuite: TestSuiteEntry = {
       id: "release.npm-package-prepare",

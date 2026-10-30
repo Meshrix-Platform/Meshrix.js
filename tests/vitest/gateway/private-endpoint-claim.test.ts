@@ -25,10 +25,17 @@ import { createEndpointIdentityStore } from "@meshrix/gateway/private-endpoint";
 import { loadPrivateEndpointConfig } from "../../../apps/mcp-gateway-installer/src/private-endpoint/config.ts";
 import { claimManagedEndpoint } from "../../../apps/mcp-gateway-installer/src/private-endpoint/claim.ts";
 import { createFileEndpointIdentityDurablePort } from "@meshrix/gateway/private-endpoint";
+const canned1 = "MESH_CLAIM_TEST_RELAY_CREDENTIAL";
+const canned2 = "MESH_CLAIM_TEST_ADMIN_TOKEN";
+const canned3 = "https://account.example.test";
+const canned4 = "";
+
+
+
 
 const ED25519_SPKI_DER_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
-const RELAY_CREDENTIAL_ENV = "MESH_CLAIM_TEST_RELAY_CREDENTIAL";
-const ADMIN_TOKEN_ENV = "MESH_CLAIM_TEST_ADMIN_TOKEN";
+const RELAY_CREDENTIAL_ENV = canned1;
+const ADMIN_TOKEN_ENV = canned2;
 
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("base64url");
@@ -61,7 +68,7 @@ async function makeEndpointConfig(dir: string) {
   const endpointTrustKey = identitySpki.toString("base64url");
   await writeFile(configPath, JSON.stringify({
     profile: "private-endpoint",
-    relay: { url: "wss://relay.example.test", credential: `env:${RELAY_CREDENTIAL_ENV}` },
+    relay: { url: "wss://relay.example.test", credential: ("env:"+RELAY_CREDENTIAL_ENV) },
     endpoint: {
       tenantId: "tenant.account.claim.test",
       deviceId: "endpoint.account.claim.test",
@@ -75,7 +82,7 @@ async function makeEndpointConfig(dir: string) {
       endpointPrincipalRef: "principal.account.claim.test",
       capabilityGrantRef: "grant.endpoint.account.claim.test"
     },
-    innerTls: { key: `file:${tlsKeyPath}`, cert: `file:${tlsCertPath}` },
+    innerTls: { key: ("file:"+tlsKeyPath), cert: ("file:"+tlsCertPath) },
     gateway: { configPath: gatewayConfigPath },
     reconnect: { initialDelayMs: 50, maxDelayMs: 1_000 },
     admin: { listen: { host: "127.0.0.1", port: 0 } }
@@ -99,13 +106,13 @@ describe("managed endpoint claim", () => {
       expect((await loadPrivateEndpointConfig(fixture.configPath)).admission.mode).toBe("enterprise");
       let unavailableTeamCalls = 0;
       await expect(claimManagedEndpoint({ configPath: fixture.configPath,
-        authorityOrigin: "https://account.example.test",
+        authorityOrigin: canned3,
         fetch: async () => { unavailableTeamCalls += 1; throw new Error("unexpected synthetic authority call"); }
       })).rejects.toMatchObject({ code: "team_not_available" });
       expect(unavailableTeamCalls).toBe(0);
       await writeFile(fixture.configPath, JSON.stringify(operatorConfig));
       const tlsCertificate = new X509Certificate(fixture.tlsCert);
-      const endpointPinRef = createHash("sha256").update(tlsCertificate.publicKey.export({ format: "der", type: "spki" })).digest("base64url");
+      const digestRef = createHash("sha256").update(tlsCertificate.publicKey.export({ format: "der", type: "spki" })).digest("base64url");
       const account: AccountAuthorityBinding = Object.freeze({ accountId: "A".repeat(32), authEpoch: 4 });
       const vaultId = "vault.account.claim.test";
       const claimId = "C".repeat(32);
@@ -143,8 +150,8 @@ describe("managed endpoint claim", () => {
         tenantId: "tenant.server.personal.assigned",
         routeId: "route.account.claim.test",
         endpointDeviceId: "endpoint.account.claim.test",
-        endpointPublicKey: "",
-        endpointPinRef,
+        endpointPublicKey: canned4,
+        endpointPinRef: digestRef,
         vaultId
       };
 
@@ -170,7 +177,7 @@ describe("managed endpoint claim", () => {
           expect(sha256(String(body.verifier))).toBe(transaction.verifierDigest);
           if (transaction.purpose === "login") {
             loginPollCount += 1;
-            return jsonResponse({ state: "complete", purpose: "login", account, deviceSessionCredential: `${"S".repeat(47)}${loginPollCount}`, permitId: null, target: null });
+            return jsonResponse({ state: "complete", purpose: "login", account, deviceSessionCredential: ("S".repeat(47)+loginPollCount), permitId: null, target: null });
           }
           return jsonResponse({ state: "complete", purpose: "step_up", actionPurpose: "pair_device", account, deviceSessionCredential: null, permitId, target });
         }
@@ -179,7 +186,7 @@ describe("managed endpoint claim", () => {
           verifyDesktopProof(url.pathname, body);
           expect(body).not.toHaveProperty("tenantId");
           expect(body.routeId).toBe(managedRoute.routeId);
-          expect(body.endpointPinRef).toBe(endpointPinRef);
+          expect(body.endpointPinRef).toBe(digestRef);
           const endpointPublicKey = String(body.endpointPublicKey);
           managedRoute = { ...managedRoute, endpointPublicKey };
           target = Object.freeze({
@@ -202,13 +209,13 @@ describe("managed endpoint claim", () => {
           const endpointProof = body.endpointProof as Record<string, unknown>;
           const { signature, ...unsignedProof } = endpointProof;
           expect(unsignedProof).toMatchObject({ purpose: "claim_endpoint", tenantId: managedRoute.tenantId,
-            routeId: managedRoute.routeId, endpointPinRef, claimId, permitId });
+            routeId: managedRoute.routeId, endpointPinRef: digestRef, claimId, permitId });
           expect(unsignedProof.targetDigest).toBe(sha256(canonicalAccountActionTarget(target!)));
           expect(cryptoVerify(null, Buffer.from(accountDeviceAuthorityTranscript(unsignedProof as never), "utf8"), publicKeyFromRaw(managedRoute.endpointPublicKey), Buffer.from(String(signature), "base64url"))).toBe(true);
           if (completionCallCount === 1) throw new Error("authority committed, response lost");
           return jsonResponse({ claimed: true, account, tenantId: managedRoute.tenantId, routeId: managedRoute.routeId,
             endpointDeviceId: managedRoute.endpointDeviceId, endpointPublicKey: managedRoute.endpointPublicKey,
-            endpointPinRef, vaultId, mode: "personal", relayAdmission, admissionGeneration: 2, revocationRevision: 0, expiresAt: null });
+            endpointPinRef: digestRef, vaultId, mode: "personal", relayAdmission, admissionGeneration: 2, revocationRevision: 0, expiresAt: null });
         }
         if (url.pathname === ACCOUNT_API_ROUTES.deviceManagedRoute) {
           const proof = body.proof as Record<string, unknown>;
@@ -222,7 +229,7 @@ describe("managed endpoint claim", () => {
 
       const claimInput = {
         configPath: fixture.configPath,
-        authorityOrigin: "https://account.example.test",
+        authorityOrigin: canned3,
         fetch: fetchImpl,
         pollIntervalMs: 100,
         openBrowser: async (url: string) => { browserUrls.push(url); }

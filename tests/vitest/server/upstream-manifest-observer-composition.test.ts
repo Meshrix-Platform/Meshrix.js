@@ -14,6 +14,14 @@ import { createOperationPermissionPlatform } from "../../../packages/capabilitie
 import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.ts";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "observed";
+const canned2 = "compose-create";
+const canned3 = "read";
+const canned4 = "restart-valid";
+const canned5 = "restart-valid-create";
+
+
+
 
 const roots: any[] = [];
 
@@ -68,16 +76,16 @@ describe("upstream manifest observer composition", () : any => {
     const created: any = await application.execute(JSON.stringify({
       schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
       action: "create",
-      serviceKey: "observed",
+      serviceKey: canned1,
       expectedServiceRevision: 0,
       expectedSetRevision: 0,
-      idempotencyKey: "compose-create",
+      idempotencyKey: canned2,
       descriptor: {
         serviceProtocol: "http",
         baseUrl: "https://service.invalid:443",
         references: [],
         operations: [{
-          operationKey: "read", method: "GET", path: "/read",
+          operationKey: canned3, method: "GET", path: "/read",
           payloadTransport: structuredJsonPayloadTransport()
         }]
       }
@@ -117,16 +125,16 @@ describe("upstream manifest observer composition", () : any => {
     const created: any = await application.execute(JSON.stringify({
       schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
       action: "create",
-      serviceKey: "restart-valid",
+      serviceKey: canned4,
       expectedServiceRevision: 0,
       expectedSetRevision: 0,
-      idempotencyKey: "restart-valid-create",
+      idempotencyKey: canned5,
       descriptor: {
         serviceProtocol: "http",
         baseUrl: "https://service.invalid:443",
         references: [],
         operations: [{
-          operationKey: "read", method: "GET", path: "/read",
+          operationKey: canned3, method: "GET", path: "/read",
           payloadTransport: structuredJsonPayloadTransport()
         }]
       }

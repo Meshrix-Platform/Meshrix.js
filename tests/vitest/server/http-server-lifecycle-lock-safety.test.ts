@@ -12,6 +12,10 @@ import {
   registerPluginOwnerGrantLifecycle,
   resolveToolSkillPublicOrigin
 } from "../../../packages/server-runtime/src/composition/http-application-assembly.ts";
+const canned1 = "fixture-disable";
+
+
+
 
 function createHarness({ openAdmission = true, transportLimits = {} }: Record<string, any> = {}) : any {
   const server: any = new EventEmitter();
@@ -320,7 +324,7 @@ describe("HTTP shutdown lock safety", () : any => {
       pluginId: "sample-plugin",
       artifactGenerationDigest: generationDigest,
       operation: "disable",
-      idempotencyKey: "fixture-disable"
+      idempotencyKey: canned1
     });
     await transaction.commitIrreversible();
     expect(operationPermissionPlatform.revokeGrantsByPluginOwner).toHaveBeenCalledWith(expect.objectContaining({

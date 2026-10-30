@@ -1437,11 +1437,10 @@ mod tests {
         let EnvPolicy::Sanitized { set, .. } = &spec.command.env else {
             panic!("legacy environment remains sanitized")
         };
+        let expected_ref = "custody.custom".to_owned();
         assert_eq!(
             set["API_TOKEN"],
-            EnvValue::Source(EnvSource::Secret {
-                secret: "custody.custom".to_owned()
-            })
+            EnvValue::Source(EnvSource::Secret { secret: expected_ref })
         );
         let summary = registry
             .list()
@@ -1553,11 +1552,10 @@ mod tests {
         let EnvPolicy::Sanitized { set, .. } = &spec.command.env else {
             panic!("converted environment remains sanitized")
         };
+        let expected_ref = "keychain.token".to_owned();
         assert_eq!(
             set["TOKEN"],
-            EnvValue::Source(EnvSource::Secret {
-                secret: "keychain.token".to_owned()
-            })
+            EnvValue::Source(EnvSource::Secret { secret: expected_ref })
         );
     }
 }

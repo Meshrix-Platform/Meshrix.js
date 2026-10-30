@@ -1117,8 +1117,7 @@
         "occurredAt": "2026-10-09T10:00:04Z",
         "detail": {
           "eventCode": "upstream_timeout",
-          "counters": {},
-          "token": "not-a-real-token-value"
+          "counters": {}
         },
         "indexBytes": 256,
         "contentBytes": 0
@@ -1327,8 +1326,7 @@
         "recordsWritten": 1,
         "pendingTerminal": false,
         "failure": null,
-        "occurredAt": "2026-10-09T10:00:07Z",
-        "secret": "not-a-real-secret"
+        "occurredAt": "2026-10-09T10:00:07Z"
       },
       "sinkHostedCustody": {
         "schemaVersion": "v0.0.1:recording:lifecycle-1",

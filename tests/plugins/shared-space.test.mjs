@@ -14,6 +14,10 @@ import {
   sandboxDigest
 } from "../../plugins/shared-space/runtime/sandbox-contracts.mjs";
 import { contentDigest } from "../../plugins/shared-space/runtime/sandbox-state-store.mjs";
+const canned1 = "synthetic-run-1";
+
+
+
 
 const sha = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const enabledConfiguration = Object.freeze({
@@ -127,7 +131,7 @@ function runInput(snapshot, overrides = {}) {
       toolCalls: 1
     },
     outputs: { schema: "shared-space-files", maxFiles: 2, maxBytes: 1024, allowedTypes: ["txt"] },
-    idempotencyKey: "synthetic-run-1",
+    idempotencyKey: canned1,
     deadlineAt: new Date(Date.now() + 60_000).toISOString(),
     ...overrides
   };

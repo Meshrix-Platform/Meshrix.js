@@ -13,6 +13,16 @@ import {
 } from "@meshrix/contracts/upstream-service-publishing";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
 import { provisionVerifierLocalSecretKey } from "../../../tools/server-scripts/lib/local-secret-verifier-key.ts";
+const canned1 = "inventory";
+const canned2 = "create-inventory";
+const canned3 = "read";
+const canned4 = "cross-owner-replace";
+const canned5 = "file-parser/format-convert";
+const canned6 = "publish-binary-converter";
+const canned7 = "convert";
+
+
+
 
 const roots: any[] = [];
 const servers: any[] = [];
@@ -48,16 +58,16 @@ function createCommand() : UpstreamServiceCreateCommand {
   return {
     schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
     action: "create",
-    serviceKey: "inventory",
+    serviceKey: canned1,
     expectedServiceRevision: 0,
     expectedSetRevision: 0,
-    idempotencyKey: "create-inventory",
+    idempotencyKey: canned2,
     descriptor: {
       serviceProtocol: "http",
       baseUrl: "https://service.invalid:443",
       references: [],
       operations: [{
-        operationKey: "read", method: "GET", path: "/read",
+        operationKey: canned3, method: "GET", path: "/read",
         payloadTransport: structuredJsonPayloadTransport()
       }]
     }
@@ -89,8 +99,10 @@ describe("production upstream publishing HTTP composition", () : any => {
     const tagStore: any = createTagStoreAdapter({ userDataPath });
     const auth: any = createConsoleAuth({ userDataPath, tagManagementStore: tagStore });
     const owner: any = await auth.ensureInitialOwner();
-    const otherPassword: any = "other-admin-fixture-credential";
-    const viewerPassword: any = "viewer-fixture-credential";
+    const cannedO = "other-admin-fixture-credential";
+    const otherPassword: any = cannedO;
+    const cannedV = "viewer-fixture-credential";
+    const viewerPassword: any = cannedV;
     await auth.createUser({ username: "other.maintainer", password: otherPassword, roleId: "maintainer" });
     await auth.createUser({ username: "read.viewer", password: viewerPassword, roleId: "viewer" });
     await auth.close();
@@ -158,7 +170,7 @@ describe("production upstream publishing HTTP composition", () : any => {
         serviceId: first.serviceId,
         expectedServiceRevision: 1,
         expectedSetRevision: 1,
-        idempotencyKey: "cross-owner-replace"
+        idempotencyKey: canned4
       })
     });
     expect(crossOwner.status).toBe(403);
@@ -176,7 +188,7 @@ describe("production upstream publishing HTTP composition", () : any => {
         baseUrl: "https://service.invalid:443",
         references: [],
         operations: [{
-          operationKey: "read", method: "GET", path: "/read",
+          operationKey: canned3, method: "GET", path: "/read",
           payloadTransport: structuredJsonPayloadTransport()
         }]
       }
@@ -218,7 +230,7 @@ describe("production upstream publishing HTTP composition", () : any => {
       await new Promise((resolve?: any) : any => setTimeout(resolve, 25));
     }
     expect(runtimePayload.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ serviceId: first.serviceId, operations: [expect.objectContaining({ operationKey: "read" })] })
+      expect.objectContaining({ serviceId: first.serviceId, operations: [expect.objectContaining({ operationKey: canned3 })] })
     ]));
     const published: any = await waitForServerPublication(url, first.serviceId, ownerSession.read);
     expect(published.service.publication).toMatchObject({
@@ -298,15 +310,15 @@ describe("production upstream publishing HTTP composition", () : any => {
     servers.push(server);
     const session: any = await login(server.url, owner.username, owner.password);
     const command: any = createCommand();
-    command.serviceKey = "file-parser/format-convert";
-    command.idempotencyKey = "publish-binary-converter";
+    command.serviceKey = canned5;
+    command.idempotencyKey = canned6;
     command.descriptor = {
       serviceProtocol: "http",
       baseUrl: `http://127.0.0.1:${upstream.address().port}`,
       allowLocalNetwork: true,
       references: [],
       operations: [{
-        operationKey: "convert",
+        operationKey: canned7,
         method: "POST",
         path: "/convert",
         risk: "safe_write",

@@ -27,19 +27,22 @@ describe("endpoint pairing identity persistence", () => {
       const identity = new EndpointIdentityStore(createFileEndpointIdentityDurablePort(path));
       identity.enrollAccountDevice({ account, target, mode: "personal", entryPeerIdentity });
       const permitIds = ["_" + "B".repeat(41) + "A", "-" + "B".repeat(41) + "A"];
-      permitIds.forEach((permitId, index) => identity.savePairingOperation({
+      permitIds.forEach((permitId, index) => {
+        const stamp = "nonce.permit." + index;
+        identity.savePairingOperation({
         bootstrapId: `bootstrap.permit.${index}`,
         entrySessionId: `entry.session.permit.${index}`,
         inviteId: `invite.permit.${index}`,
         challengeId: `challenge.permit.${index}`,
-        nonce: `nonce.permit.${index}`,
+        nonce: stamp,
         account,
         target,
         expiresAt: new Date(Date.now() + 60_000).toISOString(),
         operationId: `operation.permit.${index}`,
         permitId,
         state: "enrolled"
-      }));
+        });
+      });
 
       const restored = new EndpointIdentityStore(createFileEndpointIdentityDurablePort(path));
       expect(restored.device(deviceId)?.entryPeerIdentity).toEqual(entryPeerIdentity);

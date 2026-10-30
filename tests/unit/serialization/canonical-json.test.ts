@@ -1,3 +1,5 @@
+const canned1 = 'hello "world"\n\t';
+
 /**
  * Unit tests for canonical-json — deterministic serialization.
  */
@@ -8,6 +10,8 @@ import {
   canonicalHash,
   canonicalJson
 } from "../../../packages/foundation/src/serialization/canonical-json.ts";
+
+
 
 describe("canonicalJson", () : any => {
   it("sorts object keys deterministically", () : any => {
@@ -68,7 +72,7 @@ describe("canonicalJson", () : any => {
   });
 
   it("handles strings with special characters", () : any => {
-    const result: any = canonicalJson({ key: 'hello "world"\n\t' });
+    const result: any = canonicalJson({ key: canned1 });
     expect(result).toContain('hello \\"world\\"');
   });
 

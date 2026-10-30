@@ -13,6 +13,10 @@ import {
   createUpstreamGatewayEnvelope,
   createWorkspaceApplicationEnvelope
 } from "@meshrix/contracts/agent-mcp-traffic";
+const canned1 = "idem-1";
+
+
+
 
 function refs(trafficModel: string): Record<string, unknown> {
   return {
@@ -23,7 +27,7 @@ function refs(trafficModel: string): Record<string, unknown> {
     inputRefs: ["in-1"],
     policyRef: "policy-1",
     approvalBinding: "approval-1",
-    idempotencyKey: "idem-1",
+    idempotencyKey: canned1,
     deadlineMs: 60_000,
     cancellationRef: null,
     streamingMode: "none",

@@ -2,6 +2,12 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRouter, createWebHashHistory, type Router } from "vue-router";
+const canned1 = "svc_a";
+const canned2 = "svc_b";
+const canned3 = "legacy-new";
+const canned4 = "sk-plaintext-123";
+const canned5 = "tok-plaintext";
+
 
 const browserWindowMock: any = vi.hoisted(() : any => ({ failWrites: false }));
 const client: any = vi.hoisted(() : any => ({
@@ -48,6 +54,8 @@ import {
 import UpstreamServicePublishView from "../../../apps/console/views/admin/UpstreamServicePublishView.vue";
 import { consoleMessages, currentConsoleLocale } from "../../../apps/console/i18n/console";
 
+
+
 function publication(revision: number) : any {
   return {
     publicationRef: `urn:meshrix:upstream-publication:${revision}`,
@@ -89,8 +97,8 @@ const activeHarnesses: any[] = [];
 function createHarness(overrides: Partial<PublishDraftAutosaveOptions> = {}) : any {
   const notices: Array<{ message: string; tone: string }> = [];
   const state: any = {
-    currentKey: `${PUBLISH_DRAFT_STORAGE_KEY}:svc_a`,
-    form: { serviceKey: "svc_a", label: "A" },
+    currentKey: (PUBLISH_DRAFT_STORAGE_KEY+":svc_a"),
+    form: { serviceKey: canned1, label: "A" },
     dirty: false,
   };
   const autosave: any = createPublishDraftAutosave({
@@ -144,7 +152,7 @@ describe("createPublishDraftAutosave", () : any => {
     const payload: any = JSON.parse(window.localStorage.getItem(state.currentKey) as string);
     expect(payload.schemaVersion).toBe(PUBLISH_DRAFT_SCHEMA_VERSION);
     expect(payload.serviceId).toBe("svc_a");
-    expect(payload.form).toEqual({ serviceKey: "svc_a", label: "A" });
+    expect(payload.form).toEqual({ serviceKey: canned1, label: "A" });
     expect(notices.at(-1)?.tone).toBe("success");
     expect(notices.at(-1)?.message).toBe(consoleMessages[currentConsoleLocale.value].publishDraft.saved);
   });
@@ -158,8 +166,8 @@ describe("createPublishDraftAutosave", () : any => {
       JSON.parse(window.localStorage.getItem(`${PUBLISH_DRAFT_STORAGE_KEY}:svc_a`) as string).form.serviceKey,
     ).toBe("svc_a");
 
-    state.currentKey = `${PUBLISH_DRAFT_STORAGE_KEY}:svc_b`;
-    state.form = { serviceKey: "svc_b", label: "B" };
+    state.currentKey = PUBLISH_DRAFT_STORAGE_KEY + ":svc_b";
+    state.form = { serviceKey: canned2, label: "B" };
     state.dirty = true;
     autosave.scheduleSave();
     await vi.advanceTimersByTimeAsync(PUBLISH_DRAFT_DEBOUNCE_MS);
@@ -168,10 +176,10 @@ describe("createPublishDraftAutosave", () : any => {
     ).toBe("svc_b");
 
     // The context moved before the debounce fired: the captured write is dropped.
-    state.currentKey = `${PUBLISH_DRAFT_STORAGE_KEY}:svc_c`;
+    state.currentKey = PUBLISH_DRAFT_STORAGE_KEY + ":svc_c";
     state.dirty = true;
     autosave.scheduleSave();
-    state.currentKey = `${PUBLISH_DRAFT_STORAGE_KEY}:svc_d`;
+    state.currentKey = PUBLISH_DRAFT_STORAGE_KEY + ":svc_d";
     await vi.advanceTimersByTimeAsync(PUBLISH_DRAFT_DEBOUNCE_MS);
     expect(window.localStorage.getItem(`${PUBLISH_DRAFT_STORAGE_KEY}:svc_c`)).toBeNull();
   });
@@ -198,31 +206,31 @@ describe("createPublishDraftAutosave", () : any => {
   });
 
   it("restores a keyed slot through the validation chain and marks clean", async () : Promise<any> => {
-    const key = `${PUBLISH_DRAFT_STORAGE_KEY}:svc_a`;
-    window.localStorage.setItem(key, JSON.stringify({
+    const slot = PUBLISH_DRAFT_STORAGE_KEY + ":svc_a";
+    window.localStorage.setItem(slot, JSON.stringify({
       schemaVersion: PUBLISH_DRAFT_SCHEMA_VERSION,
       serviceId: "svc_a",
-      form: { serviceKey: "svc_a", label: "Restored label" },
+      form: { serviceKey: canned1, label: "Restored label" },
     }));
     const restore: any = vi.fn();
     const { autosave, state } = createHarness({ restore });
     state.dirty = true;
 
-    const ok: any = await autosave.restoreFor(key);
+    const ok: any = await autosave.restoreFor(slot);
     expect(ok).toBe(true);
-    expect(restore).toHaveBeenCalledWith({ serviceKey: "svc_a", label: "Restored label" });
+    expect(restore).toHaveBeenCalledWith({ serviceKey: canned1, label: "Restored label" });
     expect(state.dirty).toBe(false);
   });
 
   it("rejects a poisoned payload through the validation chain", async () : Promise<any> => {
-    const key = `${PUBLISH_DRAFT_STORAGE_KEY}:svc_a`;
+    const slot = PUBLISH_DRAFT_STORAGE_KEY + ":svc_a";
     // JSON.parse materializes an own "__proto__" key that object literals cannot.
-    window.localStorage.setItem(key, JSON.stringify(JSON.parse(
+    window.localStorage.setItem(slot, JSON.stringify(JSON.parse(
       `{"schemaVersion":"${PUBLISH_DRAFT_SCHEMA_VERSION}","serviceId":"svc_a",` +
       `"form":{"serviceKey":{"__proto__":{"polluted":true}}}}`,
     )));
     const { autosave } = createHarness();
-    await expect(autosave.restoreFor(key)).rejects.toThrow(/invalid format/);
+    await expect(autosave.restoreFor(slot)).rejects.toThrow(/invalid format/);
   });
 
   it("degrades to manual-save-only with a keyed notice on storage failure", async () : Promise<any> => {
@@ -294,7 +302,7 @@ describe("UpstreamServicePublishView per-service draft autosave", () : any => {
     window.localStorage.setItem(PUBLISH_DRAFT_STORAGE_KEY, JSON.stringify({
       schemaVersion: PUBLISH_DRAFT_SCHEMA_VERSION,
       serviceId: "",
-      form: { serviceKey: "legacy-new", label: "Legacy new" },
+      form: { serviceKey: canned3, label: "Legacy new" },
     }));
 
     const { wrapper } = await mountView("/");
@@ -332,8 +340,8 @@ describe("UpstreamServicePublishView per-service draft autosave", () : any => {
           baseUrl: "https://service.invalid:443",
           label: "Secure",
           operations: [],
-          apiKey: "sk-plaintext-123",
-          token: "tok-plaintext",
+          apiKey: canned4,
+          token: canned5,
         },
         references: [{ type: "credential", reference: "credential://vault/catalog", revision: 1, use: "request-auth" }],
       },

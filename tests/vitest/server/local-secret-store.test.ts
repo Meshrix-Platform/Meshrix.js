@@ -25,10 +25,23 @@ import {
 import {
   operationAuditProjectionKeyId
 } from "../../../packages/foundation/src/security/operation-audit-projection.ts";
+const canned1 = "bearer";
+const canned2 = "secret://Fixture/service-material";
+const canned3 = "secret://fixture/service-material/";
+const canned4 = "secret://fixture//service-material";
+const canned5 = "secret://fixture/../service-material";
+const canned6 = "secret://meshrix/system/operation-audit-projection";
+const canned7 = "hmac-projection-key";
+const canned8 = "replacement-must-be-rejected";
+const canned9 = "secret://fixture/secondary-material";
+const canned10 = "abandoned-lock-fixture";
+
+
+
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const cliEntrypoint: any = path.join(repoRoot, "apps", "server", "bin", "meshrix.ts");
-const SECRET_REF: any = "secret://fixture/service-material";
+const FIXTURE_REF: any = "secret://fixture/service-material";
 const MATERIAL_ALPHA: any = "fixture-material-alpha";
 const MATERIAL_BETA: any = "fixture-material-beta";
 const MATERIAL_GAMMA: any = "fixture-material-gamma";
@@ -44,8 +57,8 @@ function targetContract(overrides: Record<string, any> = {}) : any {
   return {
     provider: "fixture-provider",
     family: "upstream-gateway",
-    authType: "bearer",
-    secretRef: SECRET_REF,
+    authType: canned1,
+    secretRef: FIXTURE_REF,
     scope: {
       serviceId: "fixture-service",
       scopes: ["gateway:read", "gateway:write"],
@@ -132,10 +145,10 @@ describe("local secret target contract", () : any => {
 
     for (const invalid of [
       { ...target, provider: "Fixture-Provider" },
-      { ...target, secretRef: "secret://Fixture/service-material" },
-      { ...target, secretRef: "secret://fixture/service-material/" },
-      { ...target, secretRef: "secret://fixture//service-material" },
-      { ...target, secretRef: "secret://fixture/../service-material" },
+      { ...target, secretRef: canned2 },
+      { ...target, secretRef: canned3 },
+      { ...target, secretRef: canned4 },
+      { ...target, secretRef: canned5 },
       { ...target, scope: { ...target.scope, allowedHosts: undefined } },
       { ...target, scope: { ...target.scope, unverifiedBinding: "value" } },
       { ...target, inferredDefault: true }
@@ -147,7 +160,7 @@ describe("local secret target contract", () : any => {
   it("fails closed when registry and immutable value identity diverge", async () : Promise<any> => {
     await initializeLocalSecret({ dataDir, target, payload: { token: MATERIAL_ALPHA } });
     const registry: any = await readRegistry();
-    const entry: any = registry.refs[SECRET_REF];
+    const entry: any = registry.refs[FIXTURE_REF];
     const valuePath: any = path.join(dataDir, "secrets", "values", entry.storageRef.slice("local:".length));
     const valueRecord: any = JSON.parse(await fs.readFile(valuePath, "utf8"));
     valueRecord.revision = 99;
@@ -155,7 +168,7 @@ describe("local secret target contract", () : any => {
 
     await expect(resolveLocalSecretPayload({
       dataDir,
-      secretRef: SECRET_REF,
+      secretRef: FIXTURE_REF,
       expectedScope: expectedScope()
     })).rejects.toMatchObject({ code: "local_secret_value_mismatch" });
   });
@@ -190,7 +203,7 @@ describe("local secret lifecycle", () : any => {
       expect(await listLocalSecretEntries({ dataDir })).toHaveLength(1);
       await expect(resolveLocalSecretPayload({
         dataDir,
-        secretRef: "secret://meshrix/system/operation-audit-projection",
+        secretRef: canned6,
         expectedScope: {
           serviceId: "meshrix-core",
           requiredScopes: ["internal:operation-audit-projection"]
@@ -202,8 +215,8 @@ describe("local secret lifecycle", () : any => {
         target: {
           provider: "meshrix",
           family: "internal-key",
-          authType: "hmac-projection-key",
-          secretRef: "secret://meshrix/system/operation-audit-projection",
+          authType: canned7,
+          secretRef: canned6,
           scope: {
             serviceId: "meshrix-core",
             scopes: ["internal:operation-audit-projection"],
@@ -211,7 +224,7 @@ describe("local secret lifecycle", () : any => {
             allowedProtocols: []
           }
         },
-        payload: { seed: "replacement-must-be-rejected" },
+        payload: { seed: canned8 },
         keyProvider: currentKeyProvider
       })).rejects.toMatchObject({ code: "local_secret_not_configured" });
 
@@ -231,7 +244,7 @@ describe("local secret lifecycle", () : any => {
       afterRotation.key.fill(0);
       await expect(resolveLocalSecretPayload({
         dataDir,
-        secretRef: SECRET_REF,
+        secretRef: FIXTURE_REF,
         expectedScope: expectedScope(),
         keyProvider: nextKeyProvider
       })).resolves.toMatchObject({ payload: { token: MATERIAL_ALPHA } });
@@ -338,7 +351,7 @@ describe("local secret lifecycle", () : any => {
       key: Buffer.alloc(32, 0x22)
     });
     const secondTarget: any = targetContract({
-      secretRef: "secret://fixture/secondary-material"
+      secretRef: canned9
     });
     try {
       await initializeLocalSecret({
@@ -366,13 +379,13 @@ describe("local secret lifecycle", () : any => {
       });
       await expect(resolveLocalSecretPayload({
         dataDir,
-        secretRef: SECRET_REF,
+        secretRef: FIXTURE_REF,
         expectedScope: expectedScope(),
         keyProvider: currentKeyProvider
       })).rejects.toMatchObject({ code: "local_secret_decryption_failed" });
       await expect(resolveLocalSecretPayload({
         dataDir,
-        secretRef: SECRET_REF,
+        secretRef: FIXTURE_REF,
         expectedScope: expectedScope(),
         keyProvider: nextKeyProvider
       })).resolves.toMatchObject({ payload: { token: MATERIAL_ALPHA } });
@@ -421,7 +434,7 @@ describe("local secret lifecycle", () : any => {
     });
     expect(initialized.action).toBe("initialize");
     expect(initialized.secret).toMatchObject({
-      secretRef: SECRET_REF,
+      secretRef: FIXTURE_REF,
       status: "active",
       revision: 1,
       scopeBinding: { serviceBound: true, scopeCount: 2, hostCount: 1, protocolCount: 1 }
@@ -436,7 +449,7 @@ describe("local secret lifecycle", () : any => {
       dataDir,
       "secrets",
       "values",
-      initializedRegistry.refs[SECRET_REF].storageRef.slice("local:".length)
+      initializedRegistry.refs[FIXTURE_REF].storageRef.slice("local:".length)
     );
     const persistedValue: any = await fs.readFile(initializedValuePath, "utf8");
     expect(persistedValue).not.toContain(MATERIAL_ALPHA);
@@ -460,14 +473,14 @@ describe("local secret lifecycle", () : any => {
 
     const resolved: any = await resolveLocalSecretPayload({
       dataDir,
-      secretRef: SECRET_REF,
+      secretRef: FIXTURE_REF,
       expectedRevision: 1,
       expectedScope: expectedScope()
     });
     expect(resolved.payload).toEqual({ token: MATERIAL_ALPHA });
     await expect(resolveLocalSecretPayload({
       dataDir,
-      secretRef: SECRET_REF,
+      secretRef: FIXTURE_REF,
       expectedRevision: 2,
       expectedScope: expectedScope()
     })).rejects.toMatchObject({ code: "local_secret_revision_conflict" });
@@ -483,7 +496,7 @@ describe("local secret lifecycle", () : any => {
     ]) {
       await expect(resolveLocalSecretPayload({
         dataDir,
-        secretRef: SECRET_REF,
+        secretRef: FIXTURE_REF,
         expectedScope: deniedScope
       })).rejects.toMatchObject({ code: "local_secret_scope_denied", statusCode: 403 });
     }
@@ -520,15 +533,15 @@ describe("local secret lifecycle", () : any => {
       payload: { token: MATERIAL_GAMMA },
       expectedRevision: 1
     })).rejects.toMatchObject({ code: "local_secret_revision_conflict", actualRevision: 2 });
-    await expect(revokeLocalSecret({ dataDir, secretRef: SECRET_REF })).rejects.toMatchObject({
+    await expect(revokeLocalSecret({ dataDir, secretRef: FIXTURE_REF })).rejects.toMatchObject({
       code: "local_secret_revision_required"
     });
 
-    const revoked: any = await revokeLocalSecret({ dataDir, secretRef: SECRET_REF, expectedRevision: 2 });
+    const revoked: any = await revokeLocalSecret({ dataDir, secretRef: FIXTURE_REF, expectedRevision: 2 });
     expect(revoked.secret).toMatchObject({ status: "revoked", revision: 3, credentialConfigured: false });
     await expect(resolveLocalSecretPayload({
       dataDir,
-      secretRef: SECRET_REF,
+      secretRef: FIXTURE_REF,
       expectedScope: expectedScope()
     })).rejects.toMatchObject({ code: "local_secret_revoked" });
 
@@ -567,7 +580,7 @@ describe("local secret lifecycle", () : any => {
     process.env.MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE = wrongKeyFile;
     await expect(resolveLocalSecretPayload({
       dataDir,
-      secretRef: SECRET_REF,
+      secretRef: FIXTURE_REF,
       expectedScope: expectedScope()
     })).rejects.toMatchObject({ code: "local_secret_decryption_failed" });
 
@@ -577,7 +590,7 @@ describe("local secret lifecycle", () : any => {
       dataDir,
       "secrets",
       "values",
-      registry.refs[SECRET_REF].storageRef.slice("local:".length)
+      registry.refs[FIXTURE_REF].storageRef.slice("local:".length)
     );
     const valueRecord: any = JSON.parse(await fs.readFile(valuePath, "utf8"));
     valueRecord.envelope.ciphertext =
@@ -585,7 +598,7 @@ describe("local secret lifecycle", () : any => {
     await fs.writeFile(valuePath, `${JSON.stringify(valueRecord, null, 2)}\n`, { mode: 0o600 });
     await expect(resolveLocalSecretPayload({
       dataDir,
-      secretRef: SECRET_REF,
+      secretRef: FIXTURE_REF,
       expectedScope: expectedScope()
     })).rejects.toMatchObject({ code: "local_secret_decryption_failed" });
   });
@@ -607,7 +620,7 @@ describe("local secret lifecycle", () : any => {
 
     const resolved: any = await resolveLocalSecretPayload({
       dataDir,
-      secretRef: SECRET_REF,
+      secretRef: FIXTURE_REF,
       expectedScope: expectedScope()
     });
     expect([MATERIAL_BETA, MATERIAL_GAMMA]).toContain(resolved.payload.token);
@@ -622,7 +635,7 @@ describe("local secret lifecycle", () : any => {
     const lockPath: any = path.join(secretDir, ".mutation.lock");
     await fs.mkdir(secretDir, { recursive: true, mode: 0o700 });
     await fs.writeFile(lockPath, `${JSON.stringify({
-      token: "abandoned-lock-fixture",
+      token: canned10,
       pid: 0,
       createdAt: "2000-01-01T00:00:00.000Z"
     })}\n`, { mode: 0o600 });
@@ -633,7 +646,7 @@ describe("local secret lifecycle", () : any => {
       payload: { token: MATERIAL_ALPHA }
     });
 
-    expect(initialized.secret).toMatchObject({ secretRef: SECRET_REF, revision: 1, status: "active" });
+    expect(initialized.secret).toMatchObject({ secretRef: FIXTURE_REF, revision: 1, status: "active" });
     await expect(fs.access(lockPath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
@@ -644,7 +657,7 @@ describe("local secret CLI", () : any => {
     expect(initialized.status).toBe(0);
     expect(initialized.stderr).toBe("");
     const initializedJson: any = JSON.parse(initialized.stdout);
-    expect(initializedJson.secret).toMatchObject({ secretRef: SECRET_REF, revision: 1, status: "active" });
+    expect(initializedJson.secret).toMatchObject({ secretRef: FIXTURE_REF, revision: 1, status: "active" });
     expect(initialized.stdout).not.toContain(MATERIAL_ALPHA);
     expect(initialized.stdout).not.toContain(dataDir);
     expect(initialized.stdout).not.toContain("storageRef");

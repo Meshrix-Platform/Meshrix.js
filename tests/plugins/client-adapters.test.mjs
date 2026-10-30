@@ -12,6 +12,12 @@ import { adapter as kimi } from "../../plugins/agents/kimi/adapter.mjs";
 import { adapter as openclaw } from "../../plugins/agents/openclaw/adapter.mjs";
 import { adapter as opencode } from "../../plugins/agents/opencode/adapter.mjs";
 import { adapter as pi } from "../../plugins/agents/pi/adapter.mjs";
+const canned1 = "external-reference-unverified";
+const canned2 = "oauth";
+const canned3 = "forbidden";
+
+
+
 
 const supported = [codex, claudeCode, openclaw, opencode, pi];
 const base = { schemaVersion: ADAPTER_PROTOCOL, baseUrl: "https://gateway.invalid", serverName: "work", credentialRef: { kind: "env", name: "MESHRIX_WORK_KEY" } };
@@ -46,7 +52,7 @@ for (const adapter of supported) {
     const authFile = path.join(f.root, "native-auth.json");
     await fs.writeFile(authFile, "opaque synthetic native authentication data");
     assert.equal((await invokeAdapter(adapter, "scan", f.request)).available, true);
-    assert.deepEqual(await invokeAdapter(adapter, "install", f.request), { installed: true, status: "configured", credentialStatus: "external-reference-unverified", connectivity: "not-run" });
+    assert.deepEqual(await invokeAdapter(adapter, "install", f.request), { installed: true, status: "configured", credentialStatus: canned1, connectivity: "not-run" });
     const config = await f.read();
     assert.deepEqual(f.entries(config).work, expected(adapter));
     assert.equal(config.preference, "untouched");
@@ -79,7 +85,7 @@ for (const adapter of supported) {
       for (const action of ["install", "uninstall"]) await assert.rejects(() => invokeAdapter(adapter, action, request), { adapterCode: "registration_conflict" });
       assert.equal(await fs.readFile(f.file, "utf8"), before);
     }
-    f.entries(config).work.auth = "oauth";
+    f.entries(config).work.auth = canned2;
     await f.write(config);
     const oauthBefore = await fs.readFile(f.file, "utf8");
     await assert.rejects(() => invokeAdapter(adapter, "uninstall", f.request), { adapterCode: "registration_conflict" });
@@ -171,7 +177,7 @@ test("detection is separate from malformed configuration", async (t) => {
 });
 
 test("raw credentials and obsolete connector requests are rejected before mutation", async () => {
-  for (const payload of [{ token: "forbidden" }, { connector: { command: "node", args: [] } }, { client: { command: `mxak1.${"a".repeat(22)}.${"b".repeat(43)}` } }]) {
+  for (const payload of [{ token: canned3 }, { connector: { command: "node", args: [] } }, { client: { command: `mxak1.${"a".repeat(22)}.${"b".repeat(43)}` } }]) {
     await assert.rejects(() => invokeAdapter(pi, "install", { ...base, ...payload }), { adapterCode: "raw_secret_rejected" });
   }
 });

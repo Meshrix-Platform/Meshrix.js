@@ -11,6 +11,13 @@ import {
 import { createPluginLifecycleStatePort } from "../../../packages/foundation/src/module-system/plugin-lifecycle-state-port.ts";
 import { loadPluginRegistry } from "../../../packages/foundation/src/module-system/plugin-registry.ts";
 import { activatePluginDeployment } from "../../../packages/foundation/src/module-system/plugin-runtime.ts";
+const canned1 = "secret://fixture/plugin-artifact";
+const canned2 = "disable-fixture";
+const canned3 = "removed";
+const canned4 = "stopped";
+
+
+
 
 const roots: any[] = [];
 const coreContractDigest: any = `sha256:${"c".repeat(64)}`;
@@ -94,7 +101,7 @@ async function fixture({
     artifactRoot,
     trustedPublicKeys: { [keyId]: publicKeyJwk },
     artifactSigner: signer,
-    secretRef: "secret://fixture/plugin-artifact",
+    secretRef: canned1,
     coreContractDigest,
     faultInjector
   });
@@ -153,7 +160,7 @@ describe("canonical PluginArtifactAuthority", () : any => {
       pluginId: "sample-plugin",
       state: "inactive",
       operation: "disable",
-      idempotencyKey: "disable-fixture",
+      idempotencyKey: canned2,
       requestDigest: "a".repeat(64),
       generation: 1
     }));
@@ -271,7 +278,7 @@ describe("canonical PluginArtifactAuthority", () : any => {
       artifactRoot: context.artifactRoot,
       trustedPublicKeys: context.trustedPublicKeys,
       artifactSigner: context.signer,
-      secretRef: "secret://fixture/plugin-artifact",
+      secretRef: canned1,
       coreContractDigest
     });
     const port: any = authority.forPlugin({ pluginId: context.pluginId, lifecycleStatePort });
@@ -287,7 +294,7 @@ describe("canonical PluginArtifactAuthority", () : any => {
     await context.port.remove({ expectedArtifactDigest: first.artifactDigest, expectedGeneration: 1 });
     await context.lifecycleStatePort.runExclusive(() : any => context.lifecycleStatePort.writeRecord("ledger", {
       schemaVersion: "meshrix.plugin-lifecycle-ledger/1", pluginId: "sample-plugin", state: "uninstalled",
-      operation: "uninstall", idempotencyKey: "removed", requestDigest: "b".repeat(64), generation: 1
+      operation: "uninstall", idempotencyKey: canned3, requestDigest: "b".repeat(64), generation: 1
     }));
     const second: any = await context.port.publish({ sourceRoot: context.sourceRoot, version: "1.0.0", generation: 2, dependencyClosure: [] });
     await expect(context.port.install({ ...second, operation: "install" }))
@@ -300,7 +307,7 @@ describe("canonical PluginArtifactAuthority", () : any => {
 
     await context.lifecycleStatePort.runExclusive(() : any => context.lifecycleStatePort.writeRecord("ledger", {
       schemaVersion: "meshrix.plugin-lifecycle-ledger/1", pluginId: "sample-plugin", state: "inactive",
-      operation: "disable", idempotencyKey: "stopped", requestDigest: "c".repeat(64), generation: 2
+      operation: "disable", idempotencyKey: canned4, requestDigest: "c".repeat(64), generation: 2
     }));
     const third: any = await context.port.publish({ sourceRoot: context.sourceRoot, version: "1.0.0", generation: 3, dependencyClosure: [] });
     await context.port.install({ ...third, operation: "update", expectedCurrent: second });

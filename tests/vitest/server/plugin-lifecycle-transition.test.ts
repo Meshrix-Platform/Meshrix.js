@@ -10,6 +10,17 @@ import { activatePluginDeployment } from "../../../packages/foundation/src/modul
 import { createMountManager } from "../../../packages/foundation/src/module-system/mount-manager.ts";
 import { stagePluginArtifactFixture } from "./support/plugin-artifact-authority-fixture.ts";
 import { createTestPluginProcessHost } from "./support/test-plugin-process-host.ts";
+const canned1 = "alpha-disable";
+const canned2 = "beta-disable";
+const canned3 = "shared-disable";
+const canned4 = "remove";
+const canned5 = "disable";
+const canned6 = "irreversible-retry";
+const canned7 = "invalid-prepare";
+const canned8 = "ledger-failure";
+
+
+
 
 const roots: any[] = [];
 const artifactFixtures: any[] = [];
@@ -122,18 +133,18 @@ describe("canonical plugin lifecycle transition", () : any => {
       deployment: registry.resolveDeployment({ enabledPluginIds: ["alpha", "beta"] })
     });
     expect(() : any => runtime.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "alpha-disable",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned1,
       expectedGeneration: 1, input: {}
     })).toThrow(expect.objectContaining({
       code: "PLUGIN_LIFECYCLE_DEPENDENTS_ACTIVE",
       dependentPluginIds: ["beta"]
     }));
     await runtime.transitionPluginLifecycle({
-      pluginId: "beta", operation: "disable", idempotencyKey: "beta-disable",
+      pluginId: "beta", operation: "disable", idempotencyKey: canned2,
       expectedGeneration: 1, input: {}
     });
     await expect(runtime.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "alpha-disable",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned1,
       expectedGeneration: 2, input: {}
     })).resolves.toMatchObject({ state: "inactive" });
     await runtime.close();
@@ -152,7 +163,7 @@ describe("canonical plugin lifecycle transition", () : any => {
     const firstRuntime: any = await activatePluginDeployment({ deployment, createContext });
     const secondRuntime: any = await activatePluginDeployment({ deployment, createContext });
     const request: Record<string, any> = {
-      pluginId: "alpha", operation: "disable", idempotencyKey: "shared-disable",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned3,
       expectedGeneration: 1, input: { reason: "same" }
     };
     const [first, second] = await Promise.all([
@@ -185,7 +196,7 @@ describe("canonical plugin lifecycle transition", () : any => {
     });
     const mutableInput: Record<string, any> = { nested: { value: "original" } };
     const alpha: any = runtime.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "alpha-disable",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned1,
       expectedGeneration: 1, input: mutableInput
     });
     mutableInput.nested.value = "changed";
@@ -193,11 +204,11 @@ describe("canonical plugin lifecycle transition", () : any => {
     expect(runtime.contributions.operations["alpha.run"]).toBeUndefined();
     expect(runtime.mountRouting.kindRoutes).toEqual({});
     const beta: any = runtime.transitionPluginLifecycle({
-      pluginId: "beta", operation: "disable", idempotencyKey: "beta-disable",
+      pluginId: "beta", operation: "disable", idempotencyKey: canned2,
       expectedGeneration: 2, input: { reason: "test" }
     });
     expect(() : any => runtime.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "alpha-disable",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned1,
       input: { nested: { value: "original" } }
     })).toThrow(/transition/u);
     resolveBeta();
@@ -230,18 +241,18 @@ describe("canonical plugin lifecycle transition", () : any => {
       createContext: () : any => ({ lifecycleStatePort })
     });
     await expect(runtime.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "uninstall", idempotencyKey: "remove",
+      pluginId: "alpha", operation: "uninstall", idempotencyKey: canned4,
       expectedGeneration: 1, input: { evidence: { digest: "one" } }
     })).rejects.toMatchObject({ code: "PLUGIN_LIFECYCLE_TRANSITION_FAILED", generation: 2 });
     expect(() : any => runtime.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "uninstall", idempotencyKey: "remove",
+      pluginId: "alpha", operation: "uninstall", idempotencyKey: canned4,
       expectedGeneration: 2, input: { evidence: { digest: "two" } }
     })).toThrow(/transition/u);
     let resolveRetry: any;
     globalThis[Symbol.for("plugin-lifecycle-transition-test")].controls.get("alpha").promise =
       new Promise((resolve?: any) : any => { resolveRetry = resolve; });
     const retry: any = runtime.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "uninstall", idempotencyKey: "remove",
+      pluginId: "alpha", operation: "uninstall", idempotencyKey: canned4,
       expectedGeneration: 2, input: { evidence: { digest: "one" } }
     });
     const closing: any = runtime.close();
@@ -261,7 +272,7 @@ describe("canonical plugin lifecycle transition", () : any => {
     const manager: any = await createFixtureManager(repoRoot);
     const reload: any = manager.reloadMounts();
     const transition: any = manager.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "disable",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned5,
       expectedGeneration: 1, input: {}
     });
     await reload;
@@ -280,7 +291,7 @@ describe("canonical plugin lifecycle transition", () : any => {
       prepare() : any { throw new Error("listener detail"); }
     });
     await expect(manager.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "disable",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned5,
       expectedGeneration: 1, input: {}
     })).rejects.toMatchObject({ code: "PLUGIN_LIFECYCLE_ADMISSION_UPDATE_FAILED", generation: 1 });
     expect(globalThis[Symbol.for("plugin-lifecycle-transition-test")].observed).toEqual([]);
@@ -313,13 +324,13 @@ describe("canonical plugin lifecycle transition", () : any => {
       }
     });
     await expect(manager.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "irreversible-retry",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned6,
       expectedGeneration: 1, input: {}
     })).rejects.toMatchObject({ code: "PLUGIN_LIFECYCLE_TRANSITION_FAILED", generation: 2 });
     expect(manager.createExecutionView().contributions.operations["alpha.run"]).toBeUndefined();
     expect(rollbacks).toBe(0);
     await expect(manager.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "irreversible-retry",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned6,
       expectedGeneration: 2, input: {}
     })).resolves.toMatchObject({ state: "inactive", generation: 3 });
     expect(irreversibleAttempts).toBe(2);
@@ -341,7 +352,7 @@ describe("canonical plugin lifecycle transition", () : any => {
       createContext: () : any => ({ lifecycleStatePort: port })
     });
     await expect(runtime.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "invalid-prepare",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned7,
       expectedGeneration: 1, input: {}
     })).rejects.toMatchObject({ code: "PLUGIN_LIFECYCLE_TRANSITION_FAILED", generation: 2 });
     expect(globalThis[Symbol.for("plugin-lifecycle-transition-test")].prepared).toHaveLength(1);
@@ -376,7 +387,7 @@ describe("canonical plugin lifecycle transition", () : any => {
       createContext: () : any => ({ lifecycleStatePort: failingPort })
     });
     await expect(runtime.transitionPluginLifecycle({
-      pluginId: "alpha", operation: "disable", idempotencyKey: "ledger-failure",
+      pluginId: "alpha", operation: "disable", idempotencyKey: canned8,
       expectedGeneration: 1, input: {}
     })).rejects.toMatchObject({ code: "PLUGIN_LIFECYCLE_TRANSITION_FAILED", generation: 2 });
     expect(globalThis[Symbol.for("plugin-lifecycle-transition-test")].aborted).toHaveLength(1);

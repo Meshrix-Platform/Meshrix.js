@@ -12,16 +12,24 @@ import {
   createOperationProofSubstrate
 } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
 import { DEVELOPMENT_MESHRIX_SIGNER_SECRET } from "../../../packages/foundation/src/proof/proof-substrate/constants.ts";
+const canned1 = "fixture-proof-generation-1";
+const canned2 = "fixture-proof-generation-2";
+const canned3 = "";
+const canned4 = "fixture-signer-not-a-real-secret";
+const canned5 = "x";
+
+
+
 
 describe("operation proof evidence policy readiness", () : any => {
   it("signs with the active generation and verifies retained historical generations", async () : Promise<any> => {
     const previous: any = createMeshrixSigner({
       signerId: "proof-generation-1",
-      secret: "fixture-proof-generation-1"
+      secret: canned1
     });
     const active: any = createMeshrixSigner({
       signerId: "proof-generation-2",
-      secret: "fixture-proof-generation-2"
+      secret: canned2
     });
     const historicalSignature: any = await previous.sign("historical-envelope");
     const ring: any = createMeshrixSignerKeyRing({
@@ -50,25 +58,25 @@ describe("operation proof evidence policy readiness", () : any => {
   it("fails when production policy is declared without a signer", () : any => {
     const result: any = evaluateEvidencePolicyReadiness({
       evidencePolicy: "production",
-      signerSecret: ""
+      signerSecret: canned3
     });
     expect(result.ok).toBe(false);
     expect(result.reason).toMatch(/MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE/);
     expect(() : any => assertEvidencePolicyReadiness({
       evidencePolicy: "production",
-      signerSecret: ""
+      signerSecret: canned3
     })).toThrow(/MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE/);
   });
 
   it("passes when production policy and signer are consistent", () : any => {
     const result: any = evaluateEvidencePolicyReadiness({
       evidencePolicy: "production",
-      signerSecret: "fixture-signer-not-a-real-secret"
+      signerSecret: canned4
     });
     expect(result.ok).toBe(true);
     expect(() : any => assertEvidencePolicyReadiness({
       evidencePolicy: "production",
-      signerSecret: "fixture-signer-not-a-real-secret"
+      signerSecret: canned4
     })).not.toThrow();
   });
 
@@ -84,21 +92,21 @@ describe("operation proof evidence policy readiness", () : any => {
   it("passes for development policy without a signer", () : any => {
     expect(evaluateEvidencePolicyReadiness({
       evidencePolicy: "development",
-      signerSecret: ""
+      signerSecret: canned3
     }).ok).toBe(true);
   });
 
   it("passes when policy is undeclared", () : any => {
     expect(evaluateEvidencePolicyReadiness({
       evidencePolicy: "",
-      signerSecret: ""
+      signerSecret: canned3
     }).ok).toBe(true);
   });
 
   it("rejects unknown policy values", () : any => {
     const result: any = evaluateEvidencePolicyReadiness({
       evidencePolicy: "staging",
-      signerSecret: "x"
+      signerSecret: canned5
     });
     expect(result.ok).toBe(false);
     expect(result.reason).toMatch(/development.*production/);

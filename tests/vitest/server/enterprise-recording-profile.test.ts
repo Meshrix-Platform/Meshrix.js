@@ -33,6 +33,12 @@ import {
   installUpstreamRuntimeServices
 } from "../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../gateway/support.ts";
+const canned1 = "tools/call";
+const canned2 = "tool_grant";
+const canned3 = "not-recorded";
+
+
+
 
 const LIFECYCLE_VERSION = "v0.0.1:recording:lifecycle-1";
 const POLICY_VERSION = "v0.0.1:recording:policy-1";
@@ -174,7 +180,7 @@ async function startRecordedGateway(root: any, peerUrl: string, tenantId: string
     label: "synthetic",
     allowLocalNetwork: true,
     operations: [{
-      operationKey: "tools/call",
+      operationKey: canned1,
       protocol: "mcp",
       risk: "safe_write",
       requiredScopes: ["gateway:read", "gateway:write"]
@@ -189,7 +195,7 @@ async function startRecordedGateway(root: any, peerUrl: string, tenantId: string
     toolSkillManagementProvider: {
       authorizeMcpClientRequest: async () => ({
         ok: true,
-        credentialKind: "tool_grant",
+        credentialKind: canned2,
         grant: {
           id: "grant-1",
           revision: "grant-1",
@@ -375,7 +381,7 @@ describe("enterprise recording profile composition", () => {
     const recorder = createDispatchOperationRecorder({
       recordingSink: root.recordingSink,
       operation: { id: "recording.verify.dispatch", readOnly: true },
-      operationInput: { echoText: "dispatch-payload", secret: "not-recorded" },
+      operationInput: { echoText: "dispatch-payload", secret: canned3 },
       transport: "http",
       method: "POST",
       traceContext: { requestId: "req.profile.1" },

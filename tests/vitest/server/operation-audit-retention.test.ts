@@ -18,6 +18,10 @@ import {
 } from "../../../packages/foundation/src/security/operation-audit-projection.ts";
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { auditOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-risk-control.ts";
+const canned1 = "synthetic-token";
+
+
+
 
 const temporaryRoots: Set<string> = new Set();
 const PROJECTION_KEY = Buffer.alloc(32, 0x41);
@@ -402,7 +406,7 @@ describe.sequential("operation audit idempotent worker commands", () : any => {
       transport: "test",
       status: "ok",
       actor: { userId: "synthetic-user", teamIds: ["synthetic-team"] },
-      input: { beta: 2, token: "synthetic-token", alpha: 1 },
+      input: { beta: 2, token: canned1, alpha: 1 },
       output: { beta: true, alpha: "complete" }
     };
     try {
@@ -412,7 +416,7 @@ describe.sequential("operation audit idempotent worker commands", () : any => {
       expect(await store.appendIdempotent({
         ...entry,
         actor: { teamIds: ["synthetic-team"], userId: "synthetic-user" },
-        input: { alpha: 1, token: "synthetic-token", beta: 2 },
+        input: { alpha: 1, token: canned1, beta: 2 },
         output: { alpha: "complete", beta: true }
       })).toEqual({ auditId: entry.auditId, replayed: true, maintenance: { deletedCount: 0 } });
       expect(await store.getCapacityStats()).toMatchObject({ rowCount: before.rowCount, logicalBytes: before.logicalBytes, appendCount: before.appendCount });

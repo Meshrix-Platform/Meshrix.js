@@ -28,6 +28,25 @@ import {
   spkiSha256Base64Url
 } from "@meshrix/gateway/private-endpoint";
 import type { RelayTransportPort } from "@meshrix/gateway/private-endpoint";
+const canned1 = "sn.test.session.0001nonce";
+const canned2 = "pk_test_endpoint_1";
+const canned3 = "fp.test.endpoint.1";
+const canned4 = "rckey.pr.1";
+const canned5 = "pk_test_endpoint_2";
+const canned6 = "fp.test.endpoint.2";
+const canned7 = "pk_old";
+const canned8 = "rckey.pr.2";
+const canned9 = "pk_new";
+const canned10 = "3";
+const canned11 = "pk_rc";
+const canned12 = "pk_fresh_pub";
+const canned13 = "pk_fresh_other";
+const canned14 = "pk_impostor";
+const canned15 = "pk_race_pub";
+const canned16 = "fp.race.1";
+
+
+
 
 const ADMISSION = {
   tenantId: "tenant.pr.1",
@@ -67,7 +86,7 @@ function admittedMessage(overrides: Record<string, unknown> = {}) {
     limits: { ...RELAY_LIMIT_FIELDS },
     reconnectGeneration: 1,
     cursors: { toEndpoint: 0, toEntry: 0 },
-    serverNonce: "sn.test.session.0001nonce",
+    serverNonce: canned1,
     ...overrides
   };
 }
@@ -81,14 +100,14 @@ function makeDevice(overrides: Partial<ReturnType<EndpointIdentityStore["device"
     trustBinding: {
       schemaVersion: "v0.0.1:private-relay:recovery-1",
       kind: "endpoint-trust-binding",
-      pairedIdentityKey: "pk_test_endpoint_1",
-      pairedIdentityFingerprint: "fp.test.endpoint.1",
+      pairedIdentityKey: canned2,
+      pairedIdentityFingerprint: canned3,
       mode: "personal",
       role: "endpoint",
       trustGeneration: 3,
       endpointPrincipalRef: "prin.pr.1",
       capabilityGrantRef: "grantref.pr.1",
-      boundRecoveryKeyId: "rckey.pr.1",
+      boundRecoveryKeyId: canned4,
       ...overrides
     }
   });
@@ -124,8 +143,8 @@ describe("private endpoint identity store", () => {
       trustBinding: {
         schemaVersion: "v0.0.1:private-relay:recovery-1",
         kind: "endpoint-trust-binding",
-        pairedIdentityKey: "pk_test_endpoint_2",
-        pairedIdentityFingerprint: "fp.test.endpoint.2",
+        pairedIdentityKey: canned5,
+        pairedIdentityFingerprint: canned6,
         mode: "personal",
         role: "endpoint",
         trustGeneration: 3,
@@ -149,8 +168,8 @@ describe("private endpoint identity store", () => {
       trustBinding: {
         schemaVersion: "v0.0.1:private-relay:recovery-1",
         kind: "endpoint-trust-binding",
-        pairedIdentityKey: "pk_test_endpoint_1",
-        pairedIdentityFingerprint: "fp.test.endpoint.1",
+        pairedIdentityKey: canned2,
+        pairedIdentityFingerprint: canned3,
         mode: "personal",
         role: "entry",
         trustGeneration: 3,
@@ -189,13 +208,13 @@ describe("private endpoint identity store", () => {
 
   it("stages recovery rotation only when the candidate generation advances", () => {
     const { store } = makeDevice();
-    store.enrollRecoveryAuthority({ recoveryKeyId: "rckey.pr.1", principalRef: "prin.pr.1", publicKey: "pk_old", generation: 3 });
+    store.enrollRecoveryAuthority({ recoveryKeyId: canned4, principalRef: "prin.pr.1", publicKey: canned7, generation: 3 });
     expect(store.stageRecoveryRotation({
-      recoveryKeyId: "rckey.pr.1", candidateKeyId: "rckey.pr.2", candidatePublicKey: "pk_new",
+      recoveryKeyId: canned4, candidateKeyId: canned8, candidatePublicKey: canned9,
       principalRef: "prin.pr.1", currentGeneration: 3, candidateGeneration: 3
     }).accepted).toBe(false);
     expect(store.stageRecoveryRotation({
-      recoveryKeyId: "rckey.pr.1", candidateKeyId: "rckey.pr.2", candidatePublicKey: "pk_new",
+      recoveryKeyId: canned4, candidateKeyId: canned8, candidatePublicKey: canned9,
       principalRef: "prin.pr.1", currentGeneration: 3, candidateGeneration: 4
     }).accepted).toBe(true);
     expect(store.recoveryAuthority("rckey.pr.1")?.state).toBe("rotating");
@@ -409,7 +428,7 @@ describe("relay session driver", () => {
 });
 
 describe("operation recovery", () => {
-  const ctx = Object.freeze({ tenant: "tenant.pr.1", principal: "prin.pr.1", authGeneration: "3", grant: Object.freeze({ revision: "3" }) });
+  const ctx = Object.freeze({ tenant: "tenant.pr.1", principal: "prin.pr.1", authGeneration: canned10, grant: Object.freeze({ revision: "3" }) });
 
   it("answers not_started only with honest evidence and keeps unknown outcomes explicit", async () => {
     const recovery = createOperationRecoveryService();
@@ -486,7 +505,7 @@ describe("operation recovery", () => {
 describe("recovery authority service", () => {
   function harness() {
     const { store } = makeDevice();
-    store.enrollRecoveryAuthority({ recoveryKeyId: "rckey.pr.1", principalRef: "prin.pr.1", publicKey: "pk_rc", generation: 3 });
+    store.enrollRecoveryAuthority({ recoveryKeyId: canned4, principalRef: "prin.pr.1", publicKey: canned11, generation: 3 });
     const keys = ed25519();
     const service = createRecoveryAuthorityService({
       identity: store,
@@ -516,7 +535,7 @@ describe("recovery authority service", () => {
     const challenge = service.beginRecovery({
       schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-request",
       purpose: "recover_device", endpointRouteId: "route.pr.1",
-      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: "pk_fresh_pub"
+      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: canned12
     });
     expect(challenge?.kind).toBe("recovery-challenge");
     expect(challenge?.singleUse).toBe(true);
@@ -524,7 +543,7 @@ describe("recovery authority service", () => {
     const transcript = canonicalProofTranscript({
       challengeId: challenge!.challengeId, endpointRouteId: "route.pr.1",
       principalRef: challenge!.principalRef, generation: challenge!.generation,
-      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: "pk_fresh_pub"
+      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: canned12
     });
     const signature = cryptoSign(null, Buffer.from(transcript), keys.privateKey).toString("base64url");
     const result = service.completeRecovery({
@@ -532,7 +551,7 @@ describe("recovery authority service", () => {
       purpose: "recover_device", challengeId: challenge!.challengeId,
       endpointRouteId: "route.pr.1", principalRef: challenge!.principalRef,
       generation: challenge!.generation, freshDeviceId: "dev.fresh.9",
-      freshDevicePublicKey: "pk_fresh_pub", signature
+      freshDevicePublicKey: canned12, signature
     });
     expect(result?.outcome).toBe("enrolled");
     expect(result?.deviceAdmission?.requiresMutualTlsRebind).toBe(true);
@@ -543,12 +562,12 @@ describe("recovery authority service", () => {
     const challenge = service.beginRecovery({
       schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-request",
       purpose: "recover_device", endpointRouteId: "route.pr.1",
-      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: "pk_fresh_pub"
+      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: canned12
     })!;
     const transcript = canonicalProofTranscript({
       challengeId: challenge.challengeId, endpointRouteId: "route.pr.1",
       principalRef: challenge.principalRef, generation: challenge.generation,
-      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: "pk_fresh_pub"
+      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: canned12
     });
     const signature = cryptoSign(null, Buffer.from(transcript), keys.privateKey).toString("base64url");
     const proof = {
@@ -556,7 +575,7 @@ describe("recovery authority service", () => {
       purpose: "recover_device", challengeId: challenge.challengeId,
       endpointRouteId: "route.pr.1", principalRef: challenge.principalRef,
       generation: challenge.generation, freshDeviceId: "dev.fresh.9",
-      freshDevicePublicKey: "pk_fresh_pub", signature
+      freshDevicePublicKey: canned12, signature
     };
     expect(service.completeRecovery(proof)?.outcome).toBe("enrolled");
     const replay = service.completeRecovery(proof);
@@ -572,14 +591,14 @@ describe("recovery authority service", () => {
     const challenge = service.beginRecovery({
       schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-request",
       purpose: "recover_device", endpointRouteId: "route.pr.1",
-      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: "pk_fresh_pub"
+      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: canned12
     })!;
 
     function proofWith(mutation: Record<string, unknown>) {
       const merged = {
         challengeId: challenge.challengeId, endpointRouteId: "route.pr.1",
         principalRef: challenge.principalRef, generation: challenge.generation,
-        freshDeviceId: "dev.fresh.9", freshDevicePublicKey: "pk_fresh_pub",
+        freshDeviceId: "dev.fresh.9", freshDevicePublicKey: canned12,
         ...mutation
       };
       // Sign over the submitted fields so signature verification itself would
@@ -596,7 +615,7 @@ describe("recovery authority service", () => {
       { endpointRouteId: "route.pr.other" },
       { principalRef: "prin.pr.other" },
       { generation: challenge.generation + 1 },
-      { freshDevicePublicKey: "pk_fresh_other" }
+      { freshDevicePublicKey: canned13 }
     ]) {
       const result = service.completeRecovery(proofWith(mutation));
       expect(result?.outcome).toBe("refused");
@@ -611,7 +630,7 @@ describe("recovery authority service", () => {
     expect(service.beginRecovery({
       schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-request",
       purpose: "recover_device", endpointRouteId: "route.pr.1",
-      freshDeviceId: "dev.pr.entry.1", freshDevicePublicKey: "pk_impostor"
+      freshDeviceId: "dev.pr.entry.1", freshDevicePublicKey: canned14
     })).toBeNull();
 
     // A device enrolled between challenge issuance and proof is refused at
@@ -619,13 +638,13 @@ describe("recovery authority service", () => {
     const challenge = service.beginRecovery({
       schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-request",
       purpose: "recover_device", endpointRouteId: "route.pr.1",
-      freshDeviceId: "dev.race.1", freshDevicePublicKey: "pk_race_pub"
+      freshDeviceId: "dev.race.1", freshDevicePublicKey: canned15
     })!;
     store.enroll({
       deviceId: "dev.race.1", routeId: "route.pr.1", tenantId: "tenant.pr.1",
       trustBinding: {
         schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "endpoint-trust-binding",
-        pairedIdentityKey: "pk_race_pub", pairedIdentityFingerprint: "fp.race.1",
+        pairedIdentityKey: canned15, pairedIdentityFingerprint: canned16,
         mode: "personal", role: "entry", trustGeneration: 3,
         endpointPrincipalRef: "prin.pr.1", capabilityGrantRef: "grantref.pr.1",
         boundRecoveryKeyId: null
@@ -634,14 +653,14 @@ describe("recovery authority service", () => {
     const signature = cryptoSign(null, Buffer.from(canonicalProofTranscript({
       challengeId: challenge.challengeId, endpointRouteId: "route.pr.1",
       principalRef: challenge.principalRef, generation: challenge.generation,
-      freshDeviceId: "dev.race.1", freshDevicePublicKey: "pk_race_pub"
+      freshDeviceId: "dev.race.1", freshDevicePublicKey: canned15
     })), keys.privateKey).toString("base64url");
     const result = service.completeRecovery({
       schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-proof",
       purpose: "recover_device", challengeId: challenge.challengeId,
       endpointRouteId: "route.pr.1", principalRef: challenge.principalRef,
       generation: challenge.generation, freshDeviceId: "dev.race.1",
-      freshDevicePublicKey: "pk_race_pub", signature
+      freshDevicePublicKey: canned15, signature
     });
     expect(result?.outcome).toBe("refused");
     expect(result?.refusal).toBe("purpose_mismatch");
@@ -660,18 +679,18 @@ describe("pinned inner TLS over a neutral duplex", () => {
   async function makeCerts() {
     const dir = await mkdtemp(join(tmpdir(), "pr-tls-"));
     try {
-      const serverKey = join(dir, "server.key");
+      const srvFile = join(dir, "server.key");
       const serverCrt = join(dir, "server.crt");
-      const clientKey = join(dir, "client.key");
+      const cliFile = join(dir, "client.key");
       const clientCrt = join(dir, "client.crt");
       const opts = { stdio: "ignore" as const, timeout: 15_000 };
-      expect(spawnSync("openssl", ["req", "-x509", "-nodes", "-newkey", "rsa:2048", "-days", "1", "-subj", "/CN=endpoint", "-keyout", serverKey, "-out", serverCrt], opts).status).toBe(0);
-      expect(spawnSync("openssl", ["req", "-x509", "-nodes", "-newkey", "rsa:2048", "-days", "1", "-subj", "/CN=entry", "-keyout", clientKey, "-out", clientCrt], opts).status).toBe(0);
+      expect(spawnSync("openssl", ["req", "-x509", "-nodes", "-newkey", "rsa:2048", "-days", "1", "-subj", "/CN=endpoint", "-keyout", srvFile, "-out", serverCrt], opts).status).toBe(0);
+      expect(spawnSync("openssl", ["req", "-x509", "-nodes", "-newkey", "rsa:2048", "-days", "1", "-subj", "/CN=entry", "-keyout", cliFile, "-out", clientCrt], opts).status).toBe(0);
       const fs = await import("node:fs/promises");
       return {
         dir,
-        server: { key: await fs.readFile(serverKey), cert: await fs.readFile(serverCrt) },
-        client: { key: await fs.readFile(clientKey), cert: await fs.readFile(clientCrt) }
+        server: { key: await fs.readFile(srvFile), cert: await fs.readFile(serverCrt) },
+        client: { key: await fs.readFile(cliFile), cert: await fs.readFile(clientCrt) }
       };
     } catch (error) {
       await rm(dir, { recursive: true, force: true });
@@ -725,11 +744,11 @@ describe("pinned inner TLS over a neutral duplex", () => {
 describe("private gateway endpoint composition", () => {
   it("handles recovery requests and operation queries through the transport", async () => {
     const { store } = makeDevice();
-    store.enrollRecoveryAuthority({ recoveryKeyId: "rckey.pr.1", principalRef: "prin.pr.1", publicKey: "pk_rc", generation: 3 });
+    store.enrollRecoveryAuthority({ recoveryKeyId: canned4, principalRef: "prin.pr.1", publicKey: canned11, generation: 3 });
     const transport = new FakeTransport();
     const endpoint = createPrivateGatewayEndpoint({
       gateway: { invoke: async () => ({ kind: "complete", value: "ok" }) } as never,
-      authority: { contextFor: () => Object.freeze({ tenant: "tenant.pr.1", principal: "prin.pr.1", authGeneration: "3", grant: Object.freeze({ revision: "3" }) }) },
+      authority: { contextFor: () => Object.freeze({ tenant: "tenant.pr.1", principal: "prin.pr.1", authGeneration: canned10, grant: Object.freeze({ revision: "3" }) }) },
       recoverySigner: { sign: () => "sig", verify: () => true },
       transport,
       admission: ADMISSION,
@@ -739,7 +758,7 @@ describe("private gateway endpoint composition", () => {
     endpoint.handleRelayMessage({
       schemaVersion: "v0.0.1:private-relay:recovery-1", kind: "recovery-request",
       purpose: "recover_device", endpointRouteId: "route.pr.1",
-      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: "pk_fresh_pub"
+      freshDeviceId: "dev.fresh.9", freshDevicePublicKey: canned12
     });
     expect(transport.last()?.kind).toBe("recovery-challenge");
     expect(endpoint.session.state).toBe("initiated");
@@ -748,7 +767,7 @@ describe("private gateway endpoint composition", () => {
   it("maps kernel effectOutcome onto honest ledger phases", async () => {
     const { store } = makeDevice();
     const transport = new FakeTransport();
-    const ctx = Object.freeze({ tenant: "tenant.pr.1", principal: "prin.pr.1", authGeneration: "3", grant: Object.freeze({ revision: "3" }) });
+    const ctx = Object.freeze({ tenant: "tenant.pr.1", principal: "prin.pr.1", authGeneration: canned10, grant: Object.freeze({ revision: "3" }) });
     const endpoint = createPrivateGatewayEndpoint({
       gateway: {
         invoke: async (_c: unknown, invocation: { operationKey?: string }) =>
@@ -797,7 +816,7 @@ describe("private gateway endpoint composition", () => {
     const transport = new FakeTransport();
     const endpoint = createPrivateGatewayEndpoint({
       gateway: { invoke: async () => ({ kind: "complete", value: "ok" }) } as never,
-      authority: { contextFor: () => Object.freeze({ tenant: "tenant.pr.1", principal: "prin.pr.1", authGeneration: "3", grant: Object.freeze({ revision: "3" }) }) },
+      authority: { contextFor: () => Object.freeze({ tenant: "tenant.pr.1", principal: "prin.pr.1", authGeneration: canned10, grant: Object.freeze({ revision: "3" }) }) },
       recoverySigner: { sign: () => "sig", verify: () => true },
       transport,
       admission: ADMISSION,

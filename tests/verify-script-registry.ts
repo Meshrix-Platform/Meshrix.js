@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+
+const canned1 = "redacted-secret-ref-hash";
 /**
  * verify-script-registry.ts — Script Registry Coverage & Consistency Verifier
  *
@@ -33,6 +35,8 @@ import {
   requiredReportSpec
 } from "../tools/server-scripts/lib/required-report-validator.ts";
 import { npmCliArgs, resolveNpmCliInvocation } from "../tools/server-scripts/lib/npm-cli-invocation.ts";
+
+
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -1478,7 +1482,7 @@ const upstreamFixtureTransitBaseReport: any = registeredReleaseReportFixture(UPS
       accepted: true,
       serviceCredentialRefCount: 3,
       resolvedCredentialRefCount: 3,
-      credentialRefHash: "redacted-secret-ref-hash",
+      credentialRefHash: canned1,
       descriptorHasInlineCredential: false,
       rawSecretRedacted: true
     },
@@ -1567,7 +1571,7 @@ const downstreamAgentToolLoopBaseReport: any = registeredReleaseReportFixture(DO
       accepted: true,
       serviceCredentialRefCount: 1,
       resolvedCredentialRefCount: 1,
-      credentialRefHash: "redacted-secret-ref-hash",
+      credentialRefHash: canned1,
       rawSecretRedacted: true
     },
     cancellationPropagation: { ...downstreamAgentCancellationEvidence },

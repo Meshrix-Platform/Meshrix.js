@@ -23,6 +23,18 @@ import { createToolCatalog } from "../../../packages/capabilities/src/operation-
 import { runWithAbortableTimeout } from "../../../packages/capabilities/src/operation-permission-core/runtime-transport.ts";
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { stagePluginArtifactFixture } from "./support/plugin-artifact-authority-fixture.ts";
+const canned1 = "unit-locked-write";
+const canned2 = "fence_revalidation_revoked";
+const canned3 = "operation-permission-wrapper";
+const canned4 = "unit-wrapper-target";
+const canned5 = "fence_fixture_1";
+const canned6 = "operation:fixture:session-loss";
+const canned7 = "fence_fixture_session";
+const canned8 = "operation:fixture:absolute-deadline";
+const canned9 = "fence_fixture_absolute_deadline";
+
+
+
 
 const managers: any[] = [];
 const tempRoots: any[] = [];
@@ -86,7 +98,7 @@ function unsafeOperation(overrides: Record<string, any> = {}) : any {
     externalAuth: false,
     requiredScopes: [],
     readOnly: false,
-    concurrency: { workloadClass: "exclusive", key: "unit-locked-write", maxParallel: 1, cost: 2 },
+    concurrency: { workloadClass: "exclusive", key: canned1, maxParallel: 1, cost: 2 },
     safety: { risk: "safe_write" },
     inputSchema: { type: "object", properties: {} },
     audit: { enabled: true, recordInput: false },
@@ -133,7 +145,7 @@ describe("canonical operation dispatcher locking", () : any => {
         await acquireGate;
         return {
           lockKey,
-          fencingToken: "fence_revalidation_revoked",
+          fencingToken: canned2,
           acquiredAt: new Date(),
           expiresAt: new Date(Date.now() + 1_000),
           released: false,
@@ -270,12 +282,12 @@ describe("canonical operation dispatcher locking", () : any => {
     const wrapperSource: any = SERVER_API_OPERATIONS.find((operation?: any) : any => operation.id === "operation_permission.execute");
     const wrapper: any = unsafeOperation({
       id: wrapperSource.id,
-      concurrency: { ...wrapperSource.concurrency, key: "operation-permission-wrapper" },
+      concurrency: { ...wrapperSource.concurrency, key: canned3 },
       target: { controller: "unit", method: "handle" }
     });
     const target: any = unsafeOperation({
       id: "unit.wrapper.target",
-      concurrency: { workloadClass: "exclusive", key: "unit-wrapper-target", maxParallel: 1, cost: 2 }
+      concurrency: { workloadClass: "exclusive", key: canned4, maxParallel: 1, cost: 2 }
     });
     let outerInFlight: any = 0;
     let maxOuterInFlight: any = 0;
@@ -487,7 +499,7 @@ describe("canonical operation dispatcher locking", () : any => {
       config: { defaultTtlMs: 30, heartbeatIntervalMs: 5 },
       acquire: vi.fn(async (lockKey?: any) : Promise<any> => ({
         lockKey,
-        fencingToken: "fence_fixture_1",
+        fencingToken: canned5,
         acquiredAt: new Date(),
         expiresAt: new Date(Date.now() + 30),
         released: false,
@@ -545,8 +557,8 @@ describe("canonical operation dispatcher locking", () : any => {
   it("fails the dispatch when the backend invalidates the session before the next heartbeat", async () : Promise<any> => {
     const release: any = vi.fn(async () : Promise<any> => {});
     const handle: Record<string, any> = {
-      lockKey: "operation:fixture:session-loss",
-      fencingToken: "fence_fixture_session",
+      lockKey: canned6,
+      fencingToken: canned7,
       acquiredAt: new Date(),
       expiresAt: new Date(Date.now() + 100),
       released: false,
@@ -581,8 +593,8 @@ describe("canonical operation dispatcher locking", () : any => {
     vi.setSystemTime(acquiredAt);
     const release: any = vi.fn(async () : Promise<any> => {});
     const handle: Record<string, any> = {
-      lockKey: "operation:fixture:absolute-deadline",
-      fencingToken: "fence_fixture_absolute_deadline",
+      lockKey: canned8,
+      fencingToken: canned9,
       acquiredAt,
       expiresAt: new Date(acquiredAt.getTime() + 100),
       released: false,

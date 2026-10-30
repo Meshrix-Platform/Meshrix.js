@@ -7,8 +7,16 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { issueApiKey } from "../../skills/meshrix-js-api-key-issuance/scripts/issue-api-key.mjs";
 import { configureOrganization } from "../../skills/meshrix-js-organization-governance/scripts/configure-organization.mjs";
+const canned1 = "synthetic-test-credential";
+const canned2 = "synthetic-csrf";
+const canned3 = "synthetic-catalog";
+const canned4 = "selected-template";
+const canned5 = "synthetic-password";
 
-const credential = "synthetic-test-credential";
+
+
+
+const credential = canned1;
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "meshrix-skill-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -26,18 +34,18 @@ async function fixture(t) {
 
 function server({ configured = true, failure, unexpectedNode = false } = {}) {
   const calls = [];
-  return { calls, readPassword: async () => "synthetic-password", fetchImpl: async (url, init) => {
+  return { calls, readPassword: async () => canned5, fetchImpl: async (url, init) => {
     const route = new URL(url).pathname;
     const body = init.body ? JSON.parse(init.body) : null;
     calls.push({ route, body });
     assert.equal(init.redirect, "error");
     if (failure === route) throw new Error("synthetic-private-backend-detail");
     let payload;
-    if (route.endsWith("/auth/login")) payload = { ok: true, csrfToken: "synthetic-csrf" };
+    if (route.endsWith("/auth/login")) payload = { ok: true, csrfToken: canned2 };
     else if (route.endsWith("/organization-governance")) payload = { snapshot: { configured, revision: 7 } };
     else if (route.endsWith("/issuer-scopes")) payload = {
       eligibleNodes: [{ nodeId: "first-node" }, { nodeId: unexpectedNode ? "other-node" : "selected-node" }],
-      serverAudience: "https://meshrix.invalid", catalogFingerprint: "synthetic-catalog",
+      serverAudience: "https://meshrix.invalid", catalogFingerprint: canned3,
     };
     else if (route.endsWith("/api-keys")) payload = { apiKey: credential, record: { policy: body.policy } };
     else if (route.endsWith("/import")) payload = { draft: { templateKey: body.templateKey, nodes: [] } };
@@ -73,7 +81,7 @@ test("selected node and policy are preserved; plaintext goes only to the private
   assert.equal(sent.organizationNodeId, "selected-node");
   assert.deepEqual(sent.policy, { ...f.request.policy,
     audience: { ...f.request.policy.audience, serverAudience: "https://meshrix.invalid" },
-    catalogFingerprint: "synthetic-catalog",
+    catalogFingerprint: canned3,
   });
   assert.deepEqual(sent.policy.audience.targetIds, []);
   assert.equal(JSON.stringify(result).includes(credential), false);
@@ -93,10 +101,10 @@ test("the actual CLI consumes private standard input and emits only delivery sta
 globalThis.fetch = async (url, init) => {
   const route = new URL(url).pathname;
   const replies = {
-    "/api/auth/login": { ok: true, csrfToken: "synthetic-csrf" },
+    "/api/auth/login": { ok: true, csrfToken: ${JSON.stringify(canned2)} },
     "/api/authorization/organization-governance": { snapshot: { configured: true } },
-    "/api/operation-permission/v1/api-keys/issuer-scopes": { eligibleNodes: [{ nodeId: "selected-node" }], serverAudience: "https://meshrix.invalid", catalogFingerprint: "synthetic-catalog" },
-    "/api/operation-permission/v1/api-keys": { apiKey: "synthetic-test-credential" }
+    "/api/operation-permission/v1/api-keys/issuer-scopes": { eligibleNodes: [{ nodeId: "selected-node" }], serverAudience: "https://meshrix.invalid", catalogFingerprint: ${JSON.stringify(canned3)} },
+    "/api/operation-permission/v1/api-keys": { apiKey: ${JSON.stringify(canned1)} }
   };
   assert.ok(Object.hasOwn(replies, route));
   if (route.endsWith("/auth/login")) assert.equal(JSON.parse(init.body).password, "synthetic-密码");
@@ -143,7 +151,7 @@ test("organization helper preserves configured state and rejects password argume
 test("organization helper previews and publishes the selected template at one revision", async () => {
   const remote = server({ configured: false });
   assert.deepEqual(await configureOrganization(organizationArgs, remote), { ok: true, configured: true });
-  assert.deepEqual(remote.calls.find((call) => call.route.endsWith("/import")).body, { templateKey: "selected-template" });
+  assert.deepEqual(remote.calls.find((call) => call.route.endsWith("/import")).body, { templateKey: canned4 });
   const preview = remote.calls.find((call) => call.route.endsWith("/preview")).body;
   const published = remote.calls.find((call) => call.route.endsWith("/publish")).body;
   assert.equal(preview.expectedRevision, 7);

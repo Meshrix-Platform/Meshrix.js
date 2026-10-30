@@ -1,9 +1,13 @@
+const canned1 = "invoke";
+
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createEndpointTrafficController } from "../../../packages/agents/src/upstream-gateway/endpoint-traffic.ts";
+
+
 
 const reportPath: any = path.resolve(String(process.argv[2] || ""));
 
@@ -34,7 +38,7 @@ async function main() : Promise<any> {
       cooldownMs: 50,
     },
   };
-  const operation: Record<string, any> = { operationKey: "invoke" };
+  const operation: Record<string, any> = { operationKey: canned1 };
   const initial: any = controller.selectEndpointTraffic(service, operation);
   const endpoint: any = initial.endpoint;
   controller.recordEndpointOutcome(service, operation, endpoint, { statusCode: 500, ok: false });

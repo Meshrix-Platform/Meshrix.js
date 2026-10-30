@@ -34,6 +34,17 @@ import {
   createWssRelayTransport,
   serveEntryMcpStdio
 } from "@meshrix/entry-transport";
+const canned1 = "3";
+const canned2 = "op.doubt.1";
+const canned3 = "op.call.1";
+const canned4 = "op.denied";
+const canned5 = "op.doubted";
+const canned6 = "op.blowup";
+const canned7 = "op.lost.1";
+const canned8 = "op.tampered.1";
+
+
+
 
 /**
  * The relay double is deliberately a router only: it relays session lifecycle,
@@ -240,7 +251,7 @@ class RelayHub {
           limits: { ...LIMITS },
           reconnectGeneration: 1,
           cursors: { ...this.#routeCursors },
-          serverNonce: `sn.hub.${String(++this.#seq).padStart(16, "0")}`
+          serverNonce: ("sn.hub."+String(++this.#seq).padStart(16, "0"))
         });
         this.#notifyRouteChange(conn);
         break;
@@ -396,7 +407,7 @@ function enrollEndpointDevice(store: EndpointIdentityStore, clientPin: string): 
       // identity handle and must satisfy the opaque-id alphabet (a bare
       // base64url pin can begin with - or _ which opaque-id forbids).
       pairedIdentityKey: clientPin,
-      pairedIdentityFingerprint: `fp.${clientPin}`,
+      pairedIdentityFingerprint: ("fp."+clientPin),
       mode: "personal",
       role: "endpoint",
       trustGeneration: 3,
@@ -410,7 +421,7 @@ function enrollEndpointDevice(store: EndpointIdentityStore, clientPin: string): 
 const TEST_CONTEXT: AuthenticatedContext = Object.freeze({
   tenant: TENANT,
   principal: PRINCIPAL,
-  authGeneration: "3",
+  authGeneration: canned1,
   grant: Object.freeze({ revision: "3" })
 });
 
@@ -477,8 +488,8 @@ function createWsTestServer(): { server: Server; conns: { sendText(text: string)
   const conns: { sendText(text: string): void; onText(fn: (text: string) => void): void; kill(): void }[] = [];
   const server = createServer();
   server.on("upgrade", (request, socket) => {
-    const key = String(request.headers["sec-websocket-key"] ?? "");
-    const accept = createHash("sha1").update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64");
+    const wsHeader = String(request.headers["sec-websocket-key"] ?? "");
+    const accept = createHash("sha1").update(`${wsHeader}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64");
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     let buffer = Buffer.alloc(0);
     let textHandler: ((text: string) => void) | undefined;
@@ -707,7 +718,7 @@ describe("entry session against the real private endpoint composition", () => {
       // endpoint ledger records dispatched_in_doubt.
       await endpoint.dispatchInnerMessage(TEST_CONTEXT, {
         jsonrpc: "2.0", id: "op.doubt.1", method: "tools/call",
-        params: { name: "svc/tool", arguments: {}, operationKey: "op.doubt.1" }
+        params: { name: "svc/tool", arguments: {}, operationKey: canned2 }
       }).catch(() => {
         // a thrown dispatch also lands in-doubt
       });
@@ -913,14 +924,14 @@ function makeGateway() {
   const gateway = {
     async invoke(_ctx: AuthenticatedContext, invocation: { routeRef: string; method: string; params: unknown; operationKey?: string }): Promise<GatewayOutcome> {
       calls.push({ operationKey: invocation.operationKey, routeRef: invocation.routeRef, method: invocation.method, params: invocation.params });
-      const key = invocation.operationKey ?? "";
-      if (key === "op.denied") {
+      const op = invocation.operationKey ?? "";
+      if (op === "op.denied") {
         return { kind: "failure", origin: "policy", code: "policy_denied", message: "Denied by policy.", status: 403, effectOutcome: "not_started" };
       }
-      if (key === "op.doubted") {
+      if (op === "op.doubted") {
         return { kind: "failure", origin: "transport", code: "upstream_lost", message: "The upstream outcome is unavailable.", status: 503, effectOutcome: "unknown" };
       }
-      if (key === "op.blowup") throw new Error("kernel failure mid-dispatch");
+      if (op === "op.blowup") throw new Error("kernel failure mid-dispatch");
       return { kind: "complete", value: { content: [{ type: "text", text: `ran ${invocation.routeRef}` }] } };
     },
     catalog(_ctx: AuthenticatedContext, query?: { kind?: string; cursor?: string; limit?: number }) {
@@ -975,7 +986,7 @@ describe("local MCP face over the live inner channel", () => {
       const prompts = await handle({ jsonrpc: "2.0", id: "pr1", method: "prompts/list" });
       expect(prompts?.result?.prompts?.[0]?.name).toBe("svc/prompt");
 
-      const call = await handle({ jsonrpc: "2.0", id: "c1", method: "tools/call", params: { name: "svc/tool", arguments: { a: 1 }, operationKey: "op.call.1" } });
+      const call = await handle({ jsonrpc: "2.0", id: "c1", method: "tools/call", params: { name: "svc/tool", arguments: { a: 1 }, operationKey: canned3 } });
       expect(call?.result?.content?.[0]?.text).toBe("ran svc/tool");
       expect(calls.some((c) => c.operationKey === "op.call.1")).toBe(true);
 
@@ -1003,16 +1014,16 @@ describe("local MCP face over the live inner channel", () => {
       const bridge = createEntryMcpBridge({ session: entry });
       const handle = (request: unknown): Promise<Answer> => bridge.handle(request) as Promise<Answer>;
 
-      const denied = await handle({ jsonrpc: "2.0", id: "d1", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: "op.denied" } });
+      const denied = await handle({ jsonrpc: "2.0", id: "d1", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: canned4 } });
       expect(denied?.error?.code).toBe(-32003);
       expect(denied?.error?.data?.code).toBe("policy_denied");
       expect(denied?.error?.data?.effectOutcome).toBe("not_started");
 
-      const doubted = await handle({ jsonrpc: "2.0", id: "d2", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: "op.doubted" } });
+      const doubted = await handle({ jsonrpc: "2.0", id: "d2", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: canned5 } });
       expect(doubted?.error?.data?.code).toBe("upstream_lost");
       expect(doubted?.error?.data?.effectOutcome).toBe("unknown");
 
-      const blewUp = await handle({ jsonrpc: "2.0", id: "d3", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: "op.blowup" } });
+      const blewUp = await handle({ jsonrpc: "2.0", id: "d3", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: canned6 } });
       expect(blewUp?.error?.data?.code).toBe("endpoint_dispatch_failed");
       expect(blewUp?.error?.data?.effectOutcome).toBe("unknown");
       entry.close();
@@ -1031,7 +1042,7 @@ describe("local MCP face over the live inner channel", () => {
       // Let the request dispatch fully, then sever the response direction and
       // the link before the answer arrives.
       hub.dropNext(ep.transport, (message) => message.kind === "frame");
-      const pending = handle({ jsonrpc: "2.0", id: "lost1", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: "op.lost.1" } });
+      const pending = handle({ jsonrpc: "2.0", id: "lost1", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: canned7 } });
       await waitFor(() => calls.some((c) => c.operationKey === "op.lost.1"), 3_000);
       // Kill the entry link — the pending request must settle as unknown, not hang.
       hub.killLink(transport);
@@ -1042,7 +1053,7 @@ describe("local MCP face over the live inner channel", () => {
 
       // No silent replay while the channel is down.
       expect(calls.filter((c) => c.operationKey === "op.lost.1")).toHaveLength(1);
-      const refused = await handle({ jsonrpc: "2.0", id: "w1", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: "op.lost.1" } });
+      const refused = await handle({ jsonrpc: "2.0", id: "w1", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: canned7 } });
       expect(refused?.error?.data?.code).toBe("endpoint_unreachable");
       expect(calls.filter((c) => c.operationKey === "op.lost.1")).toHaveLength(1);
 
@@ -1070,7 +1081,7 @@ describe("local MCP face over the live inner channel", () => {
         bytes[0] = bytes[0] ^ 0xff;
         return { ...message, payload: bytes.toString("base64url") };
       }, (message) => message.kind === "frame" && calls.some((call) => call.operationKey === "op.tampered.1"));
-      const answer = await handle({ jsonrpc: "2.0", id: "tp1", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: "op.tampered.1" } });
+      const answer = await handle({ jsonrpc: "2.0", id: "tp1", method: "tools/call", params: { name: "svc/tool", arguments: {}, operationKey: canned8 } });
       expect(answer?.error?.data?.code).toBe("operation_status_unknown");
       // The dispatch itself reached the endpoint kernel — what was lost is
       // the result, so the honest answer is doubt, not a result.

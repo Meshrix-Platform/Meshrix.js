@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { context, descriptor, response, route, key, createTestGateway as createGateway } from "../support";
+const canned1 = "credential-1";
+const canned2 = "credential-2";
+
+
+
 
 describe("gateway fault and uncertain-outcome boundaries", () => {
   it("[CASE-L04] marks a stateful context lost on a fatal upstream 404", async () => {
@@ -68,8 +73,8 @@ describe("gateway fault and uncertain-outcome boundaries", () => {
     const gateway = createGateway({ upstream: { invoke: async () => { calls += 1; return response({ resultType: "complete", value: "ok" }); } }, descriptors: [descriptor()] });
     await gateway.start();
     try {
-      const created = gateway.createContext({ tenant: context.tenant, principal: context.principal, grantRevision: "grant-1", credentialGeneration: "credential-1", routeRef: "route.demo" });
-      const rotated = { ...context, grant: { revision: "grant-2" }, metadata: { credentialGeneration: "credential-2" } } as typeof context;
+      const created = gateway.createContext({ tenant: context.tenant, principal: context.principal, grantRevision: "grant-1", credentialGeneration: canned1, routeRef: "route.demo" });
+      const rotated = { ...context, grant: { revision: "grant-2" }, metadata: { credentialGeneration: canned2 } } as typeof context;
       expect(await gateway.invoke(rotated, { routeRef: "route.demo", method: "tools/call", params: {}, contextHandle: created.handle })).toMatchObject({ kind: "failure", code: "context_binding_mismatch" });
       expect(calls).toBe(0);
     } finally {

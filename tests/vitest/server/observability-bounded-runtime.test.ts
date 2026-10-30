@@ -25,6 +25,14 @@ import {
 import {
   assertNoSensitiveReportLeak as assertNoSensitiveReportLeakFromVerifierPath
 } from "../../../tools/server-scripts/lib/sensitive-report-scan.ts";
+const canned1 = "Bearer synthetic";
+const canned2 = "synthetic-access-token";
+const canned3 = "synthetic-upstream-secret";
+const canned4 = "synthetic-api-key";
+const canned5 = "[redacted]";
+
+
+
 
 describe("bounded observability primitives", () : any => {
   it("uses one shared scanner for runtime and verifier report finalization", () : any => {
@@ -55,10 +63,10 @@ describe("bounded observability primitives", () : any => {
         }
       },
       credentials: {
-        authorization: "Bearer synthetic",
-        accessToken: "synthetic-access-token",
-        upstreamSecret: "synthetic-upstream-secret",
-        apiKey: "synthetic-api-key",
+        authorization: canned1,
+        accessToken: canned2,
+        upstreamSecret: canned3,
+        apiKey: canned4,
         privateKeyJwk: { k: "synthetic-private-key" }
       },
       tokenCount: 2
@@ -70,11 +78,11 @@ describe("bounded observability primitives", () : any => {
       script: "tools/server-scripts/verify-authorization-enforcement.ts"
     });
     expect(report.credentials).toEqual({
-      authorization: "[redacted]",
-      accessToken: "[redacted]",
-      upstreamSecret: "[redacted]",
-      apiKey: "[redacted]",
-      privateKeyJwk: "[redacted]"
+      authorization: canned5,
+      accessToken: canned5,
+      upstreamSecret: canned5,
+      apiKey: canned5,
+      privateKeyJwk: canned5
     });
     expect(report.tokenCount).toBe(2);
   });

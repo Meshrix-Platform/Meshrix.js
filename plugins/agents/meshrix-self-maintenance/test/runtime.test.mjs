@@ -12,6 +12,14 @@ import { PrivateStateStore } from "../internal/private-state.mjs";
 import { SelfMaintenanceRuntime } from "../internal/runtime.mjs";
 import { buildPinnedRun } from "../internal/schedule.mjs";
 
+const cannedModel = "synthetic-model-token";
+const cannedRef = "credential:model-gateway";
+const cannedForbidden = "forbidden";
+const cannedRes1 = "00000000000000000000000000000001:operation:0";
+const cannedRes2 = "00000000000000000000000000000002:operation:0";
+const cannedMeshrixRef = "credential:meshrix";
+const cannedRunSuffix = (runId) => `${runId}:1`;
+
 function config(revision = "rev-1", overrides = {}) {
   return {
     schemaVersion: "v0.0.1:meshrix-self-maintenance:local-config-1",
@@ -30,7 +38,7 @@ function config(revision = "rev-1", overrides = {}) {
     workspaceSelectors: ["workspace-maintenance"],
     credentialRefs: [
       { id: "model-gateway-client", ref: "credential:model-gateway" },
-      { id: "meshrix-client", ref: "credential:meshrix" }
+      { id: "meshrix-client", ref: cannedMeshrixRef }
     ],
     ...overrides
   };
@@ -109,13 +117,13 @@ test("HTTP clients preserve caller cancellation and dispose rejected response bo
     runbookId: "schedule-1",
     operationIds: ["system.health"]
   };
-  const credentialStore = { resolve: async () => ({ token: "synthetic-model-token" }) };
+  const credentialStore = { resolve: async () => ({ token: cannedModel }) };
   const controller = new AbortController();
   let capturedSignal;
   const signalClient = new DirectModelGatewayClient({
     endpoint: "https://model-gateway.invalid",
     credentialStore,
-    credentialRef: "credential:model-gateway",
+    credentialRef: cannedRef,
     fetchImpl: async (_url, init) => {
       capturedSignal = init.signal;
       return response({ choices: [{ message: { content: "{}" } }] });
@@ -132,7 +140,7 @@ test("HTTP clients preserve caller cancellation and dispose rejected response bo
   const oversizedClient = new DirectModelGatewayClient({
     endpoint: "https://model-gateway.invalid",
     credentialStore,
-    credentialRef: "credential:model-gateway",
+    credentialRef: cannedRef,
     fetchImpl: async () => oversizedResponse
   });
   await assert.rejects(oversizedClient.propose(request), (error) => error.message === "response_too_large");
@@ -145,7 +153,7 @@ test("HTTP clients preserve caller cancellation and dispose rejected response bo
   const malformedClient = new DirectModelGatewayClient({
     endpoint: "https://model-gateway.invalid",
     credentialStore,
-    credentialRef: "credential:model-gateway",
+    credentialRef: cannedRef,
     fetchImpl: async () => malformedResponse
   });
   await assert.rejects(malformedClient.propose(request), (error) => error.message === "external_response_invalid");
@@ -157,8 +165,8 @@ test("HTTP rejection cancels the unused body without reading or replaying it", a
   let cancellations = 0;
   const client = new DirectModelGatewayClient({
     endpoint: "https://model-gateway.invalid",
-    credentialStore: { resolve: async () => ({ token: "synthetic-model-token" }) },
-    credentialRef: "credential:model-gateway",
+    credentialStore: { resolve: async () => ({ token: cannedModel }) },
+    credentialRef: cannedRef,
     fetchImpl: async () => {
       requests += 1;
       return {
@@ -187,14 +195,14 @@ test("concurrent durable budget reservations admit only the first unique request
   const reservations = await Promise.all([
     state.reserveDailyBudget({
       day,
-      reservationKey: "00000000000000000000000000000001:operation:0",
+      reservationKey: cannedRes1,
       maxCalls: 1,
       maxCostUnits: 1,
       costUnits: 1
     }),
     state.reserveDailyBudget({
       day,
-      reservationKey: "00000000000000000000000000000002:operation:0",
+      reservationKey: cannedRes2,
       maxCalls: 1,
       maxCostUnits: 1,
       costUnits: 1
@@ -381,7 +389,7 @@ test("closed schema rejects missing, extra, and secret-bearing configuration", (
   assert.throws(() => assertLocalConfig(missing), /closed_schema/);
   assert.throws(() => assertLocalConfig({
     ...config(),
-    credentialRefs: [{ id: "meshrix-client", ref: "credential:meshrix", token: "forbidden" }]
+    credentialRefs: [{ id: "meshrix-client", ref: cannedMeshrixRef, token: cannedForbidden }]
   }), /credential_refs/);
 });
 
@@ -841,7 +849,7 @@ test("recovery skips completed operations and resumes at the first uncertain ste
 
   assert.deepEqual(requests, [
     { pathname: "/v1/chat/completions", key: item.runId },
-    { pathname: "/api/operation-permission/v1/execute", key: `${item.runId}:1` }
+    { pathname: "/api/operation-permission/v1/execute", key: cannedRunSuffix(item.runId) }
   ]);
   const completed = (await journal(local.storageRoot)).find((entry) => entry.runId === item.runId &&
     entry.state === "operation_completed" && entry.operationIndex === 1);

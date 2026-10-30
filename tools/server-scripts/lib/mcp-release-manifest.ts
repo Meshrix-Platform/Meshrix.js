@@ -12,6 +12,10 @@ import {
   MCP_PRIORITY_INSTALL_TARGETS,
   mcpSupportedTargetDetails
 } from "../../../packages/protocols/mcp/adapter/mcp-release-targets.ts";
+const canned1 = "sigstore-bundle-then-asset-digest";
+
+
+
 
 function sharedHubContract(): any {
   return {
@@ -122,7 +126,7 @@ export function releaseManifest({
       artifacts: portableAssets,
       releaseChecksumFile: "RELEASE_SHA256SUMS",
       releaseChecksumSigstoreBundleFile: "RELEASE_SHA256SUMS.sigstore.json",
-      checksumAuthorityVerificationOrder: "sigstore-bundle-then-asset-digest",
+      checksumAuthorityVerificationOrder: canned1,
       checksumVerificationRequired: true,
       installCommand: "meshrix-mcp install",
       clientInstallCommand: "meshrix-mcp install --target codex",

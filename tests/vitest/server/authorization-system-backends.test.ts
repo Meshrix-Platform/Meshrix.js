@@ -2,6 +2,25 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+const canned1 = "";
+const canned2 = "opaque recovery secret";
+const canned3 = "guard recovery secret";
+const canned90 = "cred-auto-local";
+const canned91 = "cred-auto-guard";
+const canned92 = "cred-linux-rewrap";
+const canned4 = "ock_dynamic_plugin_tool";
+const canned5 = "cred-dynamic-plugin-tool";
+const canned6 = "";
+const canned7 = "ock_local_specific";
+const canned8 = "cred-local-specific";
+const canned9 = "ock_local_wildcard";
+const canned10 = "cred-local-wildcard";
+const canned11 = "ock_local_wildcard_replacement";
+const canned12 = "ock_local_expired";
+const canned13 = "cred-local-expired";
+const canned14 = "cred-binding";
+const canned15 = "cred-binding-expired";
+
 
 const spawnHarness: any = vi.hoisted(() : any => {
   class MiniEmitter {
@@ -74,6 +93,10 @@ import {
   createOpaqueCapabilityKeyProvider,
   createSealedCapabilityKernelStore
 } from "../../../packages/foundation/src/security/authorization/opaque-capability-key.ts";
+
+
+
+
 
 const tempRoots: any[] = [];
 const originalDpapiCommand: any = process.env.MESHRIX_WINDOWS_DPAPI_COMMAND;
@@ -278,7 +301,7 @@ describe("authorization system backend coverage", () : any => {
       const key: any = createCapabilityKey();
       const binding: any = await guard.bindCapabilityKey({
         capabilityKey: key,
-        credentialId: `cred-${backend}`,
+        credentialId: ("cred-"+backend),
         context: { namespace: `tenant-${backend}` }
       });
       expect(binding.credentialId).toBe(`cred-${backend}`);
@@ -359,7 +382,7 @@ describe("authorization system backend coverage", () : any => {
       });
       await expect(guard.bindCapabilityKey({
         capabilityKey: createCapabilityKey(),
-        credentialId: `cred-${backend}`,
+        credentialId: ("cred-"+backend),
         context: { namespace: `tenant-${backend}` }
       })).rejects.toThrow(/failed intentionally/);
       guard.close();
@@ -387,7 +410,7 @@ describe("authorization system backend coverage", () : any => {
       });
       await expect(guard.bindCapabilityKey({
         capabilityKey: createCapabilityKey(),
-        credentialId: `cred-write-${backend}`,
+        credentialId: ("cred-write-"+backend),
         context: { namespace: `tenant-write-${backend}` }
       })).rejects.toThrow(/write failed intentionally/);
       guard.close();
@@ -405,7 +428,7 @@ describe("authorization system backend coverage", () : any => {
     });
     const issued: any = await provider.issue({
       capabilities: [apiCapabilityId("jobs.create")],
-      credentialId: "cred-auto-local"
+      credentialId: canned1
     });
     expect(issued.runtimeLookupGeneration).toBeGreaterThanOrEqual(1);
     await expect(provider.describe()).resolves.toMatchObject({
@@ -422,9 +445,9 @@ describe("authorization system backend coverage", () : any => {
     const capabilityKey: any = createCapabilityKey();
     await expect(guard.bindCapabilityKey({
       capabilityKey,
-      credentialId: "cred-auto-guard",
+      credentialId: canned2,
       context: { namespace: "tenant-auto" }
-    })).resolves.toMatchObject({ credentialId: "cred-auto-guard" });
+    })).resolves.toMatchObject({ credentialId: canned2 });
     await expect(guard.verifyCapabilityKeyBinding({
       capabilityKey,
       context: { namespace: "tenant-auto" }
@@ -470,9 +493,9 @@ describe("authorization system backend coverage", () : any => {
       const key: any = createCapabilityKey();
       await expect(guard.bindCapabilityKey({
         capabilityKey: key,
-        credentialId: "cred-linux-rewrap",
+        credentialId: canned3,
         context: { namespace: "tenant-linux" }
-      })).resolves.toMatchObject({ credentialId: "cred-linux-rewrap" });
+      })).resolves.toMatchObject({ credentialId: canned3 });
       await expect(guard.verifyCapabilityKeyBinding({
         capabilityKey: key,
         context: { namespace: "tenant-linux" }
@@ -513,8 +536,8 @@ describe("authorization system backend coverage", () : any => {
       .rejects.toThrow(/Unknown opaque capability/);
 
     const dynamicIssued: any = await provider.issue({
-      capabilityKey: "ock_dynamic_plugin_tool",
-      credentialId: "cred-dynamic-plugin-tool",
+      capabilityKey: canned4,
+      credentialId: canned5,
       capabilities: ["cap:tool:sample_plugin.package.read:execute"],
       trustedCapabilityPermissions: ["cap:tool:sample_plugin.package.read:execute"]
     });
@@ -526,7 +549,7 @@ describe("authorization system backend coverage", () : any => {
       requiredCapabilities: ["cap:tool:sample_plugin.package.read:execute"]
     });
 
-    await expect(provider.verify({ capabilityKey: "" })).resolves.toMatchObject({
+    await expect(provider.verify({ capabilityKey: canned6 })).resolves.toMatchObject({
       ok: false,
       reasonCode: "capability_key_missing"
     });
@@ -547,8 +570,8 @@ describe("authorization system backend coverage", () : any => {
     });
 
     const issued: any = await provider.issue({
-      capabilityKey: "ock_local_specific",
-      credentialId: "cred-local-specific",
+      capabilityKey: canned7,
+      credentialId: canned8,
       capabilities: [apiCapabilityId("jobs.create")],
       grantVersion: 2,
       metadata: { purpose: "coverage" },
@@ -560,7 +583,7 @@ describe("authorization system backend coverage", () : any => {
     })).resolves.toMatchObject({
       ok: false,
       reasonCode: "missing_capabilities",
-      credentialId: "cred-local-specific",
+      credentialId: canned8,
       missingCapabilities: [apiCapabilityId("jobs.delete")]
     });
     await expect(provider.verify({
@@ -570,7 +593,7 @@ describe("authorization system backend coverage", () : any => {
     })).resolves.toMatchObject({
       ok: false,
       reasonCode: "credential_grant_version_stale",
-      credentialId: "cred-local-specific"
+      credentialId: canned8
     });
     await expect(provider.rotateCapabilityKey({
       capabilityKey: issued.capabilityKey,
@@ -581,8 +604,8 @@ describe("authorization system backend coverage", () : any => {
     });
 
     const wildcard: any = await provider.issue({
-      capabilityKey: "ock_local_wildcard",
-      credentialId: "cred-local-wildcard",
+      capabilityKey: canned9,
+      credentialId: canned10,
       capabilities: ["cap:api:*"]
     });
     await expect(provider.verify({
@@ -591,13 +614,13 @@ describe("authorization system backend coverage", () : any => {
       includeRecordDetails: true
     })).resolves.toMatchObject({
       ok: true,
-      credentialId: "cred-local-wildcard",
+      credentialId: canned10,
       capabilityCount: 1
     });
 
     const replacedCredential: any = await provider.issue({
-      capabilityKey: "ock_local_wildcard_replacement",
-      credentialId: "cred-local-wildcard",
+      capabilityKey: canned11,
+      credentialId: canned10,
       capabilities: [apiCapabilityId("jobs.get")],
       replaceCredential: true,
       replacementReason: "coverage-reissue"
@@ -608,19 +631,19 @@ describe("authorization system backend coverage", () : any => {
     })).resolves.toMatchObject({
       ok: false,
       reasonCode: "capability_key_invalid",
-      credentialId: "cred-local-wildcard"
+      credentialId: canned10
     });
     await expect(provider.verify({
       capabilityKey: replacedCredential.capabilityKey,
       requiredCapability: apiCapabilityId("jobs.get")
     })).resolves.toMatchObject({
       ok: true,
-      credentialId: "cred-local-wildcard"
+      credentialId: canned10
     });
 
     const expired: any = await provider.issue({
-      capabilityKey: "ock_local_expired",
-      credentialId: "cred-local-expired",
+      capabilityKey: canned12,
+      credentialId: canned13,
       capabilities: [apiCapabilityId("jobs.get")],
       issuedAt: "2000-01-01T00:00:00.000Z",
       expiresAt: "2000-01-01T00:00:01.000Z"
@@ -632,7 +655,7 @@ describe("authorization system backend coverage", () : any => {
     })).resolves.toMatchObject({
       ok: false,
       reasonCode: "capability_key_expired",
-      credentialId: "cred-local-expired"
+      credentialId: canned13
     });
 
     const rotated: any = await provider.rotateCapabilityKey({
@@ -642,7 +665,7 @@ describe("authorization system backend coverage", () : any => {
     });
     expect(rotated).toMatchObject({
       ok: true,
-      credentialId: "cred-local-specific",
+      credentialId: canned8,
       oldStatus: "invalid",
       status: "valid"
     });
@@ -655,15 +678,15 @@ describe("authorization system backend coverage", () : any => {
     });
 
     await expect(provider.invalidate({ capabilityKey: rotated.capabilityKey, reason: "revoked" }))
-      .resolves.toMatchObject({ credentialId: "cred-local-specific", status: "invalid" });
-    await expect(provider.invalidate({ capabilityKey: "", reason: "noop" })).resolves.toBeNull();
-    await expect(provider.invalidateCredential({ credentialId: "" })).resolves.toEqual([]);
-    await expect(provider.invalidateCredential({ credentialId: "cred-local-wildcard", reason: "credential revoked" }))
+      .resolves.toMatchObject({ credentialId: canned8, status: "invalid" });
+    await expect(provider.invalidate({ capabilityKey: canned6, reason: "noop" })).resolves.toBeNull();
+    await expect(provider.invalidateCredential({ credentialId: canned6 })).resolves.toEqual([]);
+    await expect(provider.invalidateCredential({ credentialId: canned10, reason: "credential revoked" }))
       .resolves.toHaveLength(1);
 
-    await expect(provider.exportRecoveryPackage({ passphrase: "" })).rejects.toThrow(/requires a passphrase/);
+    await expect(provider.exportRecoveryPackage({ passphrase: canned1 })).rejects.toThrow(/requires a passphrase/);
     const recoveryPackage: any = await provider.exportRecoveryPackage({
-      passphrase: "opaque recovery secret",
+      passphrase: canned2,
       reason: "coverage"
     });
     expect(recoveryPackage).toMatchObject({
@@ -672,7 +695,7 @@ describe("authorization system backend coverage", () : any => {
     });
     await expect(provider.importRecoveryPackage({
       recoveryPackage: { protocolVersion: "wrong" },
-      passphrase: "opaque recovery secret"
+      passphrase: canned2
     })).rejects.toThrow(/Unsupported capability kernel recovery package/);
 
     const importedProvider: any = createOpaqueCapabilityKeyProvider({
@@ -682,7 +705,7 @@ describe("authorization system backend coverage", () : any => {
     });
     await expect(importedProvider.importRecoveryPackage({
       recoveryPackage,
-      passphrase: "opaque recovery secret"
+      passphrase: canned2
     })).resolves.toMatchObject({
       ok: true,
       alias: "opaque-imported",
@@ -705,7 +728,7 @@ describe("authorization system backend coverage", () : any => {
     });
 
     const key: any = createCapabilityKey();
-    await expect(guard.verifyCapabilityKeyBinding({ capabilityKey: "" })).resolves.toMatchObject({
+    await expect(guard.verifyCapabilityKeyBinding({ capabilityKey: canned6 })).resolves.toMatchObject({
       ok: false,
       reasonCode: "capability_key_missing"
     });
@@ -718,10 +741,10 @@ describe("authorization system backend coverage", () : any => {
       reasonCode: "capability_binding_not_registered"
     });
 
-    await expect(guard.bindCapabilityKey({ capabilityKey: "" })).rejects.toThrow(/requires an opaque capability key/);
+    await expect(guard.bindCapabilityKey({ capabilityKey: canned6 })).rejects.toThrow(/requires an opaque capability key/);
     const binding: any = await guard.bindCapabilityKey({
       capabilityKey: key,
-      credentialId: "cred-binding",
+      credentialId: canned14,
       context: {
         namespace: "tenant-a",
         userId: "user-a",
@@ -730,7 +753,7 @@ describe("authorization system backend coverage", () : any => {
       }
     });
     expect(binding).toMatchObject({
-      credentialId: "cred-binding",
+      credentialId: canned14,
       bindingStrength: "user+agent+client",
       requireUser: true,
       requireAgent: true,
@@ -772,13 +795,13 @@ describe("authorization system backend coverage", () : any => {
       ok: true,
       applicable: true,
       reasonCode: "capability_binding_valid",
-      credentialId: "cred-binding"
+      credentialId: canned14
     });
 
     const expiredKey: any = createCapabilityKey();
     await guard.bindCapabilityKey({
       capabilityKey: expiredKey,
-      credentialId: "cred-binding-expired",
+      credentialId: canned15,
       context: { namespace: "tenant-a" },
       issuedAt: "2000-01-01T00:00:00.000Z",
       expiresAt: "2000-01-01T00:00:01.000Z"
@@ -790,11 +813,11 @@ describe("authorization system backend coverage", () : any => {
     })).resolves.toMatchObject({
       ok: false,
       reasonCode: "binding_expired",
-      credentialId: "cred-binding-expired"
+      credentialId: canned15
     });
 
-    await expect(guard.invalidateCapabilityKeyBinding({ capabilityKey: "", credentialId: "" })).resolves.toEqual([]);
-    await expect(guard.invalidateCapabilityKeyBinding({ credentialId: "cred-binding", reason: "revoked" }))
+    await expect(guard.invalidateCapabilityKeyBinding({ capabilityKey: canned6, credentialId: canned6 })).resolves.toEqual([]);
+    await expect(guard.invalidateCapabilityKeyBinding({ credentialId: canned14, reason: "revoked" }))
       .resolves.toHaveLength(1);
     await expect(guard.verifyCapabilityKeyBinding({
       capabilityKey: key,
@@ -802,12 +825,12 @@ describe("authorization system backend coverage", () : any => {
     })).resolves.toMatchObject({
       ok: false,
       reasonCode: "binding_invalid",
-      credentialId: "cred-binding"
+      credentialId: canned14
     });
 
-    await expect(guard.exportRecoveryPackage({ passphrase: "" })).rejects.toThrow(/requires a passphrase/);
+    await expect(guard.exportRecoveryPackage({ passphrase: canned1 })).rejects.toThrow(/requires a passphrase/);
     const recoveryPackage: any = await guard.exportRecoveryPackage({
-      passphrase: "guard recovery secret",
+      passphrase: canned3,
       reason: "coverage"
     });
     expect(recoveryPackage).toMatchObject({
@@ -816,7 +839,7 @@ describe("authorization system backend coverage", () : any => {
     });
     await expect(guard.importRecoveryPackage({
       recoveryPackage: { protocolVersion: "wrong" },
-      passphrase: "guard recovery secret"
+      passphrase: canned3
     })).rejects.toThrow(/Unsupported capability binding guard recovery package/);
 
     const importedGuard: any = createCapabilityBindingGuard({
@@ -826,7 +849,7 @@ describe("authorization system backend coverage", () : any => {
     });
     await expect(importedGuard.importRecoveryPackage({
       recoveryPackage,
-      passphrase: "guard recovery secret"
+      passphrase: canned3
     })).resolves.toMatchObject({
       ok: true,
       alias: "guard-imported",

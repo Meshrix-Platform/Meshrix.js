@@ -13,6 +13,13 @@ import { createPlatformMcpGateway } from "../../../../packages/server-runtime/sr
 import { structuredUpstreamServiceFixture, installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../support.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "state.read";
+const canned2 = "state.write";
+const canned3 = "state.rpc";
+const canned4 = "tool_grant";
+
+
+
 
 const cleanup: Array<() => Promise<unknown>> = [];
 
@@ -93,7 +100,7 @@ describe("configured HTTP and JSON-RPC upstream publication", () => {
       allowLocalNetwork: true,
       operations: [
         {
-          operationKey: "state.read",
+          operationKey: canned1,
           protocol: "http",
           method: "GET",
           path: "/state",
@@ -101,7 +108,7 @@ describe("configured HTTP and JSON-RPC upstream publication", () => {
           requiredScopes: ["gateway:read"]
         },
         {
-          operationKey: "state.write",
+          operationKey: canned2,
           protocol: "http",
           method: "POST",
           path: "/state",
@@ -115,7 +122,7 @@ describe("configured HTTP and JSON-RPC upstream publication", () => {
           }
         },
         {
-          operationKey: "state.rpc",
+          operationKey: canned3,
           protocol: "json-rpc",
           method: "POST",
           path: "/rpc",
@@ -216,7 +223,7 @@ describe("configured HTTP and JSON-RPC upstream publication", () => {
         return {
           ok: true,
           handled: true,
-          credentialKind: "tool_grant",
+          credentialKind: canned4,
           grant: currentGrant,
           subject: {
             type: "tool-grant",

@@ -13,6 +13,11 @@ import {
   assertPluginConfinement,
   createPluginActivationResult
 } from "@meshrix/contracts/plugins/plugin-confinement-contract";
+const canned1 = "availability_only";
+const canned2 = "traffic_owner";
+
+
+
 
 describe("Plugin confinement port", () => {
   it("forbids Workspace, application-stage, selection, and maintenance authorities", () => {
@@ -35,20 +40,20 @@ describe("Plugin confinement port", () => {
       schemaVersion: "v0.0.1:plugin:confinement-1",
       pluginId: "plugins/external-gateway",
       forbiddenAuthorities: [...PLUGIN_CONFINEMENT_FORBIDDEN_AUTHORITIES],
-      lifecycleAuthority: "availability_only"
+      lifecycleAuthority: canned1
     });
     expect(Object.isFrozen(declaration)).toBe(true);
     expect(() => assertPluginConfinement({
       schemaVersion: "v0.0.1:plugin:confinement-1",
       pluginId: "plugins/external-gateway",
       forbiddenAuthorities: [],
-      lifecycleAuthority: "availability_only"
+      lifecycleAuthority: canned1
     })).toThrow("plugin_confinement_forbidden_authorities_required");
     expect(() => assertPluginConfinement({
       schemaVersion: "v0.0.1:plugin:confinement-1",
       pluginId: "plugins/external-gateway",
       forbiddenAuthorities: [...PLUGIN_CONFINEMENT_FORBIDDEN_AUTHORITIES],
-      lifecycleAuthority: "traffic_owner"
+      lifecycleAuthority: canned2
     })).toThrow("plugin_confinement_lifecycle_must_be_availability_only");
   });
 

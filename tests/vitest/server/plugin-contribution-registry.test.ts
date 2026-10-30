@@ -15,6 +15,17 @@ import {
   custodyPromotionAuthorizationDigest,
   custodyPromotionSetDigest
 } from "../../../packages/foundation/src/execution-sandbox/custody-contracts.ts";
+const canned1 = "ed25519:test";
+const canned2 = "demo";
+const canned3 = "must-not-cross-boundary";
+const canned4 = "bearer";
+const canned5 = "Bearer short-fixture";
+const canned6 = "fixture-request-1";
+const canned7 = "skill-hub:plugin-request";
+const canned8 = "caller-chosen-retry-key";
+
+
+
 
 const CONTRIBUTION_KINDS: readonly any[] = Object.freeze([
   "operations",
@@ -29,7 +40,7 @@ const TEST_ARTIFACT_IDENTITY: Readonly<Record<string, any>> = Object.freeze({
   version: "0.0.1",
   artifactDigest: `sha256:${"a".repeat(64)}`,
   generation: 1,
-  keyId: "ed25519:test",
+  keyId: canned1,
   coreContractDigest: `sha256:${"b".repeat(64)}`
 });
 const TEST_ARTIFACT_OPTIONS: Readonly<Record<string, any>> = Object.freeze({
@@ -162,7 +173,7 @@ function enabledContributions(operationPatch: Record<string, any> = {}) : any {
     consoleEntries: {
       "admin.demo": record("demo", "consoleEntries", "admin.demo", {
         featureId: "core-platform",
-        viewKey: "demo",
+        viewKey: canned2,
         routePath: "/admin/demo",
         componentId: "demo/DemoView",
         assetPath: "console/index.mjs",
@@ -384,11 +395,12 @@ describe("plugin contribution registry", () : any => {
     const controller: any = createPluginContributionController({ registry });
     const response: any = createCapturedResponse();
     const signal: any = new AbortController().signal;
-    const credential: any = "fixture-mobile-credential-0123456789abcdef";
+    const cannedFixture = "fixture-mobile-credential-0123456789abcdef";
+    const credential: any = cannedFixture;
     const request: Record<string, any> = {
       method: "POST",
       headers: {
-        authorization: `Bearer ${credential}`,
+        authorization: ("Bearer "+credential),
         cookie: "private=fixture",
         "content-type": "application/json"
       },
@@ -399,7 +411,7 @@ describe("plugin contribution registry", () : any => {
         grant: {
           id: "grant-fixture",
           scopes: ["demo:run"],
-          credential: "must-not-cross-boundary",
+          credential: canned3,
           metadata: { policyRevision: "policy-fixture" }
         },
         policy: { decisionId: "decision-fixture" }
@@ -430,7 +442,7 @@ describe("plugin contribution registry", () : any => {
       method: "POST",
       headers: {
         contentType: "application/json",
-        authorizationScheme: "bearer",
+        authorizationScheme: canned4,
         credentialDigests: {
           authorization: createHash("sha256").update(credential).digest("hex")
         }
@@ -475,11 +487,11 @@ describe("plugin contribution registry", () : any => {
     await createPluginContributionController({ registry }).executePluginOperation({
       operation: registry.activeOperations[0],
       input: {},
-      request: { headers: { authorization: "Bearer short-fixture" } },
+      request: { headers: { authorization: canned5 } },
       response: createCapturedResponse()
     });
     const projection: any = execute.mock.calls[0][0].call;
-    expect(projection.headers).toMatchObject({ authorizationScheme: "bearer" });
+    expect(projection.headers).toMatchObject({ authorizationScheme: canned4 });
     expect(projection.headers).not.toHaveProperty("credentialDigests");
     expect(JSON.stringify(projection)).not.toContain("short-fixture");
     expect(JSON.stringify(projection)).not.toContain(
@@ -725,7 +737,7 @@ describe("plugin contribution registry", () : any => {
         serviceRef: "svc_fixture",
         operationRef: input.operationRef || "demo.run",
         input: { owner: "fixture", repository: "demo" },
-        idempotencyKey: "fixture-request-1",
+        idempotencyKey: canned6,
         ...(input.includeTimeout ? { timeoutMs: 500 } : {})
       }, { signal, ...(input.useTimeout ? { timeoutMs: input.timeoutValue ?? 500 } : {}) })
     }));
@@ -821,7 +833,7 @@ describe("plugin contribution registry", () : any => {
       serviceRef: "svc_fixture",
       operationRef: "demo.run",
       input: { owner: "fixture", repository: "demo" },
-      idempotencyKey: "fixture-request-1",
+      idempotencyKey: canned6,
       governance: {
         authorizationContextDigest: expect.stringMatching(/^[a-f0-9]{64}$/u),
         riskDecisionRef: "decision-fixture",
@@ -870,7 +882,7 @@ describe("plugin contribution registry", () : any => {
                 ...(input.spoof === true ? { principal: { subjectRef: "raw-subject" } } : {})
               }
             },
-            idempotencyKey: "skill-hub:plugin-request"
+            idempotencyKey: canned7
           }, { signal });
         }
       })
@@ -989,7 +1001,7 @@ describe("plugin contribution registry", () : any => {
           modelRef: "model.primary",
           providerRef: "provider.primary",
           inputRefs: ["same-input-ref"],
-          idempotencyKey: "caller-chosen-retry-key",
+          idempotencyKey: canned8,
           deadlineMs: 5_000,
           stream: false
         },

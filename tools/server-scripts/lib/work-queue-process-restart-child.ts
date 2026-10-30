@@ -1,4 +1,8 @@
 import { createSqliteWorkQueueStore, createQueueDefinitionRegistry } from "../../../packages/foundation/src/work-queue/index.ts";
+const canned1 = "restart-process-work";
+
+
+
 
 const [phase, userDataPath, workItemId = "", staleLeaseId = ""] = process.argv.slice(2);
 const definitionId: any = "queue.restart.process-fixture";
@@ -38,7 +42,7 @@ try {
       ...registry.resolveQueueDefinitionForEnqueue({
         queueDefinitionId: definitionId,
         scope,
-        dedupeKey: "restart-process-work"
+        dedupeKey: canned1
       }),
       payloadRef: { kind: "restart_process_fixture" },
       ownerRef: { capability: "work-queue-restart-fixture" }

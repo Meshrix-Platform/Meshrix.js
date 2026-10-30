@@ -11,6 +11,12 @@ import {
   normalizeCapabilityBindingContext
 } from "../../../packages/foundation/src/security/authorization/capability-binding-guard.ts";
 import { createCapabilityKey } from "../../../packages/foundation/src/security/authorization/opaque-capability-key.ts";
+const canned1 = "bound-credential";
+const canned2 = "missing-credential";
+const canned3 = "memory-credential";
+
+
+
 
 const tempRoots: any[] = [];
 
@@ -76,7 +82,7 @@ describe("authorization capability binding guard boundary behavior", () : any =>
 
     const bound: any = await guard.bindCapabilityKey({
       capabilityKey,
-      credentialId: "bound-credential",
+      credentialId: canned1,
       context: {
         binding_namespace: "tenant-west",
         bound_user_id: "user-1",
@@ -85,7 +91,7 @@ describe("authorization capability binding guard boundary behavior", () : any =>
       }
     });
     expect(bound).toMatchObject({
-      credentialId: "bound-credential",
+      credentialId: canned1,
       bindingStrength: "user+agent+client",
       requireUser: true,
       requireAgent: true,
@@ -94,7 +100,7 @@ describe("authorization capability binding guard boundary behavior", () : any =>
 
     await expect(guard.verifyCapabilityKeyBinding({
       capabilityKey,
-      credentialId: "bound-credential",
+      credentialId: canned1,
       context: {
         namespace: "tenant-west",
         userId: "user-1",
@@ -104,7 +110,7 @@ describe("authorization capability binding guard boundary behavior", () : any =>
     })).resolves.toMatchObject({
       ok: true,
       applicable: true,
-      credentialId: "bound-credential",
+      credentialId: canned1,
       bindingStrength: "user+agent+client"
     });
 
@@ -115,7 +121,7 @@ describe("authorization capability binding guard boundary behavior", () : any =>
 
     await expect(guard.invalidateCapabilityKeyBinding({
       capabilityKey: createCapabilityKey(),
-      credentialId: "missing-credential",
+      credentialId: canned2,
       reason: "not-found"
     })).resolves.toEqual([]);
 
@@ -140,10 +146,10 @@ describe("authorization capability binding guard boundary behavior", () : any =>
     const capabilityKey: any = createCapabilityKey();
     const bound: any = await guard.bindCapabilityKey({
       capabilityKey,
-      credentialId: "memory-credential"
+      credentialId: canned3
     });
     expect(bound).toMatchObject({
-      credentialId: "memory-credential",
+      credentialId: canned3,
       bindingStrength: "namespace",
       requireUser: false,
       requireAgent: false,

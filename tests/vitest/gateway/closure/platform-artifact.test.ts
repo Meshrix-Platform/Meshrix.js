@@ -10,6 +10,10 @@ import { createArtifactTransitProvider } from "../../../../packages/server-runti
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { modernHttpRequest } from "../support.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "convert";
+
+
+
 
 describe("default platform binary/artifact boundary", () => {
   it("[GC-046 partial] keeps multipart bytes, declared headers and owner-bound range download", async () => {
@@ -37,7 +41,7 @@ describe("default platform binary/artifact boundary", () => {
       } }, uploadCustodyReadPort: { async open() { return { stream: Readable.from([bytes]) }; } }, getListenUrl: () => "http://gateway.invalid" });
       registry = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), artifactTransitPort: artifact, claimProtectedSinkAttempt: async () => Object.freeze({ syntheticReceipt: true }) });
       installUpstreamRuntimeServices(registry, [{ serviceId: "format", serviceProtocol: "http", baseUrl: `http://127.0.0.1:${address.port}`, allowLocalNetwork: true, headers: { "x-context-scope": "synthetic" },
-        operations: [{ operationKey: "convert", method: "POST", path: "/convert", risk: "safe_write", requiredScopes: ["gateway:write"], requestSchema: { type: "object", properties: { file: { type: "string" }, targetFormat: { type: "string" } }, required: ["file", "targetFormat"], additionalProperties: false }, payloadTransport: { request: { mode: "artifact_multipart", maxBytes: 1024 * 1024, mediaTypes: ["multipart/form-data"], multipart: { maxParts: 2, artifactParts: [{ argument: "file", partName: "file", required: true }], scalarFields: [{ argument: "targetFormat", partName: "target_format", required: true }] } }, response: { mode: "artifact", maxBytes: 1024 * 1024, mediaTypes: ["application/pdf"], allowRanges: true } } }]
+        operations: [{ operationKey: canned1, method: "POST", path: "/convert", risk: "safe_write", requiredScopes: ["gateway:write"], requestSchema: { type: "object", properties: { file: { type: "string" }, targetFormat: { type: "string" } }, required: ["file", "targetFormat"], additionalProperties: false }, payloadTransport: { request: { mode: "artifact_multipart", maxBytes: 1024 * 1024, mediaTypes: ["multipart/form-data"], multipart: { maxParts: 2, artifactParts: [{ argument: "file", partName: "file", required: true }], scalarFields: [{ argument: "targetFormat", partName: "target_format", required: true }] } }, response: { mode: "artifact", maxBytes: 1024 * 1024, mediaTypes: ["application/pdf"], allowRanges: true } } }]
       }]);
       const projection = compileUpstreamOperationProjection(registry.captureManifestSnapshotState());
       const subject = { type: "tool-grant", subjectId: "owner", grantId: "grant", scopes: ["gateway:write"], dynamicCapabilities: ["cap:upstream:format:convert"] };

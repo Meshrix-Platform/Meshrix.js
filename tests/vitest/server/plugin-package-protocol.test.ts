@@ -21,6 +21,14 @@ import {
 } from "#meshrix/foundation/module-system/plugin-package-validator";
 import { createPluginPackageTarGz, extractPluginPackageTarGz, sha256Digest } from "#meshrix/foundation/module-system/plugin-package-tar";
 import { beginPluginContributionTransaction } from "#meshrix/server-runtime/composition/plugin-contribution-transaction";
+const canned1 = "ed25519:any";
+const canned2 = "acq-1";
+const canned3 = "act-1";
+const canned4 = "a";
+const canned5 = "b";
+
+
+
 
 function buildBundle({
   pluginId = "sample-plugin",
@@ -113,7 +121,7 @@ describe("plugin package protocol", () : any => {
         entrypoint: "runtime.mjs",
         files: [{ path: "runtime.mjs", sha256: "sha256:" + "a".repeat(64), size: 1 }],
         payloadDigest: "sha256:" + "b".repeat(64),
-        trust: { algorithm: "ed25519", publicKeyId: "ed25519:any", signature: "AAAA" }
+        trust: { algorithm: "ed25519", publicKeyId: canned1, signature: "AAAA" }
       }),
       /PLUGIN_PACKAGE_TRUST_REJECTED/
     );
@@ -188,13 +196,13 @@ describe("plugin package protocol", () : any => {
       const acquired: any = await lifecycle.acquire({
         pluginId: "sample-plugin",
         source,
-        acquisitionIdempotencyKey: "acq-1"
+        acquisitionIdempotencyKey: canned2
       });
       assert.equal(acquired.state, "acquired");
       const acquiredAgain: any = await lifecycle.acquire({
         pluginId: "sample-plugin",
         source,
-        acquisitionIdempotencyKey: "acq-1"
+        acquisitionIdempotencyKey: canned2
       });
       assert.equal(acquiredAgain.state, "acquired");
 
@@ -204,7 +212,7 @@ describe("plugin package protocol", () : any => {
       assert.equal(staged.state, "staged");
       const active: any = await lifecycle.activate({
         pluginId: "sample-plugin",
-        activationIdempotencyKey: "act-1"
+        activationIdempotencyKey: canned3
       });
       assert.equal(active.state, "active");
       assert.equal(lifecycle.getHealth("sample-plugin").ready, true);
@@ -453,8 +461,8 @@ describe("plugin package protocol", () : any => {
       });
       const source: any = createBytesPluginPackageSource({ bytes: bundle.archive });
       const [first, second] = await Promise.all([
-        lifecycle.acquire({ pluginId: "sample-plugin", source, acquisitionIdempotencyKey: "a" }),
-        lifecycle.acquire({ pluginId: "sample-plugin", source, acquisitionIdempotencyKey: "b" })
+        lifecycle.acquire({ pluginId: "sample-plugin", source, acquisitionIdempotencyKey: canned4 }),
+        lifecycle.acquire({ pluginId: "sample-plugin", source, acquisitionIdempotencyKey: canned5 })
       ]);
       assert.ok(["acquired", "failed"].includes(first.state));
       assert.ok(["acquired", "failed"].includes(second.state));

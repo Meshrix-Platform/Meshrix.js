@@ -5,6 +5,11 @@ import {
   SECURITY_PERMISSIONS_PROTOCOL_VERSION,
   createSecurityPermissionsProvider
 } from "../../../packages/foundation/src/security/security-permissions-provider.ts";
+const canned1 = "";
+const canned2 = "csrf_console";
+
+
+
 
 afterEach(() : any => {
   vi.restoreAllMocks();
@@ -16,7 +21,7 @@ function defaultSummary() : any {
     bootstrap: {},
     session: {
       authenticated: false,
-      csrfToken: "",
+      csrfToken: canned1,
       expiresAt: "",
       user: null
     }
@@ -155,7 +160,7 @@ describe("security permissions provider construction and delegation", () : any =
         bootstrap: { source: "console-auth" },
         session: {
           authenticated: true,
-          csrfToken: "csrf_console",
+          csrfToken: canned2,
           expiresAt: "",
           user: { userId: "console-user" }
         },
@@ -201,7 +206,7 @@ describe("security permissions provider construction and delegation", () : any =
       bootstrap: { source: "console-auth" },
       session: {
         authenticated: true,
-        csrfToken: "csrf_console",
+        csrfToken: canned2,
         expiresAt: "",
         user: { userId: "console-user" }
       },

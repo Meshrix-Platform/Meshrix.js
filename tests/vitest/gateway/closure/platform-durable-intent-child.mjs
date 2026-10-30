@@ -6,6 +6,8 @@ import { createUpstreamGatewayRegistry } from "../../../../packages/agents/src/u
 import { createPlatformMcpGateway } from "../../../../packages/server-runtime/src/composition/gateway-composition.ts";
 import { installUpstreamRuntimeServices } from "../../../helpers/upstream-runtime-snapshot.ts";
 import { mcpModernJsonRpcMessage, mcpModernRequestHeaders } from "../../../../packages/protocols/mcp/modern-downstream/protocol.ts";
+const canned1 = "tools/call";
+
 
 const [dataRoot, peerUrl, mode, risk = "safe_write"] = process.argv.slice(2);
 const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -14,6 +16,9 @@ let releaseIntent = null;
 const proof = createOperationProofSubstrate({ dataDir: path.join(dataRoot, "proof") });
 const stdioPeerScript = String.raw`
 import fs from "node:fs/promises";
+
+const canned1 = "tools/call";
+
 const counterPath = process.argv[1];
 let buffer = "";
 function send(payload) { process.stdout.write(JSON.stringify(payload) + "\n"); }
@@ -75,7 +80,7 @@ await installUpstreamRuntimeServices(registry, [{
   serviceProtocol: "mcp",
   label: "durable-fixture",
   allowLocalNetwork: true,
-  operations: [{ operationKey: "tools/call", protocol: "mcp", risk, requiredScopes: [risk === "read_only" ? "gateway:read" : "gateway:write"] }],
+  operations: [{ operationKey: canned1, protocol: "mcp", risk, requiredScopes: [risk === "read_only" ? "gateway:read" : "gateway:write"] }],
   mcp: mode === "stdio"
     ? { transport: "stdio", command: process.execPath, args: ["-e", stdioPeerScript, path.join(dataRoot, "stdio-peer-effect-count")] }
     : { transport: "http", url: peerUrl, protocolVersion: "2026-07-28" }

@@ -4,6 +4,10 @@ import { computed, ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ToolsView from "../../../apps/console/views/admin/ToolsView.vue";
 import { createConsoleBusyController } from "../../../apps/console/composables/console-busy-controller";
+const canned1 = "abcdef1234567890";
+
+
+
 
 let toolsViewBusy: any = createConsoleBusyController();
 
@@ -146,7 +150,7 @@ function makeOperationPermissionConsole(overrides: Record<string, unknown> = {})
         traceId: "",
       },
     ]),
-    operationPermissionCatalogState: ref({ fingerprint: "abcdef1234567890" }),
+    operationPermissionCatalogState: ref({ fingerprint: canned1 }),
     operationPermissionMetricsState,
     operationPermissionProfiles: ref([{ id: "profile-a" }]),
     operationPermissionRiskRows,

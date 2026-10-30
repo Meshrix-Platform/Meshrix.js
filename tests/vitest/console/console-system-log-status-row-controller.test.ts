@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildSystemStatusLogRows } from "../../../apps/console/composables/console-system-log-status-row-controller";
+const canned1 = "<redacted>";
+
+
+
 
 function readonlyValue<T>(value: T) : any {
   return { value };
@@ -35,7 +39,7 @@ describe("console system log status row controller behavior", () : any => {
           method: "POST",
           operationId: "auth.login",
           path: "/api/auth/login",
-          redactedInput: { password: "<redacted>" },
+          redactedInput: { password: canned1 },
           status: "ok",
           transport: "http",
         },

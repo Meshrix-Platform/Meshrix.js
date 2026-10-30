@@ -6,6 +6,11 @@ import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
 
 import { createLedger } from "../internal/ledger.mjs";
+const cannedIdemPaid1 = "idem.paid.1";
+const cannedIdemPaid2 = "idem.paid.2";
+const cannedFp1 = "fingerprint.1";
+const cannedFp2 = "fingerprint.2";
+
 
 const BOUNDS = {
   maxLedgerPendingEntries: 100,
@@ -31,8 +36,8 @@ test("settlement has no unused order counter and preserves legacy accounting row
   freshDb.close();
 
   const first = ledger.create({
-    callId: "call.paid.1", principalRef: "principal.1", idempotencyKey: "idem.paid.1",
-    requestFingerprint: "fingerprint.1", modelRef: "model.1", pricingRevisionRef: "price.1",
+    callId: "call.paid.1", principalRef: "principal.1", idempotencyKey: cannedIdemPaid1,
+    requestFingerprint: cannedFp1, modelRef: "model.1", pricingRevisionRef: "price.1",
     currency: "USD", reservationRef: "reservation.1", inputTokens: 10,
     requestedOutputTokens: 8, estimatedCostMicros: 12_000
   });
@@ -44,12 +49,12 @@ test("settlement has no unused order counter and preserves legacy accounting row
     response: { id: "result.1", content: "completed" }
   }), { changed: true });
   assert.deepEqual(ledger.get("call.paid.1"), {
-    callId: "call.paid.1", principalRef: "principal.1", idempotencyKey: "idem.paid.1",
-    requestFingerprint: "fingerprint.1", modelRef: "model.1", pricingRevisionRef: "price.1",
+    callId: "call.paid.1", principalRef: "principal.1", idempotencyKey: cannedIdemPaid1,
+    requestFingerprint: cannedFp1, modelRef: "model.1", pricingRevisionRef: "price.1",
     currency: "USD", reservationRef: "reservation.1", state: "settled", attempts: 1,
     amount: { currency: "USD", units: 0, nanos: 9_000_000 }, inputTokens: 10, outputTokens: 6
   });
-  assert.deepEqual(ledger.findIdempotency("principal.1", "idem.paid.1", "fingerprint.1")?.entry.response,
+  assert.deepEqual(ledger.findIdempotency("principal.1", cannedIdemPaid1, cannedFp1)?.entry.response,
     { id: "result.1", content: "completed" });
   ledger.close();
 
@@ -62,8 +67,8 @@ test("settlement has no unused order counter and preserves legacy accounting row
 
   const reopened = openLedger(dataRoot);
   const retry = reopened.create({
-    callId: "call.paid.2", principalRef: "principal.1", idempotencyKey: "idem.paid.2",
-    requestFingerprint: "fingerprint.2", modelRef: "model.1", pricingRevisionRef: "price.1",
+    callId: "call.paid.2", principalRef: "principal.1", idempotencyKey: cannedIdemPaid2,
+    requestFingerprint: cannedFp2, modelRef: "model.1", pricingRevisionRef: "price.1",
     currency: "USD", reservationRef: "reservation.2", inputTokens: 5,
     requestedOutputTokens: 4, estimatedCostMicros: 5_000
   });

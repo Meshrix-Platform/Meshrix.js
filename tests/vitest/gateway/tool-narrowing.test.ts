@@ -3,6 +3,10 @@ import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upst
 import { evaluateAudienceDecision } from "../../../packages/agents/src/upstream-gateway/audience-projection.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "tools/call";
+
+
+
 
 function mcpRegistry(tools: any[]) : any {
   return createUpstreamGatewayRegistry({
@@ -22,7 +26,7 @@ function service() : any {
     serviceProtocol: "mcp",
     label: "vault",
     allowLocalNetwork: true,
-    operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+    operations: [{ operationKey: canned1, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
     mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18" }
   };
 }

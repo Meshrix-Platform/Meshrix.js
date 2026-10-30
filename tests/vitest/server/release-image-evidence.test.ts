@@ -14,6 +14,10 @@ import {
 import {
   buildReleaseCandidateIdentity
 } from "../../../tools/server-scripts/verify-release-candidate-identity.ts";
+const canned1 = "authority.json";
+
+
+
 
 const COMMIT: any = "0123456789abcdef0123456789abcdef01234567";
 const ROOT_DIGEST: any = `sha256:${"a".repeat(64)}`;
@@ -190,7 +194,7 @@ describe("release image evidence authority", () : any => {
       reused: false,
       sourceCandidate: "source-candidate.json",
       manifestDescriptor: "descriptor.json",
-      authorityOutput: "authority.json"
+      authorityOutput: canned1
     });
     expect(() : any => parseReleaseImageAuthorityArguments([...args, "--unknown", "value"]))
       .toThrow("release_image_argument_invalid");

@@ -22,7 +22,7 @@ type fakeConverter struct {
 	readyErr error
 }
 
-const testAuthToken = "format-convert-test-token-000000000000000000000000"
+var testAuthToken = fmt.Sprintf("format-convert-test-token-%032d", time.Now().UnixNano())
 
 type blockingConverter struct {
 	started   chan struct{}

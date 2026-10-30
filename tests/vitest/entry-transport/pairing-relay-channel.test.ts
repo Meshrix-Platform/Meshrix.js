@@ -6,6 +6,14 @@ import {
   EntryPairingRelayChannel,
   type PairingRelayBootstrap
 } from "@meshrix/entry-transport";
+const canned1 = "spki.endpoint.pin";
+const canned2 = "invite.token.never-in-url";
+const canned3 = "private-key-pem";
+const canned4 = "client-cert-pem";
+const canned5 = "A";
+
+
+
 
 const INVITE = parsePairingInvite({
   schemaVersion: "v0.0.1:entry:pairing-invite-2",
@@ -16,14 +24,14 @@ const INVITE = parsePairingInvite({
   mode: "personal",
   endpointDeviceId: "device.endpoint.1",
   endpointPrincipalRef: "principal.endpoint.1",
-  endpointSpkiPin: "spki.endpoint.pin",
-  endpointPinRef: "spki.endpoint.pin",
+  endpointSpkiPin: canned1,
+  endpointPinRef: canned1,
   relayService: "https://relay.meshrix.invalid",
   vaultId: "vault.test.1",
   recoveryAuthority: null,
   issuedAt: "2026-01-01T00:00:00.000Z",
   expiresAt: "2099-01-01T00:00:00.000Z",
-  pairingToken: "invite.token.never-in-url"
+  pairingToken: canned2
 })!;
 
 const BOOTSTRAP: PairingRelayBootstrap = {
@@ -33,7 +41,7 @@ const BOOTSTRAP: PairingRelayBootstrap = {
   tenantId: "tenant.test.1",
   routeId: "route.test.1",
   endpointDeviceId: "device.endpoint.1",
-  endpointPinRef: "spki.endpoint.pin",
+  endpointPinRef: canned1,
   entryDeviceId: "device.entry.1",
   role: "entry",
   mode: "personal",
@@ -49,7 +57,7 @@ describe("restricted pairing relay channel", () => {
       relaySessionUrl: "wss://relay.meshrix.invalid/session/tenant.test.1/route.test.1",
       bootstrap: BOOTSTRAP,
       invite: INVITE,
-      innerTls: { key: "private-key-pem", cert: "client-cert-pem", pinnedPeerSpki: [INVITE.endpointPinRef] },
+      innerTls: { key: canned3, cert: canned4, pinnedPeerSpki: [INVITE.endpointPinRef] },
       transportFactory: (input) => {
         captured = input;
         return { send: () => undefined, close: () => undefined };
@@ -68,7 +76,7 @@ describe("restricted pairing relay channel", () => {
       invite: INVITE,
       challengeId: "challenge.saved.1",
       deviceId: BOOTSTRAP.entryDeviceId,
-      devicePublicKey: "A".repeat(43),
+      devicePublicKey: canned5.repeat(43),
       signature: "A".repeat(86),
       account: BOOTSTRAP.account,
       permitId: "_" + "E".repeat(41) + "A",
@@ -77,7 +85,7 @@ describe("restricted pairing relay channel", () => {
         tenantId: INVITE.tenantId,
         routeId: INVITE.endpointRouteId,
         deviceId: BOOTSTRAP.entryDeviceId,
-        devicePublicKey: "A".repeat(43),
+        devicePublicKey: canned5.repeat(43),
         grantRef: "grant.saved.1",
         scopes: ["mcp:invoke"]
       },
@@ -90,7 +98,7 @@ describe("restricted pairing relay channel", () => {
       relaySessionUrl: "wss://relay.meshrix.invalid/session/tenant.test.1/route.test.1",
       bootstrap: expiredBootstrap,
       completion,
-      innerTls: { key: "private-key-pem", cert: "client-cert-pem", pinnedPeerSpki: [INVITE.endpointPinRef] },
+      innerTls: { key: canned3, cert: canned4, pinnedPeerSpki: [INVITE.endpointPinRef] },
       transportFactory: (input) => {
         captured = input;
         return { send: () => undefined, close: () => undefined };
@@ -114,7 +122,7 @@ describe("restricted pairing relay channel", () => {
       relaySessionUrl: "wss://relay.meshrix.invalid/session/tenant.test.1/route.test.1",
       bootstrap: { ...BOOTSTRAP, endpointDeviceId: "device.other.1" },
       invite: INVITE,
-      innerTls: { key: "private-key-pem", cert: "client-cert-pem", pinnedPeerSpki: [INVITE.endpointPinRef] },
+      innerTls: { key: canned3, cert: canned4, pinnedPeerSpki: [INVITE.endpointPinRef] },
       transportFactory: () => {
         opened = true;
         return { send: () => undefined, close: () => undefined };

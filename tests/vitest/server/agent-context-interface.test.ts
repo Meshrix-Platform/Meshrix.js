@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+const canned1 = "x";
+
+
+
 
 const contextCoreMocks: any = vi.hoisted(() : any => ({
   createContextRuntime: vi.fn((options: Record<string, any> = {}) : any => ({ service: "context-runtime", options })),
@@ -81,8 +85,8 @@ describe("agent context interface", () : any => {
       options: { budget: 10 }
     });
     expect(agentContextInterface.estimateContextTokens("one two")).toBe(2);
-    expect(agentContextInterface.redactCompactionValue({ secret: "x" }, 2)).toEqual({
-      redacted: { secret: "x" },
+    expect(agentContextInterface.redactCompactionValue({ secret: canned1 }, 2)).toEqual({
+      redacted: { secret: canned1 },
       depth: 2
     });
   });

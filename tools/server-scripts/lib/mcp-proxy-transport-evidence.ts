@@ -1,6 +1,10 @@
 import {
   MCP_SUPPORTED_TARGETS
 } from "../../../packages/protocols/mcp/adapter/mcp-release-targets.ts";
+const canned1 = "failed";
+
+
+
 
 export const MCP_PROXY_TRANSPORT_REPORT_PATH: any = "build/reports/mcp-proxy-transport.json";
 export const MCP_PROXY_TRANSPORT_SCHEMA_VERSION: any = "v0.0.1:mcp:proxy-transport-report-1";
@@ -80,7 +84,7 @@ export function createMcpProxyTransportReadiness(report: Record<string, any> = {
     report: MCP_PROXY_TRANSPORT_REPORT_PATH,
     releaseReady,
     coverageReady: releaseReady,
-    liveStatus: releaseReady ? "passed" : "failed",
+    liveStatus: releaseReady ? "passed": canned1,
     requiredTargets: [...MCP_SUPPORTED_TARGETS],
     verifiedTargets: targets
       .filter((row?: any) : any => row.status === "verified")

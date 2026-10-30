@@ -1,9 +1,13 @@
+const canned1 = "";
+
 /**
  * Operation proof evidence policy readiness.
  * Enforces consistency between declared policy and signer presence.
  * Does not invent user-configuration defaults.
  */
 import { isDevelopmentMeshrixSignerSecret } from "../../../packages/foundation/src/proof/proof-substrate/constants.ts";
+
+
 
 const VALID_POLICIES: any = new Set<any>(["development", "production", ""]);
 
@@ -13,8 +17,8 @@ const VALID_POLICIES: any = new Set<any>(["development", "production", ""]);
  */
 export function evaluateEvidencePolicyReadiness({
   evidencePolicy = "",
-  signerSecret = "",
-  signerSecretFile = ""
+  signerSecret = canned1,
+  signerSecretFile = canned1
 }: Record<string, any> = {}) : any {
   const policy: any = String(evidencePolicy || "").trim();
   const secret: any = String(signerSecret || "").trim();

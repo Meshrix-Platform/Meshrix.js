@@ -1,4 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+const canned1 = "sat";
+const canned2 = "rotated";
+const canned3 = "catalog-current";
+const canned4 = "key-fixture";
+const canned5 = "synthetic-one-time-key";
+const canned6 = "synthetic-rotated-key";
+const canned7 = "private-idempotency";
+
 
 const sendJsonMock: any = vi.hoisted(() : any => vi.fn((response?: any, status?: any, payload?: any) : any => {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -25,6 +33,8 @@ vi.mock("@meshrix/protocols/http/http-utils", () : any => ({
 
 import { createOperationPermissionHttpRouter } from "../../../packages/capabilities/src/operation-permission-core/http.ts";
 import { rowToPendingOperation } from "../../../packages/capabilities/src/operation-permission-core/store-models.ts";
+
+
 
 function createResponse() : any {
   return {
@@ -70,8 +80,8 @@ function createPlatform(overrides: Record<string, any> = {}) : any {
     },
     store: {
       listGrants: vi.fn(() : any => [{ id: "grant-a" }]),
-      createGrant: vi.fn(async () : Promise<any> => ({ grant: { id: "grant-new" }, token: "sat" })),
-      rotateGrantToken: vi.fn(async (grantId?: any) : Promise<any> => (grantId === "missing" ? null : { grant: { id: grantId }, token: "rotated" })),
+      createGrant: vi.fn(async () : Promise<any> => ({ grant: { id: "grant-new" }, token: canned1 })),
+      rotateGrantToken: vi.fn(async (grantId?: any) : Promise<any> => (grantId === "missing" ? null : { grant: { id: grantId }, token: canned2 })),
       revokeGrant: vi.fn(async (grantId?: any, reason?: any) : Promise<any> => (grantId === "missing" ? null : { id: grantId, reason })),
       updateGrant: vi.fn((grantId?: any, payload?: any) : any => (grantId === "missing" ? null : { id: grantId, ...payload })),
       listAudit: vi.fn((payload?: any) : any => [{ toolExecutionId: "exec-a", ...payload }]),
@@ -159,7 +169,7 @@ describe("operation permission http behavior", () : any => {
     const scopesProvider = vi.fn(async () : Promise<any> => ({
       organizationRevision: 1,
       authorizationRevision: 2,
-      catalogFingerprint: "catalog-current",
+      catalogFingerprint: canned3,
       eligibleRoots: [{ nodeId: "org-a" }],
       eligibleNodes: [{ nodeId: "org-a" }]
     }));
@@ -225,12 +235,12 @@ describe("operation permission http behavior", () : any => {
 
   it("binds API-key creation and rotation to the configured server audience", async () : Promise<any> => {
     const create = vi.fn(async (input?: any) : Promise<any> => ({
-      record: { keyId: "key-fixture", policy: input.policy },
-      apiKey: "synthetic-one-time-key"
+      record: { keyId: canned4, policy: input.policy },
+      apiKey: canned5
     }));
     const rotate = vi.fn(async (input?: any) : Promise<any> => ({
       record: { keyId: input.keyId },
-      apiKey: "synthetic-rotated-key"
+      apiKey: canned6
     }));
     const platform = createPlatform({ apiKeyDistributionProvider: { create, rotate } });
     const securityPermissions = {
@@ -292,7 +302,7 @@ describe("operation permission http behavior", () : any => {
       grant_id: "custom-grant-private",
       agent_id: "custom-agent-private",
       profile_id: "custom-profile-private",
-      idempotency_key: "private-idempotency",
+      idempotency_key: canned7,
       reason_code: "team_approval_required",
       risk_reason: "Synthetic reason",
       redacted_input_json: "{}",

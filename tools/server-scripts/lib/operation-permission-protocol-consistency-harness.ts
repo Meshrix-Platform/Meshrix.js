@@ -7,10 +7,14 @@ import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/ht
 import { seedVerifierUpstreamServices, verifierOpaqueServiceId } from "./upstream-gateway-verifier-publication.ts";
 import { createProtocolConsistencyTokenHeaders } from "./operation-permission-protocol-consistency-helpers.ts";
 import { issueVerifierMcpApiKey } from "./verifier-mcp-api-key.ts";
+const canned1 = "v0.0.1:mcp:interface-1";
+
+
+
 
 export const OPERATION_PERMISSION_PROTOCOL_CONSISTENCY: Readonly<Record<string, any>> = Object.freeze({
   reportPath: "build/reports/operation-permission-protocol-consistency.json",
-  mcpInterfaceVersion: "v0.0.1:mcp:interface-1",
+  mcpInterfaceVersion: canned1,
   agentProfileId: "verify-operation-permission-protocol-agent",
   serviceIdPrefix: verifierOpaqueServiceId("verify-op-permission-protocol"),
   readTool: "meshrix.gateway.metrics",

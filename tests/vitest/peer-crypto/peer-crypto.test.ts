@@ -36,6 +36,10 @@ import {
   type PeerEnvelope,
   type PeerIdentity
 } from "@meshrix/peer-crypto";
+const canned1 = "signal";
+
+
+
 
 /**
  * Real PQXDH + Double Ratchet coverage between two device identities.
@@ -116,7 +120,7 @@ describe("peer-crypto X3DH/PQXDH + Double Ratchet", () => {
       // unconfirmed: libsignal keeps emitting PreKey ciphertext so a lost first
       // message can still establish the session. The reply confirms it and the
       // ratchet switches to steady-state Whisper ciphertext.
-      expect(outbound.messageType).toBe(index === 0 ? "prekey" : "signal");
+      expect(outbound.messageType).toBe(index === 0 ? "prekey": canned1);
       const plaintext = await bobSession.decryptEnvelope(envelopeOf(aliceSession, outbound));
       expect(new TextDecoder().decode(plaintext)).toBe(`a2b ${index}`);
       const reply = await bobSession.encrypt(new TextEncoder().encode(`b2a ${index}`));

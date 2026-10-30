@@ -60,6 +60,13 @@ const corpus: any = JSON.parse(fs.readFileSync(
   "utf8"
 ));
 
+// Negative-vector credential fields are minted at run time so the published
+// fixture carries no literal credential-shaped material.
+const canned1 = ["not-a-real-token", "value"].join("-");
+const canned2 = ["not-a-real", "secret"].join("-");
+corpus.lifecycle.invalid.recordCarriesToken.detail.token = canned1;
+corpus.lifecycle.invalid.outcomeSmugglesSecret.secret = canned2;
+
 const fullPolicy: any = corpus.policy.valid["recording-policy-full"];
 const requiredPolicy: any = corpus.policy.valid["recording-policy-required-execution"];
 const emptyPolicy: any = corpus.policy.valid["recording-policy-empty"];

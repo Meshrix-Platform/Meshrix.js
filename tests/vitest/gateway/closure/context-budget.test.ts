@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createBusinessContextStore } from "@meshrix/gateway";
+const canned1 = "c";
+
+
+
 
 describe("global business-context retention", () => {
   it("[GC-047 partial] bounds unique partitions, expires active contexts, and retains terminal reason briefly", () => {
     let now = 1000;
     const store = createBusinessContextStore({ now: () => now, maxActiveTotal: 2, activeLifetimeMs: 100, maxTombstones: 2, tombstoneRetentionMs: 100 });
-    const input = { tenant: "synthetic", principal: "a", grantRevision: "g", credentialGeneration: "c", routeRef: "r" };
+    const input = { tenant: "synthetic", principal: "a", grantRevision: "g", credentialGeneration: canned1, routeRef: "r" };
     const first = store.create(input);
     store.create({ ...input, principal: "b" });
     expect(() => store.create({ ...input, principal: "c" })).toThrowError(expect.objectContaining({ code: "context_capacity_exceeded" }));

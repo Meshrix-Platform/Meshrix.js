@@ -26,6 +26,13 @@ import {
   structuredJsonPayloadTransport
 } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "";
+const canned2 = "sha256:lifetime-fixture";
+const canned3 = "records.read";
+const canned4 = "inventory.lookup";
+
+
+
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void;
@@ -159,7 +166,7 @@ async function createHarness(
   registry: ReturnType<typeof createUpstreamGatewayRegistry>,
   snapshot: any,
   discoveredCapabilities: any[] = [],
-  operationKey = "",
+  operationKey = canned1,
   apiKeyDistributionProvider: any = null
 ) {
   const projection = compileUpstreamOperationProjection(snapshot);
@@ -203,7 +210,7 @@ async function createHarness(
     maxRisk: "safe_write",
     enabled: true,
     revokedAt: "",
-    projectionFingerprint: "sha256:lifetime-fixture"
+    projectionFingerprint: canned2
   };
   const store = {
     async authorizeRequest() {
@@ -696,7 +703,7 @@ describe("admitted upstream execution lifetime", () => {
       allowLocalNetwork: true,
       operations: [
         {
-          operationKey: "records.read",
+          operationKey: canned3,
           protocol: "http",
           method: "GET",
           path: "/records",
@@ -711,7 +718,7 @@ describe("admitted upstream execution lifetime", () => {
           payloadTransport: structuredJsonPayloadTransport()
         },
         {
-          operationKey: "inventory.lookup",
+          operationKey: canned4,
           protocol: "json-rpc",
           method: "POST",
           path: "/rpc",

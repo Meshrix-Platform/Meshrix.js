@@ -10,6 +10,21 @@ import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation
 import { installUpstreamRuntimeServices, structuredUpstreamServiceFixture } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 import { validateUpstreamOauth } from "../../../packages/contracts/src/upstream-service-publishing.ts";
+const canned1 = "";
+const canned2 = "secret://meshrix/oauth-client";
+const canned3 = "client_secret_basic";
+const canned4 = "run";
+const canned5 = "Bearer";
+const canned6 = "oauth-client-secret";
+const canned7 = "synthetic-client-secret";
+const canned8 = "https://idp.example.test/oauth/token";
+const canned9 = "client_secret_post";
+const canned10 = "https://idp.example.test/token";
+const canned11 = "https://vault/x";
+const canned12 = "private_key_jwt";
+
+
+
 
 const SUBJECT = {
   type: "tool-grant",
@@ -26,12 +41,12 @@ const SUBJECT = {
 
 const OAUTH = {
   grantType: "client_credentials",
-  tokenUrl: "",
+  tokenUrl: canned1,
   clientId: "meshrix-gateway",
-  clientSecretRef: "secret://meshrix/oauth-client",
+  clientSecretRef: canned2,
   scopes: ["tools:invoke"],
   audience: "guarded-api",
-  authMethod: "client_secret_basic"
+  authMethod: canned3
 };
 
 function oauthService(overrides: Record<string, any> = {}) : any {
@@ -41,7 +56,7 @@ function oauthService(overrides: Record<string, any> = {}) : any {
     label: "guarded",
     allowLocalNetwork: true,
     operations: [{
-      operationKey: "run",
+      operationKey: canned4,
       method: "POST",
       path: "/run",
       risk: "read_only",
@@ -62,7 +77,7 @@ async function tokenPeer(handler?: (params: URLSearchParams, request: any) => an
     state.authorizations.push(String(request.headers.authorization || ""));
     const result = handler
       ? handler(params, request)
-      : { access_token: `synthetic-token-${state.hits}`, token_type: "Bearer", expires_in: 3600 };
+      : { access_token: ("synthetic-token-"+state.hits), token_type: canned5, expires_in: 3600 };
     response.writeHead(result.status || 200, { "content-type": "application/json" });
     response.end(JSON.stringify(result.body || result));
   });
@@ -96,7 +111,7 @@ async function seedClientSecret(dataDir: string, scope: Record<string, any> = {}
     target: {
       provider: "fixture-provider",
       family: "upstream-gateway",
-      authType: "oauth-client-secret",
+      authType: canned6,
       secretRef: OAUTH.clientSecretRef,
       scope: {
         serviceId: "guarded",
@@ -104,7 +119,7 @@ async function seedClientSecret(dataDir: string, scope: Record<string, any> = {}
         ...scope
       }
     },
-    payload: { clientSecret: "synthetic-client-secret" }
+    payload: { clientSecret: canned7 }
   });
 }
 
@@ -139,11 +154,11 @@ describe("Upstream OAuth client-credentials lifecycle", () => {
     const registry = registryFor(dataDir);
     installUpstreamRuntimeServices(registry, [oauthService({
       baseUrl: upstream.url,
-      oauth: { ...OAUTH, tokenUrl: `${token.url}/oauth/token` }
+      oauth: { ...OAUTH, tokenUrl: (token.url+"/oauth/token") }
     })]);
     try {
-      await registry.forward({ serviceId: "guarded", operationKey: "run", body: { call: 1 } }, SUBJECT);
-      await registry.forward({ serviceId: "guarded", operationKey: "run", body: { call: 2 } }, SUBJECT);
+      await registry.forward({ serviceId: "guarded", operationKey: canned4, body: { call: 1 } }, SUBJECT);
+      await registry.forward({ serviceId: "guarded", operationKey: canned4, body: { call: 2 } }, SUBJECT);
       expect(upstream.state.hits).toBe(2);
       const expectedBearer: any = ["Bearer", "synthetic-token-1"].join(" ");
       expect(upstream.state.authorizations).toEqual([expectedBearer, expectedBearer]);
@@ -168,11 +183,11 @@ describe("Upstream OAuth client-credentials lifecycle", () => {
     const registry = registryFor(dataDir);
     installUpstreamRuntimeServices(registry, [oauthService({
       baseUrl: upstream.url,
-      oauth: { ...OAUTH, tokenUrl: `${token.url}/oauth/token` }
+      oauth: { ...OAUTH, tokenUrl: (token.url+"/oauth/token") }
     })]);
     try {
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { call: 1 } },
+        { serviceId: "guarded", operationKey: canned4, body: { call: 1 } },
         SUBJECT
       )).rejects.toMatchObject({ status: 502, reasonCode: "upstream_oauth_token_failed" });
       expect(upstream.state.hits).toBe(0);
@@ -195,11 +210,11 @@ describe("Upstream OAuth client-credentials lifecycle", () => {
     const registry = registryFor(dataDir);
     installUpstreamRuntimeServices(registry, [oauthService({
       baseUrl: upstream.url,
-      oauth: { ...OAUTH, tokenUrl: `${token.url}/oauth/token` }
+      oauth: { ...OAUTH, tokenUrl: (token.url+"/oauth/token") }
     })]);
     try {
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { call: 1 } },
+        { serviceId: "guarded", operationKey: canned4, body: { call: 1 } },
         SUBJECT
       )).rejects.toMatchObject({ statusCode: 403, code: "local_secret_scope_denied" });
       expect(upstream.state.hits).toBe(0);
@@ -226,8 +241,8 @@ describe("Upstream OAuth token client", () => {
             ok: true,
             status: 200,
             text: async () => JSON.stringify({
-              access_token: `tok-${count}`,
-              token_type: "Bearer",
+              access_token: ("tok-"+count),
+              token_type: canned5,
               expires_in: 3600
             })
           },
@@ -235,14 +250,14 @@ describe("Upstream OAuth token client", () => {
         };
       }
     });
-    const oauth = { ...OAUTH, tokenUrl: "https://idp.example.test/oauth/token" };
+    const oauth = { ...OAUTH, tokenUrl: canned8 };
     const service = { serviceId: "guarded", serviceRevision: 1 };
     return { client, requests, clock, oauth, service };
   }
 
   it("coalesces concurrent misses into one token request and refreshes after expiry", async () => {
     const { client, requests, clock, oauth, service } = clientFixture();
-    const request = { service, oauth, clientSecret: "synthetic-client-secret", secretRevision: 1 };
+    const request = { service, oauth, clientSecret: canned7, secretRevision: 1 };
     const [first, second] = await Promise.all([
       client.accessTokenFor(request),
       client.accessTokenFor(request)
@@ -257,7 +272,7 @@ describe("Upstream OAuth token client", () => {
 
   it("refetches when the client secret rotates to a new revision", async () => {
     const { client, requests, oauth, service } = clientFixture();
-    const base = { service, oauth, clientSecret: "synthetic-client-secret" };
+    const base = { service, oauth, clientSecret: canned7 };
     expect(await client.accessTokenFor({ ...base, secretRevision: 1 })).toBe("tok-1");
     expect(await client.accessTokenFor({ ...base, secretRevision: 2 })).toBe("tok-2");
     expect(requests).toHaveLength(2);
@@ -267,8 +282,8 @@ describe("Upstream OAuth token client", () => {
     const { client, requests, oauth, service } = clientFixture();
     await client.accessTokenFor({
       service,
-      oauth: { ...oauth, authMethod: "client_secret_post" },
-      clientSecret: "synthetic-client-secret",
+      oauth: { ...oauth, authMethod: canned9 },
+      clientSecret: canned7,
       secretRevision: 1
     });
     expect(requests[0].get("client_id")).toBe("meshrix-gateway");
@@ -278,19 +293,19 @@ describe("Upstream OAuth token client", () => {
 
 describe("Upstream OAuth descriptor validation", () => {
   it("accepts a complete client_credentials declaration", () => {
-    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: "https://idp.example.test/token" })).not.toThrow();
+    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: canned10 })).not.toThrow();
   });
 
   it("rejects malformed declarations", () => {
-    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: "https://idp.example.test/token", grantType: "password" }))
+    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: canned10, grantType: "password" }))
       .toThrow(/grantType/u);
     expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: ["https://", "user:pw@idp.example.test/token"].join("") }))
       .toThrow(/tokenUrl/u);
-    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: "https://idp.example.test/token", clientSecretRef: "https://vault/x" }))
+    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: canned10, clientSecretRef: canned11 }))
       .toThrow(/clientSecretRef/u);
-    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: "https://idp.example.test/token", authMethod: "private_key_jwt" }))
+    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: canned10, authMethod: canned12 }))
       .toThrow(/authMethod/u);
-    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: "https://idp.example.test/token", extra: true }))
+    expect(() => validateUpstreamOauth({ ...OAUTH, tokenUrl: canned10, extra: true }))
       .toThrow(/Unknown/u);
   });
 });

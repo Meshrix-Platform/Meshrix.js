@@ -22,6 +22,10 @@ import {
   clearConsoleToasts,
   useConsoleToasts,
 } from "../../../apps/console/composables/console-toast-controller";
+const canned1 = "governedConfirm.authority.consoleSession";
+
+
+
 
 const shellContext: any = vi.hoisted(() : any => ({} as any));
 
@@ -44,7 +48,7 @@ const FIXED_OPERATION: Record<string, any> = {
 const FIXED_REGISTRY_FACTS = {
   effect: "destructive.consequence.serviceDiscoveryAddressRemove",
   resource: "https://b.example.com",
-  authority: "governedConfirm.authority.consoleSession",
+  authority: canned1,
   duration: "governedConfirm.duration.untilRevoked",
   risk: "destructive",
 };

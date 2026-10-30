@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { context, createTestGateway, descriptor, key, route } from "../support";
+const canned1 = "auth-1";
+
+
+
 
 describe("standard multi-round input continuation", () => {
   it("[GC-017 GC-018] round-trips absent, empty and nonempty upstream state through real peer invocations", async () => {
@@ -99,8 +103,8 @@ describe("standard multi-round input continuation", () => {
     const a = { ...context, principal: "subject-a" };
     const b = { ...context, principal: "subject-b" };
     try {
-      const contextA = gateway.createContext({ tenant: a.tenant, principal: a.principal, grantRevision: "grant-1", credentialGeneration: "auth-1", routeRef: "route.demo" });
-      const contextB = gateway.createContext({ tenant: b.tenant, principal: b.principal, grantRevision: "grant-1", credentialGeneration: "auth-1", routeRef: "route.demo" });
+      const contextA = gateway.createContext({ tenant: a.tenant, principal: a.principal, grantRevision: "grant-1", credentialGeneration: canned1, routeRef: "route.demo" });
+      const contextB = gateway.createContext({ tenant: b.tenant, principal: b.principal, grantRevision: "grant-1", credentialGeneration: canned1, routeRef: "route.demo" });
       const initial = (id: string, handle: string) => ({ routeRef: "route.demo", method: "tools/call", contextHandle: handle, params: { name: "job", arguments: { id }, _meta: { "io.modelcontextprotocol/clientCapabilities": { version: 1 } } } });
       const firstA = await gateway.invoke(a, initial("A", contextA.handle));
       const firstB = await gateway.invoke(b, initial("B", contextB.handle));

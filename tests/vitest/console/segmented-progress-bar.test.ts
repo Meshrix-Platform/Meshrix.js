@@ -2,6 +2,13 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import SegmentedProgressBar from "../../../apps/console/components/SegmentedProgressBar.vue";
+const canned1 = "queued";
+const canned2 = "running";
+const canned3 = "bad";
+const canned4 = "idle";
+
+
+
 
 describe("SegmentedProgressBar behavior", () : any => {
   it("renders generated label segments from completed step counts", () : any => {
@@ -42,10 +49,10 @@ describe("SegmentedProgressBar behavior", () : any => {
     const wrapper: any = mount(SegmentedProgressBar, {
       props: {
         segments: [
-          { key: "queued", label: "Queued", state: "completed" },
-          { key: "running", state: "running" },
-          { key: "bad", label: "Bad", state: "failed" },
-          { key: "idle", label: "", state: "mystery" },
+          { key: canned1, label: "Queued", state: "completed" },
+          { key: canned2, state: "running" },
+          { key: canned3, label: "Bad", state: "failed" },
+          { key: canned4, label: "", state: "mystery" },
         ],
       },
     });

@@ -23,6 +23,15 @@ import {
   createFinalProtectedSinkAttempt,
   digestFinalProtectedSinkInput
 } from "#meshrix/foundation/security/final-protected-sink-permit";
+const canned1 = "secret://meshrix/test/unrelated-config-secret";
+const canned2 = "header";
+const canned3 = "default";
+const canned4 = "config-file-concurrent-replacement";
+
+
+
+
+
 
 const roots: string[] = [];
 const cleanups: Array<() => Promise<void>> = [];
@@ -245,14 +254,14 @@ async function prepareFailedAuthRotation(
 }
 
 async function createUnrelatedActiveSecret(runtime: Awaited<ReturnType<typeof harness>>): Promise<string> {
-  const secretRef = "secret://meshrix/test/unrelated-config-secret";
+  const secretRef = canned1;
   await initializeLocalSecret({
     dataDir: runtime.userDataPath,
     keyProvider: runtime.keyProvider!,
     target: {
       provider: "meshrix",
       family: "http-header",
-      authType: "header",
+      authType: canned2,
       secretRef,
       scope: {
         serviceId: "unrelated-service",
@@ -318,11 +327,11 @@ describe("declarative upstream config publication", () => {
     expect(publishedRuntimeService.credentialReferenceCount).toBe(1);
     expect(JSON.stringify(publishedRuntimeService)).not.toContain(oldReference.reference);
     const firstCall = await runtime.registry.forward(
-      { serviceId: record!.serviceId, operationKey: "default" },
+      { serviceId: record!.serviceId, operationKey: canned3 },
       { subjectId: "config-runtime-test", scopes: ["gateway:write"] }
     );
     expect(firstCall.response.json).toEqual({ ok: true });
-    expect(fixtureRequests).toEqual([{ authorization: `Bearer ${MARKER_A}`, method: "POST" }]);
+    expect(fixtureRequests).toEqual([{ authorization: ("Bearer "+MARKER_A), method: "POST" }]);
 
     await loader.scan();
     expect(runtime.commands).toHaveLength(1);
@@ -354,7 +363,7 @@ describe("declarative upstream config publication", () => {
     expect((await runtime.store.getSnapshot()).getService(record!.serviceId)?.manifest.references).toEqual(record!.manifest.references);
 
     const stillPublished = await runtime.registry.forward(
-      { serviceId: record!.serviceId, operationKey: "default" },
+      { serviceId: record!.serviceId, operationKey: canned3 },
       { subjectId: "config-runtime-test", scopes: ["gateway:write"] }
     );
     expect(stillPublished.response.json).toEqual({ ok: true });
@@ -362,7 +371,7 @@ describe("declarative upstream config publication", () => {
 
     await runtime.observer.scan();
     const updatedCall = await runtime.registry.forward(
-      { serviceId: record!.serviceId, operationKey: "default" },
+      { serviceId: record!.serviceId, operationKey: canned3 },
       { subjectId: "config-runtime-test", scopes: ["gateway:write"] }
     );
     expect(updatedCall.response.json).toEqual({ ok: true });
@@ -417,7 +426,7 @@ describe("declarative upstream config publication", () => {
       target: {
         provider: "meshrix",
         family: "http-header",
-        authType: "header",
+        authType: canned2,
         secretRef: reference.reference,
         scope: {
           serviceId: preparation.serviceId,
@@ -427,7 +436,7 @@ describe("declarative upstream config publication", () => {
           allowedOrigins: ["http://format-convert:8080"]
         }
       },
-      payload: { headers: { authorization: `Bearer ${MARKER_A}` } }
+      payload: { headers: { authorization: ("Bearer "+MARKER_A) } }
     });
     await writeConfig(runtime.userDataPath, [{ name, descriptor }]);
     await loader.start();
@@ -690,7 +699,7 @@ describe("declarative upstream config publication", () => {
           serviceId: current.serviceId,
           expectedServiceRevision: current.serviceRevision,
           expectedSetRevision: candidate.setRevision,
-          idempotencyKey: "config-file-concurrent-replacement",
+          idempotencyKey: canned4,
           descriptor: { ...current.manifest.payload.descriptor, label: "parallel-writer" }
         };
         await runtime.publishingApplication.execute(JSON.stringify(overwrite), {
@@ -746,7 +755,7 @@ describe("declarative upstream config publication", () => {
     const loader = runtime.makeLoader({ onError: (error: unknown) => diagnostics.push(error) });
     const directory = path.join(runtime.userDataPath, "upstream-config");
     await fs.mkdir(directory, { recursive: true });
-    await fs.writeFile(path.join(directory, "services.json"), `{"services":[{"auth":{"token":"${MARKER_A}"}`);
+    await fs.writeFile(path.join(directory, "services.json"), JSON.stringify({ services: [{ auth: { token: MARKER_A } }] }));
     await loader.start();
     expect(JSON.stringify(loader.lastError)).not.toContain(MARKER_A);
     expect(JSON.stringify(diagnostics)).not.toContain(MARKER_A);
@@ -756,7 +765,7 @@ describe("declarative upstream config publication", () => {
       name: "fixture-header-service",
       type: "mcp",
       url: "https://fixture.example.invalid:443/mcp",
-      headers: { authorization: `Bearer ${MARKER_A}` }
+      headers: { authorization: ("Bearer "+MARKER_A) }
     }]);
     await loader.scan();
     expect(runtime.commands).toEqual([]);

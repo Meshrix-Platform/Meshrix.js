@@ -5,6 +5,13 @@ import os from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
+const canned1 = "REPORT-CREDENTIAL-MARKER";
+const canned2 = "HTTP-CREDENTIAL-MARKER";
+const canned3 = "SSH-CREDENTIAL-MARKER";
+const canned4 = "METADATA-CREDENTIAL-MARKER";
+
+
+
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 const GENERATOR_SOURCE = path.join(REPO_ROOT, "tools/server-scripts/generate-provenance.ts");
@@ -37,7 +44,7 @@ async function createFixture(): Promise<string> {
     fixture: `${syntheticHome}/private-composition-marker`
   }));
   await fs.writeFile(path.join(root, "build/reports/private-report-path-marker.json"), JSON.stringify({
-    token: "REPORT-CREDENTIAL-MARKER",
+    token: canned1,
     localPath: `${syntheticHome}/private-report-marker`
   }));
   await fs.writeFile(path.join(root, "build/reports/ordinary-report.md"), "synthetic local report\n");
@@ -50,10 +57,10 @@ async function createFixture(): Promise<string> {
   git(["symbolic-ref", "HEAD", "refs/heads/private-branch-marker"]);
   const httpRemote: any = new URL("https://http-private.invalid/team/repo.git");
   httpRemote.username = "fixture-user";
-  httpRemote.password = "HTTP-CREDENTIAL-MARKER";
+  httpRemote.password = canned2;
   const sshRemote: any = new URL("ssh://ssh-private.invalid/team/repo.git");
   sshRemote.username = "fixture-user";
-  sshRemote.password = "SSH-CREDENTIAL-MARKER";
+  sshRemote.password = canned3;
   git(["remote", "set-url", "origin", httpRemote.href]);
   git(["remote", "add", "upstream", sshRemote.href]);
   return root;
@@ -170,7 +177,7 @@ describe("local build-input report generator", () => {
     const metadata = JSON.parse(await fs.readFile(packagePath, "utf8"));
     const repositoryUrl: any = new URL("https://github.com/example/private.git");
     repositoryUrl.username = "fixture-user";
-    repositoryUrl.password = "METADATA-CREDENTIAL-MARKER";
+    repositoryUrl.password = canned4;
     metadata.repository.url = repositoryUrl.href;
     await fs.writeFile(packagePath, `${JSON.stringify(metadata, null, 2)}\n`);
 

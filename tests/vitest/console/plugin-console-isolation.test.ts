@@ -10,6 +10,10 @@ import {
   connectPluginConsoleHostBridge,
 } from "../../../apps/console/plugin-console-isolation.ts";
 import { resolvePluginConsoleComponent } from "../../../apps/console/router/plugin-console-routes.ts";
+const canned1 = "sampleView";
+
+
+
 
 const mounted: VueWrapper[] = [];
 
@@ -24,7 +28,7 @@ function entry(patch: Record<string, any> = {}) : any {
     id: "admin.sample-plugin",
     pluginId: "sample-plugin",
     featureId: "sample-feature",
-    viewKey: "sampleView",
+    viewKey: canned1,
     routePath: "/admin/sample-plugin",
     componentId: "sample-plugin/AdminView",
     sandboxUrl: `/api/plugins/v1/console-sandboxes/sample-plugin/1/${"a".repeat(64)}/YWRtaW4uc2FtcGxlLXBsdWdpbg.html`,
@@ -87,7 +91,7 @@ describe("plugin console isolation", () : any => {
       const bridge: any = connectPluginConsoleHostBridge({
         port,
         entry: surface,
-        context: { locale: "en", theme: { colorScheme: "light" }, route: { path: "/admin/sample-plugin", viewKey: "sampleView" } },
+        context: { locale: "en", theme: { colorScheme: "light" }, route: { path: "/admin/sample-plugin", viewKey: canned1 } },
         invokeTool: ({ signal }: Record<string, any>) : Promise<any> => {
           requestSignal = signal;
           return pending;
@@ -131,7 +135,7 @@ describe("plugin console isolation", () : any => {
     const bridge: any = connectPluginConsoleHostBridge({
       port: port1,
       entry: surface,
-      context: { locale: "en", theme: { colorScheme: "light" }, route: { path: "/admin/sample-plugin", viewKey: "sampleView" } },
+      context: { locale: "en", theme: { colorScheme: "light" }, route: { path: "/admin/sample-plugin", viewKey: canned1 } },
       invokeTool,
       revalidate: () : any => ({ ok: true }),
     });

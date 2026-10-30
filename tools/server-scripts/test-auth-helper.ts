@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+const canned1 = "";
+
+
+
 
 const AUTH_RULES: any[] = [];
 const ORIGINAL_FETCH: any = globalThis.fetch.bind(globalThis);
@@ -52,7 +56,7 @@ export async function readInitialOwnerCredentials(server?: any) : Promise<any> {
     return {
       username: server.initialOwner?.username || "owner",
       password: inlinePassword,
-      credentialsPath: ""
+      credentialsPath: canned1
     };
   }
 
@@ -63,8 +67,8 @@ export async function readInitialOwnerCredentials(server?: any) : Promise<any> {
   if (!credentialsPath) {
     return {
       username: server.initialOwner?.username || "owner",
-      password: "",
-      credentialsPath: ""
+      password: canned1,
+      credentialsPath: canned1
     };
   }
 

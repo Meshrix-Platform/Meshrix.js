@@ -7,6 +7,21 @@ import { describe, expect, it } from "vitest";
 import { isAccountStepUpPermitId } from "@meshrix/contracts/account";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { EndpointAccountPairingApplication, accountDeviceAuthorizationMatches, createEndpointIdentityStore, createFileEndpointIdentityDurablePort, createPrivateGatewayEndpoint, type EndpointAccountPairingAuthority, type EndpointIdentityDurablePort, type EndpointDeviceRecord, type EndpointGrantOperationRecord, type EndpointInvitationRecord, type EndpointPairingOperationRecord, type EndpointPairingProofPort, type RecoveryAuthorityRecord } from "@meshrix/gateway/private-endpoint";
+const canned1 = "recovery.account-endpoint.test";
+const canned2 = "recovery-public-key";
+const canned3 = "fingerprint.account-endpoint.test";
+const canned4 = "endpoint-pin.account-endpoint.test";
+const canned5 = "endpoint-spki.account-endpoint.test";
+const canned6 = "nonce.pending.account-endpoint.test";
+const canned7 = "pin.test";
+const canned8 = "writer.substituted";
+const canned9 = "substituted-writer";
+const canned10 = "verifier.substituted";
+const canned11 = "substituted-verifier";
+const canned12 = "1";
+
+
+
 
 function accountDeviceKey(): string {
   return generateKeyPairSync("ed25519").publicKey.export({ format: "der", type: "spki" }).subarray(-32).toString("base64url");
@@ -140,9 +155,9 @@ describe("account-managed endpoint authority", () => {
     const action = target();
     identity.enrollAccountDevice({ account, target: action, mode: "personal" });
     identity.enrollRecoveryAuthority({
-      recoveryKeyId: "recovery.account-endpoint.test",
+      recoveryKeyId: canned1,
       principalRef: "principal.account-endpoint.test",
-      publicKey: "recovery-public-key",
+      publicKey: canned2,
       generation: 1,
       accountBinding: account
     });
@@ -203,7 +218,7 @@ describe("account-managed endpoint authority", () => {
         schemaVersion: "v0.0.1:private-relay:recovery-1",
         kind: "endpoint-trust-binding",
         pairedIdentityKey: endpointPublicKey,
-        pairedIdentityFingerprint: "fingerprint.account-endpoint.test",
+        pairedIdentityFingerprint: canned3,
         mode: "personal",
         role: "endpoint",
         trustGeneration: 1,
@@ -252,7 +267,7 @@ describe("account-managed endpoint authority", () => {
       entryDeviceId: "device.account-endpoint.test",
       entryDevicePublicKey: entryPublicKey,
       endpointDeviceId: "endpoint.account-endpoint.test",
-      endpointPinRef: "endpoint-pin.account-endpoint.test",
+      endpointPinRef: canned4,
       target: null,
       expiresAt: new Date(Date.now() + 60_000).toISOString()
     };
@@ -273,9 +288,9 @@ describe("account-managed endpoint authority", () => {
           : { valid: false, reason: "target_mismatch" };
       },
       async consumeStepUpPermit(input) {
-        const key = `${input.permitId}:${input.operationId}`;
-        consumed.add(key);
-        return { consumed: true, replayed: consumed.has(key) };
+        const dedupe = `${input.permitId}:${input.operationId}`;
+        consumed.add(dedupe);
+        return { consumed: true, replayed: consumed.has(dedupe) };
       },
       async completePairing() { relayCompletionCount += 1; return { completed: true, relayAdmissionActive: true }; }
     };
@@ -295,7 +310,7 @@ describe("account-managed endpoint authority", () => {
         routeId: pending.routeId,
         endpointDeviceId: pending.endpointDeviceId,
         endpointPinRef: pending.endpointPinRef,
-        endpointSpkiPin: "endpoint-spki.account-endpoint.test",
+        endpointSpkiPin: canned5,
         endpointPrincipalRef: "principal.endpoint.account-endpoint.test",
         relayService: "wss://relay.example.test",
         vaultId: "vault.account-endpoint.test",
@@ -454,7 +469,7 @@ describe("account-managed endpoint authority", () => {
       entrySessionId: "entry.pair.account-endpoint.test",
       inviteId: "invite.pending.account-endpoint.test",
       challengeId: "challenge.pending.account-endpoint.test",
-      nonce: "nonce.pending.account-endpoint.test",
+      nonce: canned6,
       account,
       target: challenge.target,
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
@@ -506,7 +521,7 @@ describe("account-managed endpoint authority", () => {
     };
     const app = new EndpointAccountPairingApplication({
       identity, authority, proof,
-      invite: { tenantId: action.tenantId, routeId: action.routeId, endpointDeviceId: "endpoint.test", endpointPinRef: "pin.test", endpointSpkiPin: "pin.test", endpointPrincipalRef: "principal.test", relayService: "wss://relay.example.test", vaultId: "vault.test", mode: "personal", recoveryAuthority: null },
+      invite: { tenantId: action.tenantId, routeId: action.routeId, endpointDeviceId: "endpoint.test", endpointPinRef: canned7, endpointSpkiPin: canned7, endpointPrincipalRef: "principal.test", relayService: "wss://relay.example.test", vaultId: "vault.test", mode: "personal", recoveryAuthority: null },
       availableScopes: ["svc:tool:read"]
     });
     const request = {
@@ -528,8 +543,8 @@ describe("account-managed endpoint authority", () => {
         vaultWriterRotation: {
           vaultId: "vault.substituted",
           generation: 2,
-          writers: [{ keyId: "writer.substituted", algorithm: "Ed25519", publicKey: "substituted-writer" }],
-          recoveryVerifier: { keyId: "verifier.substituted", algorithm: "Ed25519", publicKey: "substituted-verifier" }
+          writers: [{ keyId: canned8, algorithm: "Ed25519", publicKey: canned9 }],
+          recoveryVerifier: { keyId: canned10, algorithm: "Ed25519", publicKey: canned11 }
         }
       }
     })).toMatchObject({ outcome: "refused", refusal: "grant_target_mismatch" });
@@ -565,7 +580,7 @@ describe("account-managed endpoint authority", () => {
     };
     const app = new EndpointAccountPairingApplication({
       identity, authority, proof,
-      invite: { tenantId: initial.tenantId, routeId: initial.routeId, endpointDeviceId: "endpoint.test", endpointPinRef: "pin.test", endpointSpkiPin: "pin.test", endpointPrincipalRef: "principal.test", relayService: "wss://relay.example.test", vaultId: "vault.test", mode: "personal", recoveryAuthority: null },
+      invite: { tenantId: initial.tenantId, routeId: initial.routeId, endpointDeviceId: "endpoint.test", endpointPinRef: canned7, endpointSpkiPin: canned7, endpointPrincipalRef: "principal.test", relayService: "wss://relay.example.test", vaultId: "vault.test", mode: "personal", recoveryAuthority: null },
       availableScopes: ["svc:tool:read", "svc:tool:write"],
       idFactory: () => "grant.op.stable"
     });
@@ -632,7 +647,7 @@ describe("account-managed endpoint authority", () => {
     };
     const app = new EndpointAccountPairingApplication({
       identity, authority, proof,
-      invite: { tenantId: action.tenantId, routeId: action.routeId, endpointDeviceId: "endpoint.test", endpointPinRef: "pin.test", endpointSpkiPin: "pin.test", endpointPrincipalRef: "principal.test", relayService: "wss://relay.example.test", vaultId: "vault.test", mode: "personal", recoveryAuthority: null },
+      invite: { tenantId: action.tenantId, routeId: action.routeId, endpointDeviceId: "endpoint.test", endpointPinRef: canned7, endpointSpkiPin: canned7, endpointPrincipalRef: "principal.test", relayService: "wss://relay.example.test", vaultId: "vault.test", mode: "personal", recoveryAuthority: null },
       availableScopes: action.scopes
     });
     let invocations = 0;
@@ -649,7 +664,7 @@ describe("account-managed endpoint authority", () => {
     const context = Object.freeze({
       tenant: action.tenantId,
       principal: device.principalRef,
-      authGeneration: "1",
+      authGeneration: canned12,
       grant: Object.freeze({ revision: "1", routes: action.scopes }),
       metadata: Object.freeze({ accountId: account.accountId, authEpoch: account.authEpoch, deviceId: device.deviceId })
     });

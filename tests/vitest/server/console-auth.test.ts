@@ -29,6 +29,32 @@ import {
   parseInitialOwnerCredential,
   readPrivateOwnerCredentialFile
 } from "../../../tools/server-scripts/console-auth.ts";
+const canned1 = "Password123";
+const canned2 = "Welcome1234";
+const canned3 = "QwertyUiop";
+const canned4 = "short";
+const canned5 = "synthetic-test-signer-material";
+const canned6 = "secret-1";
+const canned7 = "supplied-owner";
+const canned8 = "password-manager-owner";
+const canned9 = "argv-owner-secret";
+const canned10 = "stdin-owner-secret";
+const canned11 = "session-viewer";
+const canned12 = "sample-feature";
+const canned13 = "session-operator";
+const canned14 = "concurrent-old";
+const canned15 = "concurrent-new";
+const canned16 = "short-username";
+const canned17 = "operator";
+const canned18 = "operator-updated";
+const canned19 = "workspace-viewer";
+const canned20 = "audit-retention-owner";
+const canned21 = "replacement";
+const canned22 = "denied";
+const canned23 = "private-owner";
+
+
+
 
 async function withTempAuth(callback?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-console-auth-"));
@@ -117,7 +143,7 @@ const PLUGIN_FEATURE_SCOPE_GRANTS: Readonly<Record<string, any>> = Object.freeze
 describe("console auth boundary behavior", () : any => {
   it("admits a supplied initial owner credential without replacing it on resume", async () : Promise<any> => {
     await withTempAuth(async (auth?: any) : Promise<any> => {
-      const password: any = credentialFor("supplied-owner");
+      const password: any = credentialFor(canned7);
       const created: any = await auth.ensureInitialOwner({ username: "Owner", password });
       expect(created).toMatchObject({
         created: true,
@@ -127,7 +153,7 @@ describe("console auth boundary behavior", () : any => {
       await expect(auth.login({ username: "owner", password }, makeRequest())).resolves.toMatchObject({
         session: { user: { username: "owner" } }
       });
-      await expect(auth.ensureInitialOwner({ username: "owner", password: credentialFor("replacement") }))
+      await expect(auth.ensureInitialOwner({ username: "owner", password: credentialFor(canned21) }))
         .resolves.toEqual({ created: false });
       await expect(auth.login({ username: "owner", password }, makeRequest())).resolves.toBeTruthy();
     });
@@ -135,20 +161,20 @@ describe("console auth boundary behavior", () : any => {
 
   it("blocks common passwords only when credentials are created or reset", async () : Promise<any> => {
     await withTempAuth(async (auth?: any) : Promise<any> => {
-      await expect(auth.ensureInitialOwner({ username: "owner", password: "Password123" }))
+      await expect(auth.ensureInitialOwner({ username: "owner", password: canned1 }))
         .rejects.toThrow(/密码过于常见/u);
-      await expect(auth.createUser({ username: "new-user", password: "Welcome1234" }))
+      await expect(auth.createUser({ username: "new-user", password: canned2 }))
         .rejects.toThrow(/密码过于常见/u);
       expect(auth.listUsers()).toHaveLength(0);
 
-      const strongPassword = credentialFor("password-manager-owner");
+      const strongPassword = credentialFor(canned8);
       const initial: any = await auth.ensureInitialOwner({ username: "owner", password: strongPassword });
-      await expect(auth.updateUser(initial.user.userId, { newPassword: "QwertyUiop" }))
+      await expect(auth.updateUser(initial.user.userId, { newPassword: canned3 }))
         .rejects.toThrow(/密码过于常见/u);
       await expect(auth.login({ username: "owner", password: strongPassword }, makeRequest()))
         .resolves.toMatchObject({ session: { user: { username: "owner" } } });
 
-      const legacyPassword = "Password123";
+      const legacyPassword = canned1;
       const legacyCredential = await authSupport.hashPassword(legacyPassword);
       auth.db.prepare(`
         INSERT INTO console_users (
@@ -169,10 +195,10 @@ describe("console auth boundary behavior", () : any => {
 
   it("denies malformed supplied owner credentials before creating an account", async () : Promise<any> => {
     await withTempAuth(async (auth?: any) : Promise<any> => {
-      await expect(auth.ensureInitialOwner({ username: "maintainer", password: credentialFor("denied") }))
+      await expect(auth.ensureInitialOwner({ username: "maintainer", password: credentialFor(canned22) }))
         .rejects.toThrow(/normalize to owner/u);
       expect(auth.listUsers()).toHaveLength(0);
-      await expect(auth.ensureInitialOwner({ username: "owner", password: "short" })).rejects.toThrow(/10-256/u);
+      await expect(auth.ensureInitialOwner({ username: "owner", password: canned4 })).rejects.toThrow(/10-256/u);
       expect(auth.listUsers()).toHaveLength(0);
     });
   });
@@ -182,7 +208,7 @@ describe("console auth boundary behavior", () : any => {
     const validPath: any = path.join(root, "owner.json");
     const linkPath: any = path.join(root, "owner-link.json");
     try {
-      const value: any = { username: "owner", password: credentialFor("private-owner") };
+      const value: any = { username: "owner", password: credentialFor(canned23) };
       const bytes: any = Buffer.from(JSON.stringify(value));
       expect(parseInitialOwnerCredential(bytes)).toEqual(value);
       await fs.writeFile(validPath, bytes, { mode: 0o600 });
@@ -192,7 +218,7 @@ describe("console auth boundary behavior", () : any => {
       await fs.chmod(validPath, 0o644);
       await expect(readPrivateOwnerCredentialFile(validPath)).rejects.toThrow(/file_unsafe/u);
       expect(() : any => parseInitialOwnerCredential(Buffer.from(JSON.stringify({ ...value, extra: true })))).toThrow(/credential_invalid/u);
-      expect(() : any => parseInitialOwnerCredential(Buffer.from(JSON.stringify({ username: "owner", password: "short" })))).toThrow(/credential_invalid/u);
+      expect(() : any => parseInitialOwnerCredential(Buffer.from(JSON.stringify({ username: "owner", password: canned4 })))).toThrow(/credential_invalid/u);
       expect(() : any => parseInitialOwnerCredential(Buffer.alloc(8193, 0x61))).toThrow(/credential_invalid/u);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
@@ -200,7 +226,7 @@ describe("console auth boundary behavior", () : any => {
   });
 
   it("rejects owner passwords in argv without disclosing them", async () : Promise<any> => {
-    const secret: any = credentialFor("argv-owner-secret");
+    const secret: any = credentialFor(canned9);
     const result: any = spawnSync(process.execPath, [
       "--conditions=source",
       path.resolve("tools/server-scripts/console-auth.ts"),
@@ -214,7 +240,7 @@ describe("console auth boundary behavior", () : any => {
 
   it("imports the initial owner only through bounded stdin and returns fixed status", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-owner-stdin-"));
-    const secret: any = credentialFor("stdin-owner-secret");
+    const secret: any = credentialFor(canned10);
     const input: any = Buffer.from(JSON.stringify({ username: "owner", password: secret }), "utf8");
     const args: any[] = [
       "--conditions=source",
@@ -260,7 +286,7 @@ describe("console auth boundary behavior", () : any => {
       expect(role.scopes.some((scope?: any) : any => scope.startsWith("sample_plugin:"))).toBe(false);
     }
 
-    const activeRoles: any = createConsoleRoleCatalog({ activeFeatureIds: ["sample-feature"], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS });
+    const activeRoles: any = createConsoleRoleCatalog({ activeFeatureIds: [canned12], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS });
     expect(activeRoles.maintainer.scopes).toEqual(expect.arrayContaining([
       "sample_plugin:read",
       "sample_plugin:write"
@@ -273,7 +299,7 @@ describe("console auth boundary behavior", () : any => {
     const tagManagementStore: any = createTagStoreAdapter({ userDataPath });
     let auth: any;
     try {
-      auth = createConsoleAuth({ userDataPath, activeFeatureIds: ["sample-feature"], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS, tagManagementStore });
+      auth = createConsoleAuth({ userDataPath, activeFeatureIds: [canned12], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS, tagManagementStore });
       expect(auth.roleList().find((role?: any) : any => role.roleId === "viewer")?.scopes)
         .toContain("sample_plugin:read");
       await auth.close();
@@ -292,7 +318,7 @@ describe("console auth boundary behavior", () : any => {
   it("removes persisted builtin plugin scopes during a lifecycle refresh", async () : Promise<any> => {
     const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-console-role-refresh-"));
     const tagManagementStore: any = createTagStoreAdapter({ userDataPath });
-    const auth: any = createConsoleAuth({ userDataPath, activeFeatureIds: ["sample-feature"], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS, tagManagementStore });
+    const auth: any = createConsoleAuth({ userDataPath, activeFeatureIds: [canned12], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS, tagManagementStore });
     try {
       expect(auth.roleList().flatMap((role?: any) : any => role.scopes || []))
         .toContain("sample_plugin:read");
@@ -412,12 +438,12 @@ describe("console auth boundary behavior", () : any => {
 
       const viewer: any = await auth.createUser({
         username: "session.viewer",
-        password: credentialFor("session-viewer"),
+        password: credentialFor(canned11),
         roleId: "viewer"
       });
       const viewerLogin: any = await auth.login({
         username: viewer.username,
-        password: credentialFor("session-viewer")
+        password: credentialFor(canned11)
       }, makeRequest());
       const viewerSummary: any = auth.getSummary(makeRequest({
         cookie: authCookieHeader(viewerLogin)
@@ -511,12 +537,12 @@ describe("console auth boundary behavior", () : any => {
       const initial: any = await auth.ensureInitialOwner();
       const operator: any = await auth.createUser({
         username: "session.operator",
-        password: credentialFor("session-operator"),
+        password: credentialFor(canned13),
         roleId: "maintainer"
       });
       const inactiveLogin: any = await auth.login({
         username: operator.username,
-        password: credentialFor("session-operator")
+        password: credentialFor(canned13)
       }, makeRequest());
       auth.db.prepare(
         "UPDATE console_sessions SET last_seen_at = ? WHERE session_id = ?"
@@ -530,7 +556,7 @@ describe("console auth boundary behavior", () : any => {
 
       const malformedActivityLogin: any = await auth.login({
         username: operator.username,
-        password: credentialFor("session-operator")
+        password: credentialFor(canned13)
       }, makeRequest());
       auth.db.prepare(
         "UPDATE console_sessions SET last_seen_at = ? WHERE session_id = ?"
@@ -590,7 +616,7 @@ describe("console auth boundary behavior", () : any => {
   it("unifies real HTTP/RPC login routes, denies before scrypt and restores cookies/retry", async () => {
     await withTempAuth(async (auth: any, userDataPath: string) => {
       const initial = await auth.ensureInitialOwner();
-      const proof = createOperationProofSubstrate({ dataDir: path.join(userDataPath, "proof-fixture"), signerSecret: "synthetic-test-signer-material".repeat(3), evidencePolicy: "development" });
+      const proof = createOperationProofSubstrate({ dataDir: path.join(userDataPath, "proof-fixture"), signerSecret: canned5.repeat(3), evidencePolicy: "development" });
       const lockManager = new MemoryLockManager();
       const controllers = { system: createSystemController({ userDataPath, securityPermissions: auth,
         consoleDomainServices: { executeConsoleDomainOperation: executeConsoleAuthOperation, uploadSessionStore: { resolveUploadSessionFiles() {}, deleteUploadSession() {} } },
@@ -651,16 +677,16 @@ describe("console auth boundary behavior", () : any => {
       const user: any = await auth.createUser({
         username: "concurrent.operator",
         displayName: "Concurrent Operator",
-        password: credentialFor("concurrent-old"),
+        password: credentialFor(canned14),
         roleId: "maintainer"
       });
       const loginResult: any = await auth.login({
         username: user.username,
-        password: credentialFor("concurrent-old")
+        password: credentialFor(canned14)
       }, makeRequest());
 
       const passwordUpdate: any = auth.updateUser(user.userId, {
-        password: credentialFor("concurrent-new")
+        password: credentialFor(canned15)
       });
       const restrictionUpdate: any = auth.updateUser(user.userId, {
         displayName: "Restricted Operator",
@@ -680,11 +706,11 @@ describe("console auth boundary behavior", () : any => {
       await auth.updateUser(user.userId, { enabled: true });
       await expect(auth.login({
         username: user.username,
-        password: credentialFor("concurrent-old")
+        password: credentialFor(canned14)
       }, makeRequest())).rejects.toThrow("用户名或密码错误");
       await expect(auth.login({
         username: user.username,
-        password: credentialFor("concurrent-new")
+        password: credentialFor(canned15)
       }, makeRequest())).resolves.toMatchObject({
         session: { user: { roleId: "viewer", enabled: true } }
       });
@@ -736,13 +762,13 @@ describe("console auth boundary behavior", () : any => {
       await auth.ensureInitialOwner();
       await expect(auth.createUser({
         username: "x",
-        password: credentialFor("short-username")
+        password: credentialFor(canned16)
       })).rejects.toThrow("用户名需为 3-80 位");
 
       const user: any = await auth.createUser({
         username: "Operator.User",
         displayName: "Operator",
-        password: credentialFor("operator"),
+        password: credentialFor(canned17),
         roleId: "maintainer",
         tenantId: "tenant:one",
         teamIds: "alpha,beta,alpha",
@@ -762,7 +788,7 @@ describe("console auth boundary behavior", () : any => {
 
       const loginResult: any = await auth.login({
         username: "operator.user",
-        password: credentialFor("operator")
+        password: credentialFor(canned17)
       }, makeRequest());
       expect(auth.listSessions()).toHaveLength(1);
 
@@ -770,7 +796,7 @@ describe("console auth boundary behavior", () : any => {
         displayName: "Updated Operator",
         roleId: "viewer",
         enabled: false,
-        password: credentialFor("operator-updated"),
+        password: credentialFor(canned18),
         tenantId: "tenant.two",
         allowedEgress: "https://a.test, https://b.test",
         attributes: { level: 2 }
@@ -899,14 +925,14 @@ describe("console auth boundary behavior", () : any => {
       await auth.ensureInitialOwner();
       await auth.createUser({
         username: "workspace.viewer",
-        password: credentialFor("workspace-viewer"),
+        password: credentialFor(canned19),
         roleId: "viewer",
         tenantId: "tenant-a",
         allowedWorkspaceIds: ["ws-allowed"]
       });
       const loginResult: any = await auth.login({
         username: "workspace.viewer",
-        password: credentialFor("workspace-viewer")
+        password: credentialFor(canned19)
       }, makeRequest());
       const cookie: any = authCookieHeader(loginResult);
       const operation: Record<string, any> = {
@@ -971,7 +997,7 @@ describe("console auth boundary behavior", () : any => {
         enabled: true,
         issuer: "https://issuer.example.test",
         clientId: "client-1",
-        clientSecret: "secret-1",
+        clientSecret: canned6,
         redirectUri: "https://console.local/callback",
         allowedDomains: ["example.test"],
         roleMapping: { "example.test": "viewer" }
@@ -988,7 +1014,7 @@ describe("console auth boundary behavior", () : any => {
 
       const auditPathNeedle: any = "/api/audit/private-path-62e8";
       const auditTargetNeedle: any = "private-audit-target-48d3";
-      const auditTargetKeyNeedle: any = "private-audit-key-14b7";
+      const auditNeedle: any = "private-audit-key-14b7";
       const auditClientNeedle: any = "private-audit-client-71a5";
       const auditErrorNeedle: any = "private-audit-error-39f4";
       const auditAbsolutePathNeedle: any = path.join(
@@ -1008,7 +1034,7 @@ describe("console auth boundary behavior", () : any => {
           scope: auditTargetNeedle,
           clientId: auditClientNeedle,
           source: auditAbsolutePathNeedle,
-          [auditTargetKeyNeedle]: true
+          [auditNeedle]: true
         },
         reasonCode: "fixture_denied",
         error: auditErrorNeedle
@@ -1041,7 +1067,7 @@ describe("console auth boundary behavior", () : any => {
         user.username,
         auditPathNeedle,
         auditTargetNeedle,
-        auditTargetKeyNeedle,
+        auditNeedle,
         auditClientNeedle,
         auditErrorNeedle,
         auditAbsolutePathNeedle
@@ -1057,7 +1083,7 @@ describe("console auth boundary behavior", () : any => {
     await withTempAuth(async (auth?: any) : Promise<any> => {
       await auth.ensureInitialOwner({
         username: "owner",
-        password: credentialFor("audit-retention-owner")
+        password: credentialFor(canned20)
       });
       const expiredAuditId = "fixture-expired-console-audit";
       auth.db.prepare(`

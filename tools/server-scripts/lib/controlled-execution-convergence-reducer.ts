@@ -2,34 +2,41 @@ import {
   containsSensitiveReportData,
   reportPayloadDigest,
 } from "../../../packages/foundation/src/observability/sensitive-report-scan.ts";
+const canned1 = "sandbox";
+const canned2 = "oci";
+const canned3 = "custody";
+const canned4 = "launcher";
+
+
+
 
 export const CONTROLLED_EXECUTION_FINAL_SCHEMA: any =
   "v0.0.1:execution-sandbox:controlled-execution-convergence-final-report-2";
 
 export const CONTROLLED_EXECUTION_LEAF_SPECS: readonly any[] = Object.freeze([
   Object.freeze({
-    key: "sandbox",
+    key: canned1,
     path: "build/reports/controlled-execution-sandbox.json",
     schemaVersion: "v0.0.1:execution-sandbox:acceptance-report-1",
     verifier: "tools/server-scripts/verify-controlled-execution-sandbox.ts",
     readyPath: ["sandboxAcceptanceReady"]
   }),
   Object.freeze({
-    key: "oci",
+    key: canned2,
     path: "build/reports/execution-sandbox-oci-conformance.json",
     schemaVersion: "v0.0.1:execution-sandbox:oci-conformance-report-1",
     verifier: "tools/server-scripts/verify-execution-sandbox-oci-conformance.ts",
     readyPath: ["productionBackendConformance"]
   }),
   Object.freeze({
-    key: "custody",
+    key: canned3,
     path: "build/reports/opaque-sandbox-custody.json",
     schemaVersion: "v0.0.1:execution-sandbox:opaque-custody-acceptance-report-1",
     verifier: "tools/server-scripts/verify-opaque-sandbox-custody.ts",
     readyPath: ["custodyAcceptanceReady"]
   }),
   Object.freeze({
-    key: "launcher",
+    key: canned4,
     path: "build/reports/execution-launcher-boundary.json",
     schemaVersion: "v0.0.1:execution-sandbox:launcher-boundary-report-1",
     verifier: "tools/verifiers/execution-launcher-boundary.ts",

@@ -3,6 +3,10 @@ import {
   compilePayloadTransport,
   selectRequestRepresentationHeaders
 } from "../../../packages/agents/src/upstream-gateway/payload-contract.ts";
+const canned1 = "Bearer caller-secret";
+
+
+
 
 describe("upstream payload representation contract", () : any => {
   it("requires an explicit bounded request representation and defaults response passthrough", () : any => {
@@ -41,7 +45,7 @@ describe("upstream payload representation contract", () : any => {
       }
     })).toThrow("argument is invalid");
     const selected: any = selectRequestRepresentationHeaders({
-      authorization: "Bearer caller-secret",
+      authorization: canned1,
       cookie: "private",
       host: "caller.invalid",
       "content-type": "application/octet-stream",

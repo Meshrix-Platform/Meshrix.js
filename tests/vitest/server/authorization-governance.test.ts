@@ -10,6 +10,10 @@ import {
 import { createSystemControllerFoundationHandlers } from "../../../packages/protocols/http/controllers/system-controller-foundation-handlers.ts";
 import { executeAuthorizationFacadeOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/authorization-facade-executor.ts";
 import { createTagManagementStore } from "../../../packages/server-runtime/src/state/tag-management-store.ts";
+const canned1 = "enterprise-group";
+
+
+
 
 describe("organization governance operation contracts", () : any => {
   it("registers authenticated catalog, import, preview, and confirmed publish operations", () : any => {
@@ -54,7 +58,7 @@ describe("organization governance operation contracts", () : any => {
     });
     const authSession: any = { user: { userId: "administrator" } };
     await handlers.handleAuthorizationOrganizationGovernanceGet({ response: {}, authSession });
-    await handlers.handleAuthorizationOrganizationGovernanceImport({ requestBody: { templateKey: "enterprise-group" }, response: {}, authSession });
+    await handlers.handleAuthorizationOrganizationGovernanceImport({ requestBody: { templateKey: canned1 }, response: {}, authSession });
     await handlers.handleAuthorizationOrganizationGovernancePreview({ requestBody: { depth: 2 }, response: {}, authSession });
     await handlers.handleAuthorizationOrganizationGovernancePublish({ requestBody: { depth: 2 }, response: {}, authSession });
     expect(sendConsoleDomainOperation.mock.calls.map((call?: any) : any => call[0].operationId)).toEqual([
@@ -88,11 +92,11 @@ describe("organization governance facade", () : any => {
     });
     expect(getResult.status).toBe(200);
     expect(getResult.payload.snapshot.configured).toBe(false);
-    expect(getResult.payload.templates).toEqual([expect.objectContaining({ templateKey: "enterprise-group" })]);
+    expect(getResult.payload.templates).toEqual([expect.objectContaining({ templateKey: canned1 })]);
 
     const importResult: any = await executeAuthorizationFacadeOperation({
       operationId: "authorization.organization_governance.import",
-      input: { templateKey: "enterprise-group" },
+      input: { templateKey: canned1 },
       context
     });
     expect(importResult.status).toBe(200);
@@ -137,7 +141,7 @@ describe("organization governance facade", () : any => {
     const organizationGovernanceService: any = createOrganizationGovernanceService({ tagManagementStore });
     const securityPermissions: any = createSecurityPermissionsProvider({ organizationGovernanceService, tagManagementStore });
     const context: any = { securityPermissions };
-    const draft: any = organizationGovernanceService.importOrganizationGovernance({ templateKey: "enterprise-group" });
+    const draft: any = organizationGovernanceService.importOrganizationGovernance({ templateKey: canned1 });
     await executeAuthorizationFacadeOperation({
       operationId: "authorization.organization_governance.publish",
       input: { ...draft, expectedRevision: 0 },

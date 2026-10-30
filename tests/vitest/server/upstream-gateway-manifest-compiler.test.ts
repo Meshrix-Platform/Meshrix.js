@@ -5,17 +5,22 @@ import {
   fingerprint,
   parseWithDuplicateRejection,
 } from "../../../packages/agents/src/upstream-gateway/manifest-compiler.ts";
+const canned1 = "value";
+const canned2 = "other";
+
+
+
 
 describe("upstream publishing raw JSON admission", () : any => {
   it("accepts nested JSON without confusing structural characters inside strings", () : any => {
     expect(parseWithDuplicateRejection(Buffer.from(JSON.stringify({
       serviceId: "service-a",
       description: "braces { } brackets [ ] and a colon: remain text",
-      nested: [{ key: "value" }, { key: "other" }]
+      nested: [{ key: canned1 }, { key: canned2 }]
     })))).toEqual({
       serviceId: "service-a",
       description: "braces { } brackets [ ] and a colon: remain text",
-      nested: [{ key: "value" }, { key: "other" }]
+      nested: [{ key: canned1 }, { key: canned2 }]
     });
   });
 

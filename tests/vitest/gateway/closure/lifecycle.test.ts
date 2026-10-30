@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { context, createTestGateway, descriptor, route } from "../support";
+const canned1 = "synthetic";
+
+
+
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -88,9 +92,9 @@ describe("gateway lifecycle under pressure", () => {
     const secondEntered = deferred<void>();
     let upstreamCalls = 0;
     const gateway = createTestGateway({
-      descriptors: [descriptor({ route: route({ metadata: { credentialBinding: "synthetic" }, effectClass: "read" }) })],
+      descriptors: [descriptor({ route: route({ metadata: { credentialBinding: canned1 }, effectClass: "read" }) })],
       admissionOptions: { maxInFlight: 1, queueSize: 2 },
-      credentialProvider: { resolve: async () => ({ Authorization: "synthetic" }) },
+      credentialProvider: { resolve: async () => ({ Authorization: canned1 }) },
       upstream: { invoke: async () => {
         upstreamCalls += 1;
         if (upstreamCalls === 1) { firstEntered.resolve(); await hold.promise; }
@@ -133,10 +137,10 @@ describe("gateway lifecycle under pressure", () => {
     let credentialCalls = 0;
     let upstreamCalls = 0;
     const gateway = createTestGateway({
-      descriptors: [descriptor({ route: route({ metadata: { credentialBinding: "synthetic" }, effectClass: "read" }) })],
+      descriptors: [descriptor({ route: route({ metadata: { credentialBinding: canned1 }, effectClass: "read" }) })],
       admissionOptions: { maxInFlight: 1, queueSize: 1 },
       currentAuthority: { read: async ({ context: original }) => ({ ...original, grant: { ...original.grant, revoked } }) },
-      credentialProvider: { resolve: async () => { credentialCalls += 1; return { Authorization: "synthetic" }; } },
+      credentialProvider: { resolve: async () => { credentialCalls += 1; return { Authorization: canned1 }; } },
       upstream: { invoke: async () => {
         upstreamCalls += 1;
         if (upstreamCalls === 1) { firstEntered.resolve(); await hold.promise; }

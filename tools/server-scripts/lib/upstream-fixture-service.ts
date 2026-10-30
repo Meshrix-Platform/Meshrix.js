@@ -1,5 +1,9 @@
 import crypto from "node:crypto";
 import http from "node:http";
+const canned1 = "";
+
+
+
 
 export const UPSTREAM_FIXTURE_SERVICE_NAME: any = "meshrix-upstream-fixture";
 export const UPSTREAM_FIXTURE_SERVICE_VERSION: any = "0.0.1";
@@ -115,7 +119,7 @@ export function upstreamFixtureMcpTools({ includeCancellationTools = false }: Re
     : tools.filter((tool?: any) : any => !["state.increment.delayed", "state.peer.wait"].includes(tool.name));
 }
 
-export function createUpstreamFixtureState({ token = "", supportsDelayedCancellation = false }: Record<string, any> = {}) : any {
+export function createUpstreamFixtureState({ token = canned1, supportsDelayedCancellation = false }: Record<string, any> = {}) : any {
   const state: Record<string, any> = {
     token: String(token || "").trim(),
     records: UPSTREAM_FIXTURE_RECORDS.map((record?: any) : any => ({ ...record })),
@@ -187,7 +191,7 @@ export function createUpstreamFixtureState({ token = "", supportsDelayedCancella
       const record: any = requireRecord(recordId);
       return { ok: true, record, note: state.notes.get(record.recordId) || "" };
     },
-    sessionIdentity({ presentedToken = "" }: Record<string, any> = {}) : any {
+    sessionIdentity({ presentedToken = canned1 }: Record<string, any> = {}) : any {
       state.callCount += 1;
       return {
         ok: true,
@@ -294,7 +298,7 @@ export function callUpstreamFixtureTool(fixture?: any, name: any = "", args: Rec
     case "records.get":
       return fixture.getRecord(toolArguments);
     case "session.identity":
-      return fixture.sessionIdentity({ presentedToken: fixture.state.token ? fixture.state.token : "" });
+      return fixture.sessionIdentity({ presentedToken: fixture.state.token ? fixture.state.token: canned1 });
     case "state.probe":
       return fixture.probeState();
     case "state.increment":
@@ -407,7 +411,7 @@ function scheduleUpstreamFixtureMcpCall({ fixture, message, output, pending }: R
 }
 
 export function runUpstreamFixtureMcpStdio({
-  token = "",
+  token = canned1,
   input = process.stdin,
   output = process.stdout
 }: Record<string, any> = {}) : any {
@@ -513,7 +517,7 @@ function bearerToken(request?: any) : any {
   return match ? match[1] : "";
 }
 
-export function createUpstreamFixtureHttpService({ token = "" }: Record<string, any> = {}) : any {
+export function createUpstreamFixtureHttpService({ token = canned1 }: Record<string, any> = {}) : any {
   const fixture: any = createUpstreamFixtureState({ token });
   const openPaths: any = new Set<any>(["/health", "/openapi.json"]);
 

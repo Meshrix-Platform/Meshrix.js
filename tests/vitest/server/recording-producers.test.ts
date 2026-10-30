@@ -10,6 +10,15 @@ import {
   recordingProducerForPort
 } from "../../../packages/foundation/src/recording/recording-producer.ts";
 import { createDispatchOperationRecorder } from "../../../packages/server-runtime/src/composition/dispatch-operation-recording.ts";
+const canned1 = "do-not-record";
+const canned2 = "nested-forbidden";
+const canned3 = "nested-api-key";
+const canned4 = "nested-private-key";
+const canned5 = "in-array";
+const canned6 = "top-level-forbidden-field";
+
+
+
 
 const SINK_ID = "sink.rec.prod.1";
 const LIFECYCLE_VERSION = "v0.0.1:recording:lifecycle-1";
@@ -361,7 +370,7 @@ describe("dispatch operation recorder", () => {
     return createDispatchOperationRecorder({
       recordingSink: store,
       operation: { id: "tool.search", readOnly: false, safety: { risk: "safe_write" } },
-      operationInput: { summary: "quarterly report", secret: "do-not-record" },
+      operationInput: { summary: "quarterly report", secret: canned1 },
       transport: "http",
       method: "POST",
       traceContext: { requestId: "req.1" },
@@ -434,14 +443,14 @@ describe("dispatch operation recorder", () => {
         config: {
           endpoint: "https://svc.internal",
           sessionTag: "redacted-by-policy",
-          token: "nested-forbidden",
+          token: canned2,
           nested: {
             keep: "visible",
-            deeper: { apiKey: "nested-api-key", privateKey: "nested-private-key" }
+            deeper: { apiKey: canned3, privateKey: canned4 }
           },
-          list: [{ name: "a", secret: "in-array" }, { name: "b" }]
+          list: [{ name: "a", secret: canned5 }, { name: "b" }]
         },
-        secret: "top-level-forbidden-field"
+        secret: canned6
       }
     });
     expect(recorder.admitBeforeEffect().ok).toBe(true);

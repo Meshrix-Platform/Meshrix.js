@@ -17,6 +17,16 @@ import {
 } from "../../../packages/server-runtime/src/execution-sandbox/opaque-custody.ts";
 import { createStorageKernel } from "../../../packages/foundation/src/storage/storage-kernel.ts";
 import { createStorageProvider } from "../../../packages/foundation/src/storage/storage-provider.ts";
+const canned1 = "grant:current";
+const canned2 = "promotion:fixture";
+const canned3 = "seal:idempotency-binding";
+const canned4 = "seal:fixture";
+const canned5 = "grant:delete";
+const canned6 = "seal:tamper";
+const canned7 = "seal:framing";
+
+
+
 
 const roots: any[] = [];
 const kernels: any[] = [];
@@ -57,7 +67,7 @@ function promotion(stored?: any, overrides: Record<string, any> = {}) : any {
     handle: stored.handle,
     contentDigest: stored.contentDigest,
     envelopeDigest: stored.envelopeDigest,
-    authorizationRef: "grant:current",
+    authorizationRef: canned1,
     approvalRef: "approval:current",
     policyRevision,
     sandboxAvailable: true,
@@ -69,7 +79,7 @@ function promotion(stored?: any, overrides: Record<string, any> = {}) : any {
       digest: "a".repeat(64),
       expiresAt: new Date(Date.now() + 60_000).toISOString()
     },
-    idempotencyKey: "promotion:fixture",
+    idempotencyKey: canned2,
     subjectRef: "subject:fixture",
     tenantRef: "tenant:fixture",
     workspaceRef: "workspace:fixture",
@@ -93,7 +103,7 @@ describe("opaque sandbox custody", () : any => {
       source: source(bytes),
       mediaType: "application/octet-stream",
       maxBytes: 4096,
-      idempotencyKey: "seal:idempotency-binding",
+      idempotencyKey: canned3,
       ownerBinding
     });
     let replaySourceConsumed: any = false;
@@ -104,7 +114,7 @@ describe("opaque sandbox custody", () : any => {
       })(),
       mediaType: "application/octet-stream",
       maxBytes: 4096,
-      idempotencyKey: "seal:idempotency-binding",
+      idempotencyKey: canned3,
       ownerBinding
     });
 
@@ -121,7 +131,7 @@ describe("opaque sandbox custody", () : any => {
       source: source(bytes),
       mediaType: "application/octet-stream",
       maxBytes: 4096,
-      idempotencyKey: "seal:idempotency-binding",
+      idempotencyKey: canned3,
       ownerBinding: { ...ownerBinding, subjectRef: "subject:other" }
     })).rejects.toMatchObject({ code: "custody_seal_idempotency_conflict" });
 
@@ -129,7 +139,7 @@ describe("opaque sandbox custody", () : any => {
       source: source(bytes),
       mediaType: "application/json",
       maxBytes: 4096,
-      idempotencyKey: "seal:idempotency-binding",
+      idempotencyKey: canned3,
       ownerBinding
     })).rejects.toMatchObject({ code: "custody_seal_idempotency_conflict" });
 
@@ -137,7 +147,7 @@ describe("opaque sandbox custody", () : any => {
       source: source(bytes),
       mediaType: "application/octet-stream",
       maxBytes: 8192,
-      idempotencyKey: "seal:idempotency-binding",
+      idempotencyKey: canned3,
       ownerBinding
     })).rejects.toMatchObject({ code: "custody_seal_idempotency_conflict" });
 
@@ -167,7 +177,7 @@ describe("opaque sandbox custody", () : any => {
     const stored: any = await custody.store({
       source: source(plaintext),
       mediaType: "application/octet-stream",
-      idempotencyKey: "seal:fixture",
+      idempotencyKey: canned4,
       ownerBinding: {
         subjectRef: "subject:fixture",
         tenantRef: "tenant:fixture",
@@ -224,7 +234,7 @@ describe("opaque sandbox custody", () : any => {
     expect(Buffer.concat(encryptedDownload).includes(plaintext)).toBe(false);
     await expect(custody.delete({
       handle: stored.handle,
-      authorizationRef: "grant:delete",
+      authorizationRef: canned5,
       ownerBinding: {
         subjectRef: "subject:fixture",
         tenantRef: "tenant:fixture",
@@ -245,7 +255,7 @@ describe("opaque sandbox custody", () : any => {
     });
     const stored: any = await custody.store({
       source: source(Buffer.from("opaque", "utf8")),
-      idempotencyKey: "seal:tamper",
+      idempotencyKey: canned6,
       ownerBinding: {
         subjectRef: "subject:fixture",
         tenantRef: "tenant:fixture",
@@ -299,7 +309,7 @@ describe("opaque sandbox custody", () : any => {
     const plaintext: any = Buffer.alloc(96 * 1024, 7);
     const stored: any = await custody.store({
       source: source(plaintext),
-      idempotencyKey: "seal:framing",
+      idempotencyKey: canned7,
       ownerBinding: {
         subjectRef: "subject:fixture",
         tenantRef: "tenant:fixture",
@@ -320,7 +330,7 @@ describe("opaque sandbox custody", () : any => {
     for (const [index, mutation] of mutations.entries()) {
       await fs.writeFile(objectPath, mutation, "utf8");
       await expect(promotionAuthority.promote(promotion(stored, {
-        idempotencyKey: `promotion:framing:${index}`
+        idempotencyKey: ("promotion:framing:"+index)
       }), async () : Promise<any> => { released += 1; })).rejects.toMatchObject({
         code: "custody_envelope_authentication_failed"
       });

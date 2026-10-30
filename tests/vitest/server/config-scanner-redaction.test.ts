@@ -4,6 +4,10 @@ import {
   createReport,
   scanText
 } from "../../../tools/config-scanner.ts";
+const canned1 = "a";
+
+
+
 
 const scanKey: any = Buffer.alloc(32, 7);
 
@@ -79,7 +83,7 @@ describe("repository local-info hygiene report redaction", () : any => {
         line: 1,
         column: 1,
         matchLength: 1,
-        fingerprint: "a".repeat(64),
+        fingerprint: canned1.repeat(64),
         message: "Use a placeholder."
       }]);
     } catch (error: any) {

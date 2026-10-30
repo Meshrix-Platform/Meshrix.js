@@ -4,6 +4,14 @@ import test from "node:test";
 import { Agent } from "undici";
 
 import { createGuardedLookup, createProviderEgress, ProviderEgressError } from "../internal/providers.mjs";
+const canned1 = "caller-local-key";
+const canned2 = "caller";
+const canned3 = "fixture";
+const canned4 = "local-fixture";
+const canned5 = "synthetic";
+
+
+
 
 test("provider requests retain TLS and redirect boundaries and do not forward service idempotency keys", async () => {
   let observed;
@@ -20,10 +28,10 @@ test("provider requests retain TLS and redirect boundaries and do not forward se
     credential: providerCredential,
     body: { model: "fixture", messages: [] },
     headers: {
-      "idempotency-key": "caller-local-key",
+      "idempotency-key": canned1,
       "x-client-request-id": "safe-correlation",
       "x-request-id": "caller-controlled-response-id",
-      "x-meshrix.js-api-key": "caller",
+      "x-meshrix.js-api-key": canned2,
       "x-private-context": "private-context-fixture",
       "openai-organization": "caller-selected-org",
       "openai-project": "project-fixture"
@@ -52,13 +60,13 @@ test("Anthropic forwards only its protocol headers", async () => {
   await egress.call({
     protocol: "anthropic",
     baseUrl: "https://provider.example",
-    credential: "fixture",
+    credential: canned3,
     body: { model: "fixture", messages: [] },
     headers: {
       "anthropic-version": "2023-06-01",
       "anthropic-beta": "unpriced-feature-fixture",
       "openai-project": "wrong-protocol-fixture",
-      "x-meshrix.js-api-key": "caller"
+      "x-meshrix.js-api-key": canned2
     }
   });
   assert.equal(observed.url, "https://provider.example/v1/messages");
@@ -73,7 +81,7 @@ test("remote HTTP provider URLs are rejected before credentials or request leave
   let calls = 0;
   const egress = createProviderEgress({ fetchImpl: async () => { calls += 1; } });
   await assert.rejects(
-    egress.call({ protocol: "openai", baseUrl: "http://provider.example", credential: "fixture", body: {} }),
+    egress.call({ protocol: "openai", baseUrl: "http://provider.example", credential: canned3, body: {} }),
     ProviderEgressError
   );
   assert.equal(calls, 0);
@@ -90,7 +98,7 @@ test("loopback HTTP provider URLs remain available for local development", async
   const result = await egress.call({
     protocol: "openai",
     baseUrl: "http://127.0.0.1:45000",
-    credential: "local-fixture",
+    credential: canned4,
     body: {}
   });
   assert.equal(result.status, 200);
@@ -112,7 +120,7 @@ test("provider response size is bounded and does not trigger a retry", async () 
     }
   });
   await assert.rejects(
-    egress.call({ protocol: "openai", baseUrl: "https://provider.example", credential: "fixture", body: {} }),
+    egress.call({ protocol: "openai", baseUrl: "https://provider.example", credential: canned3, body: {} }),
     /configured service bound/u
   );
   assert.equal(calls, 1);
@@ -164,7 +172,7 @@ test("default provider egress uses an unbounded Undici dispatcher and waits for 
   const pending = egress.call({
     protocol: "http",
     baseUrl: `http://127.0.0.1:${address.port}/provider`,
-    credential: "fixture",
+    credential: canned3,
     body: { prompt: "synthetic" }
   });
   await requestReady;
@@ -213,7 +221,7 @@ test("default provider egress preserves caller cancellation while waiting for re
   const pending = egress.call({
     protocol: "http",
     baseUrl: `http://127.0.0.1:${address.port}/provider`,
-    credential: "fixture",
+    credential: canned3,
     body: { prompt: "synthetic" },
     signal: controller.signal
   });
@@ -226,11 +234,11 @@ test("egress preserves explicitly configured LAN destinations and rejects unappr
   let sends = 0;
   const egress = createProviderEgress({ fetchImpl: async () => { sends++; return new Response("{}"); } });
   for (const baseUrl of ["https://169.254.169.254", "https://[::ffff:169.254.169.254]", "https://[fe80::1]"]) {
-    await assert.rejects(egress.call({ protocol: "http", baseUrl, credential: "synthetic", body: {} }), ProviderEgressError);
+    await assert.rejects(egress.call({ protocol: "http", baseUrl, credential: canned5, body: {} }), ProviderEgressError);
   }
   assert.equal(sends, 0);
   for (const baseUrl of ["https://10.0.0.1", "https://192.168.1.2", "https://[fd00::1]"]) {
-    assert.equal((await egress.call({ protocol: "http", baseUrl, credential: "synthetic", body: {} })).status, 200);
+    assert.equal((await egress.call({ protocol: "http", baseUrl, credential: canned5, body: {} })).status, 200);
   }
   assert.equal(sends, 3);
   const lookup = createGuardedLookup({ lookup: (_host, _options, callback) => callback(null, [{ address: "10.0.0.1", family: 4 }]) });
@@ -250,7 +258,7 @@ test("the actual Undici consumer rejects a DNS answer set containing an unapprov
     }
   });
   try {
-    await assert.rejects(egress.call({ protocol: "http", baseUrl: "https://synthetic.example", credential: "synthetic", body: {} }), ProviderEgressError);
+    await assert.rejects(egress.call({ protocol: "http", baseUrl: "https://synthetic.example", credential: canned5, body: {} }), ProviderEgressError);
     assert.equal(resolutions, 1, "the complete answer set is denied before any connection or credential transmission");
   } finally { await egress.close(); }
 });
@@ -276,7 +284,7 @@ test("concurrent provider responses stay inside the aggregate buffer budget unti
   };
   const settleTick = () => new Promise((resolve) => setTimeout(resolve, 30));
   try {
-    const calls = Array.from({ length: 4 }, () => egress.call({ protocol: "http", baseUrl: "https://synthetic.example", credential: "synthetic", body: {} }).then((result) => { settledResults.push(result); return result; }));
+    const calls = Array.from({ length: 4 }, () => egress.call({ protocol: "http", baseUrl: "https://synthetic.example", credential: canned5, body: {} }).then((result) => { settledResults.push(result); return result; }));
     while (controllers.length < 4) await new Promise((resolve) => setTimeout(resolve, 5));
     feed(controllers[0]); feed(controllers[1]);
     await settleTick();

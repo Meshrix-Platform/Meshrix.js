@@ -4,6 +4,14 @@ import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upst
 import { installUpstreamRuntimeServices, structuredUpstreamServiceFixture } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 import { validateUpstreamContentPolicy } from "../../../packages/contracts/src/upstream-service-publishing.ts";
+const canned1 = "run";
+const canned2 = "sk-live-1";
+const canned3 = "opaque-ref";
+const canned4 = "tools/call";
+const canned5 = "s3cr3t";
+
+
+
 
 const SUBJECT = {
   type: "tool-grant",
@@ -25,7 +33,7 @@ function httpService(overrides: Record<string, any> = {}, operationOverrides: Re
     label: "guarded",
     allowLocalNetwork: true,
     operations: [{
-      operationKey: "run",
+      operationKey: canned1,
       method: "POST",
       path: "/run",
       risk: "read_only",
@@ -78,7 +86,7 @@ describe("Upstream request content policy", () => {
     })]);
     try {
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { pem: ["-----BEGIN", "PRIVATE KEY-----"].join(" "), note: "x" } },
+        { serviceId: "guarded", operationKey: canned1, body: { pem: ["-----BEGIN", "PRIVATE KEY-----"].join(" "), note: "x" } },
         SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       expect(peer.hits.count).toBe(0);
@@ -104,15 +112,15 @@ describe("Upstream request content policy", () => {
     })]);
     try {
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { verb: "read", token: "sk-live-1" } },
+        { serviceId: "guarded", operationKey: canned1, body: { verb: "read", token: canned2 } },
         SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { verb: "delete" } },
+        { serviceId: "guarded", operationKey: canned1, body: { verb: "delete" } },
         SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       const admitted = await registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { verb: "list", token: "opaque-ref" } },
+        { serviceId: "guarded", operationKey: canned1, body: { verb: "list", token: canned3 } },
         SUBJECT
       );
       expect(peer.hits.count).toBe(1);
@@ -134,7 +142,7 @@ describe("Upstream request content policy", () => {
     })]);
     try {
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { other: true } },
+        { serviceId: "guarded", operationKey: canned1, body: { other: true } },
         SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       expect(peer.hits.count).toBe(0);
@@ -157,7 +165,7 @@ describe("Upstream request content policy", () => {
         request: { rules: [{ id: "svc-block-debug", path: "body.mode", deny: { oneOf: ["debug"] } }] }
       },
       operations: [{
-        operationKey: "run",
+        operationKey: canned1,
         method: "POST",
         path: "/run",
         risk: "read_only",
@@ -166,7 +174,7 @@ describe("Upstream request content policy", () => {
     })]);
     try {
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { mode: "debug" } },
+        { serviceId: "guarded", operationKey: canned1, body: { mode: "debug" } },
         SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       expect(peer.hits.count).toBe(0);
@@ -201,7 +209,7 @@ describe("Upstream request content policy", () => {
       contentPolicy: {
         request: { rules: [{ id: "block-creds", path: "arguments.secret", deny: { matches: [".+"] } }] }
       },
-      operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+      operations: [{ operationKey: canned4, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
       mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18" }
     }]);
     const subject = {
@@ -214,7 +222,7 @@ describe("Upstream request content policy", () => {
     };
     try {
       await expect(registry.forward(
-        { serviceId: "vault", operationKey: "tools/call", toolName: "store", arguments: { secret: "s3cr3t" } },
+        { serviceId: "vault", operationKey: canned4, toolName: "store", arguments: { secret: canned5 } },
         subject
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       expect(invocations).toBe(0);

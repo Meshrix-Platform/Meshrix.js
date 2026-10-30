@@ -9,6 +9,13 @@ import { createMemoryLocalSecretKeyProvider } from "../../../packages/foundation
 import { initializeLocalSecret, rotateLocalSecret } from "../../../packages/foundation/src/security/secret-store/local-secret-store.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "tools/call";
+const canned2 = "secret://modern-discovery/catalog";
+const canned3 = "bearer";
+const canned4 = "initial-token";
+
+
+
 
 type PeerRequest = {
   method: string;
@@ -220,7 +227,7 @@ async function registryFor(url: string, options: Record<string, any> = {}, crede
     label: "modern-peer",
     allowLocalNetwork: true,
     ...(credentialRefs.length > 0 ? { credentialRefs } : {}),
-    operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+    operations: [{ operationKey: canned1, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
     mcp: { transport: "http", url, protocolVersion: "2026-07-28", toolsCacheTtlMs: 60_000 }
   }]);
   return registry;
@@ -231,11 +238,11 @@ async function credentialRegistryFor(peer: Awaited<ReturnType<typeof controlledP
   tempRoots.push(root);
   const keyProvider = createMemoryLocalSecretKeyProvider();
   keyProviders.push(keyProvider);
-  const secretRef = "secret://modern-discovery/catalog";
+  const secretRef = canned2;
   const target = {
     provider: "modern-discovery-test",
     family: "modern-discovery",
-    authType: "bearer",
+    authType: canned3,
     secretRef,
     scope: {
       serviceId: "modern-peer",
@@ -245,7 +252,7 @@ async function credentialRegistryFor(peer: Awaited<ReturnType<typeof controlledP
       scopes: ["gateway:read"]
     }
   };
-  const initialized = await initializeLocalSecret({ dataDir: root, keyProvider, target, payload: { token: "initial-token" } });
+  const initialized = await initializeLocalSecret({ dataDir: root, keyProvider, target, payload: { token: canned4 } });
   let expectedRevision = initialized.secret.revision;
   const keyLoadGates: Array<{
     gate: ReturnType<typeof deferred>;

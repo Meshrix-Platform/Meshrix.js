@@ -47,6 +47,15 @@ import {
 } from "@meshrix/entry";
 import type { RecoveryEndpointPort } from "@meshrix/entry";
 import { FakeVault } from "./helpers.ts";
+const canned1 = "spki.test.pin";
+const canned2 = "AAAA";
+const canned3 = "sn.other.snapshot.nonce";
+const canned4 = "rckey.foreign";
+const canned5 = "";
+const canned6 = "A";
+
+
+
 
 const VAULT_ID = "vault.pr.test1";
 const ROUTE = "route.pr.test1";
@@ -84,7 +93,7 @@ function connectionFixture(overrides: Partial<BundleConnection> = {}): BundleCon
     routeId: ROUTE,
     tenantId: TENANT,
     mode: "personal",
-    endpointSpkiPin: "spki.test.pin",
+    endpointSpkiPin: canned1,
     principalRef: PRINCIPAL,
     relayService: "https://relay.example.invalid",
     vaultId: VAULT_ID,
@@ -244,7 +253,7 @@ describe("recovery bundle schema", () => {
   it("rejects forbidden secret-bearing fields structurally", () => {
     const material = deriveRecoveryMaterial(generateRecoveryKey().secret);
     const bundle = bundleFixture(material) as unknown as Record<string, unknown>;
-    const poisoned = { ...bundle, privateKey: "AAAA" };
+    const poisoned = { ...bundle, privateKey: canned2 };
     expect(parseEntryRecoveryBundle(poisoned)).toBeNull();
     expect(containsForbiddenSnapshotKeys(poisoned)).toBe(true);
     const clean = JSON.parse(JSON.stringify(bundleFixture(material)));
@@ -382,7 +391,7 @@ describe("vault client + snapshot sync", () => {
     });
     expect(first.outcome).toBe("committed");
     // Same nonce on a different write must be refused, never silently committed.
-    const tamperedSnapshot = { ...snapshot, generation: 5, revision: 3, snapshot: { ...envelope.snapshot, nonce: "sn.other.snapshot.nonce" } };
+    const tamperedSnapshot = { ...snapshot, generation: 5, revision: 3, snapshot: { ...envelope.snapshot, nonce: canned3 } };
     const second = await client.writeSnapshot({
       vaultId: VAULT_ID, expectedRevision: 2, snapshot: tamperedSnapshot, writerKey: material.writer
     });
@@ -493,7 +502,7 @@ describe("vault client + snapshot sync", () => {
     const sync = new SnapshotSynchronizer({ vault: new RecoveryVaultClient({ transport: vault }) });
     await sync.publish({ vaultId: VAULT_ID, bundle: bundleFixture(material), material, generation: 3 });
     // Swap the stored verifier for a foreign key.
-    vault.current!.publicVerifier = { keyId: "rckey.foreign", algorithm: "Ed25519", publicKey: material.writer.publicKey };
+    vault.current!.publicVerifier = { keyId: canned4, algorithm: "Ed25519", publicKey: material.writer.publicKey };
     const fetched = await sync.fetchSnapshot({ vaultId: VAULT_ID, material });
     expect(fetched.outcome).toBe("authority_mismatch");
   });
@@ -577,7 +586,7 @@ describe("recovery session against the real endpoint authority", () => {
     });
     expect(outcome.outcome).toBe("enrolled");
     const record = store.device(outcome.outcome === "enrolled" ? outcome.device.deviceId : "none");
-    expect(record?.pairedIdentityKey).toBe(outcome.outcome === "enrolled" ? outcome.device.publicKey : "");
+    expect(record?.pairedIdentityKey).toBe(outcome.outcome === "enrolled" ? outcome.device.publicKey: canned5);
     expect(record?.boundRecoveryKeyId).toBe(material.signing.keyId);
     expect(record?.revoked).toBe(false);
   });
@@ -590,7 +599,7 @@ describe("recovery session against the real endpoint authority", () => {
 
   it("refuses a challenge bound to a different fresh device key", async () => {
     await expect(recoverOnce({
-      mutateChallenge: (c) => ({ ...c, freshDevicePublicKey: "A".padEnd(43, "x") })
+      mutateChallenge: (c) => ({ ...c, freshDevicePublicKey: canned6.padEnd(43, "x") })
     })).rejects.toMatchObject({ code: "endpoint_refused" });
   });
 

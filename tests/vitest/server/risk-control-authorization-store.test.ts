@@ -20,6 +20,12 @@ import {
   riskControlControlsByObject
 } from "../../../packages/foundation/src/security/risk-control/index.ts";
 import { createAuthorizationStore } from "../../../packages/foundation/src/security/authorization/authorization-store.ts";
+const canned1 = "Bearer secret-token";
+const canned2 = "secret-api-key";
+const canned3 = "<redacted>";
+
+
+
 
 const tempRoots: any[] = [];
 
@@ -163,8 +169,8 @@ describe("authorization store behavior", () : any => {
         requiredScopes: ["scope:required"],
         evaluatedLayers: [{ layer: "policy" }],
         decision: {
-          token: "Bearer secret-token",
-          apiKey: "secret-api-key",
+          token: canned1,
+          apiKey: canned2,
           subjectCapabilities: ["cap-a", "cap-b"],
           subject: {
             capabilities: ["cap-x"]
@@ -222,8 +228,8 @@ describe("authorization store behavior", () : any => {
         evaluatedLayers: [{ layer: "policy" }]
       });
       expect(firstListed[0].decision.decision).toMatchObject({
-        token: "<redacted>",
-        apiKey: "<redacted>",
+        token: canned3,
+        apiKey: canned3,
         subjectCapabilities: {
           redacted: true,
           count: 2

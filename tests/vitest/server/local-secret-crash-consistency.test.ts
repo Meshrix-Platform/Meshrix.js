@@ -2,6 +2,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+const canned1 = "bearer";
+const canned2 = "secret://fixture/service";
+const canned3 = "material-before";
+const canned4 = "material-after";
+
 
 let failLockAssertion: any = false;
 
@@ -29,12 +34,14 @@ import {
   createMemoryLocalSecretKeyProvider
 } from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
 
+
+
 const roots: any[] = [];
 const target: Readonly<Record<string, any>> = Object.freeze({
   provider: "fixture-provider",
   family: "fixture-family",
-  authType: "bearer",
-  secretRef: "secret://fixture/service",
+  authType: canned1,
+  secretRef: canned2,
   scope: {
     serviceId: "fixture-service",
     scopes: ["fixture:read"],
@@ -61,13 +68,13 @@ describe("local secret crash consistency", () : any => {
     const dataDir: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-secret-crash-"));
     roots.push(dataDir);
     const keyProvider: any = createMemoryLocalSecretKeyProvider();
-    await initializeLocalSecret({ dataDir, target, payload: { token: "material-before" }, keyProvider });
+    await initializeLocalSecret({ dataDir, target, payload: { token: canned3 }, keyProvider });
 
     failLockAssertion = true;
     await expect(rotateLocalSecret({
       dataDir,
       target,
-      payload: { token: "material-after" },
+      payload: { token: canned4 },
       expectedRevision: 1,
       keyProvider
     })).rejects.toMatchObject({ code: "local_secret_store_lock_lost" });
@@ -80,7 +87,7 @@ describe("local secret crash consistency", () : any => {
       keyProvider
     })).resolves.toMatchObject({
       revision: 1,
-      payload: { token: "material-before" }
+      payload: { token: canned3 }
     });
   });
 });

@@ -11,6 +11,10 @@ import {
   validateSkillHubConfiguration
 } from "../../plugins/skill-hub/runtime.mjs";
 import { createSkillHubHttpHandler } from "../../services/skill-hub/internal/http-service.mjs";
+const canned1 = "synthetic-skill-hub-test-token-000000000000";
+
+
+
 
 const manifest = JSON.parse(await readFile(
   new URL("../../plugins/skill-hub/plugin.json", import.meta.url),
@@ -20,7 +24,7 @@ const enabledConfiguration = Object.freeze({
   enabled: true,
   service: Object.freeze({ serviceRef: "svc_skill_hub" })
 });
-const serviceAuthToken = "synthetic-skill-hub-test-token-000000000000";
+const serviceAuthToken = canned1;
 
 function sha(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -108,7 +112,7 @@ function sandboxInput(skillId, workspaceId = "workspace-source", suffix = "defau
       networkBytes: 1,
       toolCalls: 1
     }),
-    idempotencyKey: `synthetic-${skillId}-${suffix}`,
+    idempotencyKey: ("synthetic-"+skillId+"-"+suffix),
     deadlineAt: new Date(Date.now() + 60_000).toISOString()
   });
 }
@@ -213,7 +217,7 @@ async function fixture(t, configuration = enabledConfiguration) {
       const response = await fetch(`${baseUrl}/v1/operations/${request.operationRef}`, {
         method: "POST",
         headers: {
-          "authorization": `Bearer ${serviceAuthToken}`,
+          "authorization": ("Bearer "+serviceAuthToken),
           "x-meshrix-skill-hub-subject": request.input.meshrixContext.principal.subjectRef,
           "content-type": "application/json"
         },

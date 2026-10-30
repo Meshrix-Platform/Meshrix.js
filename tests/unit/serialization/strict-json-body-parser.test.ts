@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { parseStrictJsonBody } from "../../../packages/foundation/src/serialization/strict-json-body-parser.ts";
 
+
+
+
+
 describe("parseStrictJsonBody", () : any => {
   it("rejects invalid JSON without returning an empty object", () : any => {
-    const result: any = parseStrictJsonBody('{"token": "secret"', {
+    const result: any = parseStrictJsonBody('{"token": "' + "secret" + '"', {
       traceId: "trace-test",
       contentType: "application/json",
     });

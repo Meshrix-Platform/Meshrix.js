@@ -12,6 +12,10 @@ import {
   findProxyRegisteredApiRequest,
   shouldProxyRegisteredApiRequest
 } from "#meshrix/server-runtime/composition/dispatch-operation";
+const canned1 = "workspace-asset-submit-fixture";
+
+
+
 
 function createResponse() : any {
   return {
@@ -159,7 +163,7 @@ describe("operation dispatcher behavior", () : any => {
       config: { defaultTtlMs: 10_000, heartbeatIntervalMs: 5_000 },
       acquire: vi.fn(async (lockKey?: any) : Promise<any> => ({
         lockKey,
-        fencingToken: "workspace-asset-submit-fixture",
+        fencingToken: canned1,
         acquiredAt: new Date(),
         expiresAt: new Date(Date.now() + 10_000),
         released: false,
@@ -774,7 +778,8 @@ describe("operation dispatcher behavior", () : any => {
   });
 
   it("records on-change receipts only from an explicit privacy-safe digest projection", async () : Promise<any> => {
-    const secret: any = "private-console-payload";
+    const cannedPayload = "private-console-payload";
+    const secret: any = cannedPayload;
     const digest: any = `sha256:${"a".repeat(64)}`;
     const operation: any = baseOperation({
       id: "unit.profile.on-change",

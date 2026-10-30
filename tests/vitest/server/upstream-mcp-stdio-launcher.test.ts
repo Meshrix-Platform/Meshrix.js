@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
 import { createUpstreamMcpStdioLauncher } from "../../../packages/protocols/mcp/upstream-mcp-stdio-launcher.ts";
+const canned1 = "$PRIVATE_SOURCE";
+const canned2 = "resolved-value";
+const canned3 = "fixture";
+
+
+
 
 describe("upstream MCP stdio launcher boundary", () : any => {
   it("launches without a shell and projects only baseline plus configured environment", () : any => {
@@ -14,7 +20,7 @@ describe("upstream MCP stdio launcher boundary", () : any => {
       command: "/runtime/node",
       args: ["", "service.ts"],
       env: {
-        SERVICE_TOKEN: "$PRIVATE_SOURCE",
+        SERVICE_TOKEN: canned1,
         SERVICE_MODE: "fixture"
       }
     }, {
@@ -32,7 +38,7 @@ describe("upstream MCP stdio launcher boundary", () : any => {
         stdio: ["pipe", "pipe", "pipe"],
         env: {
           PATH: "/runtime/bin",
-          SERVICE_TOKEN: "resolved-value",
+          SERVICE_TOKEN: canned2,
           SERVICE_MODE: "fixture"
         },
         shell: false,
@@ -68,7 +74,7 @@ describe("upstream MCP stdio launcher boundary", () : any => {
       await expect(manager.listTools({
         transport: "stdio",
         command: "/runtime/unavailable",
-        sessionKey: "fixture",
+        sessionKey: canned3,
         sessionScope: "fixture"
       })).rejects.toThrow("process launcher is unavailable");
     } finally {

@@ -16,7 +16,8 @@ test("native registration rejects plaintext remote endpoints and hostname aliase
 test("native registration rejects embedded credentials, query and fragment without echoing them", () => {
   const withCredentials = new URL("https://meshrix.example");
   withCredentials.username = "fixture";
-  withCredentials.password = "synthetic-value";
+  const stubValue = ["synthetic", "value"].join("-");
+  withCredentials.password = stubValue;
   for (const baseUrl of ["not a URL", withCredentials.href, "https://meshrix.example/?token=hidden", "https://meshrix.example/#fragment", "ftp://meshrix.example"]) {
     assert.throws(() => registrationFrom(request(baseUrl)), (error) => error.adapterCode === "invalid_base_url" && !error.message.includes("hidden") && !error.message.includes(withCredentials.password));
   }

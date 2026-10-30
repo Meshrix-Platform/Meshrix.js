@@ -14,6 +14,11 @@ import {
   normalizeQueueDedupeKey
 } from "../../../packages/foundation/src/work-queue/index.ts";
 import { ensureSqliteWorkQueueSchema } from "../../../packages/foundation/src/work-queue/sqlite-schema.ts";
+const canned1 = "same-key";
+const canned2 = "";
+
+
+
 
 const DEFINITION_ID: any = "queue.jobs.import-parse";
 const SCOPE: Readonly<Record<string, any>> = Object.freeze({ tenantId: "platform", workspaceId: "default" });
@@ -362,8 +367,8 @@ describe("work queue restart takeover", () : any => {
       expect(database.pragma("user_version", { simple: true })).toBe(12);
       expect(database.prepare("SELECT work_item_id, dedupe_key, state FROM work_items ORDER BY created_at_ms").all())
         .toEqual([
-          { work_item_id: "terminal-first", dedupe_key: "same-key", state: "completed" },
-          { work_item_id: "terminal-second", dedupe_key: "", state: "completed" }
+          { work_item_id: "terminal-first", dedupe_key: canned1, state: "completed" },
+          { work_item_id: "terminal-second", dedupe_key: canned2, state: "completed" }
         ]);
       expect(database.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_work_queue_dedupe'").get())
         .toEqual({ name: "idx_work_queue_dedupe" });

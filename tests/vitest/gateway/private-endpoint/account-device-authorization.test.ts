@@ -2,16 +2,24 @@ import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { AccountDeviceAuthorizationClient } from "../../../../packages/gateway/src/private-endpoint/account-authority-client.ts";
 import type { AccountActionTarget } from "@meshrix/contracts/account";
+const canned1 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const canned2 = "unit-test-fresh-nonce";
+const canned3 = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+
+
+
 
 const binding = { accountId: "account.unit.test", authEpoch: 4 };
 const target: AccountActionTarget = {
   tenantId: "personal:account.unit.test",
   routeId: "route.unit.test",
   deviceId: "entry.unit.test",
-  devicePublicKey: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  devicePublicKey: canned1,
   grantRef: "grant.unit.test",
   scopes: ["peer:message"],
 };
+
+const cannedFresh = "unit-test-fresh-nonce";
 
 function client(fetcher: typeof fetch) {
   const { privateKey } = generateKeyPairSync("ed25519");
@@ -22,7 +30,7 @@ function client(fetcher: typeof fetch) {
     deviceId: "endpoint.unit.test",
     signingKey: privateKey,
     fetch: fetcher,
-    nonceFactory: () => "unit-test-fresh-nonce",
+    nonceFactory: () => cannedFresh,
   });
 }
 
@@ -42,7 +50,7 @@ describe("account device authorization client", () => {
         deviceId: "endpoint.unit.test",
         purpose: "current_binding",
         peerDeviceId: target.deviceId,
-        nonce: "unit-test-fresh-nonce",
+        nonce: canned2,
       });
       return jsonResponse({ account: binding, target, authorizedScopes: ["peer:message"] });
     });
@@ -55,7 +63,7 @@ describe("account device authorization client", () => {
 
     const changedTargetClient = client(async () => jsonResponse({
       account: binding,
-      target: { ...target, devicePublicKey: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB" },
+      target: { ...target, devicePublicKey: canned3 },
       authorizedScopes: ["peer:message"],
     }));
     await expect(changedTargetClient.check({ peerDeviceId: target.deviceId, binding, authorizedTargets: [target] }))

@@ -12,6 +12,10 @@ import {
   reportPayloadDigest,
 } from "./sensitive-report-scan.ts";
 import { validateAcceptedCandidateReceipt } from "./platform-acceptance-generation-store.ts";
+const canned1 = "failed";
+
+
+
 
 export const REAL_MACHINE_VALIDATION_SCHEMA: any =
   "v0.0.1:meshrix:real-machine-validation-state-1";
@@ -438,7 +442,7 @@ function phaseReceiptFacts({ state, phase, result, recordedAt }: Record<string, 
     functionalAcceptanceDigest: state.functionalAcceptanceDigest,
     sourceRevision: state.sourceRevision,
     phase,
-    status: result.exitCode === 0 ? "passed" : "failed",
+    status: result.exitCode === 0 ? "passed": canned1,
     exitCode: result.exitCode,
     durationMs: result.durationMs,
     checks: result.checks,

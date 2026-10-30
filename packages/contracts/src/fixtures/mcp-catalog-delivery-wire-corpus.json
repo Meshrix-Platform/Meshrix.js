@@ -56,8 +56,7 @@
       "sourceRevision": 3,
       "catalogRevision": "opaque-catalog-revision",
       "audienceRevision": 5,
-      "affectedPartitions": ["opaque-partition-a"],
-      "credential": "prohibited"
+      "affectedPartitions": ["opaque-partition-a"]
     },
     {
       "schemaVersion": "unknown",

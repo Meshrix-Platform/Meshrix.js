@@ -3,6 +3,14 @@ import { defineComponent, h, nextTick } from "vue";
 import { mount, VueWrapper } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import JsonConfigFileEditor from "../../../apps/console/components/JsonConfigFileEditor.vue";
+const canned1 = "json-editor-save";
+const canned2 = "json-editor-errors";
+const canned3 = "json-editor-cancel";
+const canned4 = "json-editor-singleton";
+const canned5 = "json-editor-string";
+
+
+
 
 const mounted: VueWrapper[] = [];
 
@@ -28,7 +36,7 @@ function mountEditor(props: Record<string, unknown> = {}) : any {
     attachTo: document.body,
     props: {
       title: "Runtime config",
-      fileKey: `file-${Math.random()}`,
+      fileKey: ("file-"+Math.random()),
       modelValue: { enabled: true },
       ...props,
     },
@@ -60,7 +68,7 @@ describe("JsonConfigFileEditor", () : any => {
     const wrapper: any = mountEditor({
       title: "Agent config",
       subtitle: "agent-tools.json",
-      fileKey: "json-editor-save",
+      fileKey: canned1,
       modelValue: { enabled: true, count: 1 },
       open: true,
       rows: 6,
@@ -99,7 +107,7 @@ describe("JsonConfigFileEditor", () : any => {
       throw new Error("write failed");
     });
     const wrapper: any = mountEditor({
-      fileKey: "json-editor-errors",
+      fileKey: canned2,
       modelValue: { enabled: true },
       onSave,
     });
@@ -125,7 +133,7 @@ describe("JsonConfigFileEditor", () : any => {
   it("cancels dirty edits and ignores readonly or clean commits", async () : Promise<any> => {
     const onSave: any = vi.fn();
     const wrapper: any = mountEditor({
-      fileKey: "json-editor-cancel",
+      fileKey: canned3,
       modelValue: { enabled: true },
       readonly: true,
       onSave,
@@ -150,13 +158,13 @@ describe("JsonConfigFileEditor", () : any => {
 
   it("keeps singleton editor state per file key and only replaces clean drafts from new props", async () : Promise<any> => {
     const first: any = mountEditor({
-      fileKey: "json-editor-singleton",
+      fileKey: canned4,
       modelValue: { version: 1 },
     });
     await first.get("textarea").setValue("{\"version\":2}");
 
     const second: any = mountEditor({
-      fileKey: "json-editor-singleton",
+      fileKey: canned4,
       modelValue: { version: 10 },
     });
     expect((second.get("textarea").element as HTMLTextAreaElement).value).toBe("{\"version\":2}");
@@ -173,7 +181,7 @@ describe("JsonConfigFileEditor", () : any => {
     expect((second.get("textarea").element as HTMLTextAreaElement).value).toContain("\"version\": 30");
 
     const stringEditor: any = mountEditor({
-      fileKey: "json-editor-string",
+      fileKey: canned5,
       modelValue: "{\"raw\":true}",
     });
     expect((stringEditor.get("textarea").element as HTMLTextAreaElement).value).toBe("{\"raw\":true}");

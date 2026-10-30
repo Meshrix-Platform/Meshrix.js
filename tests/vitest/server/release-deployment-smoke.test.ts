@@ -25,6 +25,10 @@ import {
   releaseDriverFailureCode,
   standardMcpClientAudience,
 } from "../../../tools/server-scripts/verify-release-deployment.ts";
+const canned1 = "synthetic-credential";
+
+
+
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const SHA_REVISION = "a".repeat(40);
@@ -277,7 +281,7 @@ describe("release deployment smoke", () => {
 
   it("uses an unbranded standard MCP client identity", () => {
     expect(standardClientHeaders("synthetic-credential")).toEqual({
-      "X-Meshrix.js-Api-Key": "synthetic-credential",
+      "X-Meshrix.js-Api-Key": canned1,
     });
     expect(standardMcpClientAudience("server-a")).toEqual({
       serverAudience: "server-a",

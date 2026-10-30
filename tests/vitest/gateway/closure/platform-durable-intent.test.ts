@@ -8,6 +8,10 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { createOperationProofSubstrate } from "../../../../packages/foundation/src/proof/proof-substrate/index.ts";
 import { sanitizeVerificationLog } from "../../../../tools/server-scripts/localize-verify-failure.ts";
+const canned1 = "tool-data";
+
+
+
 
 type FixtureEvent = Record<string, any> & { kind: string };
 
@@ -368,7 +372,7 @@ describe("platform discovered-tool durable dispatch intent", () => {
       label: "tool-input",
       url: "https://arguments-are-not-a-destination.invalid/",
       path: "/arguments-are-not-a-route",
-      headers: { authorization: "tool-data" }
+      headers: { authorization: canned1 }
     } });
     const intent = await started.process.waitFor("intent");
     const marker = await started.process.waitFor("dispatch-marker");

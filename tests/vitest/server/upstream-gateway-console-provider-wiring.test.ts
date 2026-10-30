@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createSystemController } from "../../../packages/protocols/http/controllers/system-controller.ts";
+const canned1 = "echo";
+
+
+
 
 function captureResponse() : any {
   return {
@@ -78,7 +82,7 @@ describe("upstream gateway console provider wiring", () : any => {
       request,
       requestBody: Buffer.from(JSON.stringify({
         serviceId: "fixture-service",
-        operationKey: "echo"
+        operationKey: canned1
       })),
       url: new URL("http://localhost/api/gateway/v1/forward"),
       response,

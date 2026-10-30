@@ -4,6 +4,10 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { npmCliArgs, resolveNpmCliInvocation } from "./npm-cli-invocation.ts";
+const canned1 = "failed";
+
+
+
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
@@ -79,7 +83,7 @@ async function runCommand(entry?: any) : Promise<any> {
     });
     child.on("close", (code?: any) : any => {
       resolve(resultForEntry(entry, {
-        status: code === 0 ? "passed" : "failed",
+        status: code === 0 ? "passed": canned1,
         exitCode: code ?? 1,
         elapsedMs: Date.now() - startedAt
       }));

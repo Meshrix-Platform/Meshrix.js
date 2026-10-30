@@ -4,6 +4,10 @@ import { defineComponent, h, ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import DashboardView from "../../../apps/console/views/DashboardView.vue";
 import { setConsoleLocaleState } from "../../../apps/console/i18n/console";
+const canned1 = "pendingOperation:request-a";
+
+
+
 
 const shellContextMock: any = vi.hoisted(() : any => ({ current: null as any }));
 const approvalFlowMock: any = vi.hoisted(() : any => ({ current: null as any }));
@@ -55,7 +59,7 @@ beforeEach(() : any => {
   approvalFlowMock.current = {
     approvalFlowCards: ref([
       {
-        key: "pendingOperation:request-a",
+        key: canned1,
         kind: "pendingOperation",
         tone: "warning",
         label: "Operation Permission 审批",

@@ -5,6 +5,10 @@ import {
   STRATEGY_MANAGEMENT_PROTOCOL_VERSION,
   createStrategyManagementProvider
 } from "../../../packages/server-runtime/src/composition/strategy-management-provider.ts";
+const canned1 = "internal";
+
+
+
 
 const STRATEGY_OPERATION_IDS: any = SERVER_API_OPERATIONS
   .filter((operation?: any) : any => operation.id.startsWith("strategy."))
@@ -106,7 +110,7 @@ describe("strategy management provider", () : any => {
       profileId: "internal-profile",
       subject: { type: "user", id: "internal-subject" },
       effectivePolicySnapshot: { internal: true },
-      context: { secret: "internal" }
+      context: { secret: canned1 }
     }));
     const provider: any = createProvider({
       getOperationPermissionPlatform: () : any => ({ policyEngine: { preview } })

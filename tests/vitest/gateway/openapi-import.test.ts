@@ -7,6 +7,12 @@ import {
   parsePortableUpstreamServiceImport,
   upstreamServiceImportFromOpenApi
 } from "../../../packages/contracts/src/upstream-service-publishing.ts";
+const canned1 = "inventory";
+const canned2 = "getItem";
+const canned3 = "createItem";
+
+
+
 
 const SUBJECT = {
   type: "tool-grant",
@@ -259,7 +265,7 @@ describe("OpenAPI -> portable upstream service import", () => {
     });
     try {
       const result = upstreamServiceImportFromOpenApi(JSON.stringify(specDocument()), {
-        serviceKey: "inventory",
+        serviceKey: canned1,
         baseUrl: peer.url
       });
       expect(result.document.descriptor.baseUrl).toBe(peer.url);
@@ -273,14 +279,14 @@ describe("OpenAPI -> portable upstream service import", () => {
         operations: descriptor.operations
       })]);
       const forwarded = await registry.forward(
-        { serviceId: "inventory", operationKey: "getItem", pathParameters: { id: "item-9" }, query: { verbose: "true" } },
+        { serviceId: "inventory", operationKey: canned2, pathParameters: { id: "item-9" }, query: { verbose: "true" } },
         SUBJECT
       );
       expect(peer.hits.count).toBe(1);
       expect(peer.hits.requests[0].url).toBe("/items/item-9?verbose=true");
       expect(forwarded?.response?.json).toMatchObject({ id: "item-9", name: "widget" });
       const created = await registry.forward(
-        { serviceId: "inventory", operationKey: "createItem", body: { name: "widget", count: 3 } },
+        { serviceId: "inventory", operationKey: canned3, body: { name: "widget", count: 3 } },
         SUBJECT
       );
       expect(peer.hits.count).toBe(2);

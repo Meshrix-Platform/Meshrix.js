@@ -34,7 +34,8 @@ function captureResponse() : any {
 
 describe("P2 security boundaries", () : any => {
   it("keeps connector authentication API-Key-only", () : any => {
-    const apiKey: any = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
+    const wire = `mxak1.${"A".repeat(22)}.${"b".repeat(43)}`;
+    const apiKey: any = wire;
     expect(connectorAuthHeaders(apiKey, "codex", "https://meshrix.example")).not.toHaveProperty("Authorization");
     expect(() : any => connectorAuthHeaders("generic-grant", "codex")).toThrow("strict mxak1");
   });

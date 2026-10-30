@@ -1,5 +1,9 @@
 import { spawn as nodeSpawn } from "node:child_process";
 import path from "node:path";
+const canned1 = "failed";
+
+
+
 
 export function sourceNodeEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const childEnv = { ...env };
@@ -551,7 +555,7 @@ export function runSuiteProcess(entry?: any, {
       const finishedAt: any = new Date();
       resolve({
         ...commandResultIdentity(entry),
-        status: cancelled ? "cancelled" : !error && exitCode === 0 ? "passed" : "failed",
+        status: cancelled ? "cancelled" : !error && exitCode === 0 ? "passed": canned1,
         exitCode,
         signal,
         ...(error ? { error: String(error.message || error) } : {}),

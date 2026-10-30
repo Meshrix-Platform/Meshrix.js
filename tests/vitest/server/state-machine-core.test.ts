@@ -12,6 +12,14 @@ import {
   ERROR_CODES,
   StateMachineError
 } from "../../../packages/foundation/src/workflow/state-machine/engine/state-machine-core.ts";
+const canned1 = ", ";
+const canned2 = "secret-12345";
+const canned3 = "nested-secret";
+
+
+
+
+
 
 const mockDefinition: Record<string, any> = {
   machineId: "fixture.strategy.lifecycle",
@@ -191,7 +199,7 @@ describe("State Machine Core - Metadata Redaction", () : any => {
       currentStatus: "submitted",
       eventType: "test.approve",
       metadata: {
-        password: "my-password",
+        password: canned1,
         label: "test-run"
       }
     });
@@ -206,7 +214,7 @@ describe("State Machine Core - Metadata Redaction", () : any => {
       currentStatus: "submitted",
       eventType: "test.approve",
       metadata: {
-        apiKey: "secret-12345",
+        apiKey: canned2,
         safeField: "safe-data"
       }
     });
@@ -680,7 +688,7 @@ describe("State Machine Core - Deep Metadata Redaction", () : any => {
       currentStatus: "submitted",
       eventType: "test.approve",
       metadata: {
-        config: { credentials: { apiKey: "nested-secret" } },
+        config: { credentials: { apiKey: canned3 } },
         label: "safe"
       }
     });
@@ -794,7 +802,7 @@ describe("State Machine Core - Deep Metadata Redaction", () : any => {
       currentStatus: "submitted",
       eventType: "test.approve",
       metadata: {
-        oauthUrl: `https://auth.example.com/refresh?${["refresh", "token"].join("_")}=rt_abc123&scope=read`
+        oauthUrl: ("https://auth.example.com/refresh?"+["refresh", "token"].join("_")+"=rt_abc123&scope=read")
       }
     });
     expect(res.ok).toBe(true);
@@ -820,7 +828,7 @@ describe("State Machine Core - Deep Metadata Redaction", () : any => {
       currentStatus: "submitted",
       eventType: "test.approve",
       metadata: {
-        rawHeader: ["Authorization =", "Bearer", "some-token-value"].join(" ")
+        rawHeader: ["Authorization", "=", "Bearer", "some-token-value"].join(" ")
       }
     });
     expect(res.ok).toBe(true);

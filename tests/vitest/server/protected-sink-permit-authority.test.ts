@@ -9,6 +9,10 @@ import {
   createFinalProtectedSinkAttempt,
   createFinalProtectedSinkPermitGuard
 } from "#meshrix/foundation/security/final-protected-sink-permit";
+const canned1 = "fixture-write";
+
+
+
 
 const NOW: any = 1_900_000_000_000;
 const SUBJECT: Readonly<Record<string, any>> = Object.freeze({
@@ -87,7 +91,7 @@ function binding(overrides: Record<string, any> = {}) : any {
 
 const EXACT_BINDING: any = binding();
 const ATTEMPT_TARGET_SELECTOR: Readonly<Record<string, any>> = Object.freeze({
-  operationKey: "fixture-write",
+  operationKey: canned1,
   serviceId: "fixture-service"
 });
 

@@ -2,6 +2,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+const canned1 = "private-config-value";
+const canned2 = "tools/call";
+const canned3 = "private-secret-generation-one";
+const canned4 = "private-secret-generation-two";
+const canned5 = "secret://fixture/session";
+
 
 const secretMaterial: any = vi.hoisted(() : any => ({
   revision: 1,
@@ -30,6 +36,8 @@ import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-s
 import { modernHttpRequest } from "../gateway/support.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 
+
+
 function fixtureTools() : any {
   return ["state.increment", "state.probe", "work.slow", "work.peer"].map((name?: any) : any => ({
     name,
@@ -54,7 +62,7 @@ async function registryFixture(mcpSessionManager?: any, overrides: Record<string
         transport: "http",
         url: "https://session-fixture.invalid/mcp",
         protocolVersion: "2025-06-18",
-        env: { FIXTURE_TOKEN: "private-config-value" },
+        env: { FIXTURE_TOKEN: canned1 },
         toolNamePrefix: "session-fixture",
         toolsCacheTtlMs: 60_000,
         timeoutMs: 10_000
@@ -241,7 +249,7 @@ describe("upstream gateway session ownership and cancellation", () : any => {
 
     const executed: any = await execute({
       operationId: "gateway.forward",
-      input: { serviceId: "session-fixture", operationKey: "tools/call" },
+      input: { serviceId: "session-fixture", operationKey: canned2 },
       context: { signal: abortController.signal }
     });
 
@@ -311,11 +319,11 @@ describe("upstream gateway session ownership and cancellation", () : any => {
       return { structuredContent: { ok: true } };
     });
     secretMaterial.revision = 1;
-    secretMaterial.value = "private-secret-generation-one";
-    const credentialRef: any = "secret://fixture/session";
+    secretMaterial.value = canned3;
+    const credentialRef: any = canned5;
     const probeCapability: any = compileUpstreamOperationCapability(
       { serviceId: "session-fixture", serviceProtocol: "mcp", credentialRefs: [credentialRef] },
-      { operationKey: "tools/call", protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"] },
+      { operationKey: canned2, protocol: "mcp", risk: "safe_write", requiredScopes: ["gateway:write"] },
       { upstreamToolName: "state.probe" }
     );
     const credentialSubject: any = readSubject({
@@ -338,7 +346,7 @@ describe("upstream gateway session ownership and cancellation", () : any => {
       const first: any = await call("state.probe", {}, credentialSubject);
       expect(first.body?.result, publicGatewayFailure(first)).toBeDefined();
       secretMaterial.revision = 2;
-      secretMaterial.value = "private-secret-generation-two";
+      secretMaterial.value = canned4;
       const second: any = await call("state.probe", {}, credentialSubject);
       expect(second.body?.result, publicGatewayFailure(second)).toBeDefined();
 
@@ -461,7 +469,7 @@ describe("upstream gateway session ownership and cancellation", () : any => {
 
       expect(registry.previewPolicy({
         serviceId: "session-fixture",
-        operationKey: "tools/call"
+        operationKey: canned2
       }, readSubject()).traffic.inFlight).toBe(2);
 
       abortController.abort(new Error("private caller cancellation detail"));
@@ -471,7 +479,7 @@ describe("upstream gateway session ownership and cancellation", () : any => {
       expect(cancelled.value.body.error?.data).toMatchObject({ code: "operation_cancelled", effectOutcome: "unknown" });
       expect(registry.previewPolicy({
         serviceId: "session-fixture",
-        operationKey: "tools/call"
+        operationKey: canned2
       }, readSubject()).traffic.inFlight).toBe(1);
 
       releasePeer();
@@ -483,7 +491,7 @@ describe("upstream gateway session ownership and cancellation", () : any => {
       });
       expect(registry.previewPolicy({
         serviceId: "session-fixture",
-        operationKey: "tools/call"
+        operationKey: canned2
       }, readSubject()).traffic.inFlight).toBe(0);
       expect(cancelNotifications).toBe(1);
       expect(slowSideEffects).toBe(0);

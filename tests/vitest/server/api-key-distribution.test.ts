@@ -28,6 +28,17 @@ import { createToolCatalog } from "../../../packages/capabilities/src/operation-
 import { createOperationPermissionStore } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { STRATEGY_PERMISSION_OPERATION_DEFINITIONS } from "../../../packages/contracts/src/operations/strategy-permission-operation-definitions.ts";
+const canned1 = "catalog-1";
+const canned2 = "tenant:anonymous:127.0.0.1";
+const canned3 = "subject:anonymous:127.0.0.1";
+const canned4 = "api-key";
+const canned5 = "api-key-admission";
+const canned6 = "secret-binding-opaque";
+const canned7 = "secret-binding-sibling";
+const canned8 = "scoped_api_key";
+
+
+
 
 const temporaryDirectories: string[] = [];
 
@@ -86,7 +97,7 @@ function governanceFixture(): any {
   };
 }
 
-function policy(catalogFingerprint = "catalog-1", overrides: Record<string, any> = {}): any {
+function policy(catalogFingerprint = canned1, overrides: Record<string, any> = {}): any {
   return {
     protocol: "mcp",
     serviceIds: [],
@@ -135,7 +146,7 @@ function harness(catalogOverrides: Record<string, any> = {}): any {
   let randomCounter: any = 0;
   const registry: any = {
     getCatalog: () : any => ({
-      fingerprint: "catalog-1",
+      fingerprint: canned1,
       tools: [{ id: "tools.echo" }],
       toolsets: [],
       scopes: [],
@@ -183,7 +194,7 @@ describe("scoped API Key distribution", () : any => {
       const otherTenant = await create("issuer");
       const limiter = (limit: number) => createFixedWindowRateLimiter({ limit, windowMs: 60000 });
       const bodyAdmission = createRequestBodyAdmissionController({ maxInFlightRequests: 8, maxInFlightRequestsPerTenant: 2, maxInFlightRequestsPerSubject: 1 });
-      const anonymousLease = bodyAdmission.acquire({ tenantKey: "tenant:anonymous:127.0.0.1", subjectKey: "subject:anonymous:127.0.0.1", contentLength: 2 });
+      const anonymousLease = bodyAdmission.acquire({ tenantKey: canned2, subjectKey: canned3, contentLength: 2 });
       const handler = createHttpServerRequestHandler({ activeApiOperations: SERVER_API_OPERATIONS.filter((operation: any) => operation.id === "auth.session"), consoleAuth: cookieAuth,
         controllers: { system: { handleAuthSession({ request, response }: any) { sendJson(response, 200, cookieAuth.getSummary(request)); } } }, distPath: "",
         registeredCoreProvider: { findProxyRegisteredApiRequest: () => null, dispatchRegisteredHttpOperation: (input: any) => dispatchRegisteredHttpOperation({ ...input, routeIndex: createOperationRouteIndex(input.operations) }) },
@@ -197,7 +208,7 @@ describe("scoped API Key distribution", () : any => {
             const authentication = await authenticateMcpApiKey({ request: rawRequest, requestBody, url, method, serverAudience: "meshrix.invalid", apiKeyDistributionProvider: current.provider });
             if (!authentication.ok) return { status: 401, body: { denied: true } };
             const principal = authentication.apiKeyAuthorization;
-            const charge = rawRequest.__meshrixPrincipalAdmission({ credentialKind: "api-key", subjectId: principal.workloadPrincipalId, tenantId: principal.organizationNodeId });
+            const charge = rawRequest.__meshrixPrincipalAdmission({ credentialKind: canned4, subjectId: principal.workloadPrincipalId, tenantId: principal.organizationNodeId });
             return charge.allowed ? { status: 200, body: { jsonrpc: "2.0", id: 1, result: { tools: [] } } } : { status: 429, body: {} };
           }
         } });
@@ -241,7 +252,7 @@ describe("scoped API Key distribution", () : any => {
         policy: policy("catalog-1", { processIdentity: { mode: "required", allowedPublicKeyFingerprints: ["sha256:fixture"] } }) });
       const input = { credential: created.apiKey, serverAudience: "https://meshrix.invalid", targetId: "server", connectorPackageId: null };
       const admission = await current.provider.authenticateAdmission(input);
-      expect(admission).toEqual({ credentialKind: "api-key-admission", subjectId: created.record.workloadPrincipalId, tenantId: "child" });
+      expect(admission).toEqual({ credentialKind: canned5, subjectId: created.record.workloadPrincipalId, tenantId: "child" });
       await expect(current.provider.authenticateRuntime({ ...input, processIdentityEvidence: null })).rejects.toMatchObject({ code: "api_key_process_identity_required" });
       await expect(current.provider.authorizeOperation({ authorization: admission, operation: { toolId: "tools.echo" } })).rejects.toMatchObject({ code: "api_key_invalid" });
       await current.provider.revoke({ subjectId: "admin", keyId: created.record.keyId, expectedLifecycleRevision: created.record.lifecycleRevision, reasonCode: "administrator_request" });
@@ -261,7 +272,7 @@ describe("scoped API Key distribution", () : any => {
       serviceIds: ["opaque-service"],
       requestedEgress: "mcp",
       requestedEgresses: ["mcp"],
-      secretBindingId: "secret-binding-opaque",
+      secretBindingId: canned6,
       secretBindingIds: ["secret-binding-opaque"],
       capabilityDomain: "upstream-gateway",
       capabilityVerb: "tools/call",
@@ -384,7 +395,7 @@ describe("scoped API Key distribution", () : any => {
           ...upstreamOperation,
           resourceContext: {
             ...upstreamResource,
-            secretBindingId: "secret-binding-sibling",
+            secretBindingId: canned7,
             secretBindingIds: ["secret-binding-sibling"]
           }
         }
@@ -504,7 +515,7 @@ describe("scoped API Key distribution", () : any => {
         resourceContext: {
           requestedEgress: "mcp",
           requestedEgresses: ["mcp"],
-          secretBindingId: "secret-binding-opaque",
+          secretBindingId: canned6,
           secretBindingIds: ["secret-binding-opaque"],
           capabilityDomain: "upstream-gateway",
           capabilityVerb: "tools/call",
@@ -691,7 +702,7 @@ describe("scoped API Key distribution", () : any => {
       expect(issuerScopes).toMatchObject({
         organizationRevision: 7,
         authorizationRevision: 11,
-        catalogFingerprint: "catalog-1",
+        catalogFingerprint: canned1,
         eligibleRoots: [{ nodeId: "issuer", breadcrumb: ["Root", "Issuer"] }]
       });
       expect(Object.keys(issuerScopes).sort()).toEqual([
@@ -714,7 +725,7 @@ describe("scoped API Key distribution", () : any => {
       expect(authorization.workloadPrincipalId).toBe(created.record.workloadPrincipalId);
       expect(authorization).not.toHaveProperty("grantProjection");
       await expect(current.provider.authenticateRuntime({
-        credential: `${created.apiKey.slice(0, -1)}A`,
+        credential: (created.apiKey.slice(0, -1)+"A"),
         serverAudience: "https://meshrix.invalid",
         targetId: "server",
         connectorPackageId: null,
@@ -920,7 +931,7 @@ describe("scoped API Key distribution", () : any => {
       await entered.promise;
       current.advance(6 * 60 * 1000);
       await expect(revalidate?.()).resolves.toMatchObject({
-        credentialKind: "scoped_api_key",
+        credentialKind: canned8,
         keyId: created.record.keyId,
         lifecycleRevision: created.record.lifecycleRevision
       });

@@ -7,12 +7,39 @@ import test from "node:test";
 import { createModelGatewayApplication } from "../internal/application.mjs";
 import { readLedgerState, ADMIN_CLIENTS, DEFAULT_PRICES, provision, provisionModel, startService } from "./helpers.mjs";
 import { startFixtureProvider } from "./fixture-provider.mjs";
+const canned1 = "late-";
+const canned2 = "ik-missing-usage";
+const canned3 = "ik-invalid-usage";
+const canned4 = "ik-bound-request";
+const canned5 = "model-gateway-test-other-secret-0000000000000000000000";
+const canned6 = "ik-principal-bound";
+const canned7 = "ik-pending-owner";
+const canned8 = "ik-retained-0";
+const canned9 = "ik-retained-2";
+const canned10 = "ik-restart-0";
+const canned11 = "ik-in-doubt";
+const canned12 = "model-gateway-test-removed-secret-0000000000000000000000";
+const canned13 = "ik-cancel-1";
+const canned14 = "ik-in-doubt-cancel";
+const canned15 = "uncertain-capacity";
+const canned16 = "synthetic-key";
+const canned17 = "synthetic-fingerprint";
+const canned18 = "storage-failure";
+const canned19 = "new-work-after-repair";
+
+
+
+const cannedPersist1 = "ik-persist-1";
+const cannedCloseDrain = "close-drain";
+const cannedRestart1 = "ik-restart-1";
+const cannedFail1 = "ik-fail-1";
+
 
 async function openAiCall(service, body, headers = {}) {
   return fetch(`${service.baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${service.clientSecret}`,
+      authorization: ("Bearer "+service.clientSecret),
       "content-type": "application/json",
       ...headers
     },
@@ -27,7 +54,7 @@ test("configuration and settled ledger state survive a clean restart", async (t)
   const response = await openAiCall(first, {
     model: "model-1",
     messages: [{ role: "user", content: "persist me" }]
-  }, { "idempotency-key": "ik-persist-1" });
+  }, { "idempotency-key": cannedPersist1 });
   assert.equal(response.status, 200);
   const callId = (await response.json()).service_call_id;
   await first.close({ keepDataRoot: true });
@@ -35,17 +62,17 @@ test("configuration and settled ledger state survive a clean restart", async (t)
   const second = await startService({ dataRoot: first.dataRoot, fixture: first.fixture });
   t.after(() => second.close());
   const models = await fetch(`${second.baseUrl}/v1/model-gateway/models`, {
-    headers: { authorization: `Bearer ${second.clientSecret}` }
+    headers: { authorization: ("Bearer "+second.clientSecret) }
   }).then((r) => r.json());
   assert.equal(models.length, 1);
   assert.equal(models[0].modelId, "model-1");
   const pricing = await fetch(`${second.baseUrl}/v1/model-gateway/pricing`, {
-    headers: { authorization: `Bearer ${second.clientSecret}` }
+    headers: { authorization: ("Bearer "+second.clientSecret) }
   }).then((r) => r.json());
   assert.equal(pricing.length, 1);
   assert.equal(pricing[0].revisionRef, "price-1");
   const ledger = await fetch(`${second.baseUrl}/v1/model-gateway/ledger/${callId}`, {
-    headers: { authorization: `Bearer ${second.clientSecret}` }
+    headers: { authorization: ("Bearer "+second.clientSecret) }
   }).then((r) => r.json());
   assert.equal(ledger.state, "settled");
   assert.equal(ledger.attempts, 1);
@@ -81,7 +108,7 @@ test("orderly close retains data-root ownership until provider work and settleme
   });
   await writeFile(path.join(dataRoot, "provider-egress.json"), JSON.stringify({ prov1: { baseUrl: "https://provider.invalid" } }));
   await writeFile(path.join(dataRoot, "secrets.json"), JSON.stringify({ prov1: "synthetic-provider-secret" }));
-  const client = app.authenticate({ authorization: `Bearer ${ADMIN_CLIENTS["service-admin"].secret}` });
+  const client = app.authenticate({ authorization: ("Bearer "+ADMIN_CLIENTS["service-admin"].secret) });
   await app.createProvider(client, { providerId: "prov1", protocol: "openai", enabled: true }, "setup");
   await app.createPricingRevision(client, {
     revisionRef: "price-1", modelRef: "model-1", currency: "USD", ...DEFAULT_PRICES, immutable: true
@@ -93,7 +120,7 @@ test("orderly close retains data-root ownership until provider work and settleme
   call = app.callOpenAi({
     client,
     body: { model: "model-1", messages: [{ role: "user", content: "x" }], max_completion_tokens: 1 },
-    idempotencyKey: "close-drain",
+    idempotencyKey: cannedCloseDrain,
     requestId: "close-drain-request"
   });
   await started;
@@ -136,7 +163,7 @@ for (const protocol of ["openai", "anthropic"]) {
     }));
     t.after(async () => { release(); await service.close(); });
     await provision(service);
-    const headers = { authorization: `Bearer ${service.clientSecret}`, "content-type": "application/json" };
+    const headers = { authorization: ("Bearer "+service.clientSecret), "content-type": "application/json" };
     if (protocol === "anthropic") {
       await fetch(`${service.baseUrl}/v1/model-gateway/providers`, {
         method: "POST", headers,
@@ -144,7 +171,7 @@ for (const protocol of ["openai", "anthropic"]) {
       });
     }
     const send = () => fetch(`${service.baseUrl}${protocol === "openai" ? "/v1/chat/completions" : "/v1/messages"}`, {
-      method: "POST", headers: { ...headers, "idempotency-key": `late-${protocol}` },
+      method: "POST", headers: { ...headers, "idempotency-key": canned1 + protocol },
       body: JSON.stringify({ model: "model-1", max_tokens: 2, messages: [{ role: "user", content: "synthetic" }] })
     });
     const call = send();
@@ -171,14 +198,14 @@ test("idempotent replay after restart performs no second egress", async (t) => {
   const first = await startService();
   await provision(first);
   const call = { model: "model-1", messages: [{ role: "user", content: "restart replay" }] };
-  const firstResponse = await openAiCall(first, call, { "idempotency-key": "ik-restart-1" });
+  const firstResponse = await openAiCall(first, call, { "idempotency-key": cannedRestart1 });
   const firstBody = await firstResponse.json();
   await first.close({ keepDataRoot: true });
 
   const second = await startService({ dataRoot: first.dataRoot, fixture: first.fixture });
   t.after(() => second.close());
   const countBefore = second.fixture.openAiCalls();
-  const replay = await openAiCall(second, call, { "idempotency-key": "ik-restart-1" });
+  const replay = await openAiCall(second, call, { "idempotency-key": cannedRestart1 });
   assert.equal(replay.status, 200);
   assert.deepEqual(await replay.json(), firstBody);
   assert.equal(second.fixture.openAiCalls(), countBefore, "replay must not reach the provider again");
@@ -192,7 +219,7 @@ test("provider failures make one paid POST and remain in_doubt without a retry",
   const response = await openAiCall(service, {
     model: modelId,
     messages: [{ role: "user", content: "fail me" }]
-  }, { "idempotency-key": "ik-fail-1" });
+  }, { "idempotency-key": cannedFail1 });
   assert.equal(response.status, 503);
   assert.equal((await response.json()).error.code, "provider_unavailable");
   assert.equal(service.fixture.openAiCalls(), 1, "a failed paid POST is never replayed automatically");
@@ -221,11 +248,11 @@ test("missing provider usage remains in_doubt instead of settling as zero cost",
   const response = await openAiCall(service, {
     model: "model-1",
     messages: [{ role: "user", content: "synthetic missing-usage response" }]
-  }, { "idempotency-key": "ik-missing-usage" });
+  }, { "idempotency-key": canned2 });
   assert.equal(response.status, 200);
   const callId = (await response.json()).service_call_id;
   const ledger = await fetch(`${service.baseUrl}/v1/model-gateway/ledger/${callId}`, {
-    headers: { authorization: `Bearer ${service.clientSecret}` }
+    headers: { authorization: ("Bearer "+service.clientSecret) }
   }).then((result) => result.json());
   assert.equal(ledger.state, "in_doubt");
   assert.equal(ledger.attempts, 1);
@@ -251,11 +278,11 @@ test("invalid provider usage is not rounded or settled as a zero-cost call", asy
   const response = await openAiCall(service, {
     model: "model-1",
     messages: [{ role: "user", content: "synthetic invalid-usage response" }]
-  }, { "idempotency-key": "ik-invalid-usage" });
+  }, { "idempotency-key": canned3 });
   assert.equal(response.status, 200);
   const callId = (await response.json()).service_call_id;
   const ledger = await fetch(`${service.baseUrl}/v1/model-gateway/ledger/${callId}`, {
-    headers: { authorization: `Bearer ${service.clientSecret}` }
+    headers: { authorization: ("Bearer "+service.clientSecret) }
   }).then((result) => result.json());
   assert.equal(ledger.state, "in_doubt");
   assert.equal(ledger.attempts, 1);
@@ -269,12 +296,12 @@ test("same idempotency key with a different request is rejected before provider 
   const first = await openAiCall(service, {
     model: "model-1",
     messages: [{ role: "user", content: "first request" }]
-  }, { "idempotency-key": "ik-bound-request" });
+  }, { "idempotency-key": canned4 });
   assert.equal(first.status, 200);
   const second = await openAiCall(service, {
     model: "model-1",
     messages: [{ role: "user", content: "different request" }]
-  }, { "idempotency-key": "ik-bound-request" });
+  }, { "idempotency-key": canned4 });
   assert.equal(second.status, 400);
   assert.equal((await second.json()).error.code, "invalid_request");
   assert.equal(service.fixture.openAiCalls(), 1);
@@ -285,7 +312,7 @@ test("idempotency replay and ledger operations are isolated by configured princi
     ...ADMIN_CLIENTS,
     "other-client": {
       subject: "other-subject",
-      secret: "model-gateway-test-other-secret-0000000000000000000000",
+      secret: canned5,
       scopes: ["model:call", "ledger:read"]
     }
   };
@@ -293,11 +320,11 @@ test("idempotency replay and ledger operations are isolated by configured princi
   t.after(() => service.close());
   await provision(service);
   const body = { model: "model-1", messages: [{ role: "user", content: "isolation" }] };
-  const first = await openAiCall(service, body, { "idempotency-key": "ik-principal-bound" });
+  const first = await openAiCall(service, body, { "idempotency-key": canned6 });
   const firstBody = await first.json();
   const second = await openAiCall(service, body, {
-    authorization: `Bearer ${clients["other-client"].secret}`,
-    "idempotency-key": "ik-principal-bound"
+    authorization: ("Bearer "+clients["other-client"].secret),
+    "idempotency-key": canned6
   });
   const secondBody = await second.json();
   assert.equal(second.status, 200);
@@ -305,7 +332,7 @@ test("idempotency replay and ledger operations are isolated by configured princi
   assert.equal(service.fixture.openAiCalls(), 2);
 
   const read = await fetch(`${service.baseUrl}/v1/model-gateway/ledger/${firstBody.service_call_id}`, {
-    headers: { authorization: `Bearer ${clients["other-client"].secret}` }
+    headers: { authorization: ("Bearer "+clients["other-client"].secret) }
   });
   assert.equal(read.status, 400);
   const readBody = await read.json();
@@ -313,7 +340,7 @@ test("idempotency replay and ledger operations are isolated by configured princi
   assert.equal(JSON.stringify(readBody).includes("fixture reply"), false);
   const cancel = await fetch(`${service.baseUrl}/v1/model-gateway/calls/${firstBody.service_call_id}/cancel`, {
     method: "POST",
-    headers: { authorization: `Bearer ${clients["other-client"].secret}` }
+    headers: { authorization: ("Bearer "+clients["other-client"].secret) }
   });
   assert.equal(cancel.status, 400);
 });
@@ -323,7 +350,7 @@ test("another principal cannot cancel a pending provider call", async (t) => {
     ...ADMIN_CLIENTS,
     "other-client": {
       subject: "other-subject",
-      secret: "model-gateway-test-other-secret-0000000000000000000000",
+      secret: canned5,
       scopes: ["model:call", "ledger:read"]
     }
   };
@@ -334,7 +361,7 @@ test("another principal cannot cancel a pending provider call", async (t) => {
   const held = openAiCall(service, {
     model: modelId,
     messages: [{ role: "user", content: "hold for cross-principal cancel" }]
-  }, { "idempotency-key": "ik-pending-owner" });
+  }, { "idempotency-key": canned7 });
   let state;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     state = readLedgerState(service.dataRoot);
@@ -345,7 +372,7 @@ test("another principal cannot cancel a pending provider call", async (t) => {
   assert.ok(callId, "the held call must have a persisted ledger entry");
   const cancel = await fetch(`${service.baseUrl}/v1/model-gateway/calls/${callId}/cancel`, {
     method: "POST",
-    headers: { authorization: `Bearer ${clients["other-client"].secret}` }
+    headers: { authorization: ("Bearer "+clients["other-client"].secret) }
   });
   assert.equal(cancel.status, 400);
   service.fixture.release(modelId);
@@ -364,7 +391,7 @@ test("RAM response capacity preserves complete durable results and completed ide
     const response = await openAiCall(service, {
       model: "model-1",
       messages: [{ role: "user", content: `retained-replay-${index}` }]
-    }, { "idempotency-key": `ik-retained-${index}` });
+    }, { "idempotency-key": ("ik-retained-"+index) });
     assert.equal(response.status, 200);
     const result = await response.json();
     results.push(result);
@@ -378,14 +405,14 @@ test("RAM response capacity preserves complete durable results and completed ide
   const evictedReplay = await openAiCall(service, {
     model: "model-1",
     messages: [{ role: "user", content: "retained-replay-0" }]
-  }, { "idempotency-key": "ik-retained-0" });
+  }, { "idempotency-key": canned8 });
   assert.equal(evictedReplay.status, 200);
   assert.deepEqual(await evictedReplay.json(), results[0], "RAM cache misses recover the same full paid result");
   assert.equal(service.fixture.openAiCalls(), 3, "an evicted response must never cause paid reexecution");
   const retainedReplay = await openAiCall(service, {
     model: "model-1",
     messages: [{ role: "user", content: "retained-replay-2" }]
-  }, { "idempotency-key": "ik-retained-2" });
+  }, { "idempotency-key": canned9 });
   assert.equal(retainedReplay.status, 200);
   assert.deepEqual(await retainedReplay.json(), results[2], "retained replays keep the complete original result");
   assert.equal(service.fixture.openAiCalls(), 3, "a retained replay must not egress");
@@ -401,7 +428,7 @@ test("RAM response cache eviction preserves complete paid results across a clean
     const response = await openAiCall(first, {
       model: "model-1",
       messages: [{ role: "user", content: `restart-retention-${index}` }]
-    }, { "idempotency-key": `ik-restart-${index}` });
+    }, { "idempotency-key": ("ik-restart-"+index) });
     assert.equal(response.status, 200);
     calls.push(await response.json());
   }
@@ -414,11 +441,11 @@ test("RAM response cache eviction preserves complete paid results across a clean
   const replayed = await openAiCall(second, {
     model: "model-1",
     messages: [{ role: "user", content: "restart-retention-1" }]
-  }, { "idempotency-key": "ik-restart-1" });
+  }, { "idempotency-key": cannedRestart1 });
   assert.equal(replayed.status, 200);
   assert.deepEqual(await replayed.json(), calls[1], "the complete retained result survives restart");
   assert.equal(second.fixture.openAiCalls(), 2, "restart retains the original completed call binding");
-  const oldReplay = await openAiCall(second, { model: "model-1", messages: [{ role: "user", content: "restart-retention-0" }] }, { "idempotency-key": "ik-restart-0" });
+  const oldReplay = await openAiCall(second, { model: "model-1", messages: [{ role: "user", content: "restart-retention-0" }] }, { "idempotency-key": canned10 });
   assert.equal(oldReplay.status, 200);
   assert.deepEqual(await oldReplay.json(), calls[0], "the oldest complete result survives RAM eviction and restart");
   assert.equal(second.fixture.openAiCalls(), 2, "restart cannot turn a completed key into a new request");
@@ -432,14 +459,14 @@ test("pending ledger entries and complete settled results survive RAM cache pres
   const inDoubt = await openAiCall(service, {
     model: "fixture-openai-fault",
     messages: [{ role: "user", content: "must stay in_doubt" }]
-  }, { "idempotency-key": "ik-in-doubt" });
+  }, { "idempotency-key": canned11 });
   assert.equal(inDoubt.status, 503);
   await inDoubt.json();
   for (let index = 0; index < 2; index += 1) {
     const settled = await openAiCall(service, {
       model: "model-2",
       messages: [{ role: "user", content: `settled-${index}` }]
-    }, { "idempotency-key": `ik-settled-${index}` });
+    }, { "idempotency-key": ("ik-settled-"+index) });
     assert.equal(settled.status, 200);
   }
   const state = readLedgerState(service.dataRoot);
@@ -451,7 +478,7 @@ test("pending ledger entries and complete settled results survive RAM cache pres
   assert.ok(inDoubtPair, "an unsettled entry must never be evicted");
   assert.equal(inDoubtPair[1].state, "in_doubt");
   const ledger = await fetch(`${service.baseUrl}/v1/model-gateway/ledger/${inDoubtPair[0]}`, {
-    headers: { authorization: `Bearer ${service.clientSecret}` }
+    headers: { authorization: ("Bearer "+service.clientSecret) }
   });
   assert.equal(ledger.status, 200, "the retained pending entry remains readable");
 });
@@ -461,7 +488,7 @@ test("removed clients lose authorization and secrets are not persisted in state"
     ...ADMIN_CLIENTS,
     removed: {
       subject: "removed-subject",
-      secret: "model-gateway-test-removed-secret-0000000000000000000000",
+      secret: canned12,
       scopes: ["model:call"]
     }
   };
@@ -472,7 +499,7 @@ test("removed clients lose authorization and secrets are not persisted in state"
   const second = await startService({ dataRoot, clients: ADMIN_CLIENTS });
   t.after(() => second.close());
   const revoked = await fetch(`${second.baseUrl}/v1/models`, {
-    headers: { authorization: `Bearer ${clients.removed.secret}` }
+    headers: { authorization: ("Bearer "+clients.removed.secret) }
   });
   assert.equal(revoked.status, 401);
   const persisted = await readFile(path.join(dataRoot, "state.json"), "utf8");
@@ -514,7 +541,7 @@ test("released ledger entries left by a crash become in_doubt on reopen", async 
     })
   );
   const application = await createModelGatewayApplication({ dataRoot, clients: ADMIN_CLIENTS });
-  const ledger = await application.readLedger(application.authenticate({ authorization: `Bearer ${ADMIN_CLIENTS["service-admin"].secret}` }), "call_crashed", "req-crash");
+  const ledger = await application.readLedger(application.authenticate({ authorization: ("Bearer "+ADMIN_CLIENTS["service-admin"].secret) }), "call_crashed", "req-crash");
   assert.equal(ledger.body.state, "in_doubt");
   await application.close();
   const persisted = readLedgerState(dataRoot);
@@ -529,7 +556,7 @@ test("cancellation of a pending call leaves an in_doubt ledger without settlemen
   const held = openAiCall(
     service,
     { model: modelId, messages: [{ role: "user", content: "hold for cancel" }] },
-    { "idempotency-key": "ik-cancel-1" }
+    { "idempotency-key": canned13 }
   );
   let state;
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -541,7 +568,7 @@ test("cancellation of a pending call leaves an in_doubt ledger without settlemen
   assert.ok(callId, "the held call must have a ledger entry");
   const cancel = await fetch(`${service.baseUrl}/v1/model-gateway/calls/${callId}/cancel`, {
     method: "POST",
-    headers: { authorization: `Bearer ${service.clientSecret}` }
+    headers: { authorization: ("Bearer "+service.clientSecret) }
   });
   assert.equal(cancel.status, 200);
   assert.equal((await cancel.json()).state, "requested");
@@ -559,7 +586,7 @@ test("cancelling a call after an uncertain provider outcome preserves in_doubt",
   const response = await openAiCall(service, {
     model: modelId,
     messages: [{ role: "user", content: "provider outcome is uncertain" }]
-  }, { "idempotency-key": "ik-in-doubt-cancel" });
+  }, { "idempotency-key": canned14 });
   assert.equal(response.status, 503);
   assert.equal(service.fixture.openAiCalls(), 1);
 
@@ -570,7 +597,7 @@ test("cancelling a call after an uncertain provider outcome preserves in_doubt",
 
   const cancel = await fetch(`${service.baseUrl}/v1/model-gateway/calls/${callId}/cancel`, {
     method: "POST",
-    headers: { authorization: `Bearer ${service.clientSecret}` }
+    headers: { authorization: ("Bearer "+service.clientSecret) }
   });
   assert.equal(cancel.status, 200);
   assert.equal((await cancel.json()).state, "in_doubt");
@@ -583,7 +610,7 @@ test("unresolved capacity survives restart and never deletes prior uncertain eff
   await provision(first, { modelId: "fixture-openai-fault" });
   await provisionModel(first, { modelId: "model-2", revisionRef: "price-2" });
   const request = { model: "fixture-openai-fault", messages: [{ role: "user", content: "uncertain capacity" }] };
-  const uncertain = await openAiCall(first, request, { "idempotency-key": "uncertain-capacity" });
+  const uncertain = await openAiCall(first, request, { "idempotency-key": canned15 });
   assert.equal(uncertain.status, 503);
   assert.equal(first.fixture.openAiCalls(), 1);
   const saved = readLedgerState(first.dataRoot);
@@ -598,7 +625,7 @@ test("unresolved capacity survives restart and never deletes prior uncertain eff
   const stillDenied = await openAiCall(second, { ...request, model: "model-2" });
   assert.equal(stillDenied.status, 429);
   assert.equal(second.fixture.openAiCalls(), 0);
-  const retry = await openAiCall(second, request, { "idempotency-key": "uncertain-capacity" });
+  const retry = await openAiCall(second, request, { "idempotency-key": canned15 });
   assert.equal(retry.status, 409);
   assert.equal(second.fixture.openAiCalls(), 0);
   assert.deepEqual(readLedgerState(dataRoot).ledger[uncertainId], saved.ledger[uncertainId]);
@@ -607,8 +634,8 @@ test("unresolved capacity survives restart and never deletes prior uncertain eff
 test("JSON ledger transfer preserves completed paid facts and removes the superseded field", async (t) => {
   const dataRoot = await mkdtemp(path.join(os.tmpdir(), "model-ledger-transfer-"));
   t.after(() => rm(dataRoot, { recursive: true, force: true }));
-  const entry = { callId: "synthetic_completed", principalRef: "direct-client", idempotencyKey: "synthetic-key",
-    requestFingerprint: "synthetic-fingerprint", modelRef: "model-1", pricingRevisionRef: "price-1", currency: "USD",
+  const entry = { callId: "synthetic_completed", principalRef: "direct-client", idempotencyKey: canned16,
+    requestFingerprint: canned17, modelRef: "model-1", pricingRevisionRef: "price-1", currency: "USD",
     reservationRef: "synthetic-reservation", state: "settled", attempts: 1, amount: { currency: "USD", units: 1, nanos: 0 },
     inputTokens: 12, outputTokens: 7, response: { service_call_id: "synthetic_completed", content: "synthetic result" } };
   await writeFile(path.join(dataRoot, "state.json"), JSON.stringify({ schemaVersion: "v0.0.1:model-gateway:state-1",
@@ -633,14 +660,14 @@ test("settlement store failure never retries the paid request and does not poiso
   t.after(() => db.close());
   db.exec("CREATE TRIGGER synthetic_settlement_failure BEFORE UPDATE OF state ON calls WHEN NEW.state='settled' BEGIN SELECT RAISE(ABORT,'synthetic failure'); END");
   const body = { model: "model-1", messages: [{ role: "user", content: "synthetic settlement storage failure" }] };
-  const failed = await openAiCall(service, body, { "idempotency-key": "storage-failure" });
+  const failed = await openAiCall(service, body, { "idempotency-key": canned18 });
   assert.equal(failed.status, 500);
   assert.equal(service.fixture.openAiCalls(), 1);
   db.exec("DROP TRIGGER synthetic_settlement_failure");
-  const uncertainRetry = await openAiCall(service, body, { "idempotency-key": "storage-failure" });
+  const uncertainRetry = await openAiCall(service, body, { "idempotency-key": canned18 });
   assert.equal(uncertainRetry.status, 409);
   assert.equal(service.fixture.openAiCalls(), 1, "repairing storage must not repeat an uncertain paid request");
-  const newRequest = await openAiCall(service, body, { "idempotency-key": "new-work-after-repair" });
+  const newRequest = await openAiCall(service, body, { "idempotency-key": canned19 });
   assert.equal(newRequest.status, 200);
   assert.equal(service.fixture.openAiCalls(), 2);
 });

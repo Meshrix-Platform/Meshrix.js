@@ -8,6 +8,11 @@ import {
   RELEASE_JOURNEY_VISUAL_CHECKPOINTS,
   readPngDimensions
 } from "./release-journey-visual-contract.ts";
+const canned1 = "enterprise-group";
+const canned2 = "convert-full-access-debug";
+
+
+
 
 export { RELEASE_JOURNEY_VISUAL_CHECKPOINTS } from "./release-journey-visual-contract.ts";
 
@@ -294,7 +299,7 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
       await capture("console-organization-permissions");
     }
     return Object.freeze({
-      templateKey: "enterprise-group",
+      templateKey: canned1,
       hierarchyVerified: true,
       tagsVerified: true,
       administratorRolesVerified: true
@@ -304,7 +309,7 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
   async function provisionApiKeyWorkload({
     serviceId,
     targetIds = ["codex"],
-    operationKey = "convert-full-access-debug",
+    operationKey = canned2,
     organizationNodeId = "group:team",
     workloadName = "Release journey PDF workload",
     toolsetIds = ["meshrix.gateway.write"],

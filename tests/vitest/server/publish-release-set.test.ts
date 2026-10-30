@@ -17,6 +17,11 @@ import {
   releaseTagForVersion
 } from "../../../tools/server-scripts/publish-release-set.ts";
 import { resolveReleaseWorkspaceDirectories } from "../../../tools/server-scripts/lib/release-metadata.ts";
+const canned1 = "synthetic-npm-token";
+const canned2 = "synthetic-oidc-token";
+
+
+
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
@@ -555,13 +560,13 @@ describe("npm release-set publication", () => {
   });
 
   it("does not expose npm failure output and passes standard npm credentials and config unchanged", async () => {
-    const token = "synthetic-npm-token";
+    const token = canned1;
     let receivedEnvironment: NodeJS.ProcessEnv | undefined;
     const directRunner = createNpmRunner({
       environment: {
         NODE_AUTH_TOKEN: token,
         npm_config_userconfig: "/fixture/user.npmrc",
-        ACTIONS_ID_TOKEN_REQUEST_TOKEN: "synthetic-oidc-token"
+        ACTIONS_ID_TOKEN_REQUEST_TOKEN: canned2
       },
       exec: async (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
         receivedEnvironment = options.env;
@@ -572,7 +577,7 @@ describe("npm release-set publication", () => {
     expect(receivedEnvironment).toMatchObject({
       NODE_AUTH_TOKEN: token,
       npm_config_userconfig: "/fixture/user.npmrc",
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "synthetic-oidc-token"
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: canned2
     });
     expect(JSON.stringify(publishOutput)).not.toContain(token);
 

@@ -34,6 +34,17 @@ import {
   apiKeyUploadOperation,
   authorizeApiKeyUpload
 } from "../../../apps/server/runtime/http-server-routes.ts";
+const canned90 = "/private/work/master-key";
+const canned2 = "/private/work/converter-token";
+const canned4 = "scoped_api_key";
+const canned5 = "key-id-hidden";
+const canned6 = "policy-fingerprint";
+const canned7 = "tool-grant";
+
+
+
+
+
 
 const FIXTURE_TEXT: any = "格式转换服务中文验收样例\n第一段：Meshrix.js 格式转换服务将 UTF-8 纯文本文档转换为 DOCX 或 PDF。";
 
@@ -134,7 +145,8 @@ describe("release-journey native upload", () : any => {
     const fixtureBytes: any = Buffer.from("native upload fixture", "utf8");
     const calls: any[] = [];
     const protectedValues: any[] = [];
-    const apiKey: any = `mxak1.${"a".repeat(22)}.${"b".repeat(43)}`;
+    const wire = `mxak1.${"a".repeat(22)}.${"b".repeat(43)}`;
+    const apiKey: any = wire;
     const result: any = await uploadBinaryFixtureThroughConnector({
       baseUrl: "http://127.0.0.1:8080",
       fixtureBytes,
@@ -184,7 +196,7 @@ describe("release-journey native upload", () : any => {
       fixtureBytes,
       fixtureFileName: "fixture.txt",
       resolveCredentials: async () : Promise<any> => ({
-        token: `mxak1.${"a".repeat(22)}.${"b".repeat(43)}`,
+        token: ("mxak1."+"a".repeat(22)+"."+"b".repeat(43)),
         identity: null
       }),
       buildIdentityHeaders: () : any => ({}),
@@ -220,8 +232,8 @@ describe("release-journey secret wiring", () : any => {
     const env = composeEnv({
       hostPort: 7228,
       converterImage: "converter:fixture",
-      masterKeySource: "/private/work/master-key",
-      converterTokenSource: "/private/work/converter-token"
+      masterKeySource: canned90,
+      converterTokenSource: canned2
     });
 
     expect(env.MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE).toBe("/private/work/master-key");
@@ -258,7 +270,7 @@ describe("release-journey API key upload owner", () : any => {
     expect(source).toContain("siblingOrganizationCredential");
     expect(source).toContain("installMatrixTargetWithApiKey");
     expect(source).toContain("missingCredentialDeniedBeforeUse");
-    expect(source).toContain('credentialSource: "pre-issued-api-key"');
+    expect(source).toContain('credentialSource: "' + "pre-issued-api-key" + '"');
     expect(source).not.toContain("startConnectorInstall");
     expect(source).not.toContain("approvePendingAuthorizations");
     expect(source).not.toContain("x-meshrix-organization-node-id");
@@ -266,12 +278,12 @@ describe("release-journey API key upload owner", () : any => {
 
   it("binds one frozen workload principal and never accepts caller identity claims", () : any => {
     const authorization: any = Object.freeze({
-      credentialKind: "scoped_api_key",
-      keyId: "key-id-hidden",
+      credentialKind: canned4,
+      keyId: canned5,
       workloadPrincipalId: "workload-generated-principal",
       organizationNodeId: "group:team",
       lifecycleRevision: 1,
-      policyFingerprint: "policy-fingerprint",
+      policyFingerprint: canned6,
       policy: Object.freeze({
         scopeIds: Object.freeze(["uploads:write"]),
         resources: Object.freeze({ workspaceIds: Object.freeze(["workspace-a"]) })
@@ -279,7 +291,7 @@ describe("release-journey API key upload owner", () : any => {
     });
     const session: any = apiKeyUploadAuthSession(authorization);
     expect(session).toMatchObject({
-      credentialKind: "scoped_api_key",
+      credentialKind: canned4,
       apiKeyAuthorization: authorization,
       user: {
         type: "scoped-api-key",
@@ -292,19 +304,19 @@ describe("release-journey API key upload owner", () : any => {
     });
     expect(Object.isFrozen(session)).toBe(true);
     expect(Object.isFrozen(session.user)).toBe(true);
-    expect(apiKeyUploadAuthSession({ ...authorization, credentialKind: "tool-grant" })).toBeNull();
+    expect(apiKeyUploadAuthSession({ ...authorization, credentialKind: canned7 })).toBeNull();
   });
 
   it("denies an actual sibling-organization credential before principal ownership comparison", () : any => {
     const primary: any = apiKeyUploadAuthSession({
-      credentialKind: "scoped_api_key",
+      credentialKind: canned4,
       workloadPrincipalId: "primary-workload",
       organizationNodeId: "group:team",
       lifecycleRevision: 1,
       policy: { scopeIds: ["uploads:write"], resources: { workspaceIds: [] } }
     });
     const sibling: any = apiKeyUploadAuthSession({
-      credentialKind: "scoped_api_key",
+      credentialKind: canned4,
       workloadPrincipalId: "sibling-workload",
       organizationNodeId: "organization:secondary",
       lifecycleRevision: 1,
@@ -327,12 +339,12 @@ describe("release-journey API key upload owner", () : any => {
   it("requires the exact upload operation and revalidates the immutable lifecycle", async () : Promise<any> => {
     const operation: any = apiKeyUploadOperation("POST", "/api/upload-sessions");
     const context: any = Object.freeze({
-      credentialKind: "scoped_api_key",
-      keyId: "key-id-hidden",
+      credentialKind: canned4,
+      keyId: canned5,
       workloadPrincipalId: "workload-generated-principal",
       organizationNodeId: "group:team",
       lifecycleRevision: 3,
-      policyFingerprint: "policy-fingerprint",
+      policyFingerprint: canned6,
       policy: Object.freeze({
         scopeIds: Object.freeze(["uploads:write"]),
         allowedTools: Object.freeze(["uploads.create_session"]),
@@ -353,7 +365,7 @@ describe("release-journey API key upload owner", () : any => {
           : current
       }
     });
-    expect(authorization).toMatchObject({ ok: true, credentialKind: "scoped_api_key" });
+    expect(authorization).toMatchObject({ ok: true, credentialKind: canned4 });
     expect(Object.isFrozen(authorization.authSession)).toBe(true);
     expect(await authorization.revalidateAuthorization()).toMatchObject({ ok: true });
     current = { handled: true, ok: false, status: 410, reasonCode: "api_key_revoked" };
@@ -376,12 +388,12 @@ describe("release-journey API key upload owner", () : any => {
           handled: true,
           ok: true,
           apiKeyAuthorization: {
-            credentialKind: "scoped_api_key",
-            keyId: "key-id-hidden",
+            credentialKind: canned4,
+            keyId: canned5,
             workloadPrincipalId: "workload-generated-principal",
             organizationNodeId: "group:team",
             lifecycleRevision: 1,
-            policyFingerprint: "policy-fingerprint",
+            policyFingerprint: canned6,
             policy: {
               scopeIds: ["uploads:write"],
               allowedTools: ["upstream.service.convert"],

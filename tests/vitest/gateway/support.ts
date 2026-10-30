@@ -3,6 +3,10 @@ import { createGateway, type GatewayOptions } from "@meshrix/gateway";
 import { createGatewayPolicy } from "@meshrix/capabilities/gateway-policy";
 import { createGatewayPermitAuthority } from "@meshrix/foundation/security/gateway-permit";
 import { mcpModernJsonRpcMessage, mcpModernRequestHeaders } from "@meshrix/protocols/mcp/modern-downstream/protocol";
+const canned1 = "auth-1";
+
+
+
 
 /** Tests deliberately inject governance; the distributed kernel has no platform fallback. */
 export function createTestGateway(options: GatewayOptions = {}) {
@@ -12,7 +16,7 @@ export function createTestGateway(options: GatewayOptions = {}) {
 export const context: AuthenticatedContext = Object.freeze({
   tenant: "tenant-demo",
   principal: "principal-demo",
-  authGeneration: "auth-1",
+  authGeneration: canned1,
   grant: Object.freeze({ revision: "grant-1", routes: "all" }),
   trace: Object.freeze({ traceparent: "00-demo" })
 });

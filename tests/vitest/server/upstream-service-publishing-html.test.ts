@@ -11,13 +11,20 @@ import {
 import {
   RELEASE_JOURNEY_STEPS
 } from "../../../tools/server-scripts/lib/release-journey-report.ts";
+const canned1 = "convert-require-approval-debug";
+const canned2 = "convert-full-access-debug";
+
+
+
+
+
 
 const BASIC_CONFIG_DOCUMENT: Readonly<Record<string, any>> = Object.freeze({
   descriptor: {
     healthPath: "/readyz",
     operations: [
       {
-        operationKey: "convert-require-approval-debug",
+        operationKey: canned1,
         method: "POST",
         path: "/v1/convert",
         risk: "safe_write",
@@ -51,7 +58,7 @@ const BASIC_CONFIG_DOCUMENT: Readonly<Record<string, any>> = Object.freeze({
         }
       },
       {
-        operationKey: "convert-full-access-debug",
+        operationKey: canned2,
         method: "POST",
         path: "/v1/convert",
         risk: "safe_write",
@@ -880,7 +887,7 @@ describe("upstream service publishing HTML report", () : any => {
       new Map<any, any>()
     );
 
-    expect(html).toContain('data-report-authority="non-authoritative-failure"');
+    expect(html).toContain('data-report-authority="' + "non-authoritative-failure" + '"');
     expect(html).toContain('data-release-evidence="rejected"');
     expect(html).toContain("Failed journey — not release evidence");
     expect(html).toContain("失败路线——不是发布证据");

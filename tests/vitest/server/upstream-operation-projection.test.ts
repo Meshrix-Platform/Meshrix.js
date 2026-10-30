@@ -4,6 +4,11 @@ import {
   upstreamProjectedOperationId
 } from "../../../packages/agents/src/upstream-gateway/operation-projection.ts";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+const canned1 = "records.read";
+const canned2 = "records-read";
+
+
+
 
 function service(serviceId?: any, overrides: Record<string, any> = {}) : any {
   return Object.freeze({
@@ -15,7 +20,7 @@ function service(serviceId?: any, overrides: Record<string, any> = {}) : any {
     credentialRefs: ["secret://verify/inventory"],
     disabled: false,
     operations: Object.freeze([{
-      operationKey: "records.read",
+      operationKey: canned1,
       protocol: "http",
       method: "GET",
       path: "/records",
@@ -55,7 +60,7 @@ describe("upstream Operation Permission projection", () : any => {
         sourceDigest: "b".repeat(64),
         serviceId,
         serviceRevision: 3,
-        operationKey: "records.read",
+        operationKey: canned1,
         dynamicCapability: {
           capabilityId: `cap:upstream:${serviceId}:records-read`,
           credentialBindingIds: [expect.stringMatching(/^credential:[a-f0-9]{16}$/u)]
@@ -64,7 +69,7 @@ describe("upstream Operation Permission projection", () : any => {
     });
     expect(first.targets.get(first.operations[0].id)).toEqual({
       serviceId,
-      operationKey: "records.read"
+      operationKey: canned1
     });
   });
 
@@ -79,8 +84,8 @@ describe("upstream Operation Permission projection", () : any => {
       collisionId,
       service(collisionId, {
         operations: [
-          { operationKey: "records.read", risk: "read_only", requiredScopes: ["gateway:read"] },
-          { operationKey: "records-read", risk: "read_only", requiredScopes: ["gateway:read"] }
+          { operationKey: canned1, risk: "read_only", requiredScopes: ["gateway:read"] },
+          { operationKey: canned2, risk: "read_only", requiredScopes: ["gateway:read"] }
         ]
       })
     ]]))).toThrow(/duplicate identities/u);

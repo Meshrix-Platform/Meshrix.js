@@ -4,6 +4,10 @@ import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upst
 import { installUpstreamRuntimeServices, structuredUpstreamServiceFixture } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 import { validateUpstreamContentPolicy } from "../../../packages/contracts/src/upstream-service-publishing.ts";
+const canned1 = "run";
+
+
+
 
 const SUBJECT = {
   type: "tool-grant",
@@ -52,7 +56,7 @@ function serviceWith(url: string, contentPolicy: any) : any {
     allowLocalNetwork: true,
     baseUrl: url,
     operations: [{
-      operationKey: "run",
+      operationKey: canned1,
       method: "POST",
       path: "/run",
       risk: "read_only",
@@ -74,18 +78,18 @@ describe("Parameter-level policy expressions", () => {
     })]);
     try {
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { amount: 20_000, count: 10 } }, SUBJECT
+        { serviceId: "guarded", operationKey: canned1, body: { amount: 20_000, count: 10 } }, SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { amount: 500, count: 999 } }, SUBJECT
+        { serviceId: "guarded", operationKey: canned1, body: { amount: 500, count: 999 } }, SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       const ok = await registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { amount: 500, count: 10 } }, SUBJECT);
+        { serviceId: "guarded", operationKey: canned1, body: { amount: 500, count: 10 } }, SUBJECT);
       expect(peer.hits.count).toBe(1);
       expect(ok.response.json.echoed.count).toBe(10);
       // A non-numeric selection never satisfies compare — allow side denies.
       await expect(registry.forward(
-        { serviceId: "guarded", operationKey: "run", body: { amount: 5, count: "ten" } }, SUBJECT
+        { serviceId: "guarded", operationKey: canned1, body: { amount: 5, count: "ten" } }, SUBJECT
       )).rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       expect(peer.hits.count).toBe(1);
     } finally {
@@ -117,12 +121,12 @@ describe("Parameter-level policy expressions", () => {
         { env: "prod", region: "us", name: "app", tenant: "t", override: true }
       ];
       for (const body of denied) {
-        await expect(registry.forward({ serviceId: "guarded", operationKey: "run", body }, SUBJECT))
+        await expect(registry.forward({ serviceId: "guarded", operationKey: canned1, body }, SUBJECT))
           .rejects.toMatchObject({ status: 403, reasonCode: "upstream_content_policy_denied" });
       }
       expect(peer.hits.count).toBe(0);
       const ok = await registry.forward(
-        { serviceId: "guarded", operationKey: "run",
+        { serviceId: "guarded", operationKey: canned1,
           body: { env: "prod", region: "eu", name: "release", tenant: "t" } }, SUBJECT);
       expect(ok.ok).toBe(true);
       expect(peer.hits.count).toBe(1);

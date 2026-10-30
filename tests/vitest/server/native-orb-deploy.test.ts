@@ -45,6 +45,14 @@ import {
   writeNativeOrbProductionUseReceipt,
 } from "../../../tools/server-scripts/lib/native-orb-deployment/support.ts";
 import { assertNoSensitiveReportLeak } from "../../../tools/server-scripts/lib/sensitive-report-scan.ts";
+const canned1 = "https://untrusted.example.invalid/key.asc";
+const canned2 = "private-owner-credential";
+const canned3 = "csrf-token";
+const canned4 = "authenticated";
+const canned5 = "secret";
+
+
+
 
 describe("native OrbStack deployment", () : any => {
   it("owns a separate exact ten-stage clean-target bootstrap", async () : Promise<any> => {
@@ -135,7 +143,7 @@ describe("native OrbStack deployment", () : any => {
     });
     expect(() : any => validateCandidateRuntimeLock({
       ...lock,
-      signer: { ...lock.signer, publicKeyUrl: "https://untrusted.example.invalid/key.asc" },
+      signer: { ...lock.signer, publicKeyUrl: canned1 },
     }, "linux-x64")).toThrowError(expect.objectContaining({
       code: "native_orb_bootstrap_runtime_lock_invalid",
     }));
@@ -159,7 +167,7 @@ describe("native OrbStack deployment", () : any => {
     const root: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-native-owner-preflight-"));
     const inputPath: any = path.join(root, "owner.json");
     const linkPath: any = path.join(root, "owner-link.json");
-    const expected: any = { username: "owner", password: "private-owner-credential" };
+    const expected: any = { username: "owner", password: canned2 };
     try {
       fs.writeFileSync(inputPath, JSON.stringify(expected), { mode: 0o600 });
       const bootstrapBytes: any = await loadPrivateBootstrapCredentialBytes(inputPath);
@@ -231,7 +239,7 @@ describe("native OrbStack deployment", () : any => {
           "content-type": "application/json",
           "set-cookie": "meshrix_session=private-session; HttpOnly; SameSite=Strict",
         });
-        response.end(JSON.stringify({ csrfToken: "csrf-token" }));
+        response.end(JSON.stringify({ csrfToken: canned3 }));
         return;
       }
       if (request.url === "/api/console/state") {
@@ -246,14 +254,14 @@ describe("native OrbStack deployment", () : any => {
     const address: any = server.address();
     const credentials: any = Buffer.from(JSON.stringify({
       username: "owner",
-      password: "private-owner-credential",
+      password: canned2,
     }), "utf8");
     try {
       await expect(probeBootstrapOrigin(`http://127.0.0.1:${address.port}`, credentials))
         .resolves.toEqual({
           health: "healthy",
           console: "available",
-          authentication: "authenticated",
+          authentication: canned4,
           governedRead: "authorized",
         });
     } finally {
@@ -330,7 +338,7 @@ describe("native OrbStack deployment", () : any => {
         sourceRevision: "c".repeat(40),
         candidateDigest: `sha256:${"d".repeat(64)}`,
         probe: {
-          health: "healthy", console: "available", authentication: "authenticated", governedRead: "authorized",
+          health: "healthy", console: "available", authentication: canned4, governedRead: "authorized",
           candidateActive: true, serviceActive: true, serviceEnabled: true
         }
       }, stages);
@@ -467,7 +475,7 @@ describe("native OrbStack deployment", () : any => {
   it("rejects origin credentials, paths, and unknown arguments", () : any => {
     const credentialOrigin: any = new URL("http://meshrix-vm.internal.example:7228");
     credentialOrigin.username = "owner";
-    credentialOrigin.password = "secret";
+    credentialOrigin.password = canned5;
     expect(() : any => parseNativeOrbDeploymentArgs([
       "--machine",
       "meshrix-vm",

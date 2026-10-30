@@ -1,6 +1,10 @@
 import { createInterface } from "node:readline";
 import { createGateway } from "../../../packages/gateway/src/index.ts";
 import { createModernDownstreamAdapter } from "../../../packages/protocols/mcp/modern-downstream/index.ts";
+const canned1 = "candidate-auth-1";
+
+
+
 
 const TARGET_PROTOCOL_VERSION = "2026-07-28";
 const RESOURCE_URI = "fixture://artifact/order-demo";
@@ -31,7 +35,7 @@ const descriptor = Object.freeze({
 const allowContext = Object.freeze({
   tenant: "tenant-demo",
   principal: "interop-candidate",
-  authGeneration: "candidate-auth-1",
+  authGeneration: canned1,
   grant: Object.freeze({ revision: "candidate-grant-1", routes: ["route.demo"], methods: ["tools/call"] }),
   trace: Object.freeze({ traceparent: "00-candidate" })
 });

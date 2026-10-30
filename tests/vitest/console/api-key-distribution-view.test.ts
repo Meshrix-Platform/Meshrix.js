@@ -10,6 +10,18 @@ import type {
   ApiKeyRecord,
 } from "../../../apps/console/lib/api-key-distribution-client";
 import type { OperationPermissionCatalog } from "../../../apps/console/lib/types/operation-permission";
+const canned1 = "catalog-a";
+const canned2 = "tools/call";
+const canned3 = "active";
+const canned4 = "key-public-id";
+const canned5 = "fingerprint-a";
+const canned6 = "policy-a";
+const canned7 = "catalog-b";
+const canned8 = "fixture-csrf";
+const canned9 = "same-origin";
+
+
+
 
 const ONE_TIME_SENTINEL = "opaque-one-time-credential";
 const futureExpiry = () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000);
@@ -27,13 +39,13 @@ const policy: ApiKeyPolicy = {
   },
   processIdentity: { mode: "optional" },
   limits: { maxUses: 10, requestsPerWindow: 3, windowSeconds: 60, maxConcurrentEffects: 1 },
-  catalogFingerprint: "catalog-a",
+  catalogFingerprint: canned1,
 };
 
 const catalog: OperationPermissionCatalog = {
   schemaVersion: "1",
   generatedAt: "2026-08-01T00:00:00.000Z",
-  fingerprint: "catalog-a",
+  fingerprint: canned1,
   scopes: [{ id: "scope-a", label: "Scope A", description: "" }],
   toolsets: [{ id: "toolset-a", label: "Toolset A", requiredScopes: ["scope-a"], maxRisk: "read_only" }],
   profiles: [{
@@ -75,7 +87,7 @@ const mcpBaseOperation = {
   toolsets: ["mcp-only"], requiredScopes: ["gateway:read"], risk: "read_only", readOnly: true, destructive: false,
   concurrency: { workloadClass: "light", maxParallel: 64, cost: 1 }, requiresApproval: false, approvalScope: "",
   timeoutMs: null, maxResultBytes: 1024, status: "active", tags: [], serviceId: "service-mcp",
-  upstreamProjectedOperation: true, protocol: "mcp", operationKey: "tools/call",
+  upstreamProjectedOperation: true, protocol: "mcp", operationKey: canned2,
   dynamicCapability: { capabilityId: "base-capability-not-selectable" },
 } as any;
 
@@ -120,19 +132,19 @@ function mcpIssuerScopes(tools = [discoveredMcpTool], status: "available" | "par
   };
 }
 
-function record(revision = 1, status: ApiKeyRecord["status"] = "active"): ApiKeyRecord {
+function record(revision = 1, status: ApiKeyRecord["status"] = canned3): ApiKeyRecord {
   return {
-    keyId: "key-public-id", displayPrefix: "mxak1.pub…", credentialFingerprint: "fingerprint-a",
+    keyId: canned4, displayPrefix: "mxak1.pub…", credentialFingerprint: canned5,
     workloadPrincipalId: "workload-principal-a", workloadDisplayName: "Build worker",
     organizationNodeId: "organization-a", organizationBreadcrumb: ["Group", "Organization A"],
-    policy, policyFingerprint: "policy-a", status, lifecycleRevision: revision, useCount: 2,
+    policy, policyFingerprint: canned6, status, lifecycleRevision: revision, useCount: 2,
     createdAt: "2026-08-01T00:00:00.000Z", rotatedAt: null, revokedAt: null,
     expiresAt: futureExpiry().toISOString(),
   };
 }
 
 const scopes: ApiKeyIssuerScopes & { catalogFingerprint: string; serverAudience: string } = {
-  organizationRevision: 1, authorizationRevision: 2, catalogFingerprint: "catalog-a", serverAudience: "server-a",
+  organizationRevision: 1, authorizationRevision: 2, catalogFingerprint: canned1, serverAudience: "server-a",
   eligibleRoots: [{ nodeId: "organization-a", name: "Organization A", breadcrumb: ["Group", "Organization A"], nodeType: "organization" }],
   eligibleNodes: [{ nodeId: "organization-a", name: "Organization A", breadcrumb: ["Group", "Organization A"], nodeType: "organization" }],
 };
@@ -220,7 +232,7 @@ describe("API key distribution console", () => {
         scopeIds: ["scope-a"],
         serviceIds: ["service-a"],
         capabilityIds: ["capability-a", "capability-b"],
-        catalogFingerprint: "catalog-a",
+        catalogFingerprint: canned1,
         processIdentity: { mode: "optional" },
         audience: expect.objectContaining({
           serverAudience: "server-a",
@@ -384,7 +396,7 @@ describe("API key distribution console", () => {
   it("blocks create when catalog fingerprint disagrees with issuer authority", async () => {
     const controller = useConsoleApiKeyDistributionController({
       client: client({
-        getCatalog: vi.fn(async () => ({ ...catalog, fingerprint: "catalog-b" })),
+        getCatalog: vi.fn(async () => ({ ...catalog, fingerprint: canned7 })),
       }) as any,
       confirmAction: vi.fn(async () => true),
     });
@@ -400,7 +412,7 @@ describe("API key distribution console", () => {
     const revoked = { ...active, status: "revoked" as const, lifecycleRevision: 2, revokedAt: new Date().toISOString() };
     const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(
       url === "/api/auth/session"
-        ? { csrfToken: "fixture-csrf" }
+        ? { csrfToken: canned8 }
         : { schemaVersion: "v0.0.1:schema:definition-1", record: revoked },
     ), { headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
@@ -414,7 +426,7 @@ describe("API key distribution console", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/operation-permission/v1/api-keys/key-public-id/revoke",
       expect.objectContaining({
-        method: "POST", credentials: "same-origin",
+        method: "POST", credentials: canned9,
         headers: expect.objectContaining({ "x-meshrix-safety-confirm": "true", "x-meshrix-csrf": "fixture-csrf" }),
         body: JSON.stringify({ expectedLifecycleRevision: 1, reasonCode: "administrator_revoked" }),
       }),

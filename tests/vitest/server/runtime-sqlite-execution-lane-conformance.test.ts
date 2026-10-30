@@ -14,6 +14,11 @@ import { createApiKeyDistributionProvider } from "../../../packages/capabilities
 import { createMemoryApiKeyVerifierKeyProvider } from "../../../packages/foundation/src/security/authorization/api-key-verifier-key-provider.ts";
 import { operationAuditTestProjectionOptions } from "./support/operation-audit-test-key.ts";
 import { createSqliteExecutionLane } from "../../../packages/foundation/src/storage/sqlite-execution-lane.ts";
+const canned1 = "one";
+const canned2 = "abrupt-owner-catalog";
+
+
+
 
 const roots: any[] = [];
 
@@ -199,7 +204,7 @@ describe("typed SQLite execution lane", () : any => {
       const admission: any = registry.resolveQueueDefinitionForEnqueue({
         queueDefinitionId: definition.queueDefinitionId,
         scope: {},
-        dedupeKey: "one"
+        dedupeKey: canned1
       });
       const enqueued: any = await store.enqueue({
         ...admission,
@@ -345,7 +350,7 @@ describe("typed SQLite execution lane", () : any => {
     const resourceContext = { workspaceId: "workspace-1" };
     const operation = { toolId: "tools.echo", risk: "read_only", resourceContext };
     const catalog = {
-      fingerprint: "abrupt-owner-catalog",
+      fingerprint: canned2,
       tools: [{
         id: "tools.echo",
         toolsets: ["meshrix.runtime.read"],
@@ -395,7 +400,7 @@ describe("typed SQLite execution lane", () : any => {
             },
             processIdentity: { mode: "optional" },
             limits: { maxUses: 3, requestsPerWindow: 2, windowSeconds: 60, maxConcurrentEffects: 1 },
-            catalogFingerprint: "abrupt-owner-catalog"
+            catalogFingerprint: "${canned2}"
           }
         });
         const authorization = await provider.authenticateRuntime({

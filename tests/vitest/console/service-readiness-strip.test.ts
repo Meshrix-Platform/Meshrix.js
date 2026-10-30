@@ -7,6 +7,15 @@ import {
   SERVICE_READINESS_LABEL_KEYS,
   SERVICE_READINESS_STATE_LABEL_KEYS,
 } from "../../../apps/console/views/admin/upstream-gateway/useServiceReadiness";
+const canned1 = "inventory.get";
+const canned2 = "fixture-fingerprint";
+const canned3 = "grt_fx";
+const canned4 = "key-1";
+const canned5 = "fp";
+const canned6 = "key-x";
+
+
+
 
 const SERVICE_ID = "inventory-api";
 
@@ -17,7 +26,7 @@ function serviceFixture(serviceId = SERVICE_ID) : any {
     baseUrl: "https://inventory.example.invalid:8443",
     healthPath: "/health",
     disabled: false,
-    operations: [{ operationKey: "inventory.get", method: "GET", path: "/inventory", risk: "read_only" }],
+    operations: [{ operationKey: canned1, method: "GET", path: "/inventory", risk: "read_only" }],
   };
 }
 
@@ -25,7 +34,7 @@ function catalogFixture(tools: any[] = []) : any {
   return {
     schemaVersion: "v1",
     generatedAt: "2026-08-05T00:00:00.000Z",
-    fingerprint: "fixture-fingerprint",
+    fingerprint: canned2,
     scopes: [],
     toolsets: [],
     profiles: [],
@@ -41,7 +50,7 @@ function grantFixture(overrides: any = {}) : any {
     scopes: [],
     toolsets: [],
     toolAllow: [],
-    tokenPrefix: "grt_fx",
+    tokenPrefix: canned3,
     hasToken: true,
     createdAt: "2026-08-05T00:00:00.000Z",
     updatedAt: "2026-08-05T00:00:00.000Z",
@@ -52,14 +61,14 @@ function grantFixture(overrides: any = {}) : any {
 
 function apiKeyFixture(serviceIds: string[] = [SERVICE_ID]) : any {
   return {
-    keyId: "key-1",
+    keyId: canned4,
     displayPrefix: "mx_fx",
-    credentialFingerprint: "fp",
+    credentialFingerprint: canned5,
     workloadPrincipalId: "workload-1",
     workloadDisplayName: "Fixture workload",
     organizationNodeId: "org-1",
     policy: { serviceIds, capabilityIds: [], toolsetIds: [], allowedTools: [], deniedTools: [] },
-    policyFingerprint: "fp",
+    policyFingerprint: canned5,
     status: "active",
     lifecycleRevision: 1,
     useCount: 0,
@@ -220,21 +229,21 @@ describe("service readiness strip", () : any => {
     const otherServiceOnly: any = stagesFor({ apiKeys: [apiKeyFixture(["billing-api"])] });
     expect(stageById(otherServiceOnly, "keyIssued").state).toBe("pending");
 
-    const withoutPolicy: any = stagesFor({ apiKeys: [{ keyId: "key-x" }] });
+    const withoutPolicy: any = stagesFor({ apiKeys: [{ keyId: canned6 }] });
     expect(stageById(withoutPolicy, "keyIssued").state).toBe("pending");
   });
 
   it("recognizes live scoped MCP-key authorization without requiring a separate generic grant", () => {
-    const key = apiKeyFixture();
-    key.policy.allowedTools = ["upstream.inventory.inspect_inventory"];
+    const grant = apiKeyFixture();
+    grant.policy.allowedTools = ["upstream.inventory.inspect_inventory"];
     const mcpService = { ...serviceFixture(), serviceProtocol: "mcp" };
-    expect(stageById(stagesFor({ service: mcpService, apiKeys: [key] }), "grantExists").state).toBe("done");
+    expect(stageById(stagesFor({ service: mcpService, apiKeys: [grant] }), "grantExists").state).toBe("done");
     for (const invalid of [
-      { ...key, status: "revoked" },
-      { ...key, status: "expired" },
-      { ...key, expiresAt: "2000-01-01T00:00:00Z" },
-      { ...key, policy: { ...key.policy, allowedTools: [] } },
-      { ...key, policy: { ...key.policy, serviceIds: ["other-service"] } },
+      { ...grant, status: "revoked" },
+      { ...grant, status: "expired" },
+      { ...grant, expiresAt: "2000-01-01T00:00:00Z" },
+      { ...grant, policy: { ...grant.policy, allowedTools: [] } },
+      { ...grant, policy: { ...grant.policy, serviceIds: ["other-service"] } },
     ]) {
       expect(stageById(stagesFor({ service: mcpService, catalog: catalogFixture([]), grants: [], apiKeys: [invalid] }), "grantExists").state).toBe("pending");
     }

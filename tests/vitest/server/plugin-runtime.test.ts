@@ -13,6 +13,8 @@ import {
   validatePluginDeployment
 } from "../../../packages/foundation/src/module-system/plugin-registry.ts";
 import { activatePluginDeployment } from "../../../packages/foundation/src/module-system/plugin-runtime.ts";
+
+const eventSym: any = Symbol.for("meshrix.plugin-runtime.test-events");
 import {
   createMountManager,
   normalizeRuntimeOptions
@@ -453,7 +455,7 @@ export async function activatePlugin({ manifest }) {
 
   it("never imports disabled modules and closes selected modules in reverse dependency order", async () : Promise<any> => {
     const root: any = await tempRoot();
-    const eventKey: any = Symbol.for("meshrix.plugin-runtime.test-events");
+    const eventKey: any = eventSym;
     globalThis[eventKey] = [];
     await writePlugin(root, manifest("base", {
       runtime: { module: "./runtime.mjs" },
@@ -512,7 +514,7 @@ export async function activatePlugin({ manifest, onClose }) {
 
   it("treats verified deployment as startup authorization for manifest-declared Host capabilities", async () : Promise<any> => {
     const root: any = await tempRoot();
-    const eventKey: any = Symbol.for("meshrix.plugin-runtime.test-events");
+    const eventKey: any = eventSym;
     globalThis[eventKey] = [];
     const source: any = `
 const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
@@ -680,7 +682,7 @@ export async function activatePlugin({ manifest }) {
 
   it("unwinds earlier and in-progress resources when activation fails", async () : Promise<any> => {
     const root: any = await tempRoot();
-    const eventKey: any = Symbol.for("meshrix.plugin-runtime.test-events");
+    const eventKey: any = eventSym;
     globalThis[eventKey] = [];
     await writePlugin(root, manifest("alpha", {
       runtime: { module: "./runtime.mjs" }
@@ -720,7 +722,7 @@ export async function activatePlugin({ onClose }) {
 
   it("surfaces close failure only after every registered cleanup has run", async () : Promise<any> => {
     const root: any = await tempRoot();
-    const eventKey: any = Symbol.for("meshrix.plugin-runtime.test-events");
+    const eventKey: any = eventSym;
     globalThis[eventKey] = [];
     await writePlugin(root, manifest("demo", {
       runtime: { module: "./runtime.mjs" }

@@ -3,6 +3,12 @@ import { request as httpRequest } from "node:http";
 import test from "node:test";
 
 import { provision, startService } from "./helpers.mjs";
+const cannedK = "ik-openai-1";
+const cannedA = "model-gateway-test-admin-secret-0000000000000000000000";
+const cannedB = "model-gateway-test-reader-secret-00000000000000000000";
+const cannedC = "model-gateway-test-caller-secret-00000000000000000000";
+const cannedD = "model-gateway-test-empty-secret-000000000000000000000";
+
 
 async function openAiCall(service, body, headers = {}) {
   return fetch(`${service.baseUrl}/v1/chat/completions`, {
@@ -72,7 +78,7 @@ test("native OpenAI chat completions settle exactly once against an immutable pr
   const first = await openAiCall(service, {
     model: "model-1",
     messages: [{ role: "user", content: "hello fixture" }]
-  }, { "idempotency-key": "ik-openai-1" });
+  }, { "idempotency-key": cannedK });
   assert.equal(first.status, 200);
   const firstBody = await first.json();
   assert.equal(firstBody.object, "chat.completion");
@@ -97,7 +103,7 @@ test("native OpenAI chat completions settle exactly once against an immutable pr
   const replay = await openAiCall(service, {
     model: "model-1",
     messages: [{ role: "user", content: "hello fixture" }]
-  }, { "idempotency-key": "ik-openai-1" });
+  }, { "idempotency-key": cannedK });
   assert.equal(replay.status, 200);
   assert.deepEqual(await replay.json(), firstBody);
   assert.equal(service.fixture.openAiCalls(), 1, "idempotent replay must not cause a second egress");
@@ -288,22 +294,22 @@ test("management reads require a management scope while discovery stays an autho
   const clients = {
     "service-admin": {
       subject: "direct-client",
-      secret: "model-gateway-test-admin-secret-0000000000000000000000",
+      secret: cannedA,
       scopes: ["model:call", "model:manage", "ledger:read"]
     },
     reader: {
       subject: "reader-subject",
-      secret: "model-gateway-test-reader-secret-00000000000000000000",
+      secret: cannedB,
       scopes: ["model:read"]
     },
     caller: {
       subject: "caller-subject",
-      secret: "model-gateway-test-caller-secret-00000000000000000000",
+      secret: cannedC,
       scopes: ["model:call"]
     },
     empty: {
       subject: "empty-subject",
-      secret: "model-gateway-test-empty-secret-000000000000000000000",
+      secret: cannedD,
       scopes: []
     }
   };

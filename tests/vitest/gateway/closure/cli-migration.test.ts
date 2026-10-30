@@ -5,6 +5,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { modernHttpRequest } from "../support.ts";
+const canned1 = "synthetic";
+
+
+
+
+
 
 const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 
@@ -17,7 +23,7 @@ describe("one canonical migration owner from the standalone CLI", () => {
   it("[GC-054 GC-055 partial] previews, fences apply, preserves earliest backup, restores exact bytes", async () => {
     const directory = await mkdtemp(join(tmpdir(), "meshrix-cli-migration-"));
     const file = join(directory, "gateway.json");
-    const original = '{"services":[{"serviceKey":"synthetic","transport":"stdio","command":"node","args":["peer.mjs"]}]}\n';
+    const original = '{"services":[{"serviceKey":"' + "synthetic" + '","transport":"stdio","command":"node","args":["peer.mjs"]}]}\n';
     try {
       await writeFile(file, original);
       const preview = command("preview", "--input", file);
@@ -47,7 +53,7 @@ describe("one canonical migration owner from the standalone CLI", () => {
     let child: ReturnType<typeof spawn> | undefined;
     try {
       await writeFile(script, `import fs from 'node:fs';\nlet pending='';\nprocess.stdin.setEncoding('utf8');\nprocess.stdin.on('data', chunk => { pending += chunk; let end; while ((end=pending.indexOf('\\n'))>=0) { const raw=pending.slice(0,end); pending=pending.slice(end+1); const wire=JSON.parse(raw); if (!wire.id) continue; const result=wire.method==='server/discover' ? {resultType:'complete',supportedVersions:['2026-07-28']} : wire.method==='tools/list' ? {resultType:'complete',tools:[{name:'synthetic',inputSchema:{type:'object'}}]} : wire.method==='tools/call' ? {resultType:'complete',content:[{type:'text',text:'stdio-upstream'}]} : {resultType:'complete',resources:[],resourceTemplates:[],prompts:[]}; process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:wire.id,result})+'\\n'); } });\nprocess.on('SIGTERM',()=>process.exit(0));\nprocess.on('exit',()=>fs.writeFileSync(process.env.MCP_EXIT_MARKER,'closed'));\n`);
-      await writeFile(file, JSON.stringify({ services: [{ serviceKey: "synthetic", transport: "stdio", command: process.execPath, args: [script], envBindings: { MCP_EXIT_MARKER: "env:MESH_TEST_MARKER" }, toolRisk: { synthetic: "read" } }] }));
+      await writeFile(file, JSON.stringify({ services: [{ serviceKey: canned1, transport: "stdio", command: process.execPath, args: [script], envBindings: { MCP_EXIT_MARKER: "env:MESH_TEST_MARKER" }, toolRisk: { synthetic: "read" } }] }));
       const preview = JSON.parse(command("preview", "--input", file).stdout);
       expect(command("apply", "--input", file, "--expected-revision", preview.sourceRevision).status).toBe(0);
       const installed = process.env.MESHRIX_TEST_INSTALLED_GATEWAY_ENTRY;

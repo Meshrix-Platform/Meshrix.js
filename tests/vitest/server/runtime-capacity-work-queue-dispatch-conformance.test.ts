@@ -10,6 +10,10 @@ import {
   createSqliteWorkQueueStore
 } from "../../../packages/foundation/src/work-queue/index.ts";
 import { createQueueApplicationPort } from "../../../packages/server-runtime/src/composition/queue-application-port.ts";
+const canned1 = "partial-1";
+
+
+
 
 const roots: any[] = [];
 
@@ -113,7 +117,7 @@ describe("runtime capacity work queue dispatch conformance", () : any => {
       },
       scope: {},
       schedulingScope: {},
-      dedupeKey: "partial-1",
+      dedupeKey: canned1,
       workItemId: "partial-1",
       payloadRef: { kind: "dispatch-conformance", workItemId: "partial-1" },
       ownerRef: { capability: "runtime-capacity-dispatch-conformance" },

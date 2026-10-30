@@ -5,6 +5,10 @@ import {
   MAX_UPSTREAM_ENDPOINTS,
   normalizeEndpoints
 } from "../../../packages/agents/src/upstream-gateway/support.ts";
+const canned1 = "read";
+
+
+
 
 function controllerWithState() : any {
   const trafficBuckets: any = new Map<any, any>();
@@ -74,7 +78,7 @@ describe("upstream endpoint traffic state retirement", () : any => {
       { endpointId: "medium", weight: 3 },
       { endpointId: "light", weight: 2 }
     ]);
-    const operation: Record<string, any> = { operationKey: "read", protocol: "http" };
+    const operation: Record<string, any> = { operationKey: canned1, protocol: "http" };
     const selected: any[] = [];
     for (let index: any = 0; index < 100; index += 1) {
       selected.push(await controller.withTrafficSlot(
@@ -105,7 +109,7 @@ describe("upstream endpoint traffic state retirement", () : any => {
       { endpointId: "heavy", weight: 10 },
       { endpointId: "light", weight: 1 }
     ]);
-    const operation: Record<string, any> = { operationKey: "read", protocol: "http" };
+    const operation: Record<string, any> = { operationKey: canned1, protocol: "http" };
     endpointCircuits.set("svc_weighted::read::heavy", {
       consecutiveFailures: 3,
       openedUntilMs: Date.now() + 60_000
@@ -145,7 +149,7 @@ describe("upstream endpoint traffic state retirement", () : any => {
       })
     );
     const service: any = serviceWithEndpoints(endpoints);
-    const operation: Record<string, any> = { operationKey: "read", protocol: "http" };
+    const operation: Record<string, any> = { operationKey: canned1, protocol: "http" };
     for (const endpoint of endpoints) {
       endpointCircuits.set(`svc_weighted::read::${endpoint.endpointId}`, {
         consecutiveFailures: 3,
@@ -165,7 +169,7 @@ describe("upstream endpoint traffic state retirement", () : any => {
   it("returns a stable reason code when an open circuit denies traffic", async () : Promise<any> => {
     const { controller, endpointCircuits } = controllerWithState();
     const service: any = serviceWithEndpoints([{ endpointId: "primary", weight: 1 }]);
-    const operation: Record<string, any> = { operationKey: "read", protocol: "http" };
+    const operation: Record<string, any> = { operationKey: canned1, protocol: "http" };
     endpointCircuits.set("svc_weighted::read::primary", {
       consecutiveFailures: 3,
       openedUntilMs: Date.now() + 60_000
@@ -191,7 +195,7 @@ describe("upstream endpoint traffic state retirement", () : any => {
     ]);
     const selected: any = controller.selectEndpointTraffic(
       service,
-      { operationKey: "read", protocol: "http" },
+      { operationKey: canned1, protocol: "http" },
       { consume: true }
     );
     expect(selected).toMatchObject({

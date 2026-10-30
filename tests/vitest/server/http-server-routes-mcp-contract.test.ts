@@ -9,6 +9,10 @@ import {
 } from "../../../packages/protocols/mcp/notifications.ts";
 import { createHttpServerRequestHandler } from "../../../apps/server/runtime/http-server-routes.ts";
 import { context, modernHttpRequest } from "../gateway/support.ts";
+const canned1 = "scoped_api_key";
+
+
+
 
 class CapturedResponse extends EventEmitter {
   readonly headers: Record<string, unknown> = {};
@@ -111,7 +115,7 @@ describe("ordinary production /mcp route enforces the modern request contract", 
       grant: Object.freeze({ revision: `policy-${workloadPrincipalId}`, routes: "all" }),
       metadata: Object.freeze({
         authorization: Object.freeze({
-          credentialKind: "scoped_api_key",
+          credentialKind: canned1,
           apiKeyAuthorization: Object.freeze({ keyId, workloadPrincipalId })
         })
       })

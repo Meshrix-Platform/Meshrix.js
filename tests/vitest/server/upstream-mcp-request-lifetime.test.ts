@@ -5,6 +5,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createUpstreamMcpSessionManager } from "../../../packages/protocols/mcp/upstream-mcp-gateway-transport.ts";
 import { createStdioMcpSession } from "../../../packages/protocols/mcp/upstream-mcp-stdio-session.ts";
+const canned1 = "request-lifetime-shared";
+const canned2 = "request-lifetime-invalid-config";
+const canned3 = "request-lifetime-configured";
+const canned4 = "request-lifetime-cancellation";
+const canned5 = "request-lifetime-stdio";
+
+
+
 
 function createWaitableLog() : any {
   const items: any[] = [];
@@ -177,7 +185,7 @@ describe("upstream MCP request lifetime", () : any => {
       maxConcurrentRequestsPerSession: 4
     });
     const sharedConfig: Record<string, any> = {
-      sessionKey: "request-lifetime-shared",
+      sessionKey: canned1,
       mcp: {
         transport: "streamable-http",
         url: "https://mcp.fixture.invalid/mcp"
@@ -185,7 +193,7 @@ describe("upstream MCP request lifetime", () : any => {
     };
     try {
       const invalidConfigBudget: any = track(manager.callTool({
-        sessionKey: "request-lifetime-invalid-config",
+        sessionKey: canned2,
         mcp: { ...sharedConfig.mcp, timeoutMs: 2_147_483_648 }
       }, { name: "invalid-config-budget" }));
       const invalidCallBudget: any = track(manager.callTool(
@@ -205,7 +213,7 @@ describe("upstream MCP request lifetime", () : any => {
         { timeoutMs: 35_000 }
       ));
       const configuredBudget: any = track(manager.callTool({
-        sessionKey: "request-lifetime-configured",
+        sessionKey: canned3,
         mcp: { ...sharedConfig.mcp, timeoutMs: 50_000 }
       }, { name: "configured-budget" }));
 
@@ -245,7 +253,7 @@ describe("upstream MCP request lifetime", () : any => {
       maxConcurrentRequestsPerSession: 2
     });
     const config: Record<string, any> = {
-      sessionKey: "request-lifetime-cancellation",
+      sessionKey: canned4,
       mcp: {
         transport: "streamable-http",
         url: "https://mcp.fixture.invalid/mcp",
@@ -384,7 +392,7 @@ describe("upstream MCP request lifetime", () : any => {
       maxConcurrentRequestsPerSession: 2
     });
     const config: Record<string, any> = {
-      sessionKey: "request-lifetime-stdio",
+      sessionKey: canned5,
       mcp: {
         transport: "stdio",
         command: "request-lifetime-fixture",

@@ -6,6 +6,9 @@ import { activatePlugin, validateModelGatewayConfiguration } from "../runtime.mj
 
 const manifest = JSON.parse(fs.readFileSync(new URL("../plugin.json", import.meta.url), "utf8"));
 
+const cannedForbidden = "forbidden";
+const cannedCall = "call-one";
+
 function authorizedCall() {
   return Object.freeze({
     auth: Object.freeze({ authenticated: true }),
@@ -28,7 +31,7 @@ test("configuration is closed and requires an explicit service reference when en
     120_000);
   assert.throws(() => validateModelGatewayConfiguration({ enabled: true, serviceRef: null }));
   assert.throws(() => validateModelGatewayConfiguration({ enabled: true, serviceRef: "svc_model", unexpected: true }));
-  assert.throws(() => validateModelGatewayConfiguration({ enabled: true, serviceRef: "svc_model", token: "forbidden" }));
+  assert.throws(() => validateModelGatewayConfiguration({ enabled: true, serviceRef: "svc_model", token: cannedForbidden }));
   assert.throws(() => validateModelGatewayConfiguration({ enabled: true, serviceRef: "svc_model", timeoutMs: 120_001 }));
 });
 
@@ -77,7 +80,7 @@ test("the configured service reference cannot be overridden and cancellation is 
       modelRef: "model.primary",
       providerRef: "provider.primary",
       inputRefs: ["input:one"],
-      idempotencyKey: "call-one",
+      idempotencyKey: cannedCall,
       deadlineMs: 5_000,
       stream: false
     },
@@ -114,7 +117,7 @@ test("per-call deadline becomes a Host timeout and never enters provider data", 
       modelRef: "model.primary",
       providerRef: "provider.primary",
       inputRefs: ["input:one"],
-      idempotencyKey: "call-one",
+      idempotencyKey: cannedCall,
       deadlineMs: 5_000,
       stream: false
     },

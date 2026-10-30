@@ -5,6 +5,10 @@ import path from "node:path";
 
 import { createPluginArtifactAuthority } from "../../../../packages/foundation/src/module-system/plugin-artifact-authority.ts";
 import { createPluginLifecycleStatePort } from "../../../../packages/foundation/src/module-system/plugin-lifecycle-state-port.ts";
+const canned1 = "secret://fixture/plugin-artifact";
+
+
+
 
 function canonicalJson(value?: any) : any {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -49,7 +53,7 @@ export async function stagePluginArtifactFixture({
     artifactRoot,
     trustedPublicKeys: { [keyId]: publicKey.export({ format: "jwk" }) },
     artifactSigner: signer,
-    secretRef: "secret://fixture/plugin-artifact",
+    secretRef: canned1,
     coreContractDigest: `sha256:${"f".repeat(64)}`
   });
   const manifests: any = new Map<any, any>();

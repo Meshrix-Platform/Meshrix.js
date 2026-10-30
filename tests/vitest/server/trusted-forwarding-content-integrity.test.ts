@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import { digestGovernedExecutionRequest } from "#meshrix/foundation/security/governed-execution-permit-authority";
 import { riskControlInputHash } from "#meshrix/server-runtime/composition/dispatch-operation-risk-control";
 import { proxyApiRequest } from "../../../apps/server/runtime/http-server-proxy.ts";
+const canned1 = "fixture-credential";
+
+
+
 
 describe("trusted forwarding content integrity", () : any => {
   it("does not collapse semantic input beyond former truncation limits", () : any => {
@@ -80,7 +84,7 @@ describe("trusted forwarding content integrity", () : any => {
           method: "GET",
           url: "/fixture",
           headers: {
-            authorization: "fixture-credential",
+            authorization: canned1,
             cookie: "fixture-cookie=original",
             accept: "text/plain"
           }

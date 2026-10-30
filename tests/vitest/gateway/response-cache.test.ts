@@ -4,6 +4,10 @@ import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upst
 import { installUpstreamRuntimeServices, structuredUpstreamServiceFixture } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
 import { validateUpstreamResponseCache } from "../../../packages/contracts/src/upstream-service-publishing.ts";
+const canned1 = "lookup";
+
+
+
 
 const SUBJECT = {
   type: "tool-grant",
@@ -45,7 +49,7 @@ function cachedService(url: string, overrides: Record<string, any> = {}) : any {
     allowLocalNetwork: true,
     baseUrl: url,
     operations: [{
-      operationKey: "lookup",
+      operationKey: canned1,
       method: "POST",
       path: "/lookup",
       risk: "read_only",
@@ -70,9 +74,9 @@ describe("Upstream response cache", () => {
     installUpstreamRuntimeServices(registry, [cachedService(peer.url)]);
     try {
       const first = await registry.forward(
-        { serviceId: "cached", operationKey: "lookup", body: { q: "alpha" } }, SUBJECT);
+        { serviceId: "cached", operationKey: canned1, body: { q: "alpha" } }, SUBJECT);
       const second = await registry.forward(
-        { serviceId: "cached", operationKey: "lookup", body: { q: "alpha" } }, SUBJECT);
+        { serviceId: "cached", operationKey: canned1, body: { q: "alpha" } }, SUBJECT);
       expect(peer.hits.count).toBe(1);
       expect(claims).toBe(1);
       expect(first.response.json.echoed.q).toBe("alpha");
@@ -83,7 +87,7 @@ describe("Upstream response cache", () => {
       expect(second.auditId).not.toBe(first.auditId);
       // A distinct input is a distinct entry.
       await registry.forward(
-        { serviceId: "cached", operationKey: "lookup", body: { q: "beta" } }, SUBJECT);
+        { serviceId: "cached", operationKey: canned1, body: { q: "beta" } }, SUBJECT);
       expect(peer.hits.count).toBe(2);
       expect(claims).toBe(2);
     } finally {
@@ -100,9 +104,9 @@ describe("Upstream response cache", () => {
     });
     installUpstreamRuntimeServices(registry, [cachedService(peer.url, { responseCache: { ttlMs: 40 } })]);
     try {
-      await registry.forward({ serviceId: "cached", operationKey: "lookup", body: { q: "x" } }, SUBJECT);
+      await registry.forward({ serviceId: "cached", operationKey: canned1, body: { q: "x" } }, SUBJECT);
       await new Promise((resolve) => setTimeout(resolve, 60));
-      await registry.forward({ serviceId: "cached", operationKey: "lookup", body: { q: "x" } }, SUBJECT);
+      await registry.forward({ serviceId: "cached", operationKey: canned1, body: { q: "x" } }, SUBJECT);
       expect(peer.hits.count).toBe(2);
     } finally {
       await registry.close();
@@ -123,7 +127,7 @@ describe("Upstream response cache", () => {
       allowLocalNetwork: true,
       baseUrl: peer.url,
       operations: [{
-        operationKey: "lookup",
+        operationKey: canned1,
         method: "POST",
         path: "/lookup",
         risk: "safe_write",
@@ -138,8 +142,8 @@ describe("Upstream response cache", () => {
       dynamicCapabilities: ["cap:upstream:cached:lookup"]
     };
     try {
-      await registry.forward({ serviceId: "cached", operationKey: "lookup", body: { q: "x" } }, writerSubject);
-      const again = await registry.forward({ serviceId: "cached", operationKey: "lookup", body: { q: "x" } }, writerSubject);
+      await registry.forward({ serviceId: "cached", operationKey: canned1, body: { q: "x" } }, writerSubject);
+      const again = await registry.forward({ serviceId: "cached", operationKey: canned1, body: { q: "x" } }, writerSubject);
       expect(peer.hits.count).toBe(2);
       expect(again.cache?.hit).not.toBe(true);
     } finally {

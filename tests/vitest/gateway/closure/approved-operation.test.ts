@@ -4,9 +4,13 @@ import { publicUpstreamMcpTool } from "../../../../packages/agents/src/upstream-
 import { createToolSkillManagementProvider } from "../../../../packages/capabilities/src/skills/tool-skill-management-provider.ts";
 import { modernHttpRequest } from "../support.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "tools/call";
+
+
+
 
 const tool = publicUpstreamMcpTool({ schemaPort: createGatewaySchemaPort(),
-  service: { serviceId: "synthetic", operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "repair_write", requiredScopes: ["gateway:write"], requiresApproval: true }] },
+  service: { serviceId: "synthetic", operations: [{ operationKey: canned1, protocol: "mcp", risk: "repair_write", requiredScopes: ["gateway:write"], requiresApproval: true }] },
   tool: { name: "destructive", inputSchema: { type: "object", properties: { value: { type: "string" } } } }
 });
 

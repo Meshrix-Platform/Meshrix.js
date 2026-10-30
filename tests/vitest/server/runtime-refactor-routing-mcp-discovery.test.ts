@@ -19,6 +19,12 @@ import {
 } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
 import { installUpstreamRuntimeServices } from "../../helpers/upstream-runtime-snapshot.ts";
 import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "fp-2";
+const canned2 = "tools/call";
+const canned3 = "read";
+
+
+
 
 const cleanupTasks: any[] = [];
 
@@ -155,7 +161,7 @@ describe("runtime refactor routing and MCP discovery", () : any => {
     });
     expect(registryGetTool).not.toHaveBeenCalled();
 
-    fingerprint = "fp-2";
+    fingerprint = canned1;
     await provider.executeTool({ toolId: "kernel.workspace.read", authorization });
     expect(provider.getRefactorInstrumentation()).toMatchObject({
       snapshotBuildCount: 2,
@@ -203,7 +209,7 @@ describe("runtime refactor routing and MCP discovery", () : any => {
       label: "Discovery fixture",
       // Operator-configured policy is the only source of the required scope; the upstream
       // tool's own readOnlyHint annotation is reported but never grants access.
-      operations: [{ operationKey: "tools/call", protocol: "mcp", risk: "read_only" }],
+      operations: [{ operationKey: canned2, protocol: "mcp", risk: "read_only" }],
       mcp: {
         transport: "http",
         url: "https://example.invalid:443/mcp",
@@ -307,7 +313,7 @@ describe("runtime refactor routing and MCP discovery", () : any => {
         runtime.recordMetric({ serviceId: "fixture", statusCode: 200 });
         runtime.appendAudit("fixture.forwarded", {
           serviceId: "fixture",
-          operationKey: "read",
+          operationKey: canned3,
           summary: "x".repeat(2_000)
         });
       }

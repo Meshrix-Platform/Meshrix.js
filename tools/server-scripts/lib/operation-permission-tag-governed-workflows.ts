@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+const canned1 = "echo";
+
+
+
 
 export function createOperationPermissionTagGovernedWorkflows(context: Record<string, any> = {}) : any {
   const {
@@ -112,7 +116,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
     const gatewayBefore: any = fixtureState.echoCount;
     const gateway: any = await callMcp("meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
-      operationKey: "echo",
+      operationKey: canned1,
       body: { proof: "external-service-forward" },
       tagPolicy: tagPolicy(ENTITY_REFS.externalService)
     }, 100);
@@ -243,7 +247,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
     const gatewayBefore: any = fixtureState.echoCount;
     const deniedGatewayForward: any = await callMcp("meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
-      operationKey: "echo",
+      operationKey: canned1,
       body: { proof: "must-not-forward" },
       tagPolicy: tagPolicy(ENTITY_REFS.externalService)
     }, 200, [200, 403]);
@@ -308,7 +312,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
     const gatewayBefore: any = fixtureState.echoCount;
     const wrongOutlet: any = await callMcpWithToolName(getMcpToken(), "meshrix.discovery", "meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
-      operationKey: "echo",
+      operationKey: canned1,
       body: { proof: "wrong-outlet-must-not-forward" },
       tagPolicy: tagPolicy(ENTITY_REFS.externalService)
     }, 230, [200, 400, 403]);
@@ -327,7 +331,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
       "meshrix.gateway.forward",
       {
         serviceId: SERVICE_ID,
-        operationKey: "echo",
+        operationKey: canned1,
         body: { proof: "read-grant-must-not-forward" },
         tagPolicy: tagPolicy(ENTITY_REFS.externalService)
       },

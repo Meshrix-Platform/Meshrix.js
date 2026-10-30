@@ -8,6 +8,13 @@ import {
 import { comparePromptPayload, compareResourcePayload, deepEqual } from '../oracles/payload.mjs';
 import { startSdkPeer } from '../peers/sdk-peer.mjs';
 import { startProcessPeer } from '../peers/process-peer.mjs';
+const canned1 = 'fail';
+const canned3 = 'effect-key-1';
+const canned2 = 'effect-key-unauthorized';
+
+
+
+
 
 const APP_META = {
   'business-id': 'order-demo',
@@ -19,7 +26,7 @@ function toolParams(overrides = {}) {
     name: 'route.demo',
     arguments: {
       objective: 'prepare artifact',
-      operationKey: 'effect-key-1',
+      operationKey: canned3,
       route: 'route.demo'
     },
     _meta: APP_META,
@@ -134,7 +141,7 @@ async function observeSlowGoodPath(peer, transport) {
     const elapsedMs = Math.round(performance.now() - started);
     return {
       observed: true,
-      status: Array.isArray(listed?.tools) ? 'pass' : 'fail',
+      status: Array.isArray(listed?.tools) ? 'pass': canned1,
       reason: Array.isArray(listed?.tools) ? 'slow_good_path_response_observed' : 'slow_good_path_response_invalid',
       elapsedMs,
       minimumDelayMs: SLOW_PATH_MIN_DELAY_MS,
@@ -164,14 +171,14 @@ async function runUnauthorizedScenario(peer, effectCountBefore) {
     const initial = await client.request('tools/call', toolParams({
       arguments: {
         objective: 'prepare artifact',
-        operationKey: 'effect-key-unauthorized',
+        operationKey: canned2,
         route: 'route.demo'
       }
     }));
     const unauthorized = await client.request('tools/call', toolParams({
       arguments: {
         objective: 'prepare artifact',
-        operationKey: 'effect-key-unauthorized',
+        operationKey: canned2,
         route: 'route.demo'
       },
       requestState: initial.requestState,

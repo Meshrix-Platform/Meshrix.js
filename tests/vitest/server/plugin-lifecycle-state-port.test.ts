@@ -10,6 +10,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createPluginLifecycleStatePort
 } from "../../../packages/foundation/src/module-system/plugin-lifecycle-state-port.ts";
+const canned1 = "b";
+
 
 const execFile: any = promisify(execFileCallback);
 const roots: any[] = [];
@@ -83,6 +85,9 @@ async function leaveCrashLease(userDataPath?: any, pluginId: any = "alpha") : Pr
   const script: any = `
     import fs from "node:fs";
     import { createPluginLifecycleStatePort } from ${JSON.stringify(moduleUrl)};
+
+const canned1 = "b";
+
     const port = await createPluginLifecycleStatePort({
       userDataPath: process.argv.at(-2),
       pluginId: process.argv.at(-1),
@@ -273,6 +278,6 @@ describe("PluginLifecycleStatePort durable filesystem lease", () : any => {
     expect(commitCode).toBe("PLUGIN_LIFECYCLE_LOCK_FENCE_LOST");
     await expect(input.port.readRecord("ledger")).resolves.toBeNull();
     expect(JSON.parse(await fs.readFile(path.join(input.leasePath, "owner.json"), "utf8")))
-      .toMatchObject({ ownerToken: "b".repeat(64) });
+      .toMatchObject({ ownerToken: canned1.repeat(64) });
   });
 });

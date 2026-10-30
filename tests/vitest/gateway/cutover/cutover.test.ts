@@ -9,6 +9,11 @@ import {
   MCP_DISCOVERY_TOOL_NAME,
   MCP_GATEWAY_TOOL_NAME
 } from "../../../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+const canned1 = "scoped_api_key";
+const canned2 = "key-cutover";
+
+
+
 
 class CapturedResponse extends EventEmitter {
   statusCode = 200;
@@ -183,7 +188,7 @@ describe("default HTTP MCP gateway cutover", () => {
       }
       return {
         ok: true,
-        credentialKind: "scoped_api_key",
+        credentialKind: canned1,
         apiKeyAuthorization: {
           id: "api-key-cutover",
           workloadPrincipalId: "subject-cutover",
@@ -209,7 +214,7 @@ describe("default HTTP MCP gateway cutover", () => {
         ...wire.headers,
         "content-type": "application/json",
         "content-length": String(Buffer.byteLength(body)),
-        "x-meshrix.js-api-key": "key-cutover"
+        "x-meshrix.js-api-key": canned2
       };
       request.socket = { remoteAddress: "127.0.0.1", encrypted: false };
       const response = new CapturedResponse();
@@ -230,7 +235,7 @@ describe("default HTTP MCP gateway cutover", () => {
       });
       expect(authorizeMcpClientRequest).toHaveBeenCalledWith(expect.objectContaining({
         method: "POST",
-        request: expect.objectContaining({ headers: expect.objectContaining({ "x-meshrix.js-api-key": "key-cutover" }) })
+        request: expect.objectContaining({ headers: expect.objectContaining({ "x-meshrix.js-api-key": canned2 }) })
       }));
 
       const deniedWire = modernHttpRequest("tools/list", 4);
