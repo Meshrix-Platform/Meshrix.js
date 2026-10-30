@@ -1,11 +1,11 @@
-const canned1 = "invoke";
-
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createEndpointTrafficController } from "../../../packages/agents/src/upstream-gateway/endpoint-traffic.ts";
+
+const canned1 = "invoke";
 
 
 

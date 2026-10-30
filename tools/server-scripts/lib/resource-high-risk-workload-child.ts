@@ -1,6 +1,3 @@
-const canned1 = "read";
-const canned2 = "probe";
-
 #!/usr/bin/env node
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
@@ -25,6 +22,9 @@ import { createJobProjectionStore } from "../../../packages/server-runtime/src/j
 import { createUploadNoRunCustody } from "../../../packages/server-runtime/src/jobs/upload-no-run-custody.ts";
 import { createUploadSessionStore } from "../../../packages/server-runtime/src/state/upload-session-store.ts";
 import { externalMemoryGrowth } from "./resource-discipline-analysis.ts";
+
+const canned1 = "read";
+const canned2 = "probe";
 
 
 
