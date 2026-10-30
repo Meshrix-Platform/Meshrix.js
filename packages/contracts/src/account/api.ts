@@ -26,6 +26,7 @@ export const ACCOUNT_API_ROUTES = Object.freeze({
   sessions: `${ACCOUNT_API_BASE}/sessions`,
   sessionRevoke: `${ACCOUNT_API_BASE}/sessions/{sessionId}`,
   sessionsRevokeOthers: `${ACCOUNT_API_BASE}/sessions/revoke-others`,
+  devices: `${ACCOUNT_API_BASE}/devices`,
   accountDelete: `${ACCOUNT_API_BASE}/delete`,
   securityEvents: `${ACCOUNT_API_BASE}/security/events`,
   passkeyRegistrationOptions: `${ACCOUNT_API_BASE}/passkeys/enrollment/options`,
@@ -164,6 +165,19 @@ export interface AccountSessionListResponse {
 export interface AccountSessionRevokeResponse {
   readonly revoked: true;
   readonly current: boolean;
+}
+
+/** One active device authorization granted through account step-up approval. */
+export interface AccountDeviceGrantSummary {
+  readonly deviceId: string;
+  readonly tenantId: string;
+  readonly routeId: string;
+  readonly scopes: readonly string[];
+  readonly grantedAt: string;
+}
+
+export interface AccountDeviceListResponse {
+  readonly devices: readonly AccountDeviceGrantSummary[];
 }
 
 export type AccountSecurityEventKind =
@@ -309,7 +323,7 @@ export interface AccountFactorListResponse {
   readonly factors: readonly AccountFactorSummary[];
 }
 
-export type AccountSecurityMutationIntent = "enroll_factor" | "remove_factor" | "link_identity" | "unlink_identity";
+export type AccountSecurityMutationIntent = "enroll_factor" | "remove_factor" | "link_identity" | "unlink_identity" | "delete_account";
 
 export interface AccountSecurityReauthenticationStartRequest {
   readonly intent: AccountSecurityMutationIntent;
