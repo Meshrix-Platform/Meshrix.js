@@ -54,7 +54,11 @@ export const consoleMessages: any = {
       storage: "运行状态",
       modules: "模块管理",
     },
+    operations: {
+      runtimeConfiguration: "运行配置",
+    },
     topbar: {
+      commandSearch: "搜索命令…",
       toggleNav: "切换导航",
       themeDarkTitle: "当前：深色模式（点击切换浅色）",
       themeLightTitle: "当前：浅色模式（点击切换深色）",
@@ -335,7 +339,11 @@ export const consoleMessages: any = {
       storage: "Runtime Status",
       modules: "Module Management",
     },
+    operations: {
+      runtimeConfiguration: "Runtime configuration",
+    },
     topbar: {
+      commandSearch: "Search commands…",
       toggleNav: "Toggle navigation",
       themeDarkTitle: "Dark mode. Click for light mode.",
       themeLightTitle: "Light mode. Click for dark mode.",

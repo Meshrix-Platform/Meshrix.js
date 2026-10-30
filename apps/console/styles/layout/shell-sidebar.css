@@ -1,3 +1,11 @@
+:root {
+  --console-frame: color-mix(in srgb, var(--bg-surface) 96%, var(--text-primary));
+  --console-rule: color-mix(in srgb, var(--bg-surface) 86%, var(--text-primary));
+  --console-ink-secondary: color-mix(in srgb, var(--text-primary) 82%, var(--bg-surface));
+  --console-hover: color-mix(in srgb, var(--bg-surface) 92%, var(--text-primary));
+  --console-selected: color-mix(in srgb, var(--bg-surface) 88%, var(--text-primary));
+}
+
 .dashboard-shell {
   min-height: 100vh;
   display: grid;
@@ -24,8 +32,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border-right: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
+  border-right: 0;
+  background: var(--console-frame);
   min-width: 0;
   transition: var(--sidebar-transition);
   overflow: visible;
@@ -149,10 +157,10 @@
 
 .brand-subtitle {
   margin: var(--space-0-5) 0 0;
-  color: var(--text-muted);
-  font-size: var(--text-2xs);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .side-nav-links,
@@ -215,9 +223,9 @@
 }
 
 .side-link.active {
-  background: var(--bg-surface);
-  color: var(--brand);
-  box-shadow: var(--shadow-xs);
+  background: var(--console-selected);
+  color: var(--text-primary);
+  box-shadow: none;
 }
 
 .side-link-label {
@@ -258,8 +266,8 @@
 
 .side-link:hover,
 .side-link-button:hover {
-  background: var(--bg-surface);
-  color: var(--brand);
+  background: var(--console-hover);
+  color: var(--text-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {

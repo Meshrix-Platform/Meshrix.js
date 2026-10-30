@@ -39,6 +39,7 @@ const {
   serviceUrl,
 } = useServerConsoleShellContext().runtime;
 
+const commandKeyLabel = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘ K" : "Ctrl K";
 const topbarUserName = computed(() => currentUser.value?.username || currentUser.value?.displayName || "");
 const breadcrumbSectionLabel = computed(() => {
   if (!isAuthenticated.value || activeRouteView.value !== "admin") {
@@ -216,6 +217,8 @@ onBeforeUnmount(() => {
           <circle cx="11" cy="11" r="7" />
           <path d="m21 21-4.35-4.35" />
         </svg>
+        <span class="topbar-search-label">{{ msg.topbar.commandSearch }}</span>
+        <kbd>{{ commandKeyLabel }}</kbd>
       </button>
     </div>
 
@@ -293,8 +296,37 @@ onBeforeUnmount(() => {
 }
 
 .topbar-palette-trigger {
-  min-width: 148px;
+  min-width: 196px;
+  gap: var(--space-2);
   justify-content: flex-start;
+  border-color: var(--console-rule);
+  background: var(--bg-surface);
+  color: var(--console-ink-secondary);
+}
+
+.topbar-palette-trigger kbd {
+  margin-left: auto;
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  color: var(--console-ink-secondary);
+}
+
+.topbar-search-label {
+  font-size: var(--text-base);
+}
+
+@media (max-width: 1000px) {
+  .topbar-palette-trigger {
+    width: 34px;
+    min-width: 34px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .topbar-search-label,
+  .topbar-palette-trigger kbd {
+    display: none;
+  }
 }
 
 .topbar-breadcrumb {
@@ -324,7 +356,9 @@ onBeforeUnmount(() => {
 .service-url-trigger {
   display: inline-flex;
   width: 100%;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
+  background: var(--bg-surface);
+  color: var(--console-ink-secondary);
   cursor: default;
   appearance: none;
 }

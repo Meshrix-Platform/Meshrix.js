@@ -85,9 +85,9 @@
   width: 100%;
   padding: var(--space-1-5);
   box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
+  border: 0;
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-surface) 74%, var(--bg-inset) 26%);
+  background: transparent;
 }
 
 .side-global-action {
@@ -99,10 +99,10 @@
   min-width: 32px;
   min-height: 32px;
   padding: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   transition:
     background var(--dur-fast) var(--ease-std),
     border-color var(--dur-fast) var(--ease-std),

@@ -36,6 +36,7 @@ const {
 const { paletteOpen, query, activeIndex } = useConsoleCommandPalette();
 
 const inputRef = ref<HTMLInputElement | null>(null);
+let returnFocusElement: HTMLElement | null = null;
 
 const items = computed<ConsoleCommandPaletteItem[]>(() => {
   const messages = msg.value;
@@ -119,8 +120,14 @@ watch(filteredItems, () => {
 
 watch(paletteOpen, async (open: any) => {
   if (!open) {
+    await nextTick();
+    if (returnFocusElement?.isConnected) {
+      returnFocusElement.focus({ preventScroll: true });
+    }
+    returnFocusElement = null;
     return;
   }
+  returnFocusElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   await nextTick();
   inputRef.value?.focus({ preventScroll: true });
 });

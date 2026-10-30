@@ -64,6 +64,17 @@ copied: `apps/console/components/MeshrixJsMark.vue` (theme-aware inline SVG).
 | Shared console components | `../../packages/ui-console/src/` (`StatusPill`, `OptionBar`, `BinaryCheckbox`) and `components/` |
 | Copy and localization rules | `i18n/README.md`, `i18n/console-messages.ts` |
 
+The internal Console uses neutral framed work surfaces, thin rules, and the
+existing typography, spacing, and control scales. Its `--console-*` aliases
+are defined once in `styles/layout/shell-sidebar.css` at document scope so
+detached dialogs and teleported controls inherit the same system. Secondary
+ink mixes 82% primary text with the surface; all fourteen appearance presets
+retain their brand and semantic color roles. Extend the existing component
+and view style owners instead of adding late override stylesheets. Static
+section headings use primary ink; actions and semantic states retain their
+contextual colors. The public
+welcome page remains an independently owned marketing surface.
+
 ### Lightweight desktop client — `apps/entry-native` (egui, current)
 
 | Resource | Location |

@@ -181,6 +181,70 @@ function dashboardAlertActionLabel(alertItem: DashboardAlert) {
 
 <template>
   <section class="dashboard-view">
+    <div class="metric-grid">
+      <article class="metric-card">
+        <div class="metric-card-header">
+          <span>存储对象</span>
+        </div>
+        <h3>
+          {{ (consoleState?.storage?.objectCount || 0).toLocaleString() }}
+        </h3>
+        <p>
+          {{
+            (consoleState?.storage?.objectFileCount || 0).toLocaleString()
+          }}
+          个对象文件
+        </p>
+      </article>
+      <article class="metric-card">
+        <div class="metric-card-header">
+          <span>客户端</span>
+          <StatusPill
+            :tone="clientOnlineCount > 0 ? 'success' : 'neutral'"
+            :label="
+              localizeStatusPillLabel(clientTotalCount > 0 ? `${clientOnlineCount} 在线` : '无客户端')
+            "
+            :show-dot="false"
+          />
+        </div>
+        <h3>{{ clientTotalCount }}</h3>
+        <p>离线 {{ clientOfflineCount }}</p>
+      </article>
+      <article class="metric-card">
+        <div class="metric-card-header">
+          <span>任务队列</span>
+          <StatusPill
+            :tone="
+              (consoleState?.jobs?.summary?.runningCount || 0) > 0
+                ? 'running'
+                : 'neutral'
+            "
+            :label="
+              localizeStatusPillLabel(
+                (consoleState?.jobs?.summary?.runningCount || 0) > 0
+                  ? `${consoleState?.jobs?.summary?.runningCount || 0} 运行中`
+                  : '空闲'
+              )
+            "
+            :show-dot="false"
+          />
+        </div>
+        <h3>
+          {{
+            (consoleState?.jobs?.summary?.queuedCount || 0) +
+            (consoleState?.jobs?.summary?.runningCount || 0)
+          }}
+        </h3>
+        <p>
+          {{
+            (consoleState?.jobs?.summary?.completedCount || 0).toLocaleString()
+          }}
+          已完成
+        </p>
+      </article>
+    </div>
+
+    <div class="dashboard-workspace">
     <article class="surface-card dashboard-todo-card">
       <div class="section-header">
         <div>
@@ -252,70 +316,8 @@ function dashboardAlertActionLabel(alertItem: DashboardAlert) {
       </div>
     </article>
 
-    <div class="metric-grid">
-      <article class="metric-card">
-        <div class="metric-card-header">
-          <span>存储对象</span>
-        </div>
-        <h3>
-          {{ (consoleState?.storage?.objectCount || 0).toLocaleString() }}
-        </h3>
-        <p>
-          {{
-            (consoleState?.storage?.objectFileCount || 0).toLocaleString()
-          }}
-          个对象文件
-        </p>
-      </article>
-      <article class="metric-card">
-        <div class="metric-card-header">
-          <span>客户端</span>
-          <StatusPill
-            :tone="clientOnlineCount > 0 ? 'success' : 'neutral'"
-            :label="
-              localizeStatusPillLabel(clientTotalCount > 0 ? `${clientOnlineCount} 在线` : '无客户端')
-            "
-            :show-dot="false"
-          />
-        </div>
-        <h3>{{ clientTotalCount }}</h3>
-        <p>离线 {{ clientOfflineCount }}</p>
-      </article>
-      <article class="metric-card">
-        <div class="metric-card-header">
-          <span>任务队列</span>
-          <StatusPill
-            :tone="
-              (consoleState?.jobs?.summary?.runningCount || 0) > 0
-                ? 'running'
-                : 'neutral'
-            "
-            :label="
-              localizeStatusPillLabel(
-                (consoleState?.jobs?.summary?.runningCount || 0) > 0
-                  ? `${consoleState?.jobs?.summary?.runningCount || 0} 运行中`
-                  : '空闲'
-              )
-            "
-            :show-dot="false"
-          />
-        </div>
-        <h3>
-          {{
-            (consoleState?.jobs?.summary?.queuedCount || 0) +
-            (consoleState?.jobs?.summary?.runningCount || 0)
-          }}
-        </h3>
-        <p>
-          {{
-            (consoleState?.jobs?.summary?.completedCount || 0).toLocaleString()
-          }}
-          已完成
-        </p>
-      </article>
+      <DashboardPluginCard :plugins="dashboardPlugins" />
     </div>
-
-    <DashboardPluginCard :plugins="dashboardPlugins" />
   </section>
 </template>
 

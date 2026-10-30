@@ -28,8 +28,8 @@
   position: absolute;
   left: 0;
   top: 50%;
-  width: 2px;
-  height: 18px;
+  width: 1px;
+  height: 16px;
   border-radius: var(--radius-full);
   background: var(--brand);
   opacity: 0;
@@ -56,6 +56,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .dashboard-shell,
+  .dashboard-shell .side-nav,
+  .dashboard-shell .side-link,
+  .dashboard-shell .configuration-alert-action,
+  .dashboard-shell .brand-mark,
+  .dashboard-shell .side-global-action,
   .route-fade-enter-active,
   .route-fade-leave-active,
   .side-link::before,
