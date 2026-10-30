@@ -273,8 +273,8 @@ onMounted(() => {
 
 .relay-traffic-hint {
   margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
 }
 
 .relay-traffic-hint-error {
@@ -284,26 +284,26 @@ onMounted(() => {
 .relay-traffic-stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-3);
+  gap: 0 var(--space-4);
 }
 
 .relay-traffic-stat {
   display: grid;
   gap: var(--space-1);
   min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--console-rule);
 }
 
 .relay-traffic-stat small {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-lg);
 }
 
 .relay-traffic-stat strong {
   color: var(--text-primary);
-  font-size: var(--text-lg);
+  font-size: var(--text-5xl);
+  font-weight: var(--font-medium);
   font-variant-numeric: tabular-nums;
 }
 

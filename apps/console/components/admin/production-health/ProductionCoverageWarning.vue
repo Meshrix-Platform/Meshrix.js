@@ -22,8 +22,8 @@ defineProps<{
 
 <style scoped>
 .production-health-warning {
-  border-color: var(--warning-border);
-  background: var(--warning-surface);
+  border-color: var(--console-rule);
+  background: var(--bg-surface);
 }
 
 .production-token-list {
@@ -35,13 +35,13 @@ defineProps<{
 .production-token-list span {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 28px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
+  background: transparent;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
 }
 </style>

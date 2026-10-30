@@ -75,21 +75,13 @@ const failedGates = computed(() => props.gates.filter((gate: any) => gate.status
 <style scoped>
 .production-gate-table {
   --table-columns: minmax(210px, 1.2fr) minmax(90px, 0.5fr) minmax(160px, 0.8fr) minmax(160px, 0.8fr) minmax(280px, 1.4fr);
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .production-gate-table .job-table-header,
 .production-gate-table .job-row {
   grid-template-columns: var(--table-columns);
-}
-
-@media (max-width: 1120px) {
-  .production-gate-table {
-    overflow-x: auto;
-  }
-
-  .production-gate-table .job-table-header,
-  .production-gate-table .job-row {
-    min-width: 980px;
-  }
+  min-width: 980px;
 }
 </style>

@@ -52,6 +52,6 @@ usePageRefreshHandler(
 .version-release-layout {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-6);
 }
 </style>

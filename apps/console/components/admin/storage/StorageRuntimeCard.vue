@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useStorageViewContext } from "../../../composables/storageViewContext";
+import { consoleMessages, currentConsoleLocale } from "../../../i18n/console";
 
 const {
   consoleState,
@@ -13,7 +14,7 @@ const {
   <article class="surface-card detail-card">
     <div class="section-header">
       <div>
-        <h3>运行状态</h3>
+        <h3>{{ consoleMessages[currentConsoleLocale].operations.runtimeConfiguration }}</h3>
       </div>
       <button
         class="inline-link"

@@ -98,25 +98,18 @@ const baselineMetaItems = computed(() => [
 
 .version-release-baseline-status {
   min-width: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-subtle);
-}
-
-.version-release-baseline-status {
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-4);
+  border-left: 1px solid var(--console-rule);
 }
 
 .version-release-baseline-status > span {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-lg);
+  font-weight: var(--font-medium);
 }
 
 .version-release-metrics {
@@ -132,13 +125,13 @@ const baselineMetaItems = computed(() => [
 .version-release-token-list span {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 28px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
+  background: transparent;
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
 }
 
@@ -149,6 +142,12 @@ const baselineMetaItems = computed(() => [
 
   .version-release-baseline-summary {
     grid-template-columns: 1fr;
+  }
+
+  .version-release-baseline-status {
+    padding-inline: 0;
+    border-left: 0;
+    border-bottom: 1px solid var(--console-rule);
   }
 }
 

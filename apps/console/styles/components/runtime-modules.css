@@ -1,6 +1,6 @@
 .modules-layout {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-6);
 }
 
 .module-control-card,
@@ -37,10 +37,10 @@
 
 .module-card-title {
   margin: 0;
-  color: var(--brand);
-  font-size: var(--text-xl);
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.02em;
 }
 
 .module-grid {
@@ -67,16 +67,17 @@
 
 .mount-group-header p {
   margin: var(--space-1) 0 0;
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
 }
 
 .module-panel,
 .mount-config-item {
   min-width: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-xl);
-  background: var(--bg-subtle);
+  background: var(--bg-surface);
 }
 
 .mount-config-item {
@@ -115,6 +116,7 @@
 .module-panel-heading,
 .mount-config-heading {
   justify-content: space-between;
+  flex-wrap: wrap;
 }
 
 .module-panel-title {
@@ -126,7 +128,7 @@
 
 .module-panel-heading strong,
 .mount-config-heading strong {
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 
@@ -134,19 +136,20 @@
 .mount-config-heading span,
 .module-note,
 .mount-config-description {
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
 }
 
 .module-panel-heading span,
 .mount-config-heading span {
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
 .module-note,
 .mount-config-description {
   margin: 0;
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
 }
 
 .module-field {
@@ -155,8 +158,8 @@
 }
 
 .module-field span {
-  color: var(--text-secondary);
-  font-size: var(--text-md);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: 600;
 }
 
@@ -213,4 +216,12 @@
   display: flex;
   justify-content: flex-end;
   margin-top: auto;
+}
+
+@media (max-width: 720px) {
+  .module-grid,
+  .compact-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .module-card-header-actions { justify-content: flex-start; }
+  .mount-config-item { padding: var(--space-4); }
+  .mount-config-actions { flex-wrap: wrap; }
 }

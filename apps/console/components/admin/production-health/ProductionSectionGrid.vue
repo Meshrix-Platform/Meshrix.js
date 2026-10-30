@@ -55,7 +55,7 @@ defineProps<{
 .production-section-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: minmax(220px, 1fr);
+  grid-auto-rows: auto;
   align-items: stretch;
   gap: var(--space-4);
 }
@@ -69,7 +69,7 @@ defineProps<{
   flex-direction: column;
   gap: var(--space-3);
   height: 100%;
-  min-height: 220px;
+  min-width: 0;
 }
 
 .compact-section-header {
@@ -84,13 +84,15 @@ defineProps<{
 
 .production-section-score strong {
   color: var(--text-primary);
-  font-size: var(--text-2xl);
+  font-size: var(--text-5xl);
+  font-weight: var(--font-medium);
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
 .production-section-score span {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
 }
 
 .production-gate-chips {
@@ -102,13 +104,13 @@ defineProps<{
 .production-gate-chips span {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 28px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
 }
 

@@ -179,7 +179,8 @@ usePageRefreshHandler(
 .strategy-management-layout {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  gap: var(--space-4);
+  gap: var(--space-6);
+  min-width: 0;
   align-items: start;
 }
 
@@ -188,6 +189,7 @@ usePageRefreshHandler(
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 .strategy-capability-card > .section-header,
@@ -196,21 +198,19 @@ usePageRefreshHandler(
 }
 
 .strategy-capability-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  display: grid;
+  gap: 0;
   padding: 0;
   margin: 0;
   list-style: none;
 }
 
 .strategy-capability-list li {
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--console-rule);
+  color: var(--console-ink-secondary);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
   overflow-wrap: anywhere;
 }
 
@@ -220,8 +220,8 @@ usePageRefreshHandler(
 }
 
 .strategy-field > span {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-base);
   font-weight: var(--font-semibold);
 }
 
@@ -229,15 +229,15 @@ usePageRefreshHandler(
 .strategy-field textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
-  background: var(--bg-subtle);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font: inherit;
 }
 
 .strategy-field select {
-  min-height: 38px;
+  min-height: 40px;
   padding: 0 var(--space-3);
 }
 
@@ -254,9 +254,9 @@ usePageRefreshHandler(
 
 .strategy-preview-result {
   padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-md);
-  background: var(--bg-subtle);
+  background: var(--console-frame);
 }
 
 .strategy-preview-result > strong {
@@ -265,7 +265,7 @@ usePageRefreshHandler(
 
 .strategy-preview-result dl {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: var(--space-3) 0 0;
 }
 
@@ -276,12 +276,12 @@ usePageRefreshHandler(
 }
 
 .strategy-preview-result dt {
-  color: var(--text-muted);
+  color: var(--console-ink-secondary);
 }
 
 .strategy-preview-result dd {
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--console-ink-secondary);
   overflow-wrap: anywhere;
 }
 

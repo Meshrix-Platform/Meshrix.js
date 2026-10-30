@@ -114,8 +114,10 @@ const {
       >
         <div class="version-assembly-layer-header">
           <div>
-            <span class="version-assembly-layer-kicker">{{ categoryLabel(layer.moduleCategory) }}</span>
-            <h3>{{ layer.label }}</h3>
+            <div class="version-assembly-layer-title">
+              <h3>{{ layer.label }}</h3>
+              <span class="version-assembly-layer-category">{{ categoryLabel(layer.moduleCategory) }}</span>
+            </div>
             <p>{{ layer.description }}</p>
           </div>
           <div class="version-assembly-layer-metrics" aria-label="层级装配统计">

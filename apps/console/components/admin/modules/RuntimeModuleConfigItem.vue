@@ -93,8 +93,8 @@ const {
 
 <style scoped>
 .mount-config-toggle-label {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   font-weight: 600;
   white-space: nowrap;
 }

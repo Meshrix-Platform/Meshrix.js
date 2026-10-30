@@ -92,7 +92,7 @@ defineProps<{
   gap: var(--space-2);
   min-height: 36px;
   padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--console-rule);
 }
 
 .production-action-list div {
@@ -108,24 +108,24 @@ defineProps<{
 .production-action-list strong {
   min-width: 0;
   color: var(--text-primary);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   overflow-wrap: anywhere;
 }
 
 .production-history-list span {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   white-space: nowrap;
 }
 
 .production-action-list code {
   min-width: 0;
   padding: var(--space-2);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--console-rule);
   border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
+  background: var(--console-frame);
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
   overflow-wrap: anywhere;
 }
 

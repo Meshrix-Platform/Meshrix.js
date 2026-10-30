@@ -8,12 +8,6 @@ const {
 
 <template>
   <article class="surface-card detail-card system-overview-card">
-    <div class="section-header">
-      <div>
-        <h3>运行状态</h3>
-      </div>
-    </div>
-
     <section class="metric-grid system-overview-metrics">
       <article class="metric-card">
         <div class="metric-card-header">
