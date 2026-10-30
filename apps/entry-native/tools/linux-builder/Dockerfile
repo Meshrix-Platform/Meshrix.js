@@ -42,6 +42,12 @@ RUN rustup target add \
     && python3.13 -m pip install --no-cache-dir ziglang==0.15.2 \
     && chmod -R a+rX /opt/cargo /opt/rustup
 
+# The host dnf.conf ships tsflags=nodocs and --setopt=tsflags=... appends
+# rather than replaces, so nodocs must be removed before any sysroot
+# transaction or every %doc file (including the license texts packaging
+# collects) is stripped from the installroot.
+RUN sed -i '/^tsflags=nodocs$/d' /etc/dnf/dnf.conf
+
 # `filesystem` must land first: its /lib64 entry is a symlink and rpm cannot
 # replace a real directory created by an earlier package in one transaction.
 RUN dnf -y --installroot=/opt/meshrix-sysroot-${CROSS_ARCH} \
@@ -131,34 +137,41 @@ RUN dnf -y --setopt=tsflags= reinstall \
       mesa-libEGL \
     && dnf clean all
 
-RUN sed -i '/^tsflags=nodocs$/d' /etc/dnf/dnf.conf \
+# The restore specs name explicit NEVRAs bound to the installed set of the
+# pinned base image: `rpm -q` expansion keeps every package deliberate and
+# reviewable without a version literal that silently rots when EL8 publishes
+# a point release. libxkbcommon-x11 must match its sibling libxkbcommon
+# (same source rpm), so its spec derives from the installed V-R. A missing
+# package fails the `rpm -q` probe loudly instead of expanding to nothing.
+RUN rpm -q libX11-common libxcb libxcb-devel libxkbcommon \
+    && rpm --root=/opt/meshrix-sysroot-${CROSS_ARCH} -q \
+      libX11-common libxcb libxcb-devel libxkbcommon \
     && dnf -y --setopt=tsflags= reinstall \
-      libX11-common-1.6.8-9.el8_10.noarch \
-      libxcb-1.13.1-1.el8 \
+      $(rpm -q libX11-common libxcb) \
     && dnf -y --setopt=tsflags= install \
-      libxkbcommon-x11-0.9.1-1.el8 \
+      $(rpm -q libxkbcommon | sed 's/^libxkbcommon-/libxkbcommon-x11-/') \
     && dnf -y --setopt=tsflags= reinstall \
-      libxcb-devel-1.13.1-1.el8 \
+      $(rpm -q libxcb-devel) \
     && dnf -y --installroot=/opt/meshrix-sysroot-${CROSS_ARCH} \
       --forcearch=${CROSS_ARCH} \
       --releasever=8 \
       --setopt=install_weak_deps=False \
       --setopt=tsflags=noscripts \
       reinstall \
-      libX11-common-1.6.8-9.el8_10.noarch \
-      libxcb-1.13.1-1.el8 \
+      $(rpm --root=/opt/meshrix-sysroot-${CROSS_ARCH} -q libX11-common libxcb) \
     && dnf -y --installroot=/opt/meshrix-sysroot-${CROSS_ARCH} \
       --forcearch=${CROSS_ARCH} \
       --releasever=8 \
       --setopt=install_weak_deps=False \
       --setopt=tsflags=noscripts \
       install \
-      libxkbcommon-x11-0.9.1-1.el8 \
+      $(rpm --root=/opt/meshrix-sysroot-${CROSS_ARCH} -q libxkbcommon \
+        | sed 's/^libxkbcommon-/libxkbcommon-x11-/') \
     && dnf -y --installroot=/opt/meshrix-sysroot-${CROSS_ARCH} \
       --forcearch=${CROSS_ARCH} \
       --releasever=8 \
       --setopt=install_weak_deps=False \
       --setopt=tsflags=noscripts \
       reinstall \
-      libxcb-devel-1.13.1-1.el8 \
+      $(rpm --root=/opt/meshrix-sysroot-${CROSS_ARCH} -q libxcb-devel) \
     && dnf clean all

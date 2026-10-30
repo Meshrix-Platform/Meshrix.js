@@ -123,6 +123,17 @@ jobs:
         with:
           node-version: "24.21.0"
 
+      # The aarch64 probe containers run foreign-arch userspace; hosted
+      # runners ship no binfmt registrations, so install qemu-user-static
+      # before qualification (idempotent on hosts that already provide it).
+      # Installed before the build matrix so an APT failure precedes the
+      # expensive compilation rather than wasting runner minutes.
+      - name: Enable aarch64 container emulation
+        if: ${{ matrix.platform == 'linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static
+
       - name: Build the Linux client matrix
         if: ${{ matrix.platform == 'linux' }}
         run: npm run build:native-linux-client

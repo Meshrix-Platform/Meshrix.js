@@ -72,6 +72,15 @@ describe("standard npm release workflow", () => {
     expect(nativeSection).toContain("verify-native-${{ matrix.platform }}-artifacts.ts");
     expect(nativeSection).toContain("release-native-${{ matrix.platform }}-${{ github.sha }}");
 
+    // The aarch64 probe containers need qemu-user-static binfmt before the
+    // verifier runs; installing it before the build matrix keeps an APT
+    // failure ahead of the expensive compilation as well.
+    const qemuSetup = nativeSection.indexOf("Enable aarch64 container emulation");
+    expect(qemuSetup).toBeGreaterThanOrEqual(0);
+    expect(nativeSection).toContain("apt-get install -y qemu-user-static");
+    expect(nativeSection.indexOf("npm run build:native-linux-client")).toBeGreaterThan(qemuSetup);
+    expect(nativeSection.indexOf("verify-native-")).toBeGreaterThan(qemuSetup);
+
     expect(publishSection).toContain("needs: [verify, native-assets]");
     expect(publishSection).toContain("environment: release-candidate");
     expect(publishSection).toContain("contents: write");
