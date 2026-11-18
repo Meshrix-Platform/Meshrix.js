@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "id": "one-light",
+  "label": {
+    "en": "One Light",
+    "zh-CN": "原子浅色"
+  },
+  "mode": "light",
+  "tokens": {
+    "bg-base": "#fafafa",
+    "bg-surface": "#ffffff",
+    "bg-subtle": "#f0f1f4",
+    "bg-inset": "#e8eaf0",
+    "border-subtle": "#d7d9e0",
+    "border-strong": "#a0a1a7",
+    "text-primary": "#383a42",
+    "text-secondary": "#4b4e58",
+    "text-muted": "#696c77",
+    "text-disabled": "#a0a1a7",
+    "text-on-brand": "#ffffff",
+    "brand": "#3568d4",
+    "brand-strong": "#2f5fcf",
+    "brand-subtle": "#e5ebff",
+    "brand-muted": "#c5d2ff",
+    "info": "#0184bc",
+    "info-surface": "#dff2f8",
+    "info-border": "#8ccbe1",
+    "success": "#50a14f",
+    "success-surface": "#e2f2df",
+    "success-border": "#9ccc9a",
+    "warning": "#986801",
+    "warning-text": "#7a4f00",
+    "warning-surface": "#f4ecd9",
+    "warning-border": "#d5b46b",
+    "danger": "#e45649",
+    "danger-surface": "#f9e0dd",
+    "danger-border": "#e9a09a"
+  }
+}

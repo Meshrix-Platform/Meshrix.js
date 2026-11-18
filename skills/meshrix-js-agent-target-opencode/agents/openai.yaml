@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target OpenCode"
+  short_description: "OpenCode configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-opencode to locate OpenCode configuration facts and the current Meshrix.js MCP integration owner."

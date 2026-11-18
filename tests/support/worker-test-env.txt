@@ -1,0 +1,1 @@
+# Empty by design. Worker tests use public local bindings and explicit synthetic overrides.

@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/schemas/release-acceptance-standards.schema.json",
+  "title": "Meshrix.js Release Acceptance Standards",
+  "type": "object",
+  "required": [
+    "$schema",
+    "version",
+    "functionalCompleteness",
+    "npmPackageInstallability",
+    "releaseDeploymentVerification",
+    "realMachineVerification"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": "v0.0.1:registry:release-acceptance-standards-2"
+    },
+    "functionalCompleteness": {
+      "type": "object",
+      "required": [
+        "claim",
+        "requiredForRelease",
+        "command",
+        "covers"
+      ],
+      "properties": {
+        "claim": {
+          "const": "functional-complete"
+        },
+        "requiredForRelease": {
+          "const": true
+        },
+        "command": {
+          "const": "npm run verify:acceptance"
+        },
+        "covers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "npmPackageInstallability": {
+      "type": "object",
+      "required": [
+        "claim",
+        "requiredForRelease",
+        "requiresClaim",
+        "command",
+        "controller",
+        "receipt",
+        "schemaVersion"
+      ],
+      "properties": {
+        "claim": {
+          "const": "npm-package-installability-passed"
+        },
+        "requiredForRelease": {
+          "const": true
+        },
+        "requiresClaim": {
+          "const": "functional-complete"
+        },
+        "command": {
+          "const": "npm run verify:npm-package-installability"
+        },
+        "controller": {
+          "const": "tools/server-scripts/verify-npm-package-installability.ts"
+        },
+        "receipt": {
+          "const": "build/reports/npm-package-installability.json"
+        },
+        "schemaVersion": {
+          "const": "v0.0.1:release:npm-package-installability-report-1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "realMachineVerification": {
+      "type": "object",
+      "required": [
+        "claim",
+        "requiredForRelease",
+        "requiresClaim",
+        "command",
+        "targets"
+      ],
+      "properties": {
+        "claim": {
+          "const": "real-machine-verified"
+        },
+        "requiredForRelease": {
+          "const": false
+        },
+        "requiresClaim": {
+          "const": "functional-complete"
+        },
+        "command": {
+          "const": "npm run verify:real-machine"
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "system",
+              "environment",
+              "mode",
+              "simulationCommand"
+            ],
+            "properties": {
+              "id": {
+                "enum": [
+                  "native-linux-x64",
+                  "native-linux-arm64",
+                  "native-macos-arm64",
+                  "native-windows-x64",
+                  "public-cloud-single-node",
+                  "clean-host-recovery"
+                ]
+              },
+              "system": {
+                "enum": [
+                  "linux-x64",
+                  "linux-arm64",
+                  "macos-arm64",
+                  "windows-x64",
+                  "declared-linux"
+                ]
+              },
+              "environment": {
+                "enum": [
+                  "native-host",
+                  "public-cloud",
+                  "independent-recovery-host"
+                ]
+              },
+              "mode": {
+                "const": "optional"
+              },
+              "simulationCommand": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "releaseDeploymentVerification": {
+      "type": "object",
+      "required": [
+        "claim",
+        "requiredForRelease",
+        "requiresClaim",
+        "command",
+        "controller",
+        "receipt",
+        "scenarios"
+      ],
+      "properties": {
+        "claim": {
+          "const": "release-deployment-verified"
+        },
+        "requiredForRelease": {
+          "const": false
+        },
+        "requiresClaim": {
+          "const": "functional-complete"
+        },
+        "command": {
+          "const": "npm run server:verify:release-deployment"
+        },
+        "controller": {
+          "const": "tools/server-scripts/verify-release-deployment.ts"
+        },
+        "receipt": {
+          "const": "build/reports/release-deployment.json"
+        },
+        "scenarios": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "success",
+              "concurrency",
+              "cancellation",
+              "provider-fault"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

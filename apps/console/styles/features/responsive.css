@@ -1,0 +1,105 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   IMPROVED RESPONSIVE BREAKPOINTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 860px) {
+  .dashboard-shell,
+  .dashboard-shell.is-collapsed,
+  .dashboard-shell.is-locked {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--sidebar-width);
+    z-index: var(--z-drawer);
+    transform: translateX(-100%);
+    transition: transform var(--dur-slow) var(--ease-out),
+                box-shadow var(--dur-slow) var(--ease-out);
+  }
+
+  .side-nav.is-open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-xl);
+  }
+
+  .dashboard-shell.is-locked .side-nav {
+    display: none;
+  }
+
+  .side-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-backdrop);
+    background: var(--backdrop);
+  }
+
+  .topbar-hamburger { display: flex; }
+
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: 0 var(--space-4);
+  }
+
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  .detail-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 520px) {
+  .metric-grid { grid-template-columns: 1fr; }
+  .compact-form-grid { grid-template-columns: 1fr; }
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "actions status"
+      "heading heading";
+    min-height: auto;
+    max-height: none;
+    height: auto;
+    flex-basis: auto;
+    row-gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+  }
+  .topbar-actions { grid-area: actions; }
+  .topbar-heading {
+    grid-area: heading;
+    width: 100%;
+  }
+  .topbar-status { grid-area: status; }
+  .view-content { padding: var(--space-4); }
+  .dashboard-main-region { margin: 0 var(--space-2) var(--space-2); }
+
+  /* Mobile topbar: collapse the service address to its status dot and drop
+     the breadcrumb
+     section chip so the page title stays visible on narrow screens. */
+  .topbar-breadcrumb-section,
+  .topbar-breadcrumb-separator { display: none; }
+  .topbar-status .service-url-badge { max-width: none; }
+  .topbar-status .service-url-text,
+  .topbar-status .service-url-chevron { display: none; }
+  .topbar-palette-trigger {
+    width: 40px;
+    min-width: 40px;
+    padding-inline: 0;
+    justify-content: center;
+  }
+
+  /* Touch targets: raise primary controls toward the 44px guideline */
+  .view-content .tool-button,
+  .view-content .table-action,
+  .view-content .primary-action,
+  .view-content input,
+  .view-content select,
+  .view-content textarea {
+    min-height: 40px;
+  }
+}
+
+/* Print */
+@media print {
+  .side-nav, .topbar, .config-drawer, .drawer-backdrop { display: none !important; }
+  .dashboard-shell { grid-template-columns: 1fr; }
+  .surface-card { box-shadow: none; border: 1px solid var(--border-subtle); }
+}

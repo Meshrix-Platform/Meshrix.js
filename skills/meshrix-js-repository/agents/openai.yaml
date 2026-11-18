@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Repository"
+  short_description: "Apply core server and platform repository rules"
+  default_prompt: "Use $meshrix-js-repository to handle this Meshrix.js repository task through its canonical owner and validation path."

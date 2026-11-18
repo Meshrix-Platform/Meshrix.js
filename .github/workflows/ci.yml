@@ -1,0 +1,118 @@
+# Public clean-rebuild workflow registration anchor.
+name: CI
+
+env:
+  NODE_OPTIONS: --conditions=source
+
+on:
+  push:
+    branches: ["nightly", "stable", "release"]
+  pull_request:
+    branches: ["nightly", "stable", "release"]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Single-platform npm qualification per AGENTS.md: an npm release may be
+  # qualified on one or two available platforms; native Ubuntu, containers, or
+  # VM coverage is not a universal publication prerequisite. The qualification
+  # environment matches the release pipeline (release.yml runs on macos-15):
+  # device-gated checks (installed MCP hub, browser launch) pass there.
+  pull-request-verify:
+    name: Pull request verification
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.21.0"
+          cache: "npm"
+      - name: Provide the Go toolchain for service verification
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: services/file-parser/format-convert/go.mod
+      - name: Use the repository-configured npm CLI
+        run: node tools/server-scripts/install-release-npm-cli.ts
+      - name: Install dependencies
+        run: npm ci
+      - name: Install the locked Chromium browser and system dependencies
+        run: npm exec --offline -- playwright install --with-deps chromium
+      - name: Run the maintained engineering entry
+        run: npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json
+      - name: Retain sanitized logs and structured results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pull-request-engineering-${{ github.sha }}
+          path: |
+            build/ci-diagnostics/local-ci/results.json
+            build/local-ci/
+            build/reports/npm-package-installability.json
+          if-no-files-found: warn
+          retention-days: 14
+          overwrite: true
+
+  engineering:
+    name: Engineering verification
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.21.0"
+          cache: "npm"
+      - name: Provide the Go toolchain for service verification
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: services/file-parser/format-convert/go.mod
+      - name: Use the repository-configured npm CLI
+        run: node tools/server-scripts/install-release-npm-cli.ts
+      - name: Install dependencies
+        run: npm ci
+      - name: Install the locked Chromium browser and system dependencies
+        run: npm exec --offline -- playwright install --with-deps chromium
+      - name: Run the maintained engineering entry
+        run: npm run ci:local -- --report build/ci-diagnostics/local-ci/results.json
+      - name: Retain sanitized logs and structured results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: engineering-${{ github.sha }}
+          path: |
+            build/ci-diagnostics/local-ci/results.json
+            build/local-ci/
+            build/reports/npm-package-installability.json
+          if-no-files-found: warn
+          retention-days: 14
+          overwrite: true
+
+  dependency-review:
+    name: Dependency review
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never

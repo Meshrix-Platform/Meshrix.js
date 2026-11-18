@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "bundleType": "meshrix.spec.bundle",
+  "specId": "meshrix.import-file-types",
+  "sourceSeed": "packages/foundation/config/default-import-file-types.json",
+  "runtimeAuthority": "FileProcessor import dictionary",
+  "lightweightBundle": true
+}

@@ -1,0 +1,20 @@
+{
+  "id": "admin-operator",
+  "label": "Admin Operator",
+  "agentType": "operator",
+  "toolsets": [
+    "meshrix.admin",
+    "meshrix.gateway.admin",
+    "meshrix.runtime.maintain",
+    "meshrix.authorization.admin"
+  ],
+  "toolAllow": [],
+  "toolDeny": [],
+  "maxRisk": "repair_write",
+  "approvalPolicy": "confirm_repair",
+  "concurrencyLimit": 1,
+  "sandboxPolicy": "server-admin",
+  "auditTags": [
+    "admin-operator"
+  ]
+}

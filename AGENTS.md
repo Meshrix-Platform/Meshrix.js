@@ -1,0 +1,334 @@
+# Repository Agent Rules
+
+This file is the repository-wide instruction authority for development agents.
+It applies to every task and directory in this repository. A more specific
+child `AGENTS.md` may strengthen these rules but must not weaken them.
+
+## Short-Term And Long-Term Planning
+
+Use the current Better Plan skill for all repository delivery planning, from a
+small scoped change to the long-term product programme. The maintainer-designated
+private project workspace owns the sole active `docs/plans/Programme.json`, with
+`Requirements.json` beside it and referenced split Tree/Task/Node workspaces
+under that plan directory. In the combined development workspace, that source
+resides in the maintainer-designated sibling planning directory; this
+repository's ignored `docs/plans/` retains inactive predecessor evidence only.
+Keep private planning and execution details
+out of published source and artifacts. Preserve independently completed plans as
+historical assets. When the designated workspace is unavailable, report the
+missing context rather than creating a competing plan in this repository.
+
+- `Programme.json` owns delivery identities, milestone outlines and dependencies.
+  Future milestones remain outlines until investigation establishes executable work.
+- `Requirements.json` owns cross-delivery requirements. Trees and Tasks reference
+  those identities instead of maintaining duplicate requirement lists.
+- Each active delivery uses the current split layout: `Tree.json`,
+  `tasks/<id>.json` and `nodes/<id>.json`. A Task has an integration owner and maps
+  to one independently deliverable Draft PR; a Node owns one coherent change and
+  its commit. Record absent commit or PR references honestly.
+- Keep shared requirements at Tree or Task scope. Record real checks and evidence
+  at their owning scope. User-journey observations and final review are delivery
+  lifecycle work; create source Nodes only for concrete implementation,
+  documentation or configuration changes, not empty audit commits.
+- Use the current skill's tool for plan operations and exports. Archive supplied
+  conversation context and superseded plans through its history commands before
+  replacement. Preserve prior outcomes and evidence without relabeling them as
+  current verification. Do not maintain an older tool dialect as the active path.
+- Repository-plan readers project only the active Programme, requirement catalogue,
+  delivery outlines and referenced split Trees. They must not import that source
+  as another writable execution plan or treat reading it as authority to run work.
+  History, commands, private paths and raw check output are not presentation fields.
+- Markdown reports are navigation or generated views of Better Plan state, never
+  a second editable plan. Product status remains in `docs/STATUS.md`; it describes
+  verified product facts rather than dispatch instructions.
+
+Plan status never grants execution authority. Preserve the user's selected model,
+live-acceptance ownership, deployment and publication boundaries. A blocker pauses
+only dependent work. Ordinary authorized scoped repairs continue without another
+general approval request. Record Task and Tree delivery conclusions separately
+from Node progress; completed Nodes alone do not establish accepted delivery.
+
+Long-running work leaves recoverable intermediate conclusions. A delivery that
+runs for many hours without an observable intermediate result cannot be reviewed,
+stopped or resumed; record conclusions in the repository as they are established
+so a later session resumes from evidence instead of re-deriving current state.
+
+## Functional Availability Before Benchmarking And Optimization
+
+Meshrix development must first establish that the actual service is usable.
+The required order is: functional implementation and focused checks; real
+frontend/backend usability; benchmark validation and performance optimization;
+then the declared final regression and review. Do not postpone frontend/backend
+verification until after performance work.
+
+Before any benchmark implementation/validation, load or capacity experiment,
+profiling, or performance optimization, obtain current evidence for the same
+candidate and relevant runtime/configuration:
+
+1. The real backend starts through its supported entry point, becomes ready,
+   and completes a representative authorized operation.
+2. The real Console/frontend opens and renders in a browser; required assets
+   and authentication work, and a representative UI action reaches that backend
+   and presents the correct result. A page HTTP 200 or CLI-only run is not enough.
+3. A standard MCP client completes the required real Meshrix-to-upstream request
+   and receives the correct result. Controlled external upstream fixtures are
+   allowed; substituting a Mock gateway, backend or frontend is not.
+4. The exercised services settle and shut down normally. Record the candidate,
+   environment/configuration, checks, observed results and privacy-safe evidence
+   references, with explicit passed/failed/not_run/blocked status.
+
+Build/typecheck success, unit tests, Mock tests, benchmark-tool self-tests,
+package checks, image builds and health checks alone cannot satisfy this
+prerequisite. A separate tool repository or "fixture" label cannot bypass it.
+Do not run performance work in parallel with the functional work it depends on.
+Missing/failed/stale evidence blocks that performance work; report the gap and
+continue only authorized functional diagnosis or repair. Changes affecting
+startup, frontend/backend integration, protocol behavior or relevant configuration
+require fresh affected functional evidence before performance resumes.
+
+Use existing functional checks and evidence records; this is not a requirement
+to rerun the whole regression at every step, create a second gate framework,
+deploy to production, or weaken the deployment boundary below. Repair original
+script defects in the original owner under Report And Repair Repository Scripts
+below; a wrapper or a second gate is never the repair vehicle.
+
+Functional evidence is not the last stage of a serial chain. Run the functional
+scenarios as soon as a build exists, in parallel with static and unit checks, and
+serialize only on genuine shared dependencies. A benchmark that measures a
+substitute workload - a no-op, a fixture, or a mock path - is not performance
+evidence for the product and must not be recorded as an evaluated result.
+
+## Upstream Service Custom Fields
+
+Meshrix.js upstream service publishing supports optional custom fields for
+declarative service configuration (for example request context headers on a
+remote MCP service). This is a standing capability target: never regress it,
+and extend it the same way new custom-field needs appear. See
+[docs/adrs/0001-upstream-service-custom-fields.md](docs/adrs/0001-upstream-service-custom-fields.md)
+for the decision, the bounded security exemption, and the required
+verification before claiming a new field is supported.
+
+## Standard MCP Clients Are First-Class
+
+Meshrix.js MCP ingress speaks the standard MCP protocol. Any conforming MCP
+client must be able to connect and use published tools without being listed
+in a hard-coded client catalog. Do not hard-code a downstream client list
+(agent product names, connector package ids) as a gate for MCP access; a
+client-declared optional identity header may be validated when present, but
+its absence must never block a standard client. Capability authorization
+(protocol, toolsets, scopes, risk, dynamic capabilities) is the gate, not
+which product the caller happens to be.
+
+## Browser Verification Hygiene
+
+Browser-based verification must never leave a running browser or server
+behind on the developer machine.
+
+1. Use `headless: true` for every Playwright/Puppeteer launch unless the task
+   is explicitly an interactive human review. Never default to a visible
+   browser.
+2. Always close the browser on every exit path (`browser.close()` in
+   `finally`, or equivalent), including failures and interruptions. A visible
+   Chrome launched with Playwright intercepts the user's default browser while
+   it stays alive.
+3. One-shot sandboxes (for example `/private/tmp/meshrix-first-use-*`, npm
+   consumer installs, Playwright profiles) must be removed in the same run
+   that created them. Do not leave the sandbox, its server process, its port,
+   or its browser behind.
+4. Before finishing a verification task, confirm no lingering processes from
+   it remain (check for the sandbox server, its port, and Chrome instances
+   with automation flags); clean up anything found.
+
+## Automatic Tool And Script Registration
+
+When an agent adds or changes a package script, verifier command, or other
+tool that belongs in the canonical registries, the agent completes that
+registration in the same change. Do not ask the maintainer for per-entry
+permission, and do not leave a new `package.json` script unclassified.
+
+Registration means an accurate explicit catalog entry (or the existing
+allowlist only when the script is a documented composite alias), with real
+inputs, outputs, tier, and side-effect metadata. Keep the current
+classification gates. Do not invent a second registration path, classify every
+matching prefix automatically, or treat a prefix pattern as a substitute for
+an explicit entry. This is standing repository-maintenance authorization. It
+does not change live MCP capability authorization or allow new external side
+effects.
+
+## Deployment Script Boundary
+
+Before changing any deployment entry point, stage catalog, stage script,
+activation path, upgrade path, deployment verification controller, optional
+external startup entry point, or optional target script, read and follow
+`tools/server-scripts/README.md`.
+
+Deployment scripts must close only Meshrix.js Core platform capabilities.
+Optional plugins, independent services, external providers, Agent or client
+products, and optional integration scenarios must remain separately invoked
+and must not block, promote, or alter a Core deployment result.
+
+## Common Engineering Workflow
+
+Meshrix.js is a cross-platform Node.js framework. Verification is one automated
+toolchain with one normal entry point, `npm run ci:local`. The development agent
+starts it automatically as part of the authorized task; do not ask the user to
+launch it, select environments or assemble commands. That entry owns
+environment discovery, test selection, execution, cleanup and result reporting;
+the user must not have to manually chain these tools or choose targets after reading
+a discovery report. The internal discovery tool observes the current device's
+operating system, CPU architecture, runtime and available local tools; never
+hard-code an operator's machine inventory or substitute manual probing.
+The entry automatically runs each applicable native-host and local Docker
+workflow, either concurrently or sequentially. Discovery must not connect to
+Tailscale peers or other remote devices. With an available local Docker engine,
+use its observed capabilities for compatible Linux container checks. Without
+Docker, verify the native host without requiring virtualization or installing
+another hypervisor. Any genuinely necessary manual step must identify the exact
+operator action, why it cannot be automated and the input needed to continue.
+Implement portable tool and runtime logic in Node.js. When Node.js can perform
+an operation across supported systems, do not implement it in OS-specific sh,
+Bash or PowerShell scripts, inline workflow shell programs, or hard-coded host
+branches. Use Node APIs for files, process lifecycle and orchestration, and
+argument-based invocation for necessary external tools. Isolate unavoidable
+operating-system integration behind a narrow adapter; it must not become the
+basic execution model of the product or verification toolchain. Migrate callers,
+tests and documentation with each replacement and remove the superseded path.
+Run a check only in an environment that satisfies its actual prerequisites.
+When those prerequisites are absent, record the check as not run and continue
+the applicable work; do not repeatedly execute it under an unsuitable emulator
+or change safety limits to accommodate that environment.
+
+An npm release may be qualified on one or two available platforms. Do not make
+exhaustive operating-system or architecture coverage, native Ubuntu, a virtual
+machine, Docker, or container-image qualification a universal npm publication
+prerequisite. Select representative checks for the actual change and preserve
+required functional and security verification on the selected platforms. Keep
+unmeasured platforms explicit without claiming they passed or treating their
+absence as a failure of the qualified npm candidate. Optional container and
+deployment artifacts retain their own applicable validation requirements.
+
+`CONTRIBUTING.md` owns the common engineering workflow: identify the module and
+integration owner, decide only consequential architecture or published-support
+changes, migrate producers/consumers/tests/documents together, run targeted
+evidence, integrate once, and maintain version, deprecation, and release facts.
+This file owns Agent execution authority, privacy, live/performance ordering,
+and Better Plan lifecycle. Specialist skills and handbooks route to
+`CONTRIBUTING.md` and the owning architecture or runbook source instead of
+restating that workflow.
+
+Frontend design and art assets are indexed in
+[docs/design/README.md](docs/design/README.md); shared masters live under
+`assets/` and consumers reference or sync from that store rather than keeping
+copies.
+
+Before pushing or promoting a candidate, complete the applicable engineering
+checks locally using the same maintained entry points, test selection, build
+order, dependency installation policy, and supported runtime versions as hosted
+CI. Follow [Local And Hosted CI](CONTRIBUTING.md#local-and-hosted-ci).
+Do not use repeated pushes to discover ordinary build, test, installation, or
+packaging failures. Repair missing local orchestration for an applicable check
+in its canonical workflow before continuing. An unavailable platform is recorded
+as not run; a hosted pass does not repair a missing local implementation of an
+applicable check.
+Keep real registry publication and hosted identity checks in their explicitly
+authorized release stage, and never describe them as locally verified.
+
+Iterate release preparation through the same local entry until its applicable
+scope passes: correct the workflow, rerun it, diagnose the retained results and
+repair the owning implementation. Reuse still-valid successful results. Move
+deterministic artifact review into that workflow and remove redundant or
+inapplicable artifact restrictions; do not add publication gates merely to
+preserve an earlier tooling assumption. Required functional and security checks
+and truthful evidence remain part of the selected release scope.
+
+## Report And Repair Repository Scripts
+
+When an agent finds a defect or limitation in the repository's own scripts or
+automation, the agent reports the root cause, the affected module boundary, and
+the repair, and fixes the defect in the original script. Do not silently bypass
+it with a separate script, wrapper, or one-off replacement that leaves the
+original script unfixed. A temporary diagnostic script may gather evidence but
+is never the repair vehicle. Ordinary authorized scoped repairs continue
+without renewed permission; obtain maintainer direction only when the repair
+changes actual scope, published support, authority, or risk, or requires an
+irreversible action.
+
+## Discover All Failures Before Repair
+
+When a test profile, audit, acceptance workflow, release gate, or other bounded
+verification scope reports a failure, do not begin repairing the first failure
+from an early-stop run.
+
+1. Complete one diagnostic discovery pass across the entire selected scope and
+   collect every failure. Use the runner's continue-after-failure mode when it
+   is safe; for the unified test runner, use `--continue-on-failure`.
+2. Treat an early-stop result as partial evidence. Report the unexecuted suites
+   explicitly and never claim that the first observed failure is the only
+   failure.
+3. Group the complete failure inventory by root cause, then repair one root
+   cause at a time with the narrowest owning verification.
+4. Do not rerun the complete profile or full regression between individual
+   repairs.
+5. After every known failure is repaired and every focused verification passes,
+   rerun the maintained workflow for the complete selected scope, reusing valid
+   results. If it exposes another scoped implementation or workflow defect,
+   repair that owner and continue the same local cycle until it passes.
+   Promotion or release requires that successful integrated result.
+
+If continuing after failure would create unsafe, destructive, or external side
+effects, stop before repair, report the undiscovered scope and the required
+authority, and obtain a maintainer decision.
+
+## Change-Scoped Verification And Result Reuse
+
+A verification result is reusable only when it is bound to the inputs it
+actually exercised. Every registered suite declares the source and configuration
+it covers, so a source change selects the affected suites instead of forcing a
+choice between the whole profile and hand-picked test files.
+
+- Reuse is keyed by an input fingerprint: covered source, direct dependencies,
+  relevant configuration and command inputs. Do not key it on the command string
+  alone, and do not invalidate it merely because the working tree is dirty.
+- A product source file that no suite claims is reported as a selection gap.
+  Silently skipping unselected source is not acceptable; an incomplete selection
+  is itself a reported outcome.
+- The maintained entry reports suites executed, suites reused, and the basis for
+  each skip, so a reader can tell what was actually proven.
+
+Manual test picking is diagnosis, not the evidence path. Prefer repairing the
+maintained entry's selection over working around it.
+
+## Verification Apparatus Budget
+
+Verification exists to make product change safe; it must not become the
+engineering object. Apparatus growth is measured against product growth and is
+reviewed like any other change.
+
+- One logical change must not require editing several catalogs in lockstep. A
+  fact derivable from a single source is generated from that source rather than
+  registered a second time.
+- A new gate, registry, verifier or profile states the failure class it prevents
+  and the observed incident that motivates it. A gate that must be relaxed,
+  re-scoped or waived for ordinary work to proceed is evidence that the gate's
+  contract is wrong; repair the contract instead of carrying the waiver.
+- Registration stays mandatory and explicit under Automatic Tool And Script
+  Registration above, but registration must not become the bulk of a change.
+
+## npm Publication
+
+The ordinary npm release path is `.github/workflows/release.yml`. A `v*` tag
+push or a manual run selecting a tag checks out that tag, confirms its package
+version, runs the applicable build and release tests, packs the public npm
+archives, installs and smoke-tests those archives, publishes them through npm's
+standard GitHub Actions Trusted Publisher flow, and creates the GitHub Release.
+Publish the archives produced by that run; do not add a second preparation or
+publication authority.
+
+Publication authenticates only through npm Trusted Publishing with the job's
+OIDC identity. No long-lived npm token may be stored in repository or
+environment secrets, exposed to any job, or consumed by the publish command;
+a package that lacks a configured Trusted Publisher is a maintainer-side
+prerequisite, not a reason to introduce a token. Do not make cross-workflow
+receipts, manually constructed OIDC probes, or post-publication signature
+audits prerequisites for this release flow. A package version conflict must
+still be caught before publishing.

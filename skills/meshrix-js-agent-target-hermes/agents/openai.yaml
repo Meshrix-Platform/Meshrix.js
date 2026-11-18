@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Hermes"
+  short_description: "Hermes Agent configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-hermes to locate Hermes Agent configuration facts and the current Meshrix.js MCP integration owner."

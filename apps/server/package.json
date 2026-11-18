@@ -1,0 +1,41 @@
+{
+  "name": "@meshrix/server",
+  "version": "0.4.2",
+  "private": true,
+  "description": "Meshrix.js Node server executable — HTTP runtime bootstrap, process lifecycle",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@meshrix/contracts": "0.4.2",
+    "@meshrix/foundation": "0.4.2",
+    "@meshrix/kernel": "0.4.2",
+    "@meshrix/protocols": "0.4.2",
+    "@meshrix/server-runtime": "0.4.2",
+    "@meshrix/ui-console": "0.4.2"
+  },
+  "imports": {
+    "#meshrix/foundation/observability/trace-context": "@meshrix/foundation/observability/trace-context",
+    "#meshrix/foundation/proof/proof-substrate/index": "@meshrix/foundation/proof/proof-substrate/index",
+    "#meshrix/foundation/security/production-ingress-contract": "@meshrix/foundation/security/production-ingress-contract",
+    "#meshrix/foundation/security/secret-store/local-secret-key-provider": "@meshrix/foundation/security/secret-store/local-secret-key-provider",
+    "#meshrix/foundation/storage/backup-contract": "@meshrix/foundation/storage/backup-contract",
+    "#meshrix/http-utils": "@meshrix/protocols/http/http-utils",
+    "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
+    "#meshrix/protocols/http/controllers/upstream-payload-transit-controller": "@meshrix/protocols/http/controllers/upstream-payload-transit-controller",
+    "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
+    "#meshrix/server-config": "@meshrix/foundation/config/server-config",
+    "#meshrix/server-runtime/composition/console-domain/services": "@meshrix/server-runtime/composition/console-domain/services",
+    "#meshrix/server-runtime/composition/dispatch-operation": "@meshrix/server-runtime/composition/dispatch-operation",
+    "#meshrix/server-runtime/composition/http-application-assembly": "@meshrix/server-runtime/composition/http-application-assembly",
+    "#meshrix/server-runtime/state/upload-session-admission": "@meshrix/server-runtime/state/upload-session-admission"
+  },
+  "exports": {},
+  "files": [
+    "dist/**/*",
+    "LICENSE",
+    "package.json"
+  ]
+}

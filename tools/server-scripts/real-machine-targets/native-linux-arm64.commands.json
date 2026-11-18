@@ -1,0 +1,7 @@
+{
+  "prepare": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "prepare", "native-linux-arm64"] },
+  "start": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "start", "native-linux-arm64"] },
+  "verify": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "verify", "native-linux-arm64"] },
+  "stop": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "stop", "native-linux-arm64"] },
+  "cleanup": { "executable": "node", "args": ["tools/server-scripts/real-machine-target-phase.ts", "cleanup", "native-linux-arm64"] }
+}

@@ -1,0 +1,462 @@
+{
+  "$schema": "./schema/dependency-rule.schema.json",
+  "version": "v0.3.0",
+  "layers": [
+    {
+      "id": "contracts",
+      "name": "Contracts",
+      "directory": "packages/contracts",
+      "allowedDependsOn": [],
+      "forbiddenDependsOn": [
+        "foundation",
+        "gateway",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "gateway",
+      "name": "Gateway Kernel",
+      "directory": "packages/kernel",
+      "allowedDependsOn": [
+        "contracts"
+      ],
+      "forbiddenDependsOn": [
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "plugins",
+        "tools",
+        "skill-tools",
+        "model-gateway-contracts"
+      ]
+    },
+    {
+      "id": "model-gateway-contracts",
+      "name": "Model Gateway Service Contracts",
+      "directory": "services/model-gateway/contracts",
+      "allowedDependsOn": [],
+      "forbiddenDependsOn": [
+        "contracts",
+        "gateway",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "foundation",
+      "name": "Foundation",
+      "directory": "packages/foundation",
+      "allowedDependsOn": [
+        "contracts"
+      ],
+      "forbiddenDependsOn": [
+        "gateway",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "agents",
+      "name": "Agents",
+      "directory": "packages/agents",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "protocols"
+      ],
+      "forbiddenDependsOn": [
+        "gateway",
+        "capabilities",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "capabilities",
+      "name": "Capabilities",
+      "directory": "packages/capabilities",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "protocols"
+      ],
+      "forbiddenDependsOn": [
+        "gateway",
+        "agents",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "protocols",
+      "name": "Protocols",
+      "directory": "packages/protocols",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "client-adapter-kit"
+      ],
+      "forbiddenDependsOn": [
+        "gateway",
+        "agents",
+        "capabilities",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "server-runtime",
+      "name": "Server Runtime",
+      "directory": "packages/server-runtime",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "gateway"
+      ],
+      "forbiddenDependsOn": [
+        "ui-console",
+        "apps",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "ui-console",
+      "name": "UI Console Adapter",
+      "directory": "packages/ui-console",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols"
+      ],
+      "forbiddenDependsOn": [
+        "gateway",
+        "server-runtime",
+        "apps",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "apps",
+      "name": "Apps",
+      "directory": "apps",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "server-runtime",
+        "protocols",
+        "ui-console",
+        "gateway"
+      ],
+      "forbiddenDependsOn": [
+        "agents",
+        "capabilities",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "gateway-installer-app",
+      "name": "Standalone Gateway Application",
+      "directory": "apps/mcp-gateway-installer",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "capabilities",
+        "protocols",
+        "gateway",
+        "client-adapter-kit"
+      ],
+      "forbiddenDependsOn": [
+        "agents",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "plugin-console",
+      "name": "Plugin Console Adapters",
+      "directory": "plugins/**/console",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "plugins"
+      ],
+      "forbiddenDependsOn": [
+        "apps",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "plugin-verifiers",
+      "name": "Plugin Verifiers",
+      "directory": "plugins/*/verifiers",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "tools"
+      ],
+      "forbiddenDependsOn": []
+    },
+    {
+      "id": "plugin-tests",
+      "name": "Plugin Tests",
+      "directory": "plugins/*/tests",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "tools"
+      ],
+      "forbiddenDependsOn": []
+    },
+    {
+      "id": "plugins",
+      "name": "Optional Plugins",
+      "directory": "plugins",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "client-adapter-kit"
+      ],
+      "forbiddenDependsOn": [
+        "apps",
+        "tools",
+        "skill-tools"
+      ]
+    },
+    {
+      "id": "skill-tools",
+      "name": "Operator Skill Tools",
+      "directory": "skills",
+      "allowedDependsOn": [],
+      "forbiddenDependsOn": [
+        "contracts",
+        "gateway",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "tools",
+        "model-gateway-contracts"
+      ]
+    },
+    {
+      "id": "tools",
+      "name": "Repository Tooling",
+      "directory": "tools",
+      "allowedDependsOn": [
+        "contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "plugins",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "model-gateway-contracts",
+        "skill-tools",
+        "gateway-installer-app"
+      ],
+      "forbiddenDependsOn": []
+    },
+    {
+      "id": "client-adapter-kit",
+      "name": "Client Adapter Kit",
+      "directory": "packages/client-adapter-kit",
+      "allowedDependsOn": [],
+      "forbiddenDependsOn": [
+        "contracts",
+        "gateway",
+        "model-gateway-contracts",
+        "foundation",
+        "agents",
+        "capabilities",
+        "protocols",
+        "server-runtime",
+        "ui-console",
+        "apps",
+        "gateway-installer-app",
+        "plugin-console",
+        "plugin-verifiers",
+        "plugin-tests",
+        "plugins",
+        "skill-tools",
+        "tools"
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "ui-console-stateful-providers-require-composition",
+      "description": "UI console executors consume stateful runtime providers through explicit ports assembled by the server composition boundary.",
+      "fromPattern": "packages/ui-console/src/**",
+      "fromLayers": [
+        "ui-console"
+      ],
+      "specifierKinds": [
+        "relative",
+        "package",
+        "package-import"
+      ],
+      "forbiddenTargets": [
+        "packages/agents/src/workspace-governance/**",
+        "packages/foundation/src/observability/readiness-baseline/**",
+        "packages/foundation/src/observability/executive-report.ts",
+        "packages/foundation/src/observability/sample-capability-pack.ts",
+        "packages/foundation/src/security/security-alerts.ts"
+      ],
+      "severity": "error"
+    },
+    {
+      "id": "http-controllers-require-composed-security-ports",
+      "description": "HTTP controllers consume security ports supplied by composition and do not create security authorities.",
+      "fromPattern": "packages/protocols/http/controllers/**",
+      "fromLayers": [
+        "protocols"
+      ],
+      "specifierKinds": [
+        "relative",
+        "package",
+        "package-import"
+      ],
+      "forbiddenTargets": [
+        "packages/foundation/src/security/security-permissions-provider.ts"
+      ],
+      "severity": "error"
+    },
+    {
+      "id": "server-runtime-cross-layer-wiring-requires-composition",
+      "description": "Server runtime state, jobs, routing, and module runtime must receive domain and protocol implementations from the composition boundary.",
+      "fromPattern": "packages/server-runtime/src/**",
+      "excludedFromPatterns": [
+        "packages/server-runtime/src/composition/**"
+      ],
+      "fromLayers": [
+        "server-runtime"
+      ],
+      "specifierKinds": [
+        "relative",
+        "package",
+        "package-import"
+      ],
+      "forbiddenTargets": [
+        "packages/agents/**",
+        "packages/capabilities/**",
+        "packages/protocols/**"
+      ],
+      "severity": "error"
+    },
+    {
+      "id": "plugin-production-relative-imports-use-public-packages",
+      "description": "Plugin production sources must consume public package exports instead of relative monorepo implementation paths.",
+      "fromPattern": "plugins/**",
+      "fromLayers": [
+        "plugins",
+        "plugin-console"
+      ],
+      "specifierKinds": [
+        "relative"
+      ],
+      "forbiddenTargets": [
+        "apps/**",
+        "packages/**",
+        "tools/**"
+      ],
+      "severity": "error"
+    }
+  ],
+  "exceptions": []
+}

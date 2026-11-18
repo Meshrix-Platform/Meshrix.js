@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-label="Meshrix.js — Traceable Shared Workspace for AI Agents">
+  <title>Meshrix.js — Traceable Shared Workspace for AI Agents</title>
+
+  <defs>
+    <!-- Background: deep obsidian with faint blue undertone -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#0a0a14"/>
+      <stop offset="100%" stop-color="#060610"/>
+    </linearGradient>
+
+    <!-- Prismatic refraction gradient (horizontal spectrum) -->
+    <linearGradient id="prism" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"    stop-color="#c9a96e" stop-opacity="0.8"/>
+      <stop offset="20%"   stop-color="#f0d28c" stop-opacity="0.6"/>
+      <stop offset="40%"   stop-color="#80deea" stop-opacity="0.7"/>
+      <stop offset="60%"   stop-color="#4fc3f7" stop-opacity="0.8"/>
+      <stop offset="80%"   stop-color="#a78bfa" stop-opacity="0.5"/>
+      <stop offset="100%"  stop-color="#c9a96e" stop-opacity="0.3"/>
+    </linearGradient>
+
+    <!-- Text area subtle glow -->
+    <radialGradient id="textGlow" cx="0.65" cy="0.5" r="0.35">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.015"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ── Background ─────────────────────────────────────────────────────────── -->
+  <rect width="1200" height="400" fill="url(#bg)"/>
+
+  <!-- Ambient glow layers -->
+  <rect width="1200" height="400" fill="url(#textGlow)"/>
+
+  <!-- ── Meshrix.js gateway mark ───────────────────────────────────────────── -->
+  <svg x="120" y="40" width="320" height="320" viewBox="150 0 320 320" fill="none" shape-rendering="geometricPrecision">
+    <defs>
+      <mask id="banner-outside-gateway" x="190" y="25" width="240" height="270" maskUnits="userSpaceOnUse" style="mask-type:luminance">
+        <rect x="190" y="25" width="240" height="270" fill="#fff"/>
+        <path d="M281.8 274V165A28.2 28.2 0 0 1 338.2 165V274Z" fill="#000"/>
+      </mask>
+    </defs>
+    <rect x="150" width="320" height="320" fill="#000"/>
+    <g stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+      <g mask="url(#banner-outside-gateway)">
+        <path d="M216.902 98.75 299.175 51.25M320.825 51.25 403.098 98.75M206.077 117.5V212.5M413.923 117.5V212.5M216.902 231.25 284.019 270M403.098 231.25 335.981 270" stroke-width="3.6"/>
+        <path d="M310 57.5 216.902 218.75M310 57.5 403.098 218.75M216.902 111.25 284.019 270M403.098 111.25 335.981 270" stroke-width="3"/>
+      </g>
+      <path d="M284.019 270V165A25.981 25.981 0 0 1 335.981 165V270" stroke-width="4.4"/>
+      <path d="M310 32.5 320.825 38.75v12.5L310 57.5l-10.825-6.25v-12.5ZM206.077 92.5 216.902 98.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM413.923 92.5 424.748 98.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM206.077 212.5 216.902 218.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM413.923 212.5 424.748 218.75v12.5l-10.825 6.25-10.825-6.25v-12.5Z" stroke-width="3.6"/>
+    </g>
+  </svg>
+
+  <!-- ── Prismatic separator line ──────────────────────────────────────────── -->
+  <rect x="460" y="158" width="1.5" height="84" fill="url(#prism)" opacity="0.4" rx="0.75"/>
+
+  <!-- ── Wordmark: "MESHRIX" ──────────────────────────────────────────────── -->
+  <text
+    x="500" y="193"
+    dominant-baseline="middle"
+    font-family="'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    font-size="72"
+    font-weight="200"
+    letter-spacing="12"
+    fill="#ede6d6">MESHRIX</text>
+
+  <!-- ── Subtitle ──────────────────────────────────────────────────────────── -->
+  <text
+    x="502" y="242"
+    font-family="'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif"
+    font-size="12.5"
+    font-weight="300"
+    letter-spacing="4.5"
+    fill="#5a6a7a">TRACEABLE SHARED WORKSPACE FOR AI AGENTS</text>
+
+  <!-- ── Bottom prismatic accent line ──────────────────────────────────────── -->
+  <rect x="502" y="282" width="360" height="0.5" fill="url(#prism)" opacity="0.25" rx="0.25"/>
+
+</svg>

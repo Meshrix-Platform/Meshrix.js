@@ -1,0 +1,16 @@
+{
+  "name": "@meshrix/plugin-external-gateway",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "cross-env NODE_OPTIONS=--conditions=source node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "@meshrix/contracts": "0.0.1"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,403 @@
+import { randomBytes } from "node:crypto";
+
+import { verifyMcpHandshakeSignature } from "../../mcp-identity.ts";
+import { deviceEnvironmentPort } from "./device-environment.ts";
+import {
+  MCP_DISCOVER_METHOD,
+  MCP_META_SERVER_INFO,
+  mcpModernJsonRpcMessage,
+  mcpModernRequestHeaders
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-client-wire";
+import {
+  MCP_PROTOCOL_VERSION
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
+import {
+  DEFAULT_SCAN_PORTS,
+  DEFAULT_TOKEN_ENV,
+  MESHRIX_MCP_DISCOVERY_FILE_ENV,
+  MESHRIX_MCP_DISCOVERY_URL_ENV,
+  MESHRIX_MCP_URL_ENV,
+  MCP_INTERFACE_VERSION,
+  MCP_SERVER_NAME,
+  MCP_STABLE_TOOL_NAME,
+  packageInfo
+} from "./constants.ts";
+import { containsMxak1Credential, MXAK1_CREDENTIAL_PATTERN, mcpTargetHeaders, normalizeBaseUrl, normalizeTarget, option } from "./basic-utils.ts";
+import {
+  discoveryRegistryPath,
+  readJson
+} from "./device-discovery-registry.ts";
+import { assertSafeEnvName, readStdin, uniqueValues } from "./connector-process.ts";
+import { fetchJson, isLoopbackHost } from "./http-json-client.ts";
+
+export function explicitBaseUrl(options: Record<string, any> = {}) : any {
+  const value: any = option(options, "url", process.env.MESHRIX_MCP_BASE_URL || "");
+  if (containsMxak1Credential(value)) {
+    throw new Error("Raw API Keys are not accepted in URLs. Use --token-stdin or --token-env.");
+  }
+  return normalizeBaseUrl(value);
+}
+
+export function baseUrlFromEndpoint(value?: any) : any {
+  const text: any = normalizeBaseUrl(value);
+  if (!text) {
+    return "";
+  }
+  try {
+    const parsed: any = new URL(text);
+    if (parsed.pathname.endsWith("/mcp")) {
+      parsed.pathname = parsed.pathname.slice(0, -4) || "/";
+      parsed.search = "";
+      parsed.hash = "";
+      return normalizeBaseUrl(parsed.toString());
+    }
+    if (
+      parsed.pathname === "/api/mcp/discovery" ||
+      parsed.pathname === "/.well-known/meshrix/mcp.json" ||
+      parsed.pathname === "/api/mcp/handshake"
+    ) {
+      parsed.pathname = "/";
+      parsed.search = "";
+      parsed.hash = "";
+      return normalizeBaseUrl(parsed.toString());
+    }
+    return text;
+  } catch {
+    return "";
+  }
+}
+
+export function parseScanPorts(options: Record<string, any> = {}) : any {
+  const raw: any = String(option(options, "scan-ports", process.env.MESHRIX_MCP_SCAN_PORTS || "")).trim();
+  const values: any = raw
+    ? raw.split(",").map((item?: any) : any => Number(item.trim()))
+    : DEFAULT_SCAN_PORTS;
+  return uniqueValues(values
+    .filter((port?: any) : any => Number.isInteger(port) && port > 0 && port <= 65535)
+    .map(String))
+    .map(Number);
+}
+
+export async function registryBaseUrls(options: Record<string, any> = {}) : Promise<any> {
+  const payload: any = await readJson(discoveryRegistryPath(options), null);
+  const name = String(option(options, "server-name", MCP_SERVER_NAME));
+  const server: any = payload?.servers?.[name] || payload?.mcpServers?.[name] || {};
+  const profiles: any = (Object.values(payload?.serverConfig?.profiles || {}) as any[]);
+  const activeProfile: any = payload?.serverConfig?.activeName
+    ? payload?.serverConfig?.profiles?.[payload.serverConfig.activeName]
+    : null;
+  return uniqueValues([
+    activeProfile?.baseUrl,
+    baseUrlFromEndpoint(server.httpUrl),
+    baseUrlFromEndpoint(server.url),
+    baseUrlFromEndpoint(payload?.discovery?.preferredHttpDiscoveryUrl),
+    baseUrlFromEndpoint(payload?.discovery?.preferredApiDiscoveryUrl),
+    ...profiles.map((profile?: any) : any => profile?.baseUrl)
+  ]);
+}
+
+export async function candidateBaseUrls(options: Record<string, any> = {}) : Promise<any> {
+  const explicit: any = explicitBaseUrl(options);
+  if (explicit) {
+    return [explicit];
+  }
+  const persistedEnvironment: Record<string, string> = await deviceEnvironmentPort.read();
+  const persistedDiscoveryFile: any = persistedEnvironment[MESHRIX_MCP_DISCOVERY_FILE_ENV] || "";
+  const persistedDiscoveryUrl: any = persistedEnvironment[MESHRIX_MCP_DISCOVERY_URL_ENV] || "";
+  const persistedMcpUrl: any = persistedEnvironment[MESHRIX_MCP_URL_ENV] || "";
+  const fileCandidates: any = uniqueValues([
+    discoveryRegistryPath(options),
+    persistedDiscoveryFile
+  ]);
+  const fromFiles: any[] = [];
+  for (const filePath of fileCandidates) {
+    const payload: any = await readJson(filePath, null);
+    const server: any = payload?.servers?.[MCP_SERVER_NAME] || payload?.mcpServers?.[MCP_SERVER_NAME] || {};
+    const profiles: any = (Object.values(payload?.serverConfig?.profiles || {}) as any[]);
+    const activeProfile: any = payload?.serverConfig?.activeName
+      ? payload?.serverConfig?.profiles?.[payload.serverConfig.activeName]
+      : null;
+    fromFiles.push(
+      activeProfile?.baseUrl,
+      baseUrlFromEndpoint(server.httpUrl),
+      baseUrlFromEndpoint(server.url),
+      baseUrlFromEndpoint(payload?.discovery?.preferredHttpDiscoveryUrl),
+      baseUrlFromEndpoint(payload?.discovery?.preferredApiDiscoveryUrl),
+      ...profiles.map((profile?: any) : any => profile?.baseUrl)
+    );
+  }
+  const scanned: any = parseScanPorts(options).flatMap((port?: any) : any => [
+    `http://127.0.0.1:${port}`,
+    `http://localhost:${port}`
+  ]);
+  return uniqueValues([
+    baseUrlFromEndpoint(process.env[MESHRIX_MCP_URL_ENV]),
+    baseUrlFromEndpoint(process.env[MESHRIX_MCP_DISCOVERY_URL_ENV]),
+    baseUrlFromEndpoint(persistedMcpUrl),
+    baseUrlFromEndpoint(persistedDiscoveryUrl),
+    ...fromFiles,
+    ...scanned
+  ]).map(normalizeBaseUrl);
+}
+
+export async function fetchMeshrixDiscovery(baseUrl?: any) : Promise<any> {
+  const url: any = `${baseUrl}/api/mcp/discovery`;
+  const result: any = await fetchJson(url, { timeoutMs: 1500 });
+  const payload: any = result.payload || {};
+  const identity: any = payload.identity || null;
+  if (
+    !result.ok ||
+    payload.name !== "Meshrix.js" ||
+    payload.interfaceVersion !== MCP_INTERFACE_VERSION ||
+    payload.stableToolName !== MCP_STABLE_TOOL_NAME ||
+    identity?.algorithm !== "Ed25519" ||
+    !identity?.publicKeyJwk ||
+    !payload.handshake?.url
+  ) {
+    throw new Error("not an Meshrix.js MCP discovery response");
+  }
+  return { payload, status: result.status };
+}
+
+export async function verifyMeshrixHandshake(baseUrl?: any, discovery?: any) : Promise<any> {
+  const nonce: any = randomBytes(32).toString("base64url");
+  const result: any = await fetchJson(`${baseUrl}/api/mcp/handshake`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      nonce,
+      client: {
+        name: packageInfo.name,
+        version: packageInfo.version
+      }
+    }),
+    timeoutMs: 2500
+  });
+  const payload: any = result.payload?.payload || {};
+  const signature: any = result.payload?.signature || {};
+  const publicKeyJwk: any = payload.identity?.publicKeyJwk;
+  if (
+    !result.ok ||
+    result.payload?.ok !== true ||
+    payload.schemaVersion !== "v0.0.1:mcp:handshake-1" ||
+    payload.nonce !== nonce ||
+    payload.server?.name !== "Meshrix.js" ||
+    payload.server?.interfaceVersion !== MCP_INTERFACE_VERSION ||
+    payload.server?.stableToolName !== MCP_STABLE_TOOL_NAME ||
+    payload.identity?.keyId !== discovery.identity?.keyId ||
+    signature.algorithm !== "Ed25519" ||
+    !verifyMcpHandshakeSignature({ publicKeyJwk, payload, signature: signature.value })
+  ) {
+    throw new Error("Meshrix.js MCP handshake signature verification failed");
+  }
+  return {
+    ok: true,
+    baseUrl,
+    discovery,
+    handshake: result.payload
+  };
+}
+
+export async function discoverMeshrixHub(options: Record<string, any> = {}) : Promise<any> {
+  const attempts: any[] = [];
+  const candidates: any = await candidateBaseUrls(options);
+  for (const baseUrl of candidates) {
+    try {
+      const fetchedDiscovery: any = await fetchMeshrixDiscovery(baseUrl);
+      const verified: any = await verifyMeshrixHandshake(baseUrl, fetchedDiscovery.payload);
+      return {
+        ...verified,
+        discoveryStatus: fetchedDiscovery.status,
+        attempts: [
+          ...attempts,
+          { baseUrl, ok: true, verified: true }
+        ]
+      };
+    } catch (error: any) {
+      attempts.push({
+        baseUrl,
+        ok: false,
+        verified: false,
+        reason: error?.name === "AbortError" ? "timeout" : error?.message || String(error)
+      });
+    }
+  }
+  return {
+    ok: false,
+    attempts,
+    reason: "No signed Meshrix.js MCP hub was discovered on this device."
+  };
+}
+
+export async function optionsWithDiscoveredBaseUrl(options: Record<string, any> = {}) : Promise<any> {
+  const discovered: any = await discoverMeshrixHub(options);
+  if (!discovered.ok) {
+    throw new Error(`${discovered.reason} Use --url only if you know the Meshrix.js base URL; it will still be handshake-verified.`);
+  }
+  return {
+    ...options,
+    "resolved-url": discovered.baseUrl,
+    __meshrixDiscovery: discovered
+  };
+}
+
+export async function resolveApiKey(options: Record<string, any> = {}, { required = false }: Record<string, any> = {}) : Promise<any> {
+  const tokenEnv: any = assertSafeEnvName(String(option(options, "token-env", DEFAULT_TOKEN_ENV)));
+  const envToken: any = String(process.env[tokenEnv] || "").trim();
+  const stdinRequested: any = options["token-stdin"] === true;
+  if (Object.hasOwn(process.env, tokenEnv)) {
+    delete process.env[tokenEnv];
+  }
+  if (stdinRequested && envToken) {
+    throw new Error(`Ambiguous API Key input. Use either --token-stdin or ${tokenEnv}, not both.`);
+  }
+  const credential: any = stdinRequested ? (await readStdin()).trim() : envToken;
+  if (!credential) {
+    if (required) throw new Error(`Missing API Key. Provide --token-stdin or ${tokenEnv}.`);
+    return "";
+  }
+  if (!MXAK1_CREDENTIAL_PATTERN.test(credential)) {
+    throw new Error("Invalid API Key. A strict mxak1 credential is required from protected stdin or the configured environment variable.");
+  }
+  return credential;
+}
+
+export function discardConfiguredApiKeyEnvironment(options: Record<string, any> = {}) : any {
+  const tokenEnv: any = assertSafeEnvName(String(option(options, "token-env", DEFAULT_TOKEN_ENV)));
+  if (Object.hasOwn(process.env, tokenEnv)) {
+    delete process.env[tokenEnv];
+  }
+}
+
+export async function ensureService(baseUrl?: any) : Promise<any> {
+  const outgoing: any = mcpModernJsonRpcMessage({
+    jsonrpc: "2.0",
+    id: 1,
+    method: MCP_DISCOVER_METHOD,
+    params: {}
+  });
+  const discover: any = await fetchJson(`${baseUrl}/mcp`, {
+    method: "POST",
+    headers: mcpModernRequestHeaders(outgoing),
+    body: JSON.stringify(outgoing)
+  });
+  const result: any = discover.payload?.result || {};
+  const metadata: any = result._meta || {};
+  const serverInfo: any = metadata[MCP_META_SERVER_INFO] || {};
+  const supportedVersions: any = Array.isArray(result.supportedVersions) ? result.supportedVersions : [];
+  if (
+    !discover.ok
+    || !String(serverInfo.name || "").trim()
+    || !String(serverInfo.version || "").trim()
+    || !supportedVersions.includes(MCP_PROTOCOL_VERSION)
+    || metadata.interfaceVersion !== MCP_INTERFACE_VERSION
+    || metadata.stableToolName !== MCP_STABLE_TOOL_NAME
+  ) {
+    throw new Error(`Meshrix.js MCP is not available at ${baseUrl}/mcp.`);
+  }
+  return discover;
+}
+
+function assertApiKeyTransport(baseUrl?: any) : any {
+  let destination: URL;
+  try {
+    destination = new URL(normalizeBaseUrl(baseUrl));
+  } catch {
+    throw new Error("API Key requests require a valid Meshrix.js destination.");
+  }
+  if (destination.username || destination.password) {
+    throw new Error("API Key requests cannot use credentials embedded in the destination URL.");
+  }
+  if (destination.protocol === "https:") return;
+  if (destination.protocol === "http:" && isLoopbackHost(destination.hostname)) return;
+  throw new Error("API Key requests require HTTPS unless the destination uses literal loopback HTTP.");
+}
+
+export function authHeaders(token?: any, target: any = "", baseUrl?: any) : any {
+  const credential: any = String(token || "").trim();
+  if (!MXAK1_CREDENTIAL_PATTERN.test(credential)) {
+    throw new Error("Invalid API Key. A strict mxak1 credential is required.");
+  }
+  assertApiKeyTransport(baseUrl);
+  return {
+    "Content-Type": "application/json",
+    "X-Meshrix.js-Api-Key": credential,
+    "X-Meshrix.js-MCP-Client-Id": "meshrix-mcp",
+    ...mcpTargetHeaders(target)
+  };
+}
+
+export async function verifyMcpTools({ baseUrl, token, target = "" }: Record<string, any>) : Promise<any> {
+  const toolsListMessage: any = mcpModernJsonRpcMessage({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/list",
+    params: {}
+  });
+  const toolsList: any = await fetchJson(`${baseUrl}/mcp`, {
+    method: "POST",
+    redirect: "error",
+    headers: {
+      ...authHeaders(token, target, baseUrl),
+      ...mcpModernRequestHeaders(toolsListMessage)
+    },
+    body: JSON.stringify(toolsListMessage)
+  });
+  const healthMessage: any = mcpModernJsonRpcMessage({
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: MCP_STABLE_TOOL_NAME,
+      arguments: {
+        apiVersion: MCP_INTERFACE_VERSION,
+        operation: "system.health",
+        input: {},
+        clientVersion: packageInfo.version
+      }
+    }
+  });
+  const health: any = await fetchJson(`${baseUrl}/mcp`, {
+    method: "POST",
+    redirect: "error",
+    headers: {
+      ...authHeaders(token, target, baseUrl),
+      ...mcpModernRequestHeaders(healthMessage)
+    },
+    body: JSON.stringify(healthMessage)
+  });
+  const tools: any = toolsList.payload?.result?.tools || [];
+  const toolNames: any = new Set<any>(tools.map((tool?: any) : any => tool.name));
+  const hasStableOutlet: any = toolNames.has(MCP_STABLE_TOOL_NAME);
+  const hasOnlyUniqueNamedTools: any = toolNames.size === tools.length && tools.every((tool?: any) : any => String(tool.name || "").trim());
+  if (
+    !toolsList.ok
+    || !health.ok
+    || tools.length === 0
+    || !hasStableOutlet
+    || !hasOnlyUniqueNamedTools
+    || health.payload?.result?.structuredContent?.payload?.ok !== true
+  ) {
+    throw new Error([
+      "MCP HTTP verification failed",
+      `toolsStatus=${toolsList.status || 0}`,
+      `healthStatus=${health.status || 0}`,
+      `toolCount=${tools.length}`,
+      `hasStableOutlet=${hasStableOutlet ? "true" : "false"}`,
+      `hasOnlyUniqueNamedTools=${hasOnlyUniqueNamedTools ? "true" : "false"}`,
+      `systemHealthOk=${health.payload?.result?.structuredContent?.payload?.ok === true ? "true" : "false"}`
+    ].join(";"));
+  }
+  const runtimeMeta: any = toolsList.payload?.result?._meta || {};
+  const runtimeSupportedTargets: any = Array.isArray(runtimeMeta.supportedTargets)
+    ? runtimeMeta.supportedTargets.map((target?: any) : any => target.target).filter(Boolean)
+    : [];
+  return {
+    toolCount: tools.length,
+    stableToolName: tools.find((t?: any) : any => t.name === MCP_STABLE_TOOL_NAME)?.name || "",
+    systemHealthOk: health.payload?.result?.structuredContent?.payload?.ok === true,
+    sharedHubOk: runtimeMeta.sharedHub?.directHttp === true,
+    priorityTargets: Array.isArray(runtimeMeta.priorityTargets) ? runtimeMeta.priorityTargets : [],
+    supportedTargets: runtimeSupportedTargets
+  };
+}

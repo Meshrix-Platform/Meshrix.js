@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Platform Acceptance"
+  short_description: "Reduce final platform readiness evidence"
+  default_prompt: "Use $meshrix-js-platform-acceptance-workflow to handle this Meshrix.js task through its canonical owner and validation path."

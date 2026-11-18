@@ -1,0 +1,170 @@
+# Publish the packages and GitHub Release from one tagged source revision.
+name: Release
+
+env:
+  NODE_OPTIONS: --conditions=source
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# Job bounds sit far above healthy durations so a stalled job fails and can
+# retry instead of billing the platform limit and holding the release group.
+jobs:
+  # Runs dependency installation, repository build and tests without any
+  # OIDC token-request authority so arbitrary repo code cannot mint tokens.
+  verify:
+    name: Verify and qualify the release archives
+    # Only tag refs may qualify a release: a tag-shaped branch selected
+    # through workflow_dispatch must not reach the OIDC publish job.
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: macos-15
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Confirm the checkout is the tagged commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - name: Provide the Go toolchain for service verification
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: services/file-parser/format-convert/go.mod
+
+      - name: Use the repository-configured npm CLI for Trusted Publishing
+        run: node tools/server-scripts/install-release-npm-cli.ts
+
+      - name: Install dependencies
+        run: npm ci
+      - name: Install the locked Chromium browser and system dependencies
+        run: npm exec --offline -- playwright install --with-deps chromium
+
+      - name: Check the tag against the release packages
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: npm run release:prepare -- --check --tag "$RELEASE_TAG"
+
+      - name: Build, test, and qualify the npm archives
+        run: npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json
+
+      - name: Retain the qualified npm archives for the publish job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-npm-set-${{ github.sha }}
+          path: build/release/npm-set/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Retain sanitized release diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-diagnostics-${{ github.sha }}
+          path: |
+            build/ci-diagnostics/release-local-ci/results.json
+            build/local-ci/
+            build/reports/npm-package-installability.json
+            build/acceptance-evidence/failures/
+          if-no-files-found: warn
+          retention-days: 14
+          overwrite: true
+
+  # Only this job holds OIDC token-request authority; it installs no
+  # dependencies and runs no repository build/test code.
+  publish:
+    name: Publish the verified release
+    needs: [verify]
+    # Re-assert the tag boundary on the privileged job itself.
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: release-candidate
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Confirm the checkout is the tagged commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.21.0"
+          registry-url: https://registry.npmjs.org
+      - name: Use the repository-configured npm CLI for Trusted Publishing
+        # The CLI is installed from its integrity-pinned tarball so the OIDC
+        # job never executes arbitrary registry-supplied code.
+        run: node tools/server-scripts/install-release-npm-cli.ts
+
+      - name: Restore the qualified npm archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-npm-set-${{ github.sha }}
+          path: build/release/npm-set/
+
+      # Publication is irreversible, so the tag must still peel to this
+      # commit before anything is published — a moved tag never releases
+      # artifacts built from a different commit.
+      - name: Verify the release tag still points at this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          repo="${{ github.repository }}"
+          ref_sha=$(gh api "repos/$repo/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
+          ref_type=$(gh api "repos/$repo/git/ref/tags/$RELEASE_TAG" --jq '.object.type')
+          if [ "$ref_type" = "tag" ]; then
+            peeled=$(gh api "repos/$repo/git/tags/$ref_sha" --jq '.object.sha')
+          else
+            peeled=$ref_sha
+          fi
+          test "$peeled" = "${{ github.sha }}" || { echo "release tag $RELEASE_TAG does not point at ${{ github.sha }}; refusing to publish"; exit 1; }
+
+      - name: Publish the qualified npm archives
+        # Bounds a registry stall well below the job limit; re-entry skips
+        # versions already published with identical content.
+        timeout-minutes: 15
+        env:
+          # Trusted Publishing through this job's OIDC identity
+          # (`id-token: write` above); no long-lived npm token is used.
+          NPM_CONFIG_PROVENANCE: "true"
+        run: node tools/server-scripts/publish-release-set.ts --artifact-dir build/release/npm-set
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          repo="${{ github.repository }}"
+          # The tag is re-peeled immediately before touching the release: a
+          # moved tag never gets a release attached at a different commit.
+          ref_sha=$(gh api "repos/$repo/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')
+          ref_type=$(gh api "repos/$repo/git/ref/tags/$RELEASE_TAG" --jq '.object.type')
+          if [ "$ref_type" = "tag" ]; then
+            peeled=$(gh api "repos/$repo/git/tags/$ref_sha" --jq '.object.sha')
+          else
+            peeled=$ref_sha
+          fi
+          test "$peeled" = "${{ github.sha }}" || { echo "release tag $RELEASE_TAG no longer points at ${{ github.sha }}; refusing to update"; exit 1; }
+          gh release create "$RELEASE_TAG" --title "Meshrix.js $RELEASE_TAG" --generate-notes || gh release view "$RELEASE_TAG" >/dev/null

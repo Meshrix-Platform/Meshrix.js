@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Storage Operations"
+  short_description: "Diagnose storage, uploads, jobs, and repair"
+  default_prompt: "Use $meshrix-js-storage-operations to handle this Meshrix.js task through its canonical owner and validation path."

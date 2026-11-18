@@ -1,0 +1,582 @@
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  assertOutboundEgressAllowed,
+  assertOutboundRuntimeEgressAllowed,
+  classifyOutboundHost,
+  evaluateOutboundEgressUrl,
+  evaluateOutboundEgressUrlWithDns,
+  evaluateOutboundRedirectLocationWithDns,
+  fetchWithPinnedDns
+} from "../../../packages/foundation/src/security/outbound-egress-policy.ts";
+const canned1 = "Bearer synthetic";
+const canned2 = "synthetic-api-key";
+const canned3 = "synthetic-project-token";
+
+
+
+
+describe("Outbound egress policy", () : any => {
+  it("classifies restricted local and private address families", () : any => {
+    expect(classifyOutboundHost("localhost")).toMatchObject({
+      kind: "hostname",
+      category: "loopback",
+      restricted: true
+    });
+    expect(classifyOutboundHost("127.0.0.1")).toMatchObject({
+      kind: "ipv4",
+      category: "loopback",
+      restricted: true
+    });
+    expect(classifyOutboundHost("10.1.2.3")).toMatchObject({
+      category: "private",
+      restricted: true
+    });
+    expect(classifyOutboundHost("169.254.169.254")).toMatchObject({
+      category: "link-local",
+      restricted: true,
+      metadataEndpoint: true
+    });
+    expect(classifyOutboundHost("fd00:ec2::254")).toMatchObject({
+      category: "private",
+      restricted: true,
+      metadataEndpoint: true
+    });
+    expect(classifyOutboundHost("api.example.com")).toMatchObject({
+      kind: "hostname",
+      category: "hostname",
+      restricted: false
+    });
+  });
+
+  it("classifies IPv4-embedding IPv6 literals by their embedded destination", () : any => {
+    // IPv4-embedding IPv6 vectors are assembled at runtime so the suite ships
+    // no routable address strings; no fragment below parses as an IP literal.
+    const v4 = (a: number, b: number, c: number, d: number): string => [a, b, c, d].join(".");
+    const nat64 = (...hextets: string[]): string => `64:ff9b:${hextets.join(":")}`;
+    const sixToFour = (a: number, b: number, c: number, d: number): string =>
+      `2002:${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}::1`;
+    // ::ffff:a.b.c.d — IPv4-mapped.
+    expect(classifyOutboundHost(`::ffff:${v4(169, 254, 169, 254)}`)).toMatchObject({
+      category: "link-local",
+      restricted: true
+    });
+    // 64:ff9b::/96 — NAT64 well-known prefix translating link-local targets.
+    expect(classifyOutboundHost(nat64("", "a9fe", "a9fe"))).toMatchObject({
+      category: "link-local",
+      restricted: true
+    });
+    expect(classifyOutboundHost(nat64("", v4(10, 1, 2, 3)))).toMatchObject({
+      category: "private",
+      restricted: true
+    });
+    // A public destination behind NAT64 stays public.
+    expect(classifyOutboundHost(nat64("", v4(8, 8, 8, 8)))).toMatchObject({
+      category: "public",
+      restricted: false
+    });
+    // 64:ff9b:1::/48 — NAT64 local-use prefix (RFC 8215). RFC 6052 places the
+    // embedded IPv4 at bits 48-63 and 72-87 around the zero u-octet, so
+    // 169.254.169.254 surfaces as :a9fe:a9:fe00:0.
+    expect(classifyOutboundHost(nat64("1", "a9fe", "a9", "fe00", "", ""))).toMatchObject({
+      category: "link-local",
+      restricted: true
+    });
+    expect(classifyOutboundHost(nat64("1", "a01", "2", "300", "", ""))).toMatchObject({
+      category: "private",
+      restricted: true
+    });
+    expect(classifyOutboundHost(nat64("1", "808", "8", "800", "", ""))).toMatchObject({
+      category: "public",
+      restricted: false
+    });
+    // A non-canonical literal inside the local-use block (nonzero u-octet)
+    // fails closed instead of being treated as a public destination.
+    expect(classifyOutboundHost(nat64("1", "a9fe", "1a9", "fe00", "", ""))).toMatchObject({
+      restricted: true
+    });
+    // 2002::/16 — 6to4 embeds the site IPv4 at bits 16-47.
+    expect(classifyOutboundHost(sixToFour(169, 254, 169, 254))).toMatchObject({
+      category: "link-local",
+      restricted: true
+    });
+    expect(classifyOutboundHost(sixToFour(8, 8, 8, 8))).toMatchObject({
+      category: "public",
+      restricted: false
+    });
+  });
+
+  it("allows explicit loopback/private access but never widens link-local or metadata access", () : any => {
+    expect(() : any => assertOutboundEgressAllowed({
+      url: "http://169.254.169.254:80/latest/meta-data/",
+      label: "outbound.url"
+    })).toThrow("Outbound egress denied for outbound.url: restricted_address_cloud-metadata.");
+
+    expect(evaluateOutboundEgressUrl({
+      url: "http://127.0.0.1:8787/mcp",
+      label: "outbound.url",
+      policyPreset: "security.development-local"
+    })).toMatchObject({
+      ok: true,
+      allowLocalForDevelopment: true,
+      allowLoopbackAndPrivate: true,
+      allowLinkLocal: false,
+      addressCategory: "loopback"
+    });
+
+    expect(evaluateOutboundEgressUrl({
+      url: "http://169.254.20.30/internal",
+      policyPreset: "security.development-local"
+    })).toMatchObject({
+      ok: false,
+      reason: "restricted_address_link-local",
+      allowLoopbackAndPrivate: true,
+      allowLinkLocal: false
+    });
+
+    expect(evaluateOutboundEgressUrl({
+      url: "http://[fd00:ec2::254]/latest/meta-data/",
+      policies: { egress: { allowLocalForConfiguredModelService: true } }
+    })).toMatchObject({
+      ok: false,
+      reason: "restricted_address_cloud-metadata",
+      metadataEndpoint: true,
+      allowLocalForConfiguredModelService: true
+    });
+  });
+
+  it("requires TLS for non-local HTTP targets and preserves explicitly allowed private HTTP", async () : Promise<any> => {
+    expect(evaluateOutboundEgressUrl({ url: "https://api.example.test/mcp" })).toMatchObject({ ok: true });
+    expect(evaluateOutboundEgressUrl({ url: "http://api.example.test/mcp" })).toMatchObject({
+      ok: false,
+      reason: "plaintext_remote_transport"
+    });
+
+    const privateService = await evaluateOutboundEgressUrlWithDns({
+      url: "http://format-convert:8080/mcp",
+      policies: { egress: { allowLocalForConfiguredModelService: true } },
+      lookup: async () : Promise<any> => [{ address: "10.20.30.40", family: 4 }]
+    });
+    expect(privateService).toMatchObject({ ok: true, reason: "allowed" });
+
+    const mixedAnswers = await evaluateOutboundEgressUrlWithDns({
+      url: "http://api.example.test/mcp",
+      policies: { egress: { allowLocalForConfiguredModelService: true } },
+      lookup: async () : Promise<any> => [
+        { address: "10.20.30.40", family: 4 },
+        { address: "203.0.113.10", family: 4 }
+      ]
+    });
+    expect(mixedAnswers).toMatchObject({ ok: false, reason: "plaintext_remote_transport" });
+
+    const fetchImpl: any = vi.fn(async () : Promise<any> => new Response("unexpected"));
+    await expect(fetchWithPinnedDns({
+      url: "http://api.example.test/mcp",
+      lookup: async () : Promise<any> => [{ address: "203.0.113.10", family: 4 }],
+      fetchImpl
+    })).rejects.toMatchObject({
+      code: "outbound_egress_denied",
+      decision: { reason: "plaintext_remote_transport" }
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when DNS resolves hostnames to restricted addresses", async () : Promise<any> => {
+    const lookup: any = vi.fn(async () : Promise<any> => [
+      { address: "203.0.113.10", family: 4 },
+      { address: "10.1.2.3", family: 4 }
+    ]);
+
+    await expect(assertOutboundRuntimeEgressAllowed({
+      url: "https://api.example.test:443/mcp",
+      label: "outbound.url",
+      policyPreset: "security.production-default",
+      lookup
+    })).rejects.toMatchObject({
+      code: "outbound_egress_denied",
+      decision: {
+        reason: "restricted_dns_address_private",
+        dns: {
+          status: "resolved",
+          restrictedAddressCount: 1
+        }
+      }
+    });
+    expect(lookup).toHaveBeenCalledWith("api.example.test", { all: true, verbatim: true });
+
+    await expect(assertOutboundRuntimeEgressAllowed({
+      url: "https://unresolved.example.test:443/mcp",
+      label: "outbound.url",
+      policyPreset: "security.production-default",
+      lookup: async () : Promise<any> => {
+        throw new Error("ENOTFOUND");
+      }
+    })).rejects.toMatchObject({
+      decision: {
+        reason: "dns_lookup_failed",
+        dns: {
+          status: "failed"
+        }
+      }
+    });
+  });
+
+  it("validates localhost-name DNS answers before local-network egress", async () => {
+    const fetchImpl: any = vi.fn(async () => new Response("unexpected"));
+    await expect(fetchWithPinnedDns({
+      url: "http://service.localhost/mcp",
+      policyPreset: "security.development-local",
+      lookup: async () => [{ address: "169.254.169.254", family: 4 }],
+      fetchImpl
+    })).rejects.toMatchObject({ code: "outbound_egress_denied", decision: { reason: "restricted_dns_address_cloud-metadata" } });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    const result = await fetchWithPinnedDns({
+      url: "http://service.localhost/mcp",
+      policyPreset: "security.development-local",
+      lookup: async () => [{ address: "127.0.0.1", family: 4 }],
+      fetchImpl
+    });
+    expect(result.pinnedDns).toMatchObject({ address: "127.0.0.1", family: 4 });
+    await result.response.body?.cancel();
+    await result.close();
+  });
+
+  it("allows explicit loopback/private DNS targets but denies any link-local answer", async () : Promise<any> => {
+    const allowed: any = await evaluateOutboundEgressUrlWithDns({
+      url: "https://dev.service.test:443/mcp",
+      label: "outbound.url",
+      policyPreset: "security.development-local",
+      lookup: async () : Promise<any> => [
+        { address: "127.0.0.1", family: 4 },
+        { address: "10.20.30.40", family: 4 }
+      ]
+    });
+
+    expect(allowed).toMatchObject({
+      ok: true,
+      reason: "allowed",
+      allowLocalForDevelopment: true,
+      dns: {
+        status: "resolved",
+        restrictedAddressCount: 2,
+        deniedAddressCount: 0
+      }
+    });
+
+    const denied: any = await evaluateOutboundEgressUrlWithDns({
+      url: "https://dev.service.test:443/mcp",
+      policies: { egress: { allowLocalForConfiguredModelService: true } },
+      lookup: async () : Promise<any> => [
+        { address: "127.0.0.1", family: 4 },
+        { address: "fe80::1", family: 6 }
+      ]
+    });
+
+    expect(denied).toMatchObject({
+      ok: false,
+      reason: "restricted_dns_address_link-local",
+      allowLocalForConfiguredModelService: true,
+      dns: {
+        restrictedAddressCount: 2,
+        deniedAddressCount: 1
+      }
+    });
+  });
+
+  it("fails closed when DNS yields no valid address", async () : Promise<any> => {
+    const decision: any = await evaluateOutboundEgressUrlWithDns({
+      url: "https://empty.service.test/mcp",
+      lookup: async () : Promise<any> => [{ address: "not-an-ip", family: 4 }]
+    });
+
+    expect(decision).toMatchObject({
+      ok: false,
+      reason: "dns_no_addresses",
+      dns: {
+        status: "resolved",
+        addressCount: 0,
+        deniedAddressCount: 0
+      }
+    });
+  });
+
+  it("pins fetch connections to the DNS answers evaluated by policy", async () : Promise<any> => {
+    const lookup: any = vi.fn(async () : Promise<any> => [{ address: "127.0.0.1", family: 4 }]);
+    const fetchImpl: any = vi.fn(async (url?: any, init?: any) : Promise<any> => {
+      expect(url).toBe("http://service.example.test:43123/health");
+      expect(init).toMatchObject({ redirect: "manual" });
+      expect(init.dispatcher).toBeDefined();
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "x-request-host": new URL(url).host
+        }
+      });
+    });
+    let pinnedFetch: any = null;
+    try {
+      pinnedFetch = await fetchWithPinnedDns({
+        url: "http://service.example.test:43123/health",
+        label: "healthCheck.url",
+        policyPreset: "security.development-local",
+        lookup,
+        fetchImpl,
+        init: {
+          redirect: "manual"
+        }
+      });
+      expect(await pinnedFetch.response.json()).toEqual({ ok: true });
+      expect(pinnedFetch.pinnedDns).toMatchObject({
+        host: "service.example.test",
+        address: "127.0.0.1",
+        family: 4,
+        addressCategory: "loopback",
+        restricted: true
+      });
+      expect(pinnedFetch.response.headers.get("x-request-host")).toBe("service.example.test:43123");
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      expect(lookup).toHaveBeenCalledTimes(1);
+      expect(lookup).toHaveBeenCalledWith("service.example.test", { all: true, verbatim: true });
+    } finally {
+      await pinnedFetch?.close?.();
+    }
+  });
+
+  it("creates the response-timeout dispatcher for both hostname and literal-address fetches", async () : Promise<any> => {
+    const requests: any[] = [];
+    const fetchImpl: any = vi.fn(async (_url?: any, init?: any) : Promise<any> => {
+      requests.push(init);
+      return new Response("ok", { status: 200 });
+    });
+    const responseTimeouts = { headersTimeout: 0, bodyTimeout: 0 };
+    const hostnameFetch = await fetchWithPinnedDns({
+      url: "https://service.example.test/mcp",
+      lookup: async () : Promise<any> => [{ address: "203.0.113.10", family: 4 }],
+      fetchImpl,
+      responseTimeouts
+    });
+    const literalFetch = await fetchWithPinnedDns({
+      url: "http://127.0.0.1:43123/mcp",
+      policies: { egress: { allowLocalForConfiguredModelService: true } },
+      fetchImpl,
+      responseTimeouts
+    });
+
+    try {
+      expect(requests).toHaveLength(2);
+      expect(requests[0].dispatcher).toBeDefined();
+      expect(requests[1].dispatcher).toBeDefined();
+      expect(hostnameFetch.pinnedDns).toMatchObject({ host: "service.example.test", address: "203.0.113.10" });
+      expect(literalFetch.pinnedDns).toBeNull();
+    } finally {
+      await hostnameFetch.close();
+      await literalFetch.close();
+    }
+  });
+
+  it("runs request-scoped admission after DNS and immediately before the pinned fetch", async () : Promise<any> => {
+    const order: string[] = [];
+    const lookup = vi.fn(async () : Promise<any> => {
+      order.push("dns");
+      return [{ address: "203.0.113.10", family: 4 }];
+    });
+    const fetchImpl = vi.fn(async () : Promise<any> => {
+      order.push("fetch");
+      return new Response("ok", { status: 200 });
+    });
+    let result: any = null;
+    try {
+      result = await fetchWithPinnedDns({
+        url: "https://mcp.example.test/tools/call",
+        lookup,
+        fetchImpl,
+        async beforeFetch() {
+          order.push("admission");
+        }
+      });
+      expect(result.response.status).toBe(200);
+      expect(order).toEqual(["dns", "admission", "fetch"]);
+    } finally {
+      await result?.close?.();
+    }
+  });
+
+  it("observes authority revoked while DNS resolution is held before pinned fetch", async () : Promise<any> => {
+    const order: string[] = [];
+    let releaseDns!: () => void;
+    let authorityAllowed = true;
+    const dnsGate = new Promise<void>((resolve) => { releaseDns = resolve; });
+    let resolveDnsStarted!: () => void;
+    const dnsStarted = new Promise<void>((resolve) => { resolveDnsStarted = resolve; });
+    const lookup = vi.fn(async () : Promise<any> => {
+      order.push("dns-start");
+      resolveDnsStarted();
+      await dnsGate;
+      order.push("dns-complete");
+      return [{ address: "203.0.113.10", family: 4 }];
+    });
+    const fetchImpl = vi.fn(async () : Promise<any> => {
+      order.push("fetch");
+      return new Response("unexpected", { status: 200 });
+    });
+    const pending = fetchWithPinnedDns({
+      url: "https://mcp.example.test/tools/call",
+      lookup,
+      fetchImpl,
+      async beforeFetch() {
+        order.push(`admission:${authorityAllowed ? "allowed" : "revoked"}`);
+        if (!authorityAllowed) {
+          throw Object.assign(new Error("authority revoked during DNS resolution"), { code: "final_admission_rejected" });
+        }
+      }
+    });
+    await dnsStarted;
+    authorityAllowed = false;
+    releaseDns();
+
+    await expect(pending).rejects.toMatchObject({ code: "final_admission_rejected" });
+    expect(order).toEqual(["dns-start", "dns-complete", "admission:revoked"]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(lookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fetch when request-scoped admission rejects", async () : Promise<any> => {
+    const order: string[] = [];
+    const fetchImpl = vi.fn(async () : Promise<any> => {
+      order.push("fetch");
+      return new Response("unexpected", { status: 200 });
+    });
+    await expect(fetchWithPinnedDns({
+      url: "https://mcp.example.test/tools/call",
+      lookup: async () : Promise<any> => [{ address: "203.0.113.10", family: 4 }],
+      fetchImpl,
+      async beforeFetch() {
+        order.push("admission");
+        throw Object.assign(new Error("final admission rejected"), { code: "final_admission_rejected" });
+      }
+    })).rejects.toMatchObject({ code: "final_admission_rejected" });
+    expect(order).toEqual(["admission"]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("validates redirect Location decisions without following the redirect", async () : Promise<any> => {
+    const literalDecision: any = await evaluateOutboundRedirectLocationWithDns({
+      sourceUrl: "https://203.0.113.10:443/start",
+      status: 302,
+      location: "http://169.254.169.254:80/latest/meta-data/",
+      label: "tools[].transport.url.redirectLocation",
+      policyPreset: "security.production-default",
+      lookup: async () : Promise<any> => {
+        throw new Error("literal addresses should not need DNS");
+      }
+    });
+    expect(literalDecision).toMatchObject({
+      ok: false,
+      reason: "restricted_address_cloud-metadata",
+      targetUrl: "http://169.254.169.254/latest/meta-data/",
+      targetDecision: {
+        addressCategory: "link-local",
+        metadataEndpoint: true
+      }
+    });
+
+    const dnsDecision: any = await evaluateOutboundRedirectLocationWithDns({
+      sourceUrl: "https://redirect.example.test:443/start",
+      status: 307,
+      location: "/next",
+      label: "tools[].transport.url.redirectLocation",
+      policyPreset: "security.production-default",
+      lookup: async () : Promise<any> => [{ address: "192.168.1.10", family: 4 }]
+    });
+    expect(dnsDecision).toMatchObject({
+      ok: false,
+      reason: "restricted_dns_address_private",
+      targetUrl: "https://redirect.example.test/next"
+    });
+  });
+
+  it("manually revalidates every redirect hop and strips cross-origin authority", async () : Promise<any> => {
+    const calls: any[] = [];
+    const lookup: any = vi.fn(async () : Promise<any> => [{ address: [8, 8, 8, 8].join("."), family: 4 }]);
+    const fetchImpl: any = vi.fn(async (url?: any, init?: any) : Promise<any> => {
+      calls.push({ url, init });
+      if (calls.length === 1) {
+        return new Response(null, { status: 302, headers: { location: "https://second.example.test/final" } });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const result: any = await fetchWithPinnedDns({
+      url: "https://first.example.test/start",
+      lookup,
+      fetchImpl,
+      maxRedirects: 5,
+      init: {
+        method: "POST",
+        headers: {
+          authorization: canned1,
+          "x-api-key": canned2,
+          "x-project-token": canned3,
+          "x-project-id": "synthetic-project",
+          "x-meshrix-gateway-service": "synthetic-service",
+          "content-type": "application/json"
+        },
+        body: "{}"
+      }
+    });
+    try {
+      expect(await result.response.json()).toEqual({ ok: true });
+      expect(calls).toHaveLength(2);
+      expect(calls[0].init.redirect).toBe("manual");
+      expect(calls[1].init).toMatchObject({ method: "GET", redirect: "manual" });
+      expect(calls[1].init.headers.authorization).toBeUndefined();
+      expect(calls[1].init.headers["x-api-key"]).toBeUndefined();
+      expect(calls[1].init.headers["x-project-token"]).toBeUndefined();
+      expect(calls[1].init.headers["x-meshrix-gateway-service"]).toBeUndefined();
+      expect(calls[1].init.headers["x-project-id"]).toBe("synthetic-project");
+      expect(calls[1].init.body).toBeUndefined();
+      expect(lookup).toHaveBeenCalledTimes(2);
+    } finally {
+      await result.close();
+    }
+  });
+
+  it("returns a redirect response without a second hop when redirects are disabled", async () : Promise<any> => {
+    const fetchImpl: any = vi.fn(async () : Promise<any> => new Response(null, {
+      status: 302,
+      headers: { location: "https://second.example.test/final" }
+    }));
+    const lookup: any = vi.fn(async () : Promise<any> => [{ address: [8, 8, 8, 8].join("."), family: 4 }]);
+    const result: any = await fetchWithPinnedDns({
+      url: "https://first.example.test/start",
+      fetchImpl,
+      lookup,
+      maxRedirects: 0
+    });
+    try {
+      expect(result.response.status).toBe(302);
+    } finally {
+      await result.close();
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("denies a redirect to restricted DNS before issuing the next request", async () : Promise<any> => {
+    const fetchImpl: any = vi.fn(async () : Promise<any> => new Response(null, {
+      status: 307,
+      headers: { location: "https://private.example.test/next" }
+    }));
+    const lookup: any = vi.fn(async (host?: any) : Promise<any> => [{
+      address: host === "private.example.test" ? "10.0.0.4" : [8, 8, 8, 8].join("."),
+      family: 4
+    }]);
+    await expect(fetchWithPinnedDns({
+      url: "https://public.example.test/start",
+      fetchImpl,
+      maxRedirects: 5,
+      lookup
+    })).rejects.toMatchObject({ code: "outbound_egress_denied" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(lookup).toHaveBeenCalledTimes(2);
+  });
+});

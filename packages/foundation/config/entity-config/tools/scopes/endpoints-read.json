@@ -1,0 +1,5 @@
+{
+  "id": "endpoints:read",
+  "label": "Read managed endpoints",
+  "description": "Read managed endpoints and their task status."
+}

@@ -1,0 +1,671 @@
+import { createHash, randomBytes } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
+import type Database from "better-sqlite3";
+
+export const MAX_MESHRIX_CLIENT_REGISTRATIONS = 2000;
+// Internal capacity safety policy; it does not populate user discovery configuration.
+export const DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS = 15 * 60;
+export const MAX_CLIENT_ENROLLMENT_TOKENS = 1024;
+export const DEFAULT_ENROLLMENT_TOKEN_TTL_SECONDS = 15 * 60;
+export const MAX_ENROLLMENT_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+const CLIENT_CREDENTIAL_PATTERN = /^mck_[A-Za-z0-9_-]{20,}$/u;
+const ENROLLMENT_TOKEN_PATTERN = /^met_[A-Za-z0-9_-]{20,}$/u;
+type AlignmentState =
+  | "unknown"
+  | "offline"
+  | "draining"
+  | "aligned"
+  | "outdated"
+  | "bootstrap-only";
+interface ClientState {
+  currentServiceUrl?: unknown;
+  desiredServiceUrl?: unknown;
+  currentJobServiceUrl?: unknown;
+}
+interface ClientRow {
+  client_id: string;
+  client_label: string;
+  app_version: string;
+  platform: string;
+  hostname: string;
+  bootstrap_url: string;
+  current_service_url: string;
+  desired_service_url: string;
+  current_job_service_url: string;
+  config_version: string;
+  alignment_state: string;
+  last_error: string;
+  busy: number;
+  last_job_id: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  last_seen_server_id: string;
+  updated_at: string;
+}
+interface CountRow {
+  count: number;
+}
+interface ClientItem {
+  clientId: string;
+  clientLabel: string;
+  appVersion: string;
+  platform: string;
+  hostname: string;
+  bootstrapUrl: string;
+  currentServiceUrl: string;
+  desiredServiceUrl: string;
+  currentJobServiceUrl: string;
+  configVersion: string;
+  alignmentState: AlignmentState;
+  connectionKind: string;
+  connectionMethod: string;
+  connectionState: "offline" | "unknown" | "active";
+  connectionStatusLabel: string;
+  supportsAlignment: true;
+  busy: boolean;
+  lastJobId: string;
+  lastError: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  lastSeenServerId: string;
+}
+interface CheckInInput extends Record<string, unknown> {
+  clientId: string;
+  clientLabel?: string;
+  appVersion?: string;
+  platform?: string;
+  hostname?: string;
+  bootstrapUrl?: string;
+  currentServiceUrl?: string;
+  desiredServiceUrl?: string;
+  currentJobServiceUrl?: string;
+  configVersion?: string;
+  busy?: boolean;
+  lastJobId?: string;
+  lastError?: string;
+  serverId?: string;
+  offlineAfterSeconds?: number;
+}
+interface ClientRegistryService {
+  recordClientCheckIn(input: CheckInInput): Record<string, unknown>;
+  listClientRegistrations(options?: { offlineAfterSeconds?: number }): {
+    summary: Record<string, number>;
+    items: ClientItem[];
+  };
+  findClientRegistration(options?: {
+    clientId?: string;
+    offlineAfterSeconds?: number;
+  }): ClientItem | null;
+  issueEnrollmentToken(options?: { ttlSeconds?: number }): Record<string, unknown>;
+  consumeEnrollmentToken(presentedToken?: unknown): Record<string, unknown>;
+  issueClientCredential(options?: { clientId?: string }): Record<string, unknown>;
+  resolveClientCredential(presentedCredential?: unknown): Record<string, unknown>;
+  close(): void;
+}
+interface ServiceOptions {
+  userDataPath?: string;
+  db?: Database.Database | null;
+  maxClientRegistrations?: number;
+  registrationRetentionSeconds?: number;
+  now?: () => number;
+}
+
+function asBoolInt(value?: unknown): 0 | 1 {
+  return value ? 1 : 0;
+}
+
+export function getClientRegistryDatabasePath(userDataPath = ""): string {
+  return path.join(userDataPath, "client-state", "client-registry.sqlite");
+}
+
+export function initializeClientRegistrySchema(db: Database.Database): void {
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA busy_timeout = 5000;
+
+    CREATE TABLE IF NOT EXISTS client_registrations (
+      client_id TEXT PRIMARY KEY,
+      client_label TEXT NOT NULL DEFAULT '',
+      app_version TEXT NOT NULL DEFAULT '',
+      platform TEXT NOT NULL DEFAULT '',
+      hostname TEXT NOT NULL DEFAULT '',
+      bootstrap_url TEXT NOT NULL DEFAULT '',
+      current_service_url TEXT NOT NULL DEFAULT '',
+      desired_service_url TEXT NOT NULL DEFAULT '',
+      current_job_service_url TEXT NOT NULL DEFAULT '',
+      config_version TEXT NOT NULL DEFAULT '',
+      alignment_state TEXT NOT NULL DEFAULT 'unknown',
+      last_error TEXT NOT NULL DEFAULT '',
+      busy INTEGER NOT NULL DEFAULT 0,
+      last_job_id TEXT NOT NULL DEFAULT '',
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      last_seen_server_id TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_client_registrations_seen
+      ON client_registrations(last_seen_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_client_registrations_state
+      ON client_registrations(alignment_state, last_seen_at DESC);
+
+    CREATE TABLE IF NOT EXISTS client_enrollment_tokens (
+      token_hash TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_client_enrollment_tokens_expiry
+      ON client_enrollment_tokens(expires_at);
+
+    CREATE TABLE IF NOT EXISTS client_credentials (
+      credential_hash TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      revoked_at TEXT NOT NULL DEFAULT ''
+    );
+  `);
+}
+
+function openClientRegistryDatabase(userDataPath = ""): Database.Database {
+  const databasePath = getClientRegistryDatabasePath(userDataPath);
+  fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+  let db: Database.Database | null = null;
+  try {
+    db = openSqliteDatabase(databasePath);
+    initializeClientRegistrySchema(db);
+    return db;
+  } catch (error: unknown) {
+    try {
+      db?.close?.();
+    } catch {
+      // Preserve the initialization failure while still attempting local cleanup.
+    }
+    throw error;
+  }
+}
+
+function normalizeClientAlignmentState(
+  currentState: ClientState = {},
+  lastSeenAt?: unknown,
+  offlineAfterSeconds?: unknown,
+  observedAtMs = Date.now(),
+): AlignmentState {
+  const currentServiceUrl = String(currentState.currentServiceUrl || "").trim();
+  const desiredServiceUrl = String(currentState.desiredServiceUrl || "").trim();
+  const currentJobServiceUrl = String(
+    currentState.currentJobServiceUrl || "",
+  ).trim();
+  const observedLastSeenAt =
+    typeof lastSeenAt === "string" ||
+    typeof lastSeenAt === "number" ||
+    lastSeenAt instanceof Date
+      ? lastSeenAt
+      : 0;
+  const ageSeconds = Math.max(
+    0,
+    Math.floor((observedAtMs - new Date(observedLastSeenAt).getTime()) / 1000),
+  );
+
+  if (!lastSeenAt || !Number.isFinite(ageSeconds)) {
+    return "unknown";
+  }
+
+  const offlineThreshold = Number(offlineAfterSeconds || 0);
+  if (offlineThreshold > 0 && ageSeconds > offlineThreshold) {
+    return "offline";
+  }
+
+  if (currentJobServiceUrl && currentJobServiceUrl !== desiredServiceUrl) {
+    return "draining";
+  }
+
+  if (
+    currentServiceUrl &&
+    desiredServiceUrl &&
+    currentServiceUrl === desiredServiceUrl
+  ) {
+    return "aligned";
+  }
+
+  if (
+    currentServiceUrl &&
+    desiredServiceUrl &&
+    currentServiceUrl !== desiredServiceUrl
+  ) {
+    return "outdated";
+  }
+
+  if (desiredServiceUrl) {
+    return "bootstrap-only";
+  }
+
+  return "unknown";
+}
+
+function prepareClientRegistryStatements(database: Database.Database) {
+  return {
+    selectClientRegistrationStmt: database.prepare<[string], ClientRow>(`
+      SELECT * FROM client_registrations WHERE client_id = ?
+    `),
+    countClientRegistrationsStmt: database.prepare<[], CountRow>(`
+      SELECT COUNT(*) AS count FROM client_registrations
+    `),
+    pruneExpiredClientRegistrationsStmt: database.prepare(`
+      DELETE FROM client_registrations
+      WHERE last_seen_at < ?
+    `),
+    upsertClientRegistrationStmt: database.prepare(`
+      INSERT INTO client_registrations (
+        client_id, client_label, app_version, platform, hostname, bootstrap_url,
+        current_service_url, desired_service_url, current_job_service_url, config_version,
+        alignment_state, last_error, busy, last_job_id, first_seen_at, last_seen_at,
+        last_seen_server_id, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(client_id) DO UPDATE SET
+        client_label = excluded.client_label,
+        app_version = excluded.app_version,
+        platform = excluded.platform,
+        hostname = excluded.hostname,
+        bootstrap_url = excluded.bootstrap_url,
+        current_service_url = excluded.current_service_url,
+        desired_service_url = excluded.desired_service_url,
+        current_job_service_url = excluded.current_job_service_url,
+        config_version = excluded.config_version,
+        alignment_state = excluded.alignment_state,
+        last_error = excluded.last_error,
+        busy = excluded.busy,
+        last_job_id = excluded.last_job_id,
+        last_seen_at = excluded.last_seen_at,
+        last_seen_server_id = excluded.last_seen_server_id,
+        updated_at = excluded.updated_at
+    `),
+    listClientRegistrationsStmt: database.prepare<[], ClientRow>(`
+      SELECT * FROM client_registrations
+      ORDER BY last_seen_at DESC, client_id ASC
+    `),
+    insertEnrollmentTokenStmt: database.prepare(`
+      INSERT INTO client_enrollment_tokens (token_hash, created_at, expires_at, consumed_at)
+      VALUES (?, ?, ?, '')
+    `),
+    selectEnrollmentTokenStmt: database.prepare(`
+      SELECT * FROM client_enrollment_tokens WHERE token_hash = ?
+    `),
+    consumeEnrollmentTokenStmt: database.prepare(`
+      UPDATE client_enrollment_tokens SET consumed_at = ?
+      WHERE token_hash = ? AND consumed_at = ''
+    `),
+    pruneEnrollmentTokensStmt: database.prepare(`
+      DELETE FROM client_enrollment_tokens WHERE expires_at < ? OR consumed_at != ''
+    `),
+    countEnrollmentTokensStmt: database.prepare<[], CountRow>(`
+      SELECT COUNT(*) AS count FROM client_enrollment_tokens
+    `),
+    deleteClientCredentialsByClientIdStmt: database.prepare(`
+      DELETE FROM client_credentials WHERE client_id = ?
+    `),
+    insertClientCredentialStmt: database.prepare(`
+      INSERT INTO client_credentials (credential_hash, client_id, created_at, revoked_at)
+      VALUES (?, ?, ?, '')
+    `),
+    selectClientCredentialStmt: database.prepare(`
+      SELECT client_id FROM client_credentials WHERE credential_hash = ? AND revoked_at = ''
+    `),
+  };
+}
+
+function clientSecretDigest(value?: unknown): string {
+  return createHash("sha256").update(String(value || "")).digest("hex");
+}
+
+function mintClientSecret(prefix: "met_" | "mck_"): string {
+  return `${prefix}${randomBytes(32).toString("base64url")}`;
+}
+
+export function isClientEnrollmentToken(value?: unknown): boolean {
+  return ENROLLMENT_TOKEN_PATTERN.test(String(value || ""));
+}
+
+export function isClientCredential(value?: unknown): boolean {
+  return CLIENT_CREDENTIAL_PATTERN.test(String(value || ""));
+}
+
+export function createClientRegistryService({
+  userDataPath = "",
+  db = null,
+  maxClientRegistrations = MAX_MESHRIX_CLIENT_REGISTRATIONS,
+  registrationRetentionSeconds = DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS,
+  now = Date.now,
+}: ServiceOptions = {}): ClientRegistryService {
+  const database = db || openClientRegistryDatabase(userDataPath);
+  const ownsDatabase = !db;
+  const maxRegistrations = Math.max(
+    1,
+    Math.floor(
+      Number(maxClientRegistrations || MAX_MESHRIX_CLIENT_REGISTRATIONS) ||
+        MAX_MESHRIX_CLIENT_REGISTRATIONS,
+    ),
+  );
+  const defaultRetentionSeconds = Math.max(
+    1,
+    Math.floor(
+      Number(
+        registrationRetentionSeconds ||
+          DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS,
+      ) || DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS,
+    ),
+  );
+  const currentTimeMs = (): number => {
+    const value = Number(typeof now === "function" ? now() : Date.now());
+    return Number.isFinite(value) ? value : Date.now();
+  };
+  let statements: ReturnType<typeof prepareClientRegistryStatements>;
+  try {
+    statements = prepareClientRegistryStatements(database);
+  } catch (error: unknown) {
+    if (ownsDatabase) {
+      try {
+        database.close();
+      } catch {
+        // Preserve the statement initialization failure.
+      }
+    }
+    throw error;
+  }
+  const {
+    selectClientRegistrationStmt,
+    countClientRegistrationsStmt,
+    pruneExpiredClientRegistrationsStmt,
+    upsertClientRegistrationStmt,
+    listClientRegistrationsStmt,
+    insertEnrollmentTokenStmt,
+    selectEnrollmentTokenStmt,
+    consumeEnrollmentTokenStmt,
+    pruneEnrollmentTokensStmt,
+    countEnrollmentTokensStmt,
+    deleteClientCredentialsByClientIdStmt,
+    insertClientCredentialStmt,
+    selectClientCredentialStmt,
+  } = statements;
+
+  return {
+    recordClientCheckIn({
+      clientId,
+      clientLabel = "",
+      appVersion = "",
+      platform = "",
+      hostname = "",
+      bootstrapUrl = "",
+      currentServiceUrl = "",
+      desiredServiceUrl = "",
+      currentJobServiceUrl = "",
+      configVersion = "",
+      busy = false,
+      lastJobId = "",
+      lastError = "",
+      serverId = "",
+      offlineAfterSeconds = 0,
+    }: CheckInInput): Record<string, unknown> {
+      const existing = selectClientRegistrationStmt.get(String(clientId || ""));
+      const checkedInAtMs = currentTimeMs();
+      const checkedInAt = new Date(checkedInAtMs).toISOString();
+      const firstSeenAt = existing?.first_seen_at || checkedInAt;
+      if (!existing) {
+        const offlineThreshold = Number(offlineAfterSeconds || 0);
+        let count = Number(countClientRegistrationsStmt.get()?.count || 0);
+        if (count >= maxRegistrations) {
+          const expirationSeconds =
+            Number.isFinite(offlineThreshold) && offlineThreshold > 0
+              ? offlineThreshold
+              : defaultRetentionSeconds;
+          const expiredCutoff = new Date(
+            checkedInAtMs - expirationSeconds * 1000,
+          ).toISOString();
+          pruneExpiredClientRegistrationsStmt.run(expiredCutoff);
+          count = Number(countClientRegistrationsStmt.get()?.count || 0);
+        }
+        if (count >= maxRegistrations) {
+          return {
+            ok: false,
+            statusCode: 429,
+            code: "client_registration_capacity_exceeded",
+            error: "客户端登记容量已满，请等待离线记录过期后重试。",
+          };
+        }
+      }
+      const alignmentState = normalizeClientAlignmentState(
+        {
+          currentServiceUrl,
+          desiredServiceUrl,
+          currentJobServiceUrl,
+        },
+        checkedInAt,
+        offlineAfterSeconds,
+        checkedInAtMs,
+      );
+
+      upsertClientRegistrationStmt.run(
+        clientId,
+        String(clientLabel || hostname || clientId),
+        String(appVersion || ""),
+        String(platform || ""),
+        String(hostname || ""),
+        String(bootstrapUrl || ""),
+        String(currentServiceUrl || ""),
+        String(desiredServiceUrl || ""),
+        String(currentJobServiceUrl || ""),
+        String(configVersion || ""),
+        alignmentState,
+        String(lastError || ""),
+        asBoolInt(busy),
+        String(lastJobId || ""),
+        firstSeenAt,
+        checkedInAt,
+        String(serverId || ""),
+        checkedInAt,
+      );
+
+      return {
+        ok: true,
+        clientId,
+        alignmentState,
+        connectionKind: "meshrix-client",
+        connectionMethod: "meshrix-client 封装",
+        connectionState:
+          alignmentState === "offline"
+            ? "offline"
+            : alignmentState === "unknown"
+              ? "unknown"
+              : "active",
+        connectionStatusLabel: "",
+        supportsAlignment: true,
+        firstSeenAt,
+        lastSeenAt: checkedInAt,
+      };
+    },
+    listClientRegistrations({
+      offlineAfterSeconds = 0,
+    }: { offlineAfterSeconds?: number } = {}) {
+      const observedAtMs = currentTimeMs();
+      const items: ClientItem[] = listClientRegistrationsStmt
+        .all()
+        .map((row) => {
+          const alignmentState = normalizeClientAlignmentState(
+            {
+              currentServiceUrl: row.current_service_url,
+              desiredServiceUrl: row.desired_service_url,
+              currentJobServiceUrl: row.current_job_service_url,
+            },
+            row.last_seen_at,
+            offlineAfterSeconds,
+            observedAtMs,
+          );
+
+          return {
+            clientId: row.client_id,
+            clientLabel: row.client_label || row.hostname || row.client_id,
+            appVersion: row.app_version || "",
+            platform: row.platform || "",
+            hostname: row.hostname || "",
+            bootstrapUrl: row.bootstrap_url || "",
+            currentServiceUrl: row.current_service_url || "",
+            desiredServiceUrl: row.desired_service_url || "",
+            currentJobServiceUrl: row.current_job_service_url || "",
+            configVersion: row.config_version || "",
+            alignmentState,
+            connectionKind: "meshrix-client",
+            connectionMethod: "meshrix-client 封装",
+            connectionState:
+              alignmentState === "offline"
+                ? "offline"
+                : alignmentState === "unknown"
+                  ? "unknown"
+                  : "active",
+            connectionStatusLabel: "",
+            supportsAlignment: true,
+            busy: Boolean(row.busy),
+            lastJobId: row.last_job_id || "",
+            lastError: row.last_error || "",
+            firstSeenAt: row.first_seen_at,
+            lastSeenAt: row.last_seen_at,
+            lastSeenServerId: row.last_seen_server_id || "",
+          };
+        });
+
+      const summary: Record<string, number> = {
+        totalCount: items.length,
+        alignedCount: items.filter((item) => item.alignmentState === "aligned")
+          .length,
+        outdatedCount: items.filter(
+          (item) => item.alignmentState === "outdated",
+        ).length,
+        drainingCount: items.filter(
+          (item) => item.alignmentState === "draining",
+        ).length,
+        bootstrapOnlyCount: items.filter(
+          (item) => item.alignmentState === "bootstrap-only",
+        ).length,
+        offlineCount: items.filter((item) => item.alignmentState === "offline")
+          .length,
+        unknownCount: items.filter((item) => item.alignmentState === "unknown")
+          .length,
+        meshrixClientCount: items.length,
+        mcpPluginCount: 0,
+        alignableCount: items.length,
+      };
+
+      return {
+        summary,
+        items,
+      };
+    },
+    findClientRegistration({
+      clientId = "",
+      offlineAfterSeconds = 0,
+    }: { clientId?: string; offlineAfterSeconds?: number } = {}) {
+      const selectedClientId = String(clientId || "").trim();
+      if (!selectedClientId) {
+        return null;
+      }
+      return (
+        this.listClientRegistrations({ offlineAfterSeconds }).items.find(
+          (item) => item.clientId === selectedClientId,
+        ) || null
+      );
+    },
+    issueEnrollmentToken({
+      ttlSeconds = DEFAULT_ENROLLMENT_TOKEN_TTL_SECONDS,
+    }: { ttlSeconds?: number } = {}): Record<string, unknown> {
+      const issuedAtMs = currentTimeMs();
+      const issuedAt = new Date(issuedAtMs).toISOString();
+      pruneEnrollmentTokensStmt.run(issuedAt);
+      const liveCount = Number(countEnrollmentTokensStmt.get()?.count || 0);
+      if (liveCount >= MAX_CLIENT_ENROLLMENT_TOKENS) {
+        return {
+          ok: false,
+          statusCode: 429,
+          code: "client_enrollment_token_capacity_exceeded",
+          error: "客户端登记令牌容量已满，请等待过期令牌回收后重试。",
+        };
+      }
+      const ttl = Math.min(
+        MAX_ENROLLMENT_TOKEN_TTL_SECONDS,
+        Math.max(
+          60,
+          Math.floor(
+            Number(ttlSeconds || DEFAULT_ENROLLMENT_TOKEN_TTL_SECONDS) ||
+              DEFAULT_ENROLLMENT_TOKEN_TTL_SECONDS,
+          ),
+        ),
+      );
+      const token = mintClientSecret("met_");
+      const expiresAt = new Date(issuedAtMs + ttl * 1000).toISOString();
+      insertEnrollmentTokenStmt.run(clientSecretDigest(token), issuedAt, expiresAt);
+      return { ok: true, token, expiresAt };
+    },
+    consumeEnrollmentToken(presentedToken?: unknown): Record<string, unknown> {
+      const presented = String(presentedToken || "");
+      if (!isClientEnrollmentToken(presented)) {
+        return { ok: false, code: "client_enrollment_token_invalid" };
+      }
+      const consumedAtMs = currentTimeMs();
+      const consumedAt = new Date(consumedAtMs).toISOString();
+      const tokenHash = clientSecretDigest(presented);
+      const row = selectEnrollmentTokenStmt.get(tokenHash) as
+        | { expires_at?: unknown; consumed_at?: unknown }
+        | undefined;
+      if (
+        !row ||
+        String(row.consumed_at || "") ||
+        String(row.expires_at || "") <= consumedAt
+      ) {
+        return { ok: false, code: "client_enrollment_token_invalid" };
+      }
+      const outcome = consumeEnrollmentTokenStmt.run(consumedAt, tokenHash);
+      if (Number(outcome?.changes || 0) !== 1) {
+        return { ok: false, code: "client_enrollment_token_invalid" };
+      }
+      return { ok: true };
+    },
+    issueClientCredential({
+      clientId = "",
+    }: { clientId?: string } = {}): Record<string, unknown> {
+      const boundClientId = String(clientId || "");
+      if (!boundClientId) {
+        return { ok: false, code: "client_credential_issue_failed" };
+      }
+      const credential = mintClientSecret("mck_");
+      const issuedAt = new Date(currentTimeMs()).toISOString();
+      deleteClientCredentialsByClientIdStmt.run(boundClientId);
+      insertClientCredentialStmt.run(
+        clientSecretDigest(credential),
+        boundClientId,
+        issuedAt,
+      );
+      return { ok: true, credential };
+    },
+    resolveClientCredential(
+      presentedCredential?: unknown,
+    ): Record<string, unknown> {
+      const presented = String(presentedCredential || "");
+      if (!isClientCredential(presented)) {
+        return { ok: false };
+      }
+      const row = selectClientCredentialStmt.get(
+        clientSecretDigest(presented),
+      ) as { client_id?: unknown } | undefined;
+      const resolvedClientId = String(row?.client_id || "");
+      return resolvedClientId
+        ? { ok: true, clientId: resolvedClientId }
+        : { ok: false };
+    },
+    close(): void {
+      if (ownsDatabase) {
+        database.close();
+      }
+    },
+  };
+}

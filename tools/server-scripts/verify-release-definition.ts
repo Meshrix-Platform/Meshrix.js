@@ -1,0 +1,182 @@
+#!/usr/bin/env node
+
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import {
+  loadReleaseDefinition,
+  resolveReleaseWorkspaceDirectories
+} from "./lib/release-metadata.ts";
+import {
+  MCP_NPM_PACKAGE_NAME,
+  MCP_NPM_PACKAGE_VERSION
+} from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
+
+const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const semverPattern: any =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
+
+function fail(code?: any, detail?: any) : any {
+  const error: Error & Record<string, any> = new Error(detail);
+  error.code = code;
+  throw error;
+}
+
+export async function verifyReleaseDefinition({
+  rootDir = repoRoot,
+  expectedTag = ""
+}: Record<string, any> = {}) : Promise<any> {
+  const definition: any = await loadReleaseDefinition(rootDir);
+  const version: any = String(definition?.release?.version || "");
+  const tag: any = String(definition?.release?.tag || "");
+  const channel: any = String(definition?.release?.channel || "");
+  const npmCliVersion: any = String(definition?.github?.npmCliVersion || "");
+  const npmCliMatch: any = /^(\d+)\.(\d+)\.(\d+)$/u.exec(npmCliVersion);
+  if (!npmCliMatch) {
+    fail("release_definition_npm_cli_version_invalid", "The release workflow requires an exact npm CLI version.");
+  }
+  const npmCliCoordinates: number[] = npmCliMatch.slice(1).map(Number);
+  const npmCliMinimum = [11, 5, 1];
+  const npmCliSupported = npmCliCoordinates.some((part, index) => {
+    if (part === npmCliMinimum[index]) return false;
+    return part > npmCliMinimum[index] && npmCliCoordinates.slice(0, index)
+      .every((previous, previousIndex) => previous === npmCliMinimum[previousIndex]);
+  }) || npmCliCoordinates.every((part, index) => part === npmCliMinimum[index]);
+  if (!npmCliSupported) {
+    fail("release_definition_npm_cli_version_unsupported", "The release workflow requires npm 11.5.1 or newer for trusted publishing.");
+  }
+  const npmCliIntegrity: any = String(definition?.github?.npmCliIntegrity || "");
+  if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(npmCliIntegrity)) {
+    fail("release_definition_npm_cli_integrity_invalid", "The release workflow requires a pinned npm CLI tarball SHA-512.");
+  }
+  if (!semverPattern.test(version) || tag !== `v${version}`) {
+    fail("release_definition_coordinates_invalid", "Release version and tag do not agree.");
+  }
+  if (channel !== (version.includes("-") ? "next" : "stable")) {
+    fail("release_definition_channel_invalid", "Release channel does not agree with SemVer.");
+  }
+  if (expectedTag && expectedTag !== tag) {
+    fail("release_definition_tag_mismatch", "Git tag does not match the release definition.");
+  }
+
+  const rootPackage: any = JSON.parse(await fs.readFile(path.join(rootDir, "package.json"), "utf8"));
+  if (rootPackage.name !== MCP_NPM_PACKAGE_NAME || rootPackage.version !== MCP_NPM_PACKAGE_VERSION) {
+    fail("release_definition_mcp_package_identity_mismatch", "MCP executable identity must match the root npm package.");
+  }
+  const workspaceDirectories: any = await resolveReleaseWorkspaceDirectories({
+    rootDir,
+    workspaces: rootPackage.workspaces
+  });
+  const expectedManifests: any[] = [
+    "package.json",
+    ...workspaceDirectories.map((workspace?: any) : any => `${workspace}/package.json`)
+  ];
+  if (JSON.stringify(definition.packages.manifests) !== JSON.stringify(expectedManifests)) {
+    fail("release_definition_manifest_set_mismatch", "Release manifest set is not the workspace release set.");
+  }
+  for (const manifest of expectedManifests) {
+    const value: any = JSON.parse(await fs.readFile(path.join(rootDir, manifest), "utf8"));
+    if (value.version !== version) {
+      fail("release_definition_package_version_mismatch", `${manifest} does not match the release version.`);
+    }
+  }
+  const lock: any = JSON.parse(await fs.readFile(path.join(rootDir, "package-lock.json"), "utf8"));
+  if (lock.version !== version || lock.packages?.[""]?.version !== version) {
+    fail("release_definition_lock_version_mismatch", "package-lock.json does not match the release version.");
+  }
+  const releasePlan: any = JSON.parse(await fs.readFile(path.join(rootDir, "docs/releases/plan.json"), "utf8"));
+  if (releasePlan.schemaVersion !== 2 || releasePlan.repository !== "Meshrix.js") {
+    fail("release_definition_plan_identity_invalid", "Release plan identity is invalid.");
+  }
+  if (releasePlan.currentVersion !== rootPackage.version) {
+    fail("release_definition_plan_version_mismatch", "Release plan version does not match package.json.");
+  }
+  const changelog: any = String(releasePlan.changelog || "");
+  try {
+    await fs.access(path.join(rootDir, changelog));
+  } catch {
+    fail("release_definition_plan_changelog_missing", "Release plan changelog is missing.");
+  }
+  if (
+    definition?.container?.target !== "runtime-ui" ||
+    definition?.container?.requiredForRelease !== false
+  ) {
+    fail("release_definition_container_scope_invalid", "Container deployment remains an optional release scope.");
+  }
+  if (
+    definition?.acceptance?.profile !== "single-node" ||
+    definition?.acceptance?.commandId !== "platform-acceptance" ||
+    definition?.acceptance?.stableRequiredClaim !== "functional-complete" ||
+    definition?.acceptance?.releaseRequiredClaim !== "npm-package-installability-passed" ||
+    definition?.acceptance?.standardsRegistry !==
+      "tools/registry/release-acceptance-standards.registry.json"
+  ) {
+    fail(
+      "release_definition_acceptance_standard_invalid",
+      "The release definition must bind single-node to the canonical platform-acceptance functional-complete claim.",
+    );
+  }
+  if (definition?.localVerification?.engine !== "automatic-local" ||
+    definition?.localVerification?.evidenceAuthority !== "local-only") {
+    fail("release_definition_local_verification_invalid", "Local release verification must use the automatic project entry.");
+  }
+  return definition;
+}
+
+function readField(definition?: any, field?: any) : any {
+  const value: any = field.split(".").reduce((current?: any, key?: any) : any => current?.[key], definition);
+  if (value === undefined || (typeof value === "object" && value !== null)) {
+    fail("release_definition_field_invalid", `Field ${field} is not a scalar release fact.`);
+  }
+  return String(value);
+}
+
+async function main() : Promise<any> {
+  const args: any = process.argv.slice(2);
+  let expectedTag: any = "";
+  let field: any = "";
+  let jsonField: any = "";
+  for (let index: any = 0; index < args.length; index += 1) {
+    if (args[index] === "--tag") {
+      expectedTag = String(args[++index] || "");
+    } else if (args[index] === "--field") {
+      field = String(args[++index] || "");
+    } else if (args[index] === "--json-field") {
+      jsonField = String(args[++index] || "");
+    } else {
+      fail("release_definition_argument_invalid", `Unknown argument: ${args[index]}`);
+    }
+  }
+  const definition: any = await verifyReleaseDefinition({ expectedTag });
+  if (field && jsonField) {
+    fail("release_definition_argument_invalid", "Use either --field or --json-field.");
+  }
+  if (field) {
+    process.stdout.write(`${readField(definition, field)}\n`);
+  } else if (jsonField) {
+    const value: any = jsonField.split(".").reduce((current?: any, key?: any) : any => current?.[key], definition);
+    if (value === undefined) fail("release_definition_field_invalid", `Unknown field ${jsonField}.`);
+    process.stdout.write(`${JSON.stringify(value)}\n`);
+  } else {
+    process.stdout.write(`${JSON.stringify({
+      ok: true,
+      version: definition.release.version,
+      tag: definition.release.tag,
+      channel: definition.release.channel,
+      containerTarget: definition.container.target,
+      stableClaim: definition.acceptance.stableRequiredClaim,
+      releaseClaim: definition.acceptance.releaseRequiredClaim,
+      npmCliVersion: definition.github.npmCliVersion,
+      npmCliIntegrity: definition.github.npmCliIntegrity
+    })}\n`);
+  }
+}
+
+const isMain: any = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  main().catch((error?: any) : any => {
+    process.stderr.write(`${JSON.stringify({ ok: false, code: error?.code || "release_definition_invalid" })}\n`);
+    process.exitCode = 1;
+  });
+}

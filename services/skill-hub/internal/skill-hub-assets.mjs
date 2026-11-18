@@ -1,0 +1,166 @@
+import {
+  asArray,
+  hash,
+  nowIso,
+  stableId,
+  stableJson,
+  text,
+  WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
+} from "./skill-hub-contracts.mjs";
+import {
+  projectSkillHubAssetRecord,
+  SKILL_HUB_ASSET_BUCKETS,
+  skillHubAssetBucketForType
+} from "./skill-hub-contribution.mjs";
+import {
+  SKILL_HUB_SKILL_STORAGE_DIR,
+  SKILL_HUB_STORAGE_ROOT_DIR,
+  skillHubAssetRelativePath,
+  skillHubSandboxPolicy
+} from "./skill-hub-storage.mjs";
+
+export function materializeSkillHubAsset(contribution, {
+  persistenceEnabled = false,
+  serviceData = null,
+  schedulePersistence = null,
+  registryScope,
+  lifecycleState = contribution.status || "submitted",
+  targetWorkspaceId = contribution.workspaceId,
+  relation = "canonical",
+  actorId = "",
+  reason = "",
+  assetRecordProjector = projectSkillHubAssetRecord,
+  assetBucketResolver = skillHubAssetBucketForType,
+  assetBuckets = SKILL_HUB_ASSET_BUCKETS
+} = {}) {
+  const bucket = text(assetBucketResolver(contribution.contributionType));
+  if (bucket !== "skills" || !asArray(assetBuckets).includes(bucket)) {
+    const error = new Error("Skill Hub asset mapping must resolve to the registered skills bucket.");
+    error.code = "skill_hub_asset_bucket_invalid";
+    throw error;
+  }
+  const storageDirectories = [SKILL_HUB_STORAGE_ROOT_DIR, SKILL_HUB_SKILL_STORAGE_DIR];
+  const assetBasePath = skillHubAssetRelativePath({
+    workspaceId: targetWorkspaceId,
+    contributionId: contribution.contributionId,
+    relation,
+    registryScope
+  });
+  if (!contribution.packageCustodyRef) {
+    throw new Error("Skill Hub assets require a service custody bundle.");
+  }
+  const packageRoot = "";
+  const packageBundle = {
+    path: text(contribution.packageBundle?.path),
+    digest: text(contribution.packageBundle?.digest),
+    size: Number(contribution.packageBundle?.size || 0),
+    custodyRef: text(contribution.packageBundle?.custodyRef),
+    envelopeDigest: text(contribution.packageBundle?.envelopeDigest)
+  };
+  const timestamp = nowIso();
+  const manifest = {
+    schemaVersion: "v0.0.1:schema:definition-1",
+    protocolVersion: WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION,
+    assetKind: "skill_hub_asset",
+    contributionId: contribution.contributionId,
+    workspaceId: targetWorkspaceId,
+    sourceWorkspaceId: contribution.workspaceId,
+    contributionType: "skill",
+    bucket,
+    relation,
+    lifecycleState,
+    contributorId: contribution.contributorId,
+    contributorKind: contribution.contributorKind,
+    sourceAgentId: contribution.sourceAgentId,
+    sourceAgentKind: contribution.sourceAgentKind,
+    title: contribution.title,
+    payloadRefs: contribution.payloadRefs,
+    skillManifestRef: contribution.skillManifestRef,
+    skillPackageRef: contribution.skillPackageRef,
+    runtimeKind: contribution.runtimeKind,
+    entryPoint: contribution.entryPoint,
+    packageSize: contribution.packageSize,
+    packageChecksum: contribution.packageChecksum,
+    packageRoot,
+    packageBundle,
+    packageCustodyRef: text(contribution.packageCustodyRef),
+    packageContentDigest: text(contribution.packageContentDigest),
+    packageEnvelopeDigest: text(contribution.packageEnvelopeDigest),
+    custodyState: text(contribution.custodyState),
+    executionState: text(contribution.executionState),
+    declaredPermissions: contribution.declaredPermissions,
+    license: contribution.license,
+    risk: contribution.risk,
+    requestedVisibility: contribution.requestedVisibility,
+    requestedActions: contribution.requestedActions,
+    actorId: text(actorId),
+    reason: text(reason),
+    sandboxPolicy: skillHubSandboxPolicy(),
+    createdAt: timestamp
+  };
+  const manifestHash = hash(stableJson(manifest), 32);
+  // The registry transaction selects a revision only after its file is durable.
+  // Failed commits must never overwrite a manifest referenced by committed state.
+  const assetPath = assetBasePath.replace(/\.json$/u, `.${manifestHash}.json`);
+  const record = assetRecordProjector({
+    assetId: stableId("skill_hub_asset", {
+      contributionId: contribution.contributionId,
+      workspaceId: targetWorkspaceId,
+      relation
+    }),
+    contributionId: contribution.contributionId,
+    workspaceId: targetWorkspaceId,
+    sourceWorkspaceId: contribution.workspaceId,
+    contributionType: "skill",
+    bucket,
+    relation,
+    lifecycleState,
+    assetPath,
+    manifestHash,
+    packageRoot,
+    packageBundle,
+    packageCustodyRef: text(contribution.packageCustodyRef),
+    packageContentDigest: text(contribution.packageContentDigest),
+    packageEnvelopeDigest: text(contribution.packageEnvelopeDigest),
+    custodyState: text(contribution.custodyState),
+    executionState: text(contribution.executionState),
+    payloadRefs: contribution.payloadRefs,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  });
+  if (persistenceEnabled) {
+    if (!serviceData || typeof serviceData.writeFile !== "function" || typeof schedulePersistence !== "function") {
+      throw new TypeError("Skill Hub asset persistence requires the service data capability.");
+    }
+    const persistedManifest = {
+      ...manifest,
+      assetId: record.assetId,
+      assetPath,
+      manifestHash,
+      fixedSkillHubAssetBuckets: storageDirectories
+    };
+    schedulePersistence(() => serviceData.writeFile(
+      assetPath,
+      `${JSON.stringify(persistedManifest, null, 2)}\n`,
+      "utf8"
+    ));
+  }
+  contribution.packageBundle = packageBundle;
+  contribution.assetRecords = asArray(contribution.assetRecords);
+  const existingIndex = contribution.assetRecords.findIndex((item) =>
+    item.workspaceId === record.workspaceId && item.relation === record.relation
+  );
+  if (existingIndex >= 0) {
+    contribution.assetRecords[existingIndex] = {
+      ...contribution.assetRecords[existingIndex],
+      ...record,
+      createdAt: contribution.assetRecords[existingIndex].createdAt || record.createdAt,
+      updatedAt: timestamp
+    };
+  } else {
+    contribution.assetRecords.push(record);
+  }
+  contribution.currentAssetRef = record;
+  contribution.updatedAt = timestamp;
+  return record;
+}

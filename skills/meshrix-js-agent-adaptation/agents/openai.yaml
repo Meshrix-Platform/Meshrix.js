@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Agent Adaptation"
+  short_description: "Route client configuration and MCP qualification"
+  default_prompt: "Use $meshrix-js-agent-adaptation to select the relevant client reference and distinguish vendor facts, current adapter behavior, and verified qualification."

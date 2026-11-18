@@ -1,0 +1,123 @@
+{
+  "kind": "meshrix.upstream-service",
+  "schemaVersion": "v0.0.1:upstream-service:portable-import-2",
+  "serviceKey": "file-parser/format-convert",
+  "descriptor": {
+    "serviceProtocol": "http",
+    "label": "File Parser / Format Convert",
+    "description": "Convert an owner-bound uploaded document without Base64 encoding.",
+    "baseUrl": "http://format-convert:8080",
+    "healthPath": "/readyz",
+    "allowLocalNetwork": true,
+    "tags": ["file-parser", "format-convert"],
+    "references": [
+      {
+        "type": "credential",
+        "reference": "secret://meshrix/file-parser/format-convert/request-auth",
+        "revision": 1,
+        "use": "request-auth",
+        "host": "format-convert",
+        "protocol": "http",
+        "scopes": []
+      }
+    ],
+    "trafficPolicy": {
+      "perMinute": 120,
+      "burst": 20,
+      "maxConcurrent": 4
+    },
+    "operations": [
+      {
+        "operationKey": "convert-require-approval-debug",
+        "label": "Convert document (approval required debug)",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/convert",
+        "risk": "safe_write",
+        "requiredScopes": ["gateway:write"],
+        "requiresApproval": true,
+        "approvalScope": "gateway:write",
+        "requiredApproval": {
+          "required": true,
+          "approvalScope": "gateway:write",
+          "approvalLayers": []
+        },
+        "payloadTransport": {
+          "request": {
+            "mode": "artifact_multipart",
+            "maxBytes": 53477376,
+            "mediaTypes": ["multipart/form-data"],
+            "multipart": {
+              "artifactParts": [
+                {
+                  "argument": "file",
+                  "partName": "file",
+                  "required": true
+                }
+              ],
+              "scalarFields": [
+                {
+                  "argument": "targetFormat",
+                  "partName": "targetFormat",
+                  "required": false
+                }
+              ],
+              "maxParts": 2
+            }
+          },
+          "response": {
+            "mode": "artifact",
+            "maxBytes": 104857600,
+            "mediaTypes": [
+              "application/pdf",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ],
+            "allowRanges": true
+          }
+        }
+      },
+      {
+        "operationKey": "convert-full-access-debug",
+        "label": "Convert document (immediate debug)",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/convert",
+        "risk": "safe_write",
+        "requiredScopes": ["gateway:write"],
+        "payloadTransport": {
+          "request": {
+            "mode": "artifact_multipart",
+            "maxBytes": 53477376,
+            "mediaTypes": ["multipart/form-data"],
+            "multipart": {
+              "artifactParts": [
+                {
+                  "argument": "file",
+                  "partName": "file",
+                  "required": true
+                }
+              ],
+              "scalarFields": [
+                {
+                  "argument": "targetFormat",
+                  "partName": "targetFormat",
+                  "required": false
+                }
+              ],
+              "maxParts": 2
+            }
+          },
+          "response": {
+            "mode": "artifact",
+            "maxBytes": 104857600,
+            "mediaTypes": [
+              "application/pdf",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ],
+            "allowRanges": true
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Kimi"
+  short_description: "Kimi MCP adapter configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-kimi to locate Kimi MCP adapter configuration facts and the current Meshrix.js MCP integration owner."

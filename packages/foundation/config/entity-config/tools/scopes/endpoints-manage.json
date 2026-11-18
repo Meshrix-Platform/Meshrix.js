@@ -1,0 +1,5 @@
+{
+  "id": "endpoints:manage",
+  "label": "Manage managed endpoints",
+  "description": "Enroll, configure and revoke managed endpoints."
+}

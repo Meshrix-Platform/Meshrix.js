@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "$schema",
+    "version",
+    "schemaVersion",
+    "profileId",
+    "authorized",
+    "capacityCertified",
+    "nonCertificationReason",
+    "requiredModes",
+    "privacy"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "minLength": 1 },
+    "schemaVersion": { "const": "v0.0.1:runtime:capacity-profile-gate-1" },
+    "profileId": { "type": "string" },
+    "authorized": { "type": "boolean" },
+    "capacityCertified": { "type": "boolean" },
+    "nonCertificationReason": { "type": "string", "minLength": 1 },
+    "requiredModes": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": { "enum": ["closed-loop", "open-loop", "fault", "soak"] }
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["allowRuntimePayloads", "allowServiceAddresses", "allowMachinePaths"],
+      "properties": {
+        "allowRuntimePayloads": { "type": "boolean" },
+        "allowServiceAddresses": { "type": "boolean" },
+        "allowMachinePaths": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

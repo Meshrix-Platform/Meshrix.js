@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Claude Code"
+  short_description: "Claude Code configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-claude-code to locate Claude Code configuration facts and the current Meshrix.js MCP integration owner."

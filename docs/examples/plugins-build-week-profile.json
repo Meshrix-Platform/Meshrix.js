@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "v0.0.1:plugin:build-week-demo-profile-1",
+  "id": "build-week-demo",
+  "summary": "Synthetic deployment profile for repository-verified runtime plugins. Use only after Core admits matching plugin packages; this file does not install or enable plugins by itself.",
+  "status": "pre-release-demo",
+  "runtime": {
+    "deploymentProfileId": "build-week-demo",
+    "enabledPlugins": [
+      "shared-space",
+      "skill-hub"
+    ],
+    "pluginConfigurations": {
+      "shared-space": {
+        "enabled": true,
+        "modules": {
+          "localDirectory": true,
+          "controlledSandbox": true
+        }
+      },
+      "skill-hub": {
+        "enabled": true,
+        "modules": {
+          "registry": true,
+          "opaqueCustody": true,
+          "controlledSandbox": true,
+          "operationPermission": true
+        }
+      }
+    }
+  },
+  "operatorNotes": [
+    "Repository verification and this profile are separate from a tagged production release.",
+    "Do not place credentials, tokens, endpoints, or local paths in this profile."
+  ]
+}

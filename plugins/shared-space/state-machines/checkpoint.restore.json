@@ -1,0 +1,652 @@
+{
+  "machineId": "checkpoint.restore",
+  "entityType": "checkpoint_restore",
+  "version": "v0.0.1:state-machine:checkpoint-restore-1",
+  "description": "Shared Space checkpoint restore requests, previews, approval flows, and append-only recording.",
+  "initialState": "restore_requested",
+  "states": [
+    {
+      "id": "restore_requested",
+      "label": "Restore Requested"
+    },
+    {
+      "id": "restore_preview_generated",
+      "label": "Restore Preview Generated"
+    },
+    {
+      "id": "approval_pending",
+      "label": "Approval Pending"
+    },
+    {
+      "id": "approved",
+      "label": "Approved"
+    },
+    {
+      "id": "rejected",
+      "label": "Rejected",
+      "terminal": true
+    },
+    {
+      "id": "expired",
+      "label": "Expired",
+      "terminal": true
+    },
+    {
+      "id": "restore_marker_recording",
+      "label": "Restore Marker Recording"
+    },
+    {
+      "id": "completed",
+      "label": "Completed",
+      "terminal": true
+    },
+    {
+      "id": "failed",
+      "label": "Failed",
+      "terminal": true
+    }
+  ],
+  "events": [
+    {
+      "id": "restore.request",
+      "label": "Request Restore",
+      "riskLevel": "low"
+    },
+    {
+      "id": "restore.generate_preview",
+      "label": "Generate Restore Preview",
+      "riskLevel": "low"
+    },
+    {
+      "id": "restore.approval_request",
+      "label": "Request Approval",
+      "riskLevel": "low"
+    },
+    {
+      "id": "restore.approve",
+      "label": "Approve Restore Request",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "restore.reject",
+      "label": "Reject Restore Request",
+      "riskLevel": "low"
+    },
+    {
+      "id": "restore.expire",
+      "label": "Expire Restore Request",
+      "riskLevel": "low"
+    },
+    {
+      "id": "restore.record_marker",
+      "label": "Record Restore Marker",
+      "riskLevel": "high"
+    },
+    {
+      "id": "restore.complete",
+      "label": "Complete Restore",
+      "riskLevel": "low"
+    },
+    {
+      "id": "restore.fail",
+      "label": "Fail Restore Lifecycle",
+      "riskLevel": "low"
+    }
+  ],
+  "totalMatrix": [
+    {
+      "from": "restore_requested",
+      "event": "restore.request",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "restore_requested",
+      "event": "restore.generate_preview",
+      "result": "legal_transition",
+      "to": "restore_preview_generated"
+    },
+    {
+      "from": "restore_requested",
+      "event": "restore.approval_request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_PREVIEW_NOT_GENERATED"
+    },
+    {
+      "from": "restore_requested",
+      "event": "restore.approve",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_APPROVAL_NOT_PENDING"
+    },
+    {
+      "from": "restore_requested",
+      "event": "restore.reject",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_APPROVAL_NOT_PENDING"
+    },
+    {
+      "from": "restore_requested",
+      "event": "restore.expire",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_APPROVAL_NOT_PENDING"
+    },
+    {
+      "from": "restore_requested",
+      "event": "restore.record_marker",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_PREVIEW_NOT_GENERATED"
+    },
+    {
+      "from": "restore_requested",
+      "event": "restore.complete",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_NOT_RECORDED"
+    },
+    {
+      "from": "restore_requested",
+      "event": "restore.fail",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "restore_preview_generated",
+      "event": "restore.request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_REQUESTED"
+    },
+    {
+      "from": "restore_preview_generated",
+      "event": "restore.generate_preview",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "restore_preview_generated",
+      "event": "restore.approval_request",
+      "result": "legal_transition",
+      "to": "approval_pending"
+    },
+    {
+      "from": "restore_preview_generated",
+      "event": "restore.approve",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_APPROVAL_NOT_PENDING"
+    },
+    {
+      "from": "restore_preview_generated",
+      "event": "restore.reject",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_APPROVAL_NOT_PENDING"
+    },
+    {
+      "from": "restore_preview_generated",
+      "event": "restore.expire",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_APPROVAL_NOT_PENDING"
+    },
+    {
+      "from": "restore_preview_generated",
+      "event": "restore.record_marker",
+      "result": "legal_transition",
+      "to": "restore_marker_recording",
+      "guards": [
+        "treeExists",
+        "nodeExists",
+        "previewGenerated",
+        "policyAllowed",
+        "appendOnly"
+      ]
+    },
+    {
+      "from": "restore_preview_generated",
+      "event": "restore.complete",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_NOT_RECORDED"
+    },
+    {
+      "from": "restore_preview_generated",
+      "event": "restore.fail",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "approval_pending",
+      "event": "restore.request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_REQUESTED"
+    },
+    {
+      "from": "approval_pending",
+      "event": "restore.generate_preview",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_PREVIEW_ALREADY_GENERATED"
+    },
+    {
+      "from": "approval_pending",
+      "event": "restore.approval_request",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "approval_pending",
+      "event": "restore.approve",
+      "result": "legal_transition",
+      "to": "approved",
+      "guards": [
+        "policyAllowed"
+      ]
+    },
+    {
+      "from": "approval_pending",
+      "event": "restore.reject",
+      "result": "legal_transition",
+      "to": "rejected"
+    },
+    {
+      "from": "approval_pending",
+      "event": "restore.expire",
+      "result": "legal_transition",
+      "to": "expired"
+    },
+    {
+      "from": "approval_pending",
+      "event": "restore.record_marker",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_NOT_APPROVED"
+    },
+    {
+      "from": "approval_pending",
+      "event": "restore.complete",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_NOT_RECORDED"
+    },
+    {
+      "from": "approval_pending",
+      "event": "restore.fail",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "approved",
+      "event": "restore.request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_REQUESTED"
+    },
+    {
+      "from": "approved",
+      "event": "restore.generate_preview",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_PREVIEW_ALREADY_GENERATED"
+    },
+    {
+      "from": "approved",
+      "event": "restore.approval_request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_APPROVED"
+    },
+    {
+      "from": "approved",
+      "event": "restore.approve",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "approved",
+      "event": "restore.reject",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_APPROVED"
+    },
+    {
+      "from": "approved",
+      "event": "restore.expire",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_APPROVED"
+    },
+    {
+      "from": "approved",
+      "event": "restore.record_marker",
+      "result": "legal_transition",
+      "to": "restore_marker_recording",
+      "guards": [
+        "treeExists",
+        "nodeExists",
+        "previewGenerated",
+        "policyAllowed",
+        "approvalApproved",
+        "appendOnly"
+      ]
+    },
+    {
+      "from": "approved",
+      "event": "restore.complete",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_NOT_RECORDED"
+    },
+    {
+      "from": "approved",
+      "event": "restore.fail",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "rejected",
+      "event": "restore.request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_REJECTED"
+    },
+    {
+      "from": "rejected",
+      "event": "restore.generate_preview",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_REJECTED"
+    },
+    {
+      "from": "rejected",
+      "event": "restore.approval_request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_REJECTED"
+    },
+    {
+      "from": "rejected",
+      "event": "restore.approve",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_REJECTED"
+    },
+    {
+      "from": "rejected",
+      "event": "restore.reject",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "rejected",
+      "event": "restore.expire",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_REJECTED"
+    },
+    {
+      "from": "rejected",
+      "event": "restore.record_marker",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_REJECTED"
+    },
+    {
+      "from": "rejected",
+      "event": "restore.complete",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_REJECTED"
+    },
+    {
+      "from": "rejected",
+      "event": "restore.fail",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_REJECTED"
+    },
+    {
+      "from": "expired",
+      "event": "restore.request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_EXPIRED"
+    },
+    {
+      "from": "expired",
+      "event": "restore.generate_preview",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_EXPIRED"
+    },
+    {
+      "from": "expired",
+      "event": "restore.approval_request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_EXPIRED"
+    },
+    {
+      "from": "expired",
+      "event": "restore.approve",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_EXPIRED"
+    },
+    {
+      "from": "expired",
+      "event": "restore.reject",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_EXPIRED"
+    },
+    {
+      "from": "expired",
+      "event": "restore.expire",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "expired",
+      "event": "restore.record_marker",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_EXPIRED"
+    },
+    {
+      "from": "expired",
+      "event": "restore.complete",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_EXPIRED"
+    },
+    {
+      "from": "expired",
+      "event": "restore.fail",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_EXPIRED"
+    },
+    {
+      "from": "restore_marker_recording",
+      "event": "restore.request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_RECORDED"
+    },
+    {
+      "from": "restore_marker_recording",
+      "event": "restore.generate_preview",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_RECORDED"
+    },
+    {
+      "from": "restore_marker_recording",
+      "event": "restore.approval_request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_RECORDED"
+    },
+    {
+      "from": "restore_marker_recording",
+      "event": "restore.approve",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_RECORDED"
+    },
+    {
+      "from": "restore_marker_recording",
+      "event": "restore.reject",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_RECORDED"
+    },
+    {
+      "from": "restore_marker_recording",
+      "event": "restore.expire",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_ALREADY_RECORDED"
+    },
+    {
+      "from": "restore_marker_recording",
+      "event": "restore.record_marker",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "restore_marker_recording",
+      "event": "restore.complete",
+      "result": "legal_transition",
+      "to": "completed"
+    },
+    {
+      "from": "restore_marker_recording",
+      "event": "restore.fail",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "completed",
+      "event": "restore.request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_COMPLETED"
+    },
+    {
+      "from": "completed",
+      "event": "restore.generate_preview",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_COMPLETED"
+    },
+    {
+      "from": "completed",
+      "event": "restore.approval_request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_COMPLETED"
+    },
+    {
+      "from": "completed",
+      "event": "restore.approve",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_COMPLETED"
+    },
+    {
+      "from": "completed",
+      "event": "restore.reject",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_COMPLETED"
+    },
+    {
+      "from": "completed",
+      "event": "restore.expire",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_COMPLETED"
+    },
+    {
+      "from": "completed",
+      "event": "restore.record_marker",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_COMPLETED"
+    },
+    {
+      "from": "completed",
+      "event": "restore.complete",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "completed",
+      "event": "restore.fail",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_COMPLETED"
+    },
+    {
+      "from": "failed",
+      "event": "restore.request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_FAILED"
+    },
+    {
+      "from": "failed",
+      "event": "restore.generate_preview",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_FAILED"
+    },
+    {
+      "from": "failed",
+      "event": "restore.approval_request",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_FAILED"
+    },
+    {
+      "from": "failed",
+      "event": "restore.approve",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_FAILED"
+    },
+    {
+      "from": "failed",
+      "event": "restore.reject",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_FAILED"
+    },
+    {
+      "from": "failed",
+      "event": "restore.expire",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_FAILED"
+    },
+    {
+      "from": "failed",
+      "event": "restore.record_marker",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_FAILED"
+    },
+    {
+      "from": "failed",
+      "event": "restore.complete",
+      "result": "illegal_transition",
+      "errorCode": "RESTORE_TERMINAL_FAILED"
+    },
+    {
+      "from": "failed",
+      "event": "restore.fail",
+      "result": "ignored_idempotent_event"
+    }
+  ],
+  "invariants": [
+    "SM-GOV-004",
+    "SM-GOV-005",
+    "SM-GOV-006",
+    "SM-GOV-007",
+    "SM-GOV-011",
+    "SM-GOV-012"
+  ],
+  "proofObligations": [
+    "PO-RESTORE-001",
+    "PO-RESTORE-002",
+    "PO-RESTORE-003",
+    "PO-RESTORE-004",
+    "PO-RESTORE-005"
+  ],
+  "proofMappings": [
+    {
+      "obligationId": "PO-RESTORE-001",
+      "method": "path_includes_state",
+      "params": {
+        "target": "restore_marker_recording",
+        "requiredBefore": "restore_preview_generated"
+      }
+    },
+    {
+      "obligationId": "PO-RESTORE-002",
+      "method": "guard_validation_by_risk",
+      "params": {
+        "highRiskEvent": "restore.record_marker",
+        "requiredGuardIfHighRisk": "approvalApproved"
+      }
+    },
+    {
+      "obligationId": "PO-RESTORE-003",
+      "method": "immutable_history_validation",
+      "params": {
+        "preventDelete": true,
+        "preventRewrite": true
+      }
+    },
+    {
+      "obligationId": "PO-RESTORE-004",
+      "method": "terminal_state_marker_association",
+      "params": {
+        "target": "completed",
+        "requiredArtifact": "restore_marker"
+      }
+    },
+    {
+      "obligationId": "PO-RESTORE-005",
+      "method": "illegal_terminal_states_transition",
+      "params": {
+        "blockedStates": [
+          "rejected",
+          "expired"
+        ]
+      }
+    }
+  ]
+}

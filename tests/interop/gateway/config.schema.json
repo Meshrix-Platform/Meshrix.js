@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.invalid/gateway-interop-config.schema.json",
+  "title": "Meshrix gateway interop runner configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidateKind"],
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^http://(127\\.0\\.0\\.1|localhost|\\[::1\\]):[0-9]+/mcp$"
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "args": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1
+    },
+    "startupTimeoutMs": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 120000
+    },
+    "requestTimeoutMs": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 120000
+    },
+    "candidateKind": {
+      "enum": ["standalone-packed-http", "platform-default-http", "legacy-packed-http", "reference-fixture"]
+    },
+    "manifest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authorization": {
+      "type": "string"
+    },
+    "protocolVersion": {
+      "enum": ["2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26"]
+    },
+    "publicMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "toolName": { "type": "string", "minLength": 1 },
+        "resourceUri": { "type": "string", "minLength": 1 },
+        "promptName": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "oneOf": [
+    { "required": ["endpoint"] },
+    { "required": ["command"] }
+  ]
+}

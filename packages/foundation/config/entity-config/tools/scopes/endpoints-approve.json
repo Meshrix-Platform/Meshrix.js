@@ -1,0 +1,5 @@
+{
+  "id": "endpoints:approve",
+  "label": "Approve managed tasks",
+  "description": "Resolve managed endpoint permission prompts."
+}

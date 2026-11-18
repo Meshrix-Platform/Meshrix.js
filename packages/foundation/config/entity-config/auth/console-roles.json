@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "v0.0.1:meshrix-console:role-policy-1",
+  "description": "Console roles are configuration-only scope bundles. Feature-owned scope grants are projected only while their feature is active.",
+  "featureScopeGrants": {},
+  "roles": [
+    {
+      "roleId": "owner",
+      "label": "Owner",
+      "scopes": ["$all"]
+    },
+    {
+      "roleId": "maintainer",
+      "label": "Maintainer",
+      "scopes": [
+        "console:read",
+        "gateway:read",
+        "workspace:read",
+        "storage:read",
+        "gateway:write",
+        "workspace:write",
+        "storage:write",
+        "gateway:maintain",
+        "workspace:maintain",
+        "jobs:read",
+        "jobs:write",
+        "maintenance:read",
+        "maintenance:run",
+        "maintenance:approve",
+        "endpoints:read",
+        "endpoints:execute",
+        "endpoints:manage",
+        "endpoints:approve",
+        "model:call",
+        "recording:read",
+        "recording:admin"
+      ]
+    },
+    {
+      "roleId": "viewer",
+      "label": "Viewer",
+      "scopes": [
+        "console:read",
+        "gateway:read",
+        "workspace:read",
+        "storage:read",
+        "jobs:read",
+        "endpoints:read",
+        "recording:read"
+      ]
+    }
+  ]
+}

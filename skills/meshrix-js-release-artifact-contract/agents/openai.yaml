@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Release Artifact Contract"
+  short_description: "Lock published runtime-ui shape and one public origin"
+  default_prompt: "Use $meshrix-js-release-artifact-contract to keep the published artifact on runtime-ui with one public origin, console at /, and API at /api."

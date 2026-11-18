@@ -1,0 +1,816 @@
+{
+  "machineId": "workspace-contribution.lifecycle",
+  "entityType": "workspace_contribution",
+  "version": "v0.0.1:state-machine:workspace-contribution-lifecycle-1",
+  "description": "Core workspace contribution asset lifecycle.",
+  "initialState": "submitted",
+  "states": [
+    {
+      "id": "submitted"
+    },
+    {
+      "id": "preview"
+    },
+    {
+      "id": "scanned"
+    },
+    {
+      "id": "needs_changes"
+    },
+    {
+      "id": "reviewed"
+    },
+    {
+      "id": "published"
+    },
+    {
+      "id": "adopted"
+    },
+    {
+      "id": "deprecated"
+    },
+    {
+      "id": "rejected",
+      "terminal": true
+    },
+    {
+      "id": "revoked",
+      "terminal": true
+    }
+  ],
+  "events": [
+    {
+      "id": "contribution.submit",
+      "riskLevel": "low",
+      "idempotent": true
+    },
+    {
+      "id": "contribution.preview",
+      "riskLevel": "low"
+    },
+    {
+      "id": "contribution.scan_passed",
+      "riskLevel": "low"
+    },
+    {
+      "id": "contribution.scan_failed",
+      "riskLevel": "low"
+    },
+    {
+      "id": "contribution.review_approved",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "contribution.review_rejected",
+      "riskLevel": "low",
+      "idempotent": true
+    },
+    {
+      "id": "contribution.changes_requested",
+      "riskLevel": "low"
+    },
+    {
+      "id": "contribution.publish",
+      "riskLevel": "high"
+    },
+    {
+      "id": "contribution.adopt",
+      "riskLevel": "high"
+    },
+    {
+      "id": "contribution.deprecate",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "contribution.revoke",
+      "riskLevel": "high"
+    }
+  ],
+  "allowedTerminalEvents": [
+    "contribution.review_rejected",
+    "contribution.revoke"
+  ],
+  "invariants": [
+    "SM-GOV-006",
+    "SM-GOV-007"
+  ],
+  "proofObligations": [
+    "PO-CONTRIB-001",
+    "PO-CONTRIB-002",
+    "PO-CONTRIB-003",
+    "PO-CONTRIB-004",
+    "PO-CONTRIB-005",
+    "PO-CONTRIB-006"
+  ],
+  "proofMappings": [
+    {
+      "obligationId": "PO-CONTRIB-001",
+      "method": "path_includes_state",
+      "params": {
+        "target": "published",
+        "requiredBefore": "reviewed"
+      }
+    },
+    {
+      "obligationId": "PO-CONTRIB-002",
+      "method": "path_includes_state",
+      "params": {
+        "target": "adopted",
+        "requiredBefore": "published"
+      }
+    },
+    {
+      "obligationId": "PO-CONTRIB-003",
+      "method": "terminal_state",
+      "params": {
+        "target": "rejected"
+      }
+    },
+    {
+      "obligationId": "PO-CONTRIB-004",
+      "method": "terminal_state",
+      "params": {
+        "target": "revoked"
+      }
+    },
+    {
+      "obligationId": "PO-CONTRIB-005",
+      "method": "matrix_error_codes",
+      "params": {}
+    },
+    {
+      "obligationId": "PO-CONTRIB-006",
+      "method": "integration_test",
+      "params": {
+        "target": "runtime_engine"
+      }
+    }
+  ],
+  "totalMatrix": [
+    {
+      "from": "submitted",
+      "event": "contribution.submit",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.preview",
+      "result": "legal_transition",
+      "to": "preview"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.scan_passed",
+      "result": "illegal_transition",
+      "errorCode": "CONTRIBUTION_NOT_PREVIEWED"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.scan_failed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.review_approved",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.review_rejected",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.changes_requested",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.publish",
+      "result": "illegal_transition",
+      "errorCode": "CONTRIBUTION_PUBLISH_BEFORE_REVIEW"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.adopt",
+      "result": "illegal_transition",
+      "errorCode": "CONTRIBUTION_NOT_PUBLISHED"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "submitted",
+      "event": "contribution.revoke",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.submit",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.preview",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.scan_passed",
+      "result": "legal_transition",
+      "to": "scanned"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.scan_failed",
+      "result": "legal_transition",
+      "to": "rejected"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.review_approved",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.review_rejected",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.changes_requested",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.publish",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.adopt",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "preview",
+      "event": "contribution.revoke",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.submit",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.preview",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.scan_passed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.scan_failed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.review_approved",
+      "result": "legal_transition",
+      "to": "reviewed"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.review_rejected",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.changes_requested",
+      "result": "legal_transition",
+      "to": "needs_changes"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.publish",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.adopt",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "scanned",
+      "event": "contribution.revoke",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.submit",
+      "result": "legal_transition",
+      "to": "submitted"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.preview",
+      "result": "legal_transition",
+      "to": "preview"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.scan_passed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.scan_failed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.review_approved",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.review_rejected",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.changes_requested",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.publish",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.adopt",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "needs_changes",
+      "event": "contribution.revoke",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.submit",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.preview",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.scan_passed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.scan_failed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.review_approved",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.review_rejected",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.changes_requested",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.publish",
+      "result": "legal_transition",
+      "to": "published",
+      "guards": [
+        "require_approval"
+      ]
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.adopt",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "reviewed",
+      "event": "contribution.revoke",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "published",
+      "event": "contribution.submit",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "published",
+      "event": "contribution.preview",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "published",
+      "event": "contribution.scan_passed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "published",
+      "event": "contribution.scan_failed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "published",
+      "event": "contribution.review_approved",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "published",
+      "event": "contribution.review_rejected",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "published",
+      "event": "contribution.changes_requested",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "published",
+      "event": "contribution.publish",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "published",
+      "event": "contribution.adopt",
+      "result": "legal_transition",
+      "to": "adopted",
+      "guards": [
+        "require_adoption_policy"
+      ]
+    },
+    {
+      "from": "published",
+      "event": "contribution.deprecate",
+      "result": "legal_transition",
+      "to": "deprecated"
+    },
+    {
+      "from": "published",
+      "event": "contribution.revoke",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.submit",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.preview",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.scan_passed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.scan_failed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.review_approved",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.review_rejected",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.changes_requested",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.publish",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.adopt",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.deprecate",
+      "result": "legal_transition",
+      "to": "deprecated"
+    },
+    {
+      "from": "adopted",
+      "event": "contribution.revoke",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.submit",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.preview",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.scan_passed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.scan_failed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.review_approved",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.review_rejected",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.changes_requested",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.publish",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.adopt",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TRANSITION"
+    },
+    {
+      "from": "deprecated",
+      "event": "contribution.revoke",
+      "result": "legal_transition",
+      "to": "revoked",
+      "guards": [
+        "require_admin"
+      ]
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.submit",
+      "result": "illegal_transition",
+      "errorCode": "CONTRIBUTION_TERMINAL_REJECTED"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.preview",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.scan_passed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.scan_failed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.review_approved",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.review_rejected",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.changes_requested",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.publish",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.adopt",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "rejected",
+      "event": "contribution.revoke",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.submit",
+      "result": "illegal_transition",
+      "errorCode": "CONTRIBUTION_TERMINAL_REVOKED"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.preview",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.scan_passed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.scan_failed",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.review_approved",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.review_rejected",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.changes_requested",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.publish",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.adopt",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "INVALID_TERMINAL_TRANSITION"
+    },
+    {
+      "from": "revoked",
+      "event": "contribution.revoke",
+      "result": "ignored_idempotent_event"
+    }
+  ]
+}

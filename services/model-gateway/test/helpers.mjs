@@ -1,0 +1,155 @@
+import { DatabaseSync } from "node:sqlite";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import os from "node:os";
+import path from "node:path";
+
+import { createModelGatewayHttpHandler } from "../internal/http-service.mjs";
+import { startFixtureProvider } from "./fixture-provider.mjs";
+const cannedA = "model-gateway-test-admin-secret-0000000000000000000000";
+
+
+export const ADMIN_CLIENTS = {
+  "service-admin": {
+    subject: "direct-client",
+    secret: cannedA,
+    scopes: ["model:call", "model:manage", "ledger:read"]
+  }
+};
+
+export const DEFAULT_PRICES = {
+  inputTokenRate: { currency: "USD", units: 0, nanos: 1_000_000 },
+  outputTokenRate: { currency: "USD", units: 0, nanos: 2_000_000 }
+};
+
+export async function startService(options = {}) {
+  const dataRoot = options.dataRoot || await mkdtemp(path.join(os.tmpdir(), "model-gateway-test-"));
+  const fixture = options.fixture || await startFixtureProvider();
+  if (options.configureEgress !== false) {
+    await writeFile(
+      path.join(dataRoot, "provider-egress.json"),
+      JSON.stringify({
+        prov1: { baseUrl: fixture.baseUrl },
+        prov2: { baseUrl: fixture.baseUrl }
+      })
+    );
+    await writeFile(
+      path.join(dataRoot, "secrets.json"),
+      JSON.stringify({
+        prov1: "fixture-provider-secret-00000000000000000000000000",
+        prov2: "fixture-provider-secret-00000000000000000000000000"
+      })
+    );
+  }
+  const handler = await createModelGatewayHttpHandler({
+    dataRoot,
+    clients: options.clients || ADMIN_CLIENTS,
+    bounds: options.bounds,
+    maxRequestBytes: options.maxRequestBytes,
+    fetchImpl: options.fetchImpl
+  });
+  const server = createServer(handler);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  return {
+    dataRoot,
+    fixture,
+    baseUrl,
+    handler,
+    server,
+    clientSecret: (options.clients || ADMIN_CLIENTS)["service-admin"]?.secret || Object.values(options.clients || ADMIN_CLIENTS)[0]?.secret,
+    clientSecretFor(clientId) {
+      return (options.clients || ADMIN_CLIENTS)[clientId]?.secret;
+    },
+    async close({ keepDataRoot = false } = {}) {
+      await handler.close();
+      await new Promise((resolve) => server.close(resolve));
+      await fixture.close();
+      if (!keepDataRoot) await rm(dataRoot, { recursive: true, force: true });
+    }
+  };
+}
+
+export async function provisionModel(service, {
+  modelId,
+  revisionRef,
+  providerId = "prov1",
+  protocol = "openai",
+  prices = DEFAULT_PRICES
+}) {
+  const headers = {
+    authorization: `Bearer ${service.clientSecret}`,
+    "content-type": "application/json"
+  };
+  const provider = await fetch(`${service.baseUrl}/v1/model-gateway/providers`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ providerId, protocol, enabled: true })
+  });
+  const pricing = await fetch(`${service.baseUrl}/v1/model-gateway/pricing-revisions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      revisionRef,
+      modelRef: modelId,
+      currency: "USD",
+      ...prices,
+      immutable: true
+    })
+  });
+  const model = await fetch(`${service.baseUrl}/v1/model-gateway/models`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      modelId,
+      providerRef: providerId,
+      pricingRevisionRef: revisionRef,
+      enabled: true
+    })
+  });
+  return { provider, pricing, model };
+}
+
+export async function provision(service, { modelId = "model-1", prices = DEFAULT_PRICES } = {}) {
+  const headers = {
+    authorization: `Bearer ${service.clientSecret}`,
+    "content-type": "application/json"
+  };
+  const provider = await fetch(`${service.baseUrl}/v1/model-gateway/providers`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ providerId: "prov1", protocol: "openai", enabled: true })
+  });
+  const pricing = await fetch(`${service.baseUrl}/v1/model-gateway/pricing-revisions`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      revisionRef: "price-1",
+      modelRef: modelId,
+      currency: "USD",
+      ...prices,
+      immutable: true
+    })
+  });
+  const model = await fetch(`${service.baseUrl}/v1/model-gateway/models`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      modelId,
+      providerRef: "prov1",
+      pricingRevisionRef: "price-1",
+      enabled: true
+    })
+  });
+  return { provider, pricing, model };
+}
+
+// Synthetic test fixtures only: inspect the production durable ledger, including
+// records whose response copy has left the hot cache.
+export function readLedgerState(dataRoot) {
+  const db = new DatabaseSync(path.join(dataRoot, "ledger.sqlite"), { readOnly: true });
+  try {
+    return { ledger: Object.fromEntries(db.prepare("SELECT call_id,facts,response FROM calls ORDER BY rowid").all().map((row) =>
+      [row.call_id, { ...JSON.parse(row.facts), response: row.response ? JSON.parse(row.response) : null }])) };
+  } finally { db.close(); }
+}

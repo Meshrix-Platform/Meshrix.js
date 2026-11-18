@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/registry/schema/module.schema.json",
+  "title": "Module Registry",
+  "description": "Registry of every domain module, its public API, operations, and metadata.",
+  "type": "object",
+  "required": ["$schema", "version", "modules"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "pattern": "^v\\d+\\.\\d+\\.\\d+$" },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "owner", "directory"],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "type": "string", "enum": ["foundation", "domain", "protocol", "runtime", "app", "ui"] },
+          "owner": { "type": "string" },
+          "directory": { "type": "string" },
+          "publicApi": { "type": "array", "items": { "type": "string" } },
+          "operations": { "type": "array", "items": { "type": "string" } },
+          "stateStores": { "type": "array", "items": { "type": "string" } },
+          "protocolAdapters": { "type": "array", "items": { "type": "string" } },
+          "runtimeProviders": { "type": "array", "items": { "type": "string" } },
+          "featureProfiles": { "type": "array", "items": { "type": "string" } },
+          "contracts": { "type": "array", "items": { "type": "string" } },
+          "testSuites": { "type": "array", "items": { "type": "string" } },
+          "dependsOn": { "type": "array", "items": { "type": "string" } },
+          "description": { "type": "string" },
+          "chineseName": { "type": "string" }
+        }
+      }
+    }
+  }
+}

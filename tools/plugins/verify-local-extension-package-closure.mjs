@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+import fs from "node:fs/promises";
+import path from "node:path";
+import { spawn } from "node:child_process";
+
+import { repoRoot, readJson, sanitizeError } from "./lib/repository.mjs";
+import { assertMigratedExtensionClosure } from "./lib/migrated-extension-closure.mjs";
+import { npmCliArgs, resolveNpmCliInvocation } from "../server-scripts/lib/npm-cli-invocation.ts";
+
+function run(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8"); });
+    child.on("error", reject);
+    child.on("close", (code) => code === 0 ? resolve({ stdout, stderr }) : reject(new Error(`${command} ${args.join(" ")} failed: ${sanitizeError(stderr || stdout)}`)));
+  });
+}
+
+async function exists(relative) {
+  try { await fs.access(path.join(repoRoot, relative)); return true; } catch { return false; }
+}
+
+async function main() {
+  const registry = await readJson(path.join(repoRoot, "plugins", "registry", "plugins.json"));
+  const counts = assertMigratedExtensionClosure(registry);
+  const required = [
+    "LICENSE",
+    "services/file-parser/format-convert/go.mod",
+    "services/file-parser/format-convert/LICENSE",
+    "services/model-gateway/LICENSE",
+    "services/skill-hub/LICENSE",
+    "plugins/LICENSE-APACHE-2.0",
+    "plugins/external-gateway/LICENSE",
+    "plugins/model-gateway/LICENSE",
+    "plugins/agents/antigravity/LICENSE",
+    "plugins/agents/claude-code/LICENSE",
+    "packages/client-adapter-kit/LICENSE",
+    "plugins/agents/codex/LICENSE",
+    "plugins/agents/kimi/LICENSE",
+    "plugins/agents/meshrix-self-maintenance/LICENSE",
+    "plugins/agents/openclaw/LICENSE",
+    "plugins/agents/opencode/LICENSE",
+    "plugins/agents/pi/LICENSE",
+    "plugins/core-host-contract.json",
+    "plugins/registry/plugins.json",
+    "plugins/schemas/plugin-bundle.schema.json",
+    "tests/plugins/client-adapters.test.mjs",
+    "tools/plugins/pack-plugins.mjs",
+    "THIRD_PARTY_NOTICES.md"
+  ];
+  for (const file of required) if (!(await exists(file))) throw new Error(`missing packaged extension artifact: ${file}`);
+  const packageJson = await readJson(path.join(repoRoot, "package.json"));
+  for (const root of ["services/", "plugins/", "tools/plugins/", "tests/plugins/"]) {
+    if (!packageJson.files.some((entry) => entry === root || entry.startsWith(root))) throw new Error(`package files do not include ${root}`);
+  }
+  const architectureRoots = packageJson["//architecture-governance"]?.canonicalSourceRoots || [];
+  for (const root of ["services/", "plugins/"]) if (!architectureRoots.includes(root)) throw new Error(`architecture policy omits ${root}`);
+  const notice = await fs.readFile(path.join(repoRoot, "THIRD_PARTY_NOTICES.md"), "utf8");
+  for (const marker of ["Apache-2.0", "`pactium@0.8.4` is distributed under Apache-2.0", "GPL-3.0-or-later", "tools/plugins/", "tests/plugins/"]) {
+    if (!notice.includes(marker)) throw new Error(`mixed license notice omits ${marker}`);
+  }
+  const npmInvocation = resolveNpmCliInvocation();
+  const pack = await run(npmInvocation.command, npmCliArgs(npmInvocation, ["pack", "--dry-run", "--json", "--ignore-scripts"]));
+  const parsedPack = JSON.parse(pack.stdout.trim());
+  const reports = Array.isArray(parsedPack) ? parsedPack : Object.values(parsedPack || {});
+  if (reports.length !== 1) throw new Error("npm pack returned an unexpected artifact count");
+  const [report] = reports;
+  const packed = new Set((report.files || []).map((entry) => String(entry.path || "").replace(/^package\//u, "")));
+  for (const file of [
+    "LICENSE",
+    "services/file-parser/format-convert/go.mod",
+    "services/file-parser/format-convert/LICENSE",
+    "services/model-gateway/LICENSE",
+    "services/skill-hub/LICENSE",
+    "plugins/LICENSE-APACHE-2.0",
+    "plugins/external-gateway/LICENSE",
+    "plugins/model-gateway/LICENSE",
+    "plugins/agents/antigravity/LICENSE",
+    "plugins/agents/claude-code/LICENSE",
+    "packages/client-adapter-kit/LICENSE",
+    "plugins/agents/codex/LICENSE",
+    "plugins/agents/kimi/LICENSE",
+    "plugins/agents/meshrix-self-maintenance/LICENSE",
+    "plugins/agents/openclaw/LICENSE",
+    "plugins/agents/opencode/LICENSE",
+    "plugins/agents/pi/LICENSE",
+    "plugins/registry/plugins.json",
+    "THIRD_PARTY_NOTICES.md"
+  ]) {
+    if (![...packed].some((entry) => entry === file || entry.startsWith(`${file}/`))) throw new Error(`npm dry-run omitted ${file}`);
+  }
+  process.stdout.write(`${JSON.stringify({
+    ok: true,
+    serviceCount: 1,
+    runtimePluginCount: counts.runtimeCount,
+    adapterCount: counts.adapterCount,
+    migratedRuntimeCount: counts.migratedRuntimeCount,
+    migratedAdapterCount: counts.migratedAdapterCount,
+    nestedLicenses: true,
+    npmPackClosure: true
+  })}\n`);
+}
+
+main().catch((error) => {
+  process.stderr.write(`${sanitizeError(error)}\n`);
+  process.exitCode = 1;
+});

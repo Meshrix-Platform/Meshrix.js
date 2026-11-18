@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Performance Load Testing"
+  short_description: "Run bounded observable Meshrix.js load profiles"
+  default_prompt: "Use $meshrix-js-performance-load-testing to plan and run a bounded observable performance profile for Meshrix.js."

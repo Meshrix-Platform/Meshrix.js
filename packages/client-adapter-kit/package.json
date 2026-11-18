@@ -1,0 +1,33 @@
+{
+  "name": "@meshrix/client-adapter-kit",
+  "version": "0.4.2",
+  "description": "Public JSON-stdio contract and local execution helpers for Meshrix client adapters.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "types": "./index.d.mts",
+  "files": [
+    "README.md",
+    "index.mjs",
+    "shared.mjs",
+    "native-registration.mjs",
+    "index.d.mts",
+    "native-registration.d.mts",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/client-adapter-kit"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true
+}

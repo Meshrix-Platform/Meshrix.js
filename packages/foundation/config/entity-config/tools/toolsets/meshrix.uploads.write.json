@@ -1,0 +1,10 @@
+{
+  "id": "meshrix.uploads.write",
+  "label": "Uploads write",
+  "requiredScopes": [
+    "uploads:write"
+  ],
+  "maxRisk": "safe_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

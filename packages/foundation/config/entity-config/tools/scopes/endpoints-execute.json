@@ -1,0 +1,5 @@
+{
+  "id": "endpoints:execute",
+  "label": "Execute managed tasks",
+  "description": "Submit and cancel work on managed endpoints."
+}

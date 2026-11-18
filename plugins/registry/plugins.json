@@ -1,0 +1,249 @@
+{
+  "schemaVersion": "v0.0.1:schema:meshrix-plugins-registry-2",
+  "kind": "meshrix.plugins.registry",
+  "policy": {
+    "externalOnly": true,
+    "namingRule": "Provider plugins use capability-domain prefixes. Migrated product plugins retain stable shared-space and skill-hub identities.",
+    "uniquenessRule": "One product or upstream concept owns one plugin; sub-capabilities remain inside that plugin.",
+    "credentialRule": "Credentials use secretRef and are resolved only for an authorized operation.",
+    "integrationRule": "Runtime plugins use verified one-plugin bundles and public Meshrix Host ports."
+  },
+  "groups": [
+    {
+      "id": "products",
+      "path": "plugins",
+      "description": "Detachable Meshrix product plugins."
+    },
+    {
+      "id": "services",
+      "path": "plugins/services",
+      "description": "External service wrappers and provider integrations."
+    },
+    {
+      "id": "documents",
+      "path": "plugins/documents",
+      "description": "Document and OCR processing plugins."
+    },
+    {
+      "id": "datastores",
+      "path": "plugins/datastores",
+      "description": "Datastore and backend mounts."
+    },
+    {
+      "id": "agents",
+      "path": "plugins/agents",
+      "description": "Peer adapter plugins."
+    }
+  ],
+  "plugins": [
+    {
+      "id": "agent-antigravity",
+      "path": "plugins/agents/antigravity",
+      "status": "stable",
+      "version": "0.4.2",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Antigravity capability assessment; protected Meshrix header references remain unqualified.",
+      "runtime": false,
+      "adapter": true,
+      "release": false,
+      "adapterContract": {
+        "target": "antigravity",
+        "packageName": "@meshrix/agent-antigravity-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-claude-code",
+      "path": "plugins/agents/claude-code",
+      "status": "stable",
+      "version": "0.4.2",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Claude Code peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": false,
+      "adapterContract": {
+        "target": "claude-code",
+        "packageName": "@meshrix/agent-claude-code-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-codex",
+      "path": "plugins/agents/codex",
+      "status": "stable",
+      "version": "0.4.2",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Codex peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": false,
+      "adapterContract": {
+        "target": "codex",
+        "packageName": "@meshrix/agent-codex-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-kimi",
+      "path": "plugins/agents/kimi",
+      "status": "stable",
+      "version": "0.4.2",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Kimi Code capability assessment; protected Meshrix header registration is unsupported.",
+      "runtime": false,
+      "adapter": true,
+      "release": false,
+      "adapterContract": {
+        "target": "kimi",
+        "packageName": "@meshrix/agent-kimi-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-openclaw",
+      "path": "plugins/agents/openclaw",
+      "status": "stable",
+      "version": "0.4.2",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "OpenClaw peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": false,
+      "adapterContract": {
+        "target": "openclaw",
+        "packageName": "@meshrix/agent-openclaw-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-opencode",
+      "path": "plugins/agents/opencode",
+      "status": "stable",
+      "version": "0.4.2",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "OpenCode peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": false,
+      "adapterContract": {
+        "target": "opencode",
+        "packageName": "@meshrix/agent-opencode-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-pi",
+      "path": "plugins/agents/pi",
+      "status": "stable",
+      "version": "0.4.2",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Native remote Pi MCP registration with an explicit protected credential reference.",
+      "runtime": false,
+      "adapter": true,
+      "release": false,
+      "adapterContract": {
+        "target": "pi",
+        "packageName": "@meshrix/agent-pi-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-self-maintenance",
+      "path": "plugins/agents/meshrix-self-maintenance",
+      "status": "experimental",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Independent local maintenance client controlled only by an atomically replaced configuration file.",
+      "runtime": false,
+      "adapter": false,
+      "release": false
+    },
+    {
+      "id": "external-gateway",
+      "path": "plugins/external-gateway",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "products",
+      "types": [
+        "runtime-plugin"
+      ],
+      "summary": "Optional downstream and upstream transport channels for operator-owned Caddy, Nginx, or explicit direct endpoints.",
+      "runtime": true,
+      "adapter": false,
+      "release": true
+    },
+    {
+      "id": "model-gateway",
+      "path": "plugins/model-gateway",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "products",
+      "types": [
+        "runtime-plugin"
+      ],
+      "summary": "Default-disabled stateless adapter for an independently deployed Model Gateway Service.",
+      "runtime": true,
+      "adapter": false,
+      "release": true
+    },
+    {
+      "id": "shared-space",
+      "path": "plugins/shared-space",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "products",
+      "types": [
+        "runtime-plugin"
+      ],
+      "summary": "Governed Shared Space snapshots, reversible mutations, and controlled sandbox execution contributions.",
+      "runtime": true,
+      "adapter": false,
+      "release": true
+    },
+    {
+      "id": "skill-hub",
+      "path": "plugins/skill-hub",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "products",
+      "types": [
+        "runtime-plugin"
+      ],
+      "summary": "Governed Skill Hub contribution custody, review, publication, adoption, permissions, statistics, and controlled execution.",
+      "runtime": true,
+      "adapter": false,
+      "release": true
+    }
+  ]
+}

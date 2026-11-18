@@ -1,0 +1,436 @@
+// @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { defineComponent, ref } from "vue";
+import { createMemoryHistory, createRouter, type Router } from "vue-router";
+import ApiKeyDistributionView from "../../../apps/console/views/admin/ApiKeyDistributionView.vue";
+import { setConsoleLocaleState } from "../../../apps/console/i18n/console";
+import type { ApiKeyMcpToolSelection, ApiKeyPolicy, ApiKeyRecord } from "../../../apps/console/lib/api-key-distribution-client";
+const canned1 = "catalog-a";
+const canned2 = "active";
+const canned3 = "key-public-id";
+const canned4 = "fingerprint-a";
+const canned5 = "policy-a";
+
+
+
+
+const ONE_TIME_SENTINEL = "opaque-one-time-credential";
+const ROTATED_SENTINEL = "opaque-rotated-credential";
+
+// The view composes its controller directly; the mock installs a per-test fake
+// through this holder so every test drives fresh ephemeral state.
+const controllerHolder = vi.hoisted((): { factory: (() => any) | null } => ({ factory: null }));
+
+vi.mock("../../../apps/console/composables/console-api-key-distribution-controller", () => ({
+  useConsoleApiKeyDistributionController: () => {
+    if (!controllerHolder.factory) throw new Error("test controller factory not installed");
+    return controllerHolder.factory();
+  },
+}));
+
+const policy: ApiKeyPolicy = {
+  protocol: "mcp",
+  serviceIds: ["service-a"], capabilityIds: ["capability-a"], toolsetIds: ["toolset-a"],
+  allowedTools: ["tool.read"], deniedTools: [], scopeIds: ["scope-a"], maximumRisk: "low",
+  audience: { serverAudience: "server-a", targetIds: ["target-a"], connectorPackageIds: [] },
+  resources: {
+    mode: "restricted", workspaceIds: ["workspace-a"], dataClassifications: [], egressClasses: [],
+    semanticFamilies: [], capabilityDomains: [], capabilityVerbs: [], resourceKinds: [], effectKinds: [],
+    secretBindingIds: [], allowedOrigins: [], allowedCidrs: [],
+  },
+  processIdentity: { mode: "optional" },
+  limits: { maxUses: 10, requestsPerWindow: 3, windowSeconds: 60, maxConcurrentEffects: 1 },
+  catalogFingerprint: canned1,
+};
+
+function record(revision = 1, status: ApiKeyRecord["status"] = canned2): ApiKeyRecord {
+  return {
+    keyId: canned3, displayPrefix: "mxak1.pub…", credentialFingerprint: canned4,
+    workloadPrincipalId: "workload-principal-a", workloadDisplayName: "Build worker",
+    organizationNodeId: "organization-a", organizationBreadcrumb: ["Group", "Organization A"],
+    policy, policyFingerprint: canned5, status, lifecycleRevision: revision, useCount: 2,
+    createdAt: "2026-08-01T00:00:00.000Z", rotatedAt: null, revokedAt: null,
+    expiresAt: "2026-09-01T00:00:00.000Z",
+  };
+}
+
+function createFakeController() {
+  const oneTimeSecret = ref("");
+  const revealedRecord = ref<ApiKeyRecord | null>(null);
+  const copied = ref(false);
+  const status = ref("");
+  const dismissSecret = vi.fn((announce = false) => {
+    const hadSecret = Boolean(oneTimeSecret.value);
+    oneTimeSecret.value = "";
+    revealedRecord.value = null;
+    copied.value = false;
+    if (announce && hadSecret) status.value = "dismissed";
+  });
+  return {
+    applyProfile: vi.fn(),
+    clearUnavailableMcpSelections: vi.fn(),
+    busy: ref(false),
+    copied,
+    connectorSnippet: ref("# Standard MCP Streamable HTTP connection (2026-07-28)\n# X-Meshrix.js-Api-Key: ${MESHRIX_MCP_TOKEN}"),
+    copyConnectorSnippet: vi.fn(async () => {}),
+    copySecret: vi.fn(async () => { copied.value = true; }),
+    create: vi.fn(async () => {
+      revealedRecord.value = record();
+      oneTimeSecret.value = ONE_TIME_SENTINEL;
+    }),
+    creating: ref(false),
+    dataClassificationOptions: ref([]),
+    dismissSecret,
+    draft: ref({
+      workloadDisplayName: "Build worker", organizationNodeId: "organization-a",
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString().slice(0, 16),
+      selectedToolsetIds: [] as string[], allowedTools: [] as string[], selectedProfileId: "",
+      selectedMcpTools: [],
+      maximumRisk: "low", serverAudience: "", selectedClientGuide: "generic", selectedTargetIds: [] as string[],
+      resourcesUnrestricted: true, selectedDataClassifications: [] as string[], workspaceIds: "",
+      requestsPerMinute: null as number | null, maxConcurrentEffects: null as number | null,
+    }),
+    draftConfigDocument: ref("{}"),
+    draftMissingHints: ref([] as string[]),
+    draftValid: ref(true),
+    eligible: ref(true),
+    error: ref(""),
+    importDraftConfig: vi.fn(),
+    inferredSummaryItems: ref([]),
+    loading: ref(false),
+    maximumRiskOptions: ref([{ value: "low", label: "Low" }]),
+    mcpToolSelection: ref({ status: "available", services: [], tools: [] }),
+    mcpToolOptions: ref([]),
+    selectedMcpToolFacts: ref<ApiKeyMcpToolSelection[]>([]),
+    unavailableSelectedMcpTools: ref([]),
+    toggleMcpToolSelection: vi.fn(),
+    mutatingKeyId: ref(""),
+    nodes: ref([{ nodeId: "organization-a", name: "Organization A", breadcrumb: [], nodeType: "organization" }]),
+    oneTimeSecret,
+    profileOptions: ref([]),
+    records: ref([record()]),
+    refresh: vi.fn(async () => true),
+    revealedRecord,
+    revoke: vi.fn(),
+    // Direct true -> true swap (no dismiss in between) pins the view-level
+    // acknowledgement reset regardless of controller sequencing.
+    rotate: vi.fn(async (entry: ApiKeyRecord) => {
+      revealedRecord.value = entry;
+      oneTimeSecret.value = ROTATED_SENTINEL;
+    }),
+    scopes: ref({ organizationRevision: 1, authorizationRevision: 2 }),
+    snippetCopied: ref(false),
+    status,
+    targetOptions: ref([{ value: "codex", label: "Codex", description: "codex" }]),
+    clientGuideOptions: ref([
+      { value: "generic", label: "Standard MCP client", description: "MCP 2026-07-28" },
+      { value: "codex", label: "Codex", description: "codex" },
+    ]),
+    toolsetOptions: ref<Array<{ value: string; label: string }>>([]),
+  };
+}
+
+type FakeController = ReturnType<typeof createFakeController>;
+
+async function mountConsoleView(configure?: (controller: FakeController) => void): Promise<{
+  controller: FakeController;
+  router: Router;
+  wrapper: VueWrapper;
+}> {
+  const controller = createFakeController();
+  configure?.(controller);
+  controllerHolder.factory = () => controller;
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/", component: ApiKeyDistributionView },
+      { path: "/next", component: defineComponent({ template: '<div data-testid="next-page">next</div>' }) },
+    ],
+  });
+  const wrapper = mount(defineComponent({ template: "<router-view />" }), {
+    global: { plugins: [router] },
+    attachTo: document.body,
+  });
+  await router.push("/");
+  await flushPromises();
+  return { controller, router, wrapper };
+}
+
+async function revealViaCreate(wrapper: VueWrapper): Promise<void> {
+  await wrapper.find(".api-key-create-actions .primary-action").trigger("click");
+  await flushPromises();
+}
+
+async function acknowledge(wrapper: VueWrapper): Promise<void> {
+  await wrapper.find('[data-testid="api-key-reveal-confirm"] input').setValue(true);
+  await flushPromises();
+}
+
+beforeEach(() => {
+  setConsoleLocaleState("en");
+});
+
+afterEach(() => {
+  document.body.innerHTML = "";
+  vi.restoreAllMocks();
+});
+
+describe("API key one-time reveal guard", () => {
+  it.each([
+    { locale: "en" as const, accessLabel: "Access", separator: ", " },
+    { locale: "zh-CN" as const, accessLabel: "能力", separator: "、" },
+  ])("shows selected MCP tools and toolsets in the $locale confirmation summary", async ({ locale, accessLabel, separator }) => {
+    setConsoleLocaleState(locale);
+    const { controller, wrapper } = await mountConsoleView((state) => {
+      state.selectedMcpToolFacts.value = [{
+        serviceId: "service-inventory",
+        publicName: "upstream.service-inventory.inspect_inventory",
+        label: "Inventory: inspect_inventory",
+        operationToolId: "upstream.service-inventory.tools-call",
+        capabilityId: "cap:upstream:service-inventory:tools-call-inspect_inventory",
+        risk: "safe_write",
+        requiredScopes: ["gateway:write"],
+        toolsets: ["upstream-mcp"],
+      }];
+      state.toolsetOptions.value = [
+        { value: "toolset-read", label: "Workspace read" },
+        { value: "toolset-write", label: "Workspace write" },
+      ];
+    });
+    await wrapper.find('[data-testid="agent-setup-step-3"]').trigger("click");
+    const review = wrapper.find('[data-testid="agent-setup-review-step"]');
+    expect(review.isVisible()).toBe(true);
+    const access = review.findAll(".api-key-review-summary > div")
+      .find((entry) => entry.find("span").text() === accessLabel)!;
+    expect(access.find("strong").text()).toBe("Inventory: inspect_inventory");
+
+    controller.draft.value.selectedToolsetIds = ["toolset-read"];
+    controller.draft.value.allowedTools = ["workspace.read"];
+    await flushPromises();
+    expect(access.find("strong").text()).toBe(["Workspace read", "Inventory: inspect_inventory"].join(separator));
+    expect(access.text()).not.toContain("Workspace write");
+    wrapper.unmount();
+  });
+
+  it("keeps connection guidance separate from the optional authorization audience control", async () => {
+    const { controller, wrapper } = await mountConsoleView();
+    const clientGuide = wrapper.find('[data-testid="client-guide-select"]');
+    expect((clientGuide.element as HTMLSelectElement).value).toBe("generic");
+    await clientGuide.setValue("codex");
+    expect(controller.draft.value.selectedClientGuide).toBe("codex");
+    expect(controller.draft.value.selectedTargetIds).toEqual([]);
+
+    await wrapper.find('[data-testid="agent-setup-step-2"]').trigger("click");
+    const restriction = wrapper.find('[data-testid="client-audience-restriction"]');
+    expect(restriction.exists()).toBe(true);
+    expect(restriction.text()).toContain("Client audience restriction (optional)");
+    expect(restriction.text()).toContain("Leave empty to avoid a brand-based restriction");
+    expect(restriction.element.closest("details")?.querySelector("summary")?.textContent)
+      .toContain("Advanced settings");
+    expect(controller.draft.value.selectedTargetIds).toEqual([]);
+  });
+
+  it("tells generic-client users to store the key on their own client", async () => {
+    const { wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+    expect(wrapper.find('[data-testid="api-key-connector-snippet"] h4').text())
+      .toBe("Configure your MCP client");
+    const note = wrapper.find('[data-testid="generic-client-secret-note"]');
+    expect(note.text()).toContain("local environment variable or secret manager");
+    expect(note.text()).toContain("does not store the credential for you");
+    expect(wrapper.find(".api-key-connector-snippet-code").text())
+      .toContain("X-Meshrix.js-Api-Key: ${MESHRIX_MCP_TOKEN}");
+    expect(wrapper.find('[data-testid="api-key-connector-snippet-copy"]').text())
+      .toBe("Copy connection guide");
+  });
+
+  it("keeps the branded connector guidance for an explicitly selected guide", async () => {
+    const { wrapper } = await mountConsoleView((controller) => {
+      controller.draft.value.selectedClientGuide = "codex";
+    });
+    await revealViaCreate(wrapper);
+    expect(wrapper.find('[data-testid="api-key-connector-snippet"] h4').text())
+      .toBe("Then copy the Agent config");
+    expect(wrapper.find('[data-testid="generic-client-secret-note"]').exists()).toBe(false);
+    expect(wrapper.find(".api-key-connector-snippet-note").text())
+      .toContain("Set the one-time key in the MESHRIX_MCP_TOKEN environment variable");
+    expect(wrapper.find('[data-testid="api-key-connector-snippet-copy"]').text()).toBe("Copy config");
+  });
+
+  it("explains both organization setup and scope assignment and links to governance", async () => {
+    const { wrapper } = await mountConsoleView((controller) => {
+      controller.eligible.value = false;
+    });
+    const emptyState = wrapper.find('[data-access="restricted-empty"]');
+    expect(emptyState.text()).toContain("If organization governance is not configured");
+    expect(emptyState.text()).toContain("If governance is already configured");
+    expect(emptyState.text()).toContain("never infers global authority");
+    expect(emptyState.find('[data-testid="organization-governance-link"]').attributes("href"))
+      .toBe("/admin/organization-governance");
+  });
+
+  it("makes copy the primary, initially focused action and confirms copies inline", async () => {
+    const { controller, wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+
+    const reveal = wrapper.find(".api-key-reveal");
+    expect(reveal.exists()).toBe(true);
+    expect(wrapper.find("[data-one-time-secret]").text()).toBe(ONE_TIME_SENTINEL);
+
+    const actions = wrapper.find(".api-key-reveal-actions").findAll("button");
+    const copy = actions[0];
+    expect(copy.attributes("data-testid")).toBe("api-key-reveal-copy");
+    expect(copy.classes()).toContain("primary-action");
+    expect(copy.text()).toBe("Copy Key");
+    expect(document.activeElement).toBe(copy.element);
+
+    await copy.trigger("click");
+    await flushPromises();
+    expect(controller.copySecret).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="api-key-reveal-copy"]').text()).toBe("Copied");
+  });
+
+  it("disables dismissal until the explicit storage acknowledgement", async () => {
+    const { controller, wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+
+    const dismiss = wrapper.find('[data-testid="api-key-reveal-dismiss"]');
+    expect(dismiss.attributes("disabled")).toBeDefined();
+    // Even a dispatched click must not dismiss while unacknowledged.
+    await dismiss.trigger("click");
+    expect(controller.dismissSecret).not.toHaveBeenCalled();
+    expect(wrapper.find(".api-key-reveal").exists()).toBe(true);
+
+    await acknowledge(wrapper);
+    const enabledDismiss = wrapper.find('[data-testid="api-key-reveal-dismiss"]');
+    expect(enabledDismiss.attributes("disabled")).toBeUndefined();
+    await enabledDismiss.trigger("click");
+    await flushPromises();
+    expect(controller.dismissSecret).toHaveBeenCalledWith(true);
+    expect(controller.oneTimeSecret.value).toBe("");
+    expect(wrapper.find(".api-key-reveal").exists()).toBe(false);
+  });
+
+  it("blocks route changes while the reveal is open and unacknowledged", async () => {
+    const { router, wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+    expect(wrapper.find('[data-testid="api-key-reveal-navigation-reminder"]').exists()).toBe(false);
+
+    await router.push("/next");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/");
+    const reminder = wrapper.find('[data-testid="api-key-reveal-navigation-reminder"]');
+    expect(reminder.exists()).toBe(true);
+    expect(reminder.text()).toContain("The plaintext key is still on screen");
+    expect(wrapper.find(".api-key-reveal").exists()).toBe(true);
+  });
+
+  it("releases the guard after acknowledgement and clears the plaintext on leave", async () => {
+    const { controller, router, wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+
+    await router.push("/next");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/");
+
+    await acknowledge(wrapper);
+    expect(wrapper.find('[data-testid="api-key-reveal-navigation-reminder"]').exists()).toBe(false);
+
+    await router.push("/next");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/next");
+    expect(wrapper.find('[data-testid="next-page"]').exists()).toBe(true);
+    // Unmount on the route change clears the ephemeral plaintext.
+    expect(controller.oneTimeSecret.value).toBe("");
+    expect(document.body.innerHTML).not.toContain(ONE_TIME_SENTINEL);
+  });
+
+  it("releases the guard after acknowledge and dismiss", async () => {
+    const { router, wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+    await acknowledge(wrapper);
+    await wrapper.find('[data-testid="api-key-reveal-dismiss"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".api-key-reveal").exists()).toBe(false);
+
+    await router.push("/next");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/next");
+  });
+
+  it("discard without storing clears the secret and releases the guard", async () => {
+    const { controller, router, wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+    expect(wrapper.find(".api-key-reveal").text()).toContain(
+      "Discarding clears the plaintext immediately; it can never be shown again.",
+    );
+
+    const discard = wrapper.find('[data-testid="api-key-reveal-discard"]');
+    expect(discard.text()).toBe("Discard without storing");
+    await discard.trigger("click");
+    await flushPromises();
+    expect(controller.dismissSecret).toHaveBeenCalled();
+    expect(controller.oneTimeSecret.value).toBe("");
+    expect(controller.status.value).toBe("The plaintext key was discarded; it cannot be viewed again.");
+    expect(wrapper.find(".api-key-reveal").exists()).toBe(false);
+
+    await router.push("/next");
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/next");
+  });
+
+  it("resets the acknowledgement when a new secret replaces the reveal", async () => {
+    const { controller, wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+    await acknowledge(wrapper);
+    expect(wrapper.find('[data-testid="api-key-reveal-dismiss"]').attributes("disabled")).toBeUndefined();
+
+    await wrapper.findAll(".api-key-record-actions button")[0].trigger("click");
+    await flushPromises();
+    expect(controller.oneTimeSecret.value).toBe(ROTATED_SENTINEL);
+    const confirmInput = wrapper.find('[data-testid="api-key-reveal-confirm"] input');
+    expect((confirmInput.element as HTMLInputElement).checked).toBe(false);
+    expect(wrapper.find('[data-testid="api-key-reveal-dismiss"]').attributes("disabled")).toBeDefined();
+  });
+
+  it("keeps the plaintext out of storage, route state, and the DOM after dismissal", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    const { router, wrapper } = await mountConsoleView();
+    await revealViaCreate(wrapper);
+    expect(wrapper.find("[data-one-time-secret]").text()).toBe(ONE_TIME_SENTINEL);
+
+    await wrapper.find('[data-testid="api-key-reveal-copy"]').trigger("click");
+    await acknowledge(wrapper);
+    await wrapper.find('[data-testid="api-key-reveal-dismiss"]').trigger("click");
+    await flushPromises();
+
+    const storageWrites = setItem.mock.calls.map((call) => String(call[1])).join(" ");
+    expect(storageWrites).not.toContain(ONE_TIME_SENTINEL);
+    const dump = (storage: Storage): string =>
+      Array.from({ length: storage.length }, (_, index) => storage.getItem(storage.key(index)!) ?? "").join(" ");
+    expect(dump(window.localStorage)).not.toContain(ONE_TIME_SENTINEL);
+    expect(dump(window.sessionStorage)).not.toContain(ONE_TIME_SENTINEL);
+    expect(document.body.innerHTML).not.toContain(ONE_TIME_SENTINEL);
+    expect(router.currentRoute.value.fullPath).not.toContain(ONE_TIME_SENTINEL);
+    // Refresh and reload clearing holds via ephemeral refs and is pinned by the
+    // sibling controller test (api-key-distribution-view.test.ts); no new code.
+  });
+
+  it("keeps the no-re-view statement accurate and offers no reveal-again path", async () => {
+    const source = readFileSync(
+      "apps/console/views/admin/ApiKeyDistributionView.vue",
+      "utf8",
+    );
+    expect(source).toContain("不存在再次查看、导出、恢复或归档操作");
+    expect(source).toContain("there is no reveal-again, export, restore, or archive action.");
+    expect(source).toContain("onBeforeRouteLeave");
+    expect(source).not.toMatch(/revealAgain|exportSecret|archiveSecret/i);
+
+    const { wrapper } = await mountConsoleView();
+    expect(wrapper.find(".api-key-list-card").text()).toContain(
+      "there is no reveal-again, export, restore, or archive action.",
+    );
+  });
+});

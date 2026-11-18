@@ -1,0 +1,93 @@
+{
+  "name": "@meshrix/capabilities",
+  "version": "0.4.2",
+  "description": "Meshrix.js operation permission and runtime capabilities",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
+  },
+  "type": "module",
+  "exports": {
+    "./operation-permission-core/index": {
+      "source": "./src/operation-permission-core/index.ts",
+      "types": "./dist/operation-permission-core/index.d.ts",
+      "default": "./dist/operation-permission-core/index.js"
+    },
+    "./operation-permission-core/runtime-schema": {
+      "source": "./src/operation-permission-core/runtime-schema.ts",
+      "types": "./dist/operation-permission-core/runtime-schema.d.ts",
+      "default": "./dist/operation-permission-core/runtime-schema.js"
+    },
+    "./operation-permission-core/store": {
+      "source": "./src/operation-permission-core/store.ts",
+      "types": "./dist/operation-permission-core/store.d.ts",
+      "default": "./dist/operation-permission-core/store.js"
+    },
+    "./operation-permission-core/store-schema": {
+      "source": "./src/operation-permission-core/store-schema.ts",
+      "types": "./dist/operation-permission-core/store-schema.d.ts",
+      "default": "./dist/operation-permission-core/store-schema.js"
+    },
+    "./operation-permission-core/store-worker-owner": {
+      "source": "./src/operation-permission-core/store-worker-owner.ts",
+      "types": "./dist/operation-permission-core/store-worker-owner.d.ts",
+      "default": "./dist/operation-permission-core/store-worker-owner.js"
+    },
+    "./operation-permission-core/api-key-distribution-worker-owner": {
+      "source": "./src/operation-permission-core/api-key-distribution-worker-owner.ts",
+      "types": "./dist/operation-permission-core/api-key-distribution-worker-owner.d.ts",
+      "default": "./dist/operation-permission-core/api-key-distribution-worker-owner.js"
+    },
+    "./operation-permission-core/catalog": {
+      "source": "./src/operation-permission-core/catalog.ts",
+      "types": "./dist/operation-permission-core/catalog.d.ts",
+      "default": "./dist/operation-permission-core/catalog.js"
+    },
+    "./operation-permission-core/http": {
+      "source": "./src/operation-permission-core/http.ts",
+      "types": "./dist/operation-permission-core/http.d.ts",
+      "default": "./dist/operation-permission-core/http.js"
+    },
+    "./operation-permission-core/policy": {
+      "source": "./src/operation-permission-core/policy.ts",
+      "types": "./dist/operation-permission-core/policy.d.ts",
+      "default": "./dist/operation-permission-core/policy.js"
+    },
+    "./skills/tool-skill-management-provider": {
+      "source": "./src/skills/tool-skill-management-provider.ts",
+      "types": "./dist/skills/tool-skill-management-provider.d.ts",
+      "default": "./dist/skills/tool-skill-management-provider.js"
+    },
+    "./gateway-policy": {
+      "source": "./src/gateway-policy/index.ts",
+      "types": "./dist/gateway-policy/index.d.ts",
+      "default": "./dist/gateway-policy/index.js"
+    },
+    "./gateway-credentials": {
+      "source": "./src/gateway-credentials/index.ts",
+      "types": "./dist/gateway-credentials/index.d.ts",
+      "default": "./dist/gateway-credentials/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/capabilities"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/contracts": "0.4.2",
+    "@meshrix/foundation": "0.4.2",
+    "@meshrix/protocols": "0.4.2"
+  }
+}

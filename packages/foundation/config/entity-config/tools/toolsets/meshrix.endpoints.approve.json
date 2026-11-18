@@ -1,0 +1,11 @@
+{
+  "id": "meshrix.endpoints.approve",
+  "label": "Managed endpoints approve",
+  "requiredScopes": [
+    "endpoints:read",
+    "endpoints:approve"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

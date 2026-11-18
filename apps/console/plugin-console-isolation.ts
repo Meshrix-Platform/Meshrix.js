@@ -1,0 +1,351 @@
+import { sendJson } from "@meshrix/ui-console/bridge-http";
+
+export const PLUGIN_CONSOLE_BRIDGE_VERSION: any = "v0.0.1:plugin:console-bridge-1";
+export const PLUGIN_CONSOLE_IFRAME_SANDBOX: any = "allow-scripts";
+export const PLUGIN_CONSOLE_MAX_REQUEST_BYTES: any = 1 * 1024 * 1024;
+export const PLUGIN_CONSOLE_MAX_RESPONSE_BYTES: any = 8 * 1024 * 1024;
+export const PLUGIN_CONSOLE_MAX_CONCURRENT_CALLS: any = 4;
+
+const DIGEST_PATTERN: any = /^sha256:[a-f0-9]{64}$/u;
+const TOOL_ID_PATTERN: any = /^[a-z][a-zA-Z0-9._-]*$/u;
+const INVOKE_ID_PATTERN: any = /^[A-Za-z0-9._-]{1,128}$/u;
+
+export type PluginConsoleIsolationEntry = {
+  id: string;
+  pluginId: string;
+  featureId: string;
+  viewKey: string;
+  routePath?: string;
+  slotId?: string;
+  componentId: string;
+  sandboxUrl: string;
+  bridgeVersion: string;
+  artifactDigest: string;
+  artifactGeneration: number;
+  toolIds: readonly string[];
+  requiredScopes: readonly string[];
+};
+
+export type PluginConsoleIsolationSurface = PluginConsoleIsolationEntry & {
+  invokeUrl: string;
+  sandbox: string;
+};
+
+export type PluginConsoleHostContext = {
+  locale: string;
+  theme: { colorScheme: string };
+  route: { path: string; viewKey: string };
+};
+
+export type PluginConsoleRevalidation =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+export type PluginConsoleIsolationHost = {
+  invokeTool?: (request: {
+    toolId: string;
+    payload: unknown;
+    signal: AbortSignal;
+    entry: PluginConsoleIsolationSurface;
+    context: PluginConsoleHostContext;
+  }) => Promise<unknown>;
+  revalidate?: () => PluginConsoleRevalidation;
+  readHostContext?: () => PluginConsoleHostContext;
+};
+
+function uniqueToolIds(value?: any) : any {
+  if (!Array.isArray(value)) return null;
+  const output: any[] = [];
+  const seen: any = new Set<any>();
+  for (const entry of value) {
+    const id: any = String(entry || "").trim();
+    if (!TOOL_ID_PATTERN.test(id) || seen.has(id)) return null;
+    seen.add(id);
+    output.push(id);
+  }
+  return Object.freeze(output);
+}
+
+function pluginConsoleInvokeUrl(sandboxUrl?: any) : any {
+  const value: any = String(sandboxUrl || "");
+  if (!value.endsWith(".html")) return "";
+  return value
+    .replace("/api/plugins/v1/console-sandboxes/", "/api/plugins/v1/console-bridges/")
+    .replace(/\.html$/u, "/invoke");
+}
+
+export function admitPluginConsoleIsolationEntry(
+  entry: PluginConsoleIsolationEntry,
+): PluginConsoleIsolationSurface | undefined {
+  if (!entry || typeof entry !== "object" || Object.hasOwn(entry, "assetUrl") || Object.hasOwn(entry, "assetExport")) {
+    return undefined;
+  }
+  const id: any = String(entry.id || "");
+  const pluginId: any = String(entry.pluginId || "");
+  const prefix: any = `${pluginId}/`;
+  if (!/^[a-z][a-z0-9-]*$/u.test(pluginId) || !/^[a-z][a-zA-Z0-9._-]*$/u.test(id)) return undefined;
+  if (!String(entry.componentId || "").startsWith(prefix)) return undefined;
+  const componentName: any = String(entry.componentId).slice(prefix.length);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(componentName)) return undefined;
+  const digest: any = String(entry.artifactDigest || "");
+  if (!DIGEST_PATTERN.test(digest) || !Number.isSafeInteger(entry.artifactGeneration) || entry.artifactGeneration < 1) {
+    return undefined;
+  }
+  if (entry.bridgeVersion !== PLUGIN_CONSOLE_BRIDGE_VERSION) return undefined;
+  const sandboxUrl: any = String(entry.sandboxUrl || "");
+  const sandboxPrefix: any = `/api/plugins/v1/console-sandboxes/${pluginId}/${entry.artifactGeneration}/${digest.slice(7)}/`;
+  if (
+    !sandboxUrl.startsWith(sandboxPrefix) ||
+    !/[A-Za-z0-9_-]+\.html$/u.test(sandboxUrl) ||
+    /[?#]/u.test(sandboxUrl) ||
+    sandboxUrl.split("/").includes("..")
+  ) {
+    return undefined;
+  }
+  const invokeUrl: any = pluginConsoleInvokeUrl(sandboxUrl);
+  if (!invokeUrl.startsWith(`/api/plugins/v1/console-bridges/${pluginId}/`)) return undefined;
+  const toolIds: any = uniqueToolIds(entry.toolIds);
+  if (!toolIds || !Array.isArray(entry.requiredScopes)) return undefined;
+  return Object.freeze({
+    ...entry,
+    id,
+    pluginId,
+    componentId: String(entry.componentId),
+    sandboxUrl,
+    bridgeVersion: PLUGIN_CONSOLE_BRIDGE_VERSION,
+    artifactDigest: digest,
+    toolIds,
+    requiredScopes: Object.freeze([...entry.requiredScopes]),
+    invokeUrl,
+    sandbox: PLUGIN_CONSOLE_IFRAME_SANDBOX,
+  });
+}
+
+export function utf8JsonByteLength(value?: any) : any {
+  try {
+    const encoded: any = JSON.stringify(value === undefined ? null : value);
+    if (typeof encoded !== "string") return Number.POSITIVE_INFINITY;
+    return new TextEncoder().encode(encoded).length;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function normalizedRoutePath() : any {
+  const hash: any = String(globalThis.location?.hash || "").replace(/^#/u, "");
+  const path: any = hash || String(globalThis.location?.pathname || "/");
+  return path.split(/[?#]/u)[0] || "/";
+}
+
+export function readPluginConsoleHostContext(entry: PluginConsoleIsolationSurface) : PluginConsoleHostContext {
+  const html: any = globalThis.document?.documentElement;
+  const colorScheme: any = String(
+    html?.dataset?.appearanceColorScheme || html?.style?.colorScheme || "light"
+  );
+  return Object.freeze({
+    locale: String(html?.lang || "zh-CN"),
+    theme: Object.freeze({ colorScheme: colorScheme === "dark" ? "dark" : "light" }),
+    route: Object.freeze({
+      path: normalizedRoutePath(),
+      viewKey: String(entry.viewKey || ""),
+    }),
+  });
+}
+
+export async function invokePluginConsoleTool({
+  toolId,
+  payload,
+  signal,
+  entry,
+  context,
+}: Record<string, any> = {}) : Promise<any> {
+  return sendJson(entry.invokeUrl, "POST", {
+    bridgeVersion: entry.bridgeVersion,
+    pluginId: entry.pluginId,
+    componentId: entry.componentId,
+    artifactDigest: entry.artifactDigest,
+    artifactGeneration: entry.artifactGeneration,
+    route: context.route,
+    toolId,
+    payload: payload === undefined ? null : payload,
+  }, { signal });
+}
+
+export function connectPluginConsoleHostBridge({
+  iframe,
+  port,
+  entry,
+  context,
+  invokeTool = invokePluginConsoleTool,
+  revalidate,
+}: Record<string, any> = {}) : any {
+  let hostPort: any = port;
+  let revoked: any = false;
+  let inFlight: any = 0;
+  const controllers: AbortController[] = [];
+
+  function closePort() : any {
+    try { hostPort?.close?.(); } catch {}
+    hostPort = null;
+  }
+
+  function revoke(reason: any = "plugin_console_revoked") : any {
+    if (revoked) return;
+    revoked = true;
+    for (const controller of controllers) controller.abort(String(reason || "plugin_console_revoked"));
+    controllers.length = 0;
+    try {
+      hostPort?.postMessage?.({
+        type: "meshrix.plugin-console.revoke",
+        reason: String(reason || "plugin_console_revoked"),
+      });
+    } catch {}
+    closePort();
+    try { iframe?.remove?.(); } catch {}
+  }
+
+  if (!hostPort) {
+    const channel: any = new MessageChannel();
+    hostPort = channel.port1;
+    const target: any = iframe?.contentWindow;
+    if (!target || typeof target.postMessage !== "function") {
+      throw new Error("Plugin console view could not be loaded.");
+    }
+    target.postMessage({
+      type: "meshrix.plugin-console.init",
+      bridgeVersion: entry.bridgeVersion,
+      context,
+    }, "*", [channel.port2]);
+  }
+  hostPort.start?.();
+
+  hostPort.addEventListener("message", async (event?: any) : Promise<any> => {
+    const data: any = event?.data;
+    if (!data || typeof data !== "object") return;
+    if (data.type === "meshrix.plugin-console.failed") {
+      revoke("plugin_console_failed");
+      return;
+    }
+    if (data.type !== "meshrix.plugin-console.invoke" || revoked) return;
+    const id: any = String(data.id || "");
+    const toolId: any = String(data.toolId || "");
+    if (!INVOKE_ID_PATTERN.test(id)) return;
+    function reply(payloadValue?: any) : any {
+      if (revoked) return;
+      try { hostPort.postMessage({ id, ...payloadValue }); } catch {}
+    }
+    const status: any = typeof revalidate === "function" ? revalidate() : { ok: true };
+    if (!status || status.ok !== true) {
+      reply({ type: "meshrix.plugin-console.result", ok: false, error: { code: "plugin_console_revalidation_failed" } });
+      revoke(status?.reason || "plugin_console_revalidation_failed");
+      return;
+    }
+    if (!entry.toolIds.includes(toolId) || !TOOL_ID_PATTERN.test(toolId)) {
+      reply({ type: "meshrix.plugin-console.result", ok: false, error: { code: "plugin_console_tool_denied" } });
+      return;
+    }
+    if (utf8JsonByteLength(data.payload) > PLUGIN_CONSOLE_MAX_REQUEST_BYTES) {
+      reply({ type: "meshrix.plugin-console.result", ok: false, error: { code: "plugin_console_payload_too_large" } });
+      return;
+    }
+    if (inFlight >= PLUGIN_CONSOLE_MAX_CONCURRENT_CALLS) {
+      reply({ type: "meshrix.plugin-console.result", ok: false, error: { code: "plugin_console_concurrency_limit" } });
+      return;
+    }
+    if (typeof invokeTool !== "function") {
+      reply({ type: "meshrix.plugin-console.result", ok: false, error: { code: "plugin_console_tool_denied" } });
+      return;
+    }
+    inFlight += 1;
+    const controller: any = new AbortController();
+    controllers.push(controller);
+    try {
+      const result: any = await invokeTool({
+        toolId,
+        payload: data.payload,
+        signal: controller.signal,
+        entry,
+        context,
+      });
+      if (utf8JsonByteLength(result) > PLUGIN_CONSOLE_MAX_RESPONSE_BYTES) {
+        reply({ type: "meshrix.plugin-console.result", ok: false, error: { code: "plugin_console_payload_too_large" } });
+        return;
+      }
+      reply({ type: "meshrix.plugin-console.result", ok: true, result });
+    } catch {
+      reply({
+        type: "meshrix.plugin-console.result",
+        ok: false,
+        error: { code: "plugin_console_tool_denied" },
+      });
+    } finally {
+      inFlight = Math.max(0, inFlight - 1);
+      const index: number = controllers.indexOf(controller);
+      if (index >= 0) controllers.splice(index, 1);
+    }
+  });
+
+  return Object.freeze({
+    revoke,
+    get revoked() : any { return revoked; },
+  });
+}
+
+export function createOpaquePluginConsoleIframe(entry: PluginConsoleIsolationSurface) : any {
+  const iframe: any = globalThis.document.createElement("iframe");
+  iframe.setAttribute("sandbox", PLUGIN_CONSOLE_IFRAME_SANDBOX);
+  iframe.setAttribute("referrerpolicy", "no-referrer");
+  iframe.setAttribute("allow", "");
+  iframe.setAttribute("title", "Plugin console");
+  iframe.setAttribute("data-testid", "plugin-console-isolation-frame");
+  iframe.style.cssText = "border:0;width:100%;height:100%;min-height:24rem;background:transparent;flex:1;";
+  iframe.src = entry.sandboxUrl;
+  return iframe;
+}
+
+export async function mountPluginConsoleIsolation(
+  hostElement: Element,
+  entry: PluginConsoleIsolationSurface,
+  host: PluginConsoleIsolationHost = {},
+) : Promise<any> {
+  const iframe: any = createOpaquePluginConsoleIframe(entry);
+  let bridge: any = null;
+  let connected: any = false;
+  const readContext: any = host.readHostContext || (() : any => readPluginConsoleHostContext(entry));
+  const initialContext: any = readContext();
+  function revalidate() : PluginConsoleRevalidation {
+    const custom: any = host.revalidate?.();
+    if (custom && custom.ok !== true) return custom;
+    const current: any = readContext();
+    if (entry.routePath && current.route.path !== entry.routePath) {
+      return { ok: false, reason: "plugin_console_route_changed" };
+    }
+    return { ok: true };
+  }
+  function connect() : any {
+    if (connected || !iframe.contentWindow) return;
+    connected = true;
+    window.removeEventListener("message", onGuestReady);
+    bridge = connectPluginConsoleHostBridge({
+      iframe,
+      entry,
+      context: initialContext,
+      invokeTool: host.invokeTool,
+      revalidate,
+    });
+  }
+  function onGuestReady(event?: any) : any {
+    if (event?.source !== iframe.contentWindow) return;
+    if (event.data?.type !== "meshrix.plugin-console.guest-ready") return;
+    if (event.data?.bridgeVersion !== entry.bridgeVersion) return;
+    connect();
+  }
+  window.addEventListener("message", onGuestReady);
+  hostElement.replaceChildren(iframe);
+  return () : any => {
+    window.removeEventListener("message", onGuestReady);
+    bridge?.revoke("plugin_console_unmounted");
+    bridge = null;
+    hostElement.replaceChildren();
+  };
+}

@@ -1,0 +1,120 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.kilo/
+*.swp
+*.swo
+__pycache__/
+*.py[cod]
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+meshrix-cloud-init.yaml
+.venv/
+.venv-pdf/
+.venv-paddleocr/
+
+# Logs / crash dumps
+*.log
+logs/
+hs_err_pid*
+replay_pid*
+crash-*
+
+# App local data and generated workspace outputs
+.meshrix-server-data/
+.meshrix-data/
+/meshrix-data/
+/.meshrix-agent-history/
+/build/
+/dist/
+**/dist/
+/cache/
+/outputs/
+/reports/production-readiness/
+/.cache/
+
+# Java / Rust / Node build outputs
+node_modules/
+target/
+apps/desktop/.dart_tool/
+apps/desktop/.flutter-plugins
+apps/desktop/.flutter-plugins-dependencies
+apps/desktop/build/
+client-gui/.dart_tool/
+client-gui/.flutter-plugins
+client-gui/.flutter-plugins-dependencies
+client-gui/build/
+
+# Generated archives / binaries
+*.app
+*.AppImage
+*.asar
+*.dmg
+*.exe
+*.msi
+*.zip
+*.tar.gz
+*.tar.xz
+*.rar
+*.tgz
+!vendor/*.tgz
+
+# Local module runtimes and heavy assets
+packages/capabilities/runtime-modules/knowledge/runtime/jre/**
+!packages/capabilities/runtime-modules/knowledge/runtime/jre/
+!packages/capabilities/runtime-modules/knowledge/runtime/jre/.gitkeep
+packages/capabilities/runtime-modules/knowledge/tika/*
+!packages/capabilities/runtime-modules/knowledge/tika/
+!packages/capabilities/runtime-modules/knowledge/tika/.gitkeep
+packages/capabilities/runtime-modules/knowledge/ocr/runtime/**
+!packages/capabilities/runtime-modules/knowledge/ocr/runtime/
+!packages/capabilities/runtime-modules/knowledge/ocr/runtime/README.md
+!packages/capabilities/runtime-modules/knowledge/ocr/runtime/**/
+!packages/capabilities/runtime-modules/knowledge/ocr/runtime/**/.gitkeep
+
+# Local demo workspaces — demo scenes and mockups stay on this machine and
+# are never committed; see demo/README.md
+/demo/*
+!/demo/README.md
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+
+# Local test source data can contain large/private documents.
+/tests/fixtures/
+/tests/email-corpus/
+
+# Local browser/test artifacts
+.playwright-cli/
+output/
+test-results/
+
+# Local AI assistant skill/runtime artifacts
+CLAUDE.md
+.claude/
+.codex-research/
+.commandcode/
+.gemini/
+.impeccable/
+.github/skills/
+
+# Local toolchain overrides (may contain machine-local paths)
+.cargo/
+
+# Local process documents. Public documentation remains under docs/README.md,
+# docs/RUNBOOK.md, docs/COMPATIBILITY.md, docs/ENTITY-CONFIG-LAYOUT.md,
+# docs/architecture/, docs/functionality/, docs/protocols/, docs/examples/,
+# docs/adrs/, and docs/verification/.
+/docs/plans/
+/docs/reports/
+
+# Test-only placeholder data roots must never become repository content.
+/<user-data>/
+*.tsbuildinfo

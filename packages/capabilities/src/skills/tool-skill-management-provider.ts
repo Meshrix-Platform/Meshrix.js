@@ -1,0 +1,771 @@
+import {
+  grantCanSeeTool,
+  grantVisibleRisk,
+  nowIso
+} from "./tool-skill-management-provider-grant-utils.ts";
+import {
+  collectWorkspaces,
+  executeToolPayload,
+  inputMayNeedWorkspaceResolution,
+  resolveWorkspaceReferencesInInput,
+  sanitizeMcpOutputValue,
+  valueContainsWorkspaceId,
+  workspaceDirectoryFromWorkspaces
+} from "./tool-skill-management-provider-workspace-projection.ts";
+import {
+  createDelegatedMcpGrantForPlatform,
+  revokeDelegatedMcpGrantForPlatform
+} from "./tool-skill-management-provider-delegated-mcp.ts";
+import { authenticateMcpApiKey, authenticateMcpApiKeyAdmission } from "./mcp-api-key-authentication.ts";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
+import {
+  apiKeyAuthorizationEvaluationInput,
+  apiKeyResourcePolicyAllowsOperation
+} from "../operation-permission-core/api-key-distribution.ts";
+
+export const OPERATION_PERMISSION_FACADE_PROTOCOL_VERSION: any = "v0.0.1:operation-permission:facade-1";
+const VISIBLE_TOOL_SNAPSHOT_SCHEMA: any = "v0.0.1:capabilities:visible-tool-snapshot-1";
+const VISIBLE_TOOL_SNAPSHOT_CAPACITY: any = 8;
+let visibleToolSnapshotBuildCount: any = 0;
+let catalogEnumerationCount: any = 0;
+
+export function getRefactorInstrumentation() : any {
+  return {
+    schemaVersion: VISIBLE_TOOL_SNAPSHOT_SCHEMA,
+    snapshotBuildCount: visibleToolSnapshotBuildCount,
+    catalogEnumerationCount: catalogEnumerationCount
+  };
+}
+
+export function createToolSkillManagementProvider({
+  operationPermissionPlatform,
+  userDataPath = "",
+  securityPermissions = operationPermissionPlatform?.securityPermissions || null,
+  evaluateToolAudience = null,
+  resolveAudiencePartitionKeys = null,
+  resolveAudienceCatalogFacts = null,
+  logger = null
+}: Record<string, any> = {}) : any {
+  const platform: any = operationPermissionPlatform;
+  const visibleToolSnapshots: any = new Map<string, any>();
+  const apiKeyDenialAuditWindows = new Map<string, { nextRecordAt: number; suppressedCount: number }>();
+  const apiKeyDenialAuditRequests = new WeakSet<object>();
+  let publicOrigin = "";
+  let serverAudience = "";
+
+  function configurePublicOrigin(value: unknown): string {
+    const configured = String(value || "").trim();
+    let parsed: URL;
+    try {
+      parsed = new URL(configured);
+    } catch {
+      throw Object.assign(new Error("The configured public origin is invalid."), {
+        code: "public_origin_invalid"
+      });
+    }
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.origin !== configured
+    ) {
+      throw Object.assign(new Error("The configured public origin is invalid."), {
+        code: "public_origin_invalid"
+      });
+    }
+    if (publicOrigin && publicOrigin !== parsed.origin) {
+      throw Object.assign(new Error("The public origin cannot change after admission is configured."), {
+        code: "public_origin_immutable"
+      });
+    }
+    publicOrigin = parsed.origin;
+    serverAudience = parsed.host;
+    return publicOrigin;
+  }
+
+  function getPublicOrigin(): string {
+    return publicOrigin;
+  }
+
+  async function recordApiKeyAuthenticationDenial({
+    decisionStore,
+    request = null,
+    result
+  }: Record<string, any>): Promise<void> {
+    if (typeof decisionStore?.appendDecision !== "function") return;
+    if (request && typeof request === "object") {
+      if (apiKeyDenialAuditRequests.has(request)) return;
+      apiKeyDenialAuditRequests.add(request);
+    }
+    const status = Number(result?.status || result?.statusCode || 401);
+    const reasonCode = status >= 500
+      ? "api_key_authority_unavailable"
+      : "api_key_authentication_denied";
+    const now = Date.now();
+    const previous = apiKeyDenialAuditWindows.get(reasonCode);
+    if (previous && now < previous.nextRecordAt) {
+      previous.suppressedCount = Math.min(100_000, previous.suppressedCount + 1);
+      return;
+    }
+    const deniedAttempts = Math.min(100_001, 1 + (previous?.suppressedCount || 0));
+    apiKeyDenialAuditWindows.set(reasonCode, {
+      nextRecordAt: now + 60_000,
+      suppressedCount: 0
+    });
+    try {
+      await decisionStore.appendDecision({
+        decisionId: `mcp_auth_${now.toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+        operationId: "mcp.authenticate",
+        toolId: "",
+        grantId: "",
+        subject: { type: "anonymous", subjectId: "", scopes: [] },
+        resource: {
+          operationId: "mcp.authenticate",
+          toolId: "",
+          risk: "read_only"
+        },
+        action: "mcp.authenticate",
+        effect: "deny",
+        allowed: false,
+        reasonCode,
+        redactedReason: reasonCode === "api_key_authority_unavailable"
+          ? `API key authorization is unavailable (${deniedAttempts} denied attempt${deniedAttempts === 1 ? "" : "s"} in the audit window).`
+          : `MCP API key authentication was denied (${deniedAttempts} denied attempt${deniedAttempts === 1 ? "" : "s"} in the audit window).`,
+        requiredScopes: [],
+        missingScopes: [],
+        evaluatedLayers: ["mcp_api_key_authentication"],
+        createdAt: new Date(now).toISOString()
+      });
+    } catch {
+      logger?.warn?.("mcp.authentication.denial_audit_failed", {
+        code: "security_decision_store_unavailable"
+      });
+    }
+  }
+
+  function visibleToolSnapshot() : any {
+    const current: any = requirePlatform();
+    const catalog: any = current.catalog?.() || { tools: [] };
+    const fingerprint: any = String(catalog?.fingerprint || "").trim();
+    let snapshot: any = fingerprint ? visibleToolSnapshots.get(fingerprint) : null;
+    if (!snapshot) {
+      const tools: any[] = Array.isArray(catalog?.tools) ? catalog.tools : [];
+      catalogEnumerationCount += 1;
+      const toolsById: any = new Map<any, any>(
+        tools.map((tool?: any) : any => [tool?.id, tool])
+      );
+      const activeTools: any[] = tools.filter((tool?: any) : any => tool?.status === "active");
+      snapshot = Object.freeze({
+        revision: fingerprint,
+        toolsById,
+        activeTools: Object.freeze(activeTools)
+      });
+      visibleToolSnapshotBuildCount += 1;
+      if (fingerprint) {
+        visibleToolSnapshots.set(fingerprint, snapshot);
+        if (visibleToolSnapshots.size > VISIBLE_TOOL_SNAPSHOT_CAPACITY) {
+          visibleToolSnapshots.delete(visibleToolSnapshots.keys().next().value);
+        }
+      }
+    }
+    return snapshot;
+  }
+
+  async function loadMcpWorkspaceDirectory({ request, context = {}, signal = null }: Record<string, any>) : Promise<any> {
+    const result: any = await executeTool({
+      toolId: "meshrix.agentWorkspace.list",
+      input: {},
+      request,
+      context: {
+        ...context,
+        transport: "mcp",
+        internalPurpose: "workspace-reference-resolution"
+      },
+      signal
+    });
+    if (!result.ok) {
+      return workspaceDirectoryFromWorkspaces([]);
+    }
+    return workspaceDirectoryFromWorkspaces(collectWorkspaces(executeToolPayload(result)));
+  }
+
+  function requirePlatform() : any {
+    if (!platform) {
+      throw new Error("Operation Permission provider is not connected to Operation Permission platform.");
+    }
+    return platform;
+  }
+
+  async function authenticateAdmission({ request }: Record<string, any> = {}): Promise<any> {
+    const result = await authenticateMcpApiKeyAdmission({
+      request,
+      serverAudience,
+      apiKeyDistributionProvider: requirePlatform().apiKeyDistributionProvider
+    });
+    if (result?.handled && !result.ok) {
+      const current: any = requirePlatform();
+      await recordApiKeyAuthenticationDenial({
+        decisionStore: current.securityPermissions || securityPermissions,
+        request,
+        result
+      });
+    }
+    return result;
+  }
+
+  async function authorizeRequest({
+    request,
+    requiredScopes = [],
+    recordUse = true,
+    requestBody = Buffer.alloc(0),
+    url = null,
+    method = "GET"
+  }: Record<string, any> = {}) : Promise<any> {
+    const current: any = requirePlatform();
+    if (!current.store?.authorizeRequest) {
+      return {
+        ok: false,
+        status: 503,
+        error: "Operation Permission authorization is unavailable."
+      };
+    }
+    const apiKeyAuthorization: any = await authenticateMcpApiKey({
+      request,
+      requestBody,
+      url,
+      method,
+      apiKeyDistributionProvider: current.apiKeyDistributionProvider,
+      securityPermissions: current.securityPermissions || securityPermissions,
+      serverAudience
+    });
+    if (apiKeyAuthorization.handled) {
+      if (!apiKeyAuthorization.ok) {
+        await recordApiKeyAuthenticationDenial({
+          decisionStore: current.securityPermissions || securityPermissions,
+          request,
+          result: apiKeyAuthorization
+        });
+        return apiKeyAuthorization;
+      }
+      try {
+        const evaluation: any = apiKeyAuthorizationEvaluationInput(apiKeyAuthorization.apiKeyAuthorization);
+        return Object.freeze({
+          ...apiKeyAuthorization,
+          restriction: evaluation.restriction,
+          subject: evaluation.subject
+        });
+      } catch {
+        const failure = {
+          handled: true,
+          ok: false,
+          status: 503,
+          reasonCode: "api_key_authority_unavailable",
+          error: "API key authorization evaluation is unavailable."
+        };
+        await recordApiKeyAuthenticationDenial({
+          decisionStore: current.securityPermissions || securityPermissions,
+          request,
+          result: failure
+        });
+        return failure;
+      }
+    }
+    const authorization: any = await current.store.authorizeRequest({
+      request,
+      requiredScopes,
+      recordUse,
+      requestBody,
+      url,
+      method
+    });
+    if (!authorization.ok && typeof current.securityPermissions?.appendDecision === "function") {
+      await current.securityPermissions.appendDecision({
+        decisionId: `authz_mcp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+        traceId: request?.__meshrixTraceContext?.traceId || request?.__meshrixRequestId || "",
+        operationId: "mcp.request",
+        toolId: "",
+        grantId: authorization.grant?.id || "",
+        subject: authorization.grant
+          ? {
+              type: "tool-grant",
+              subjectId: authorization.grant.id,
+              username: authorization.grant.label || authorization.grant.id,
+              scopes: authorization.grant.scopes || []
+            }
+          : {
+              type: "anonymous",
+              subjectId: "",
+              scopes: []
+            },
+        resource: {
+          operationId: "mcp.request",
+          toolId: "",
+          risk: "read_only"
+        },
+        action: "mcp.authorize",
+        effect: "deny",
+        allowed: false,
+        reasonCode: authorization.reasonCode || "mcp_authorization_denied",
+        redactedReason: authorization.error || "MCP authorization denied.",
+        requiredScopes,
+        missingScopes: authorization.missingScopes || [],
+        evaluatedLayers: ["mcp_token_authorization"],
+        createdAt: nowIso()
+      });
+    }
+    return authorization;
+  }
+
+  async function authorizeMcpClientRequest(input: Record<string, any> = {}) : Promise<any> {
+    const authorization: any = await authorizeRequest(input);
+    if (!authorization?.ok) return authorization;
+    if (authorization.credentialKind === "scoped_api_key") {
+      // authorizeRequest already projects a complete restriction/subject from
+      // the API Key policy; reuse it when present. Otherwise the flat store
+      // fields are not preserved on this path, so read the policy from the
+      // nested apiKeyAuthorization projection.
+      const existing: any = authorization.restriction && typeof authorization.restriction === "object"
+        ? authorization.restriction
+        : null;
+      const flat: any = authorization.apiKeyAuthorization && typeof authorization.apiKeyAuthorization === "object"
+        ? authorization.apiKeyAuthorization
+        : authorization;
+      const policy: any = flat.policy || {};
+      const restriction: any = existing || Object.freeze({
+        credentialKind: "scoped_api_key",
+        credentialId: String(flat.keyId || ""),
+        policyFingerprint: String(flat.policyFingerprint || ""),
+        toolsets: Object.freeze([...(policy.toolsetIds || [])]),
+        scopes: Object.freeze([...(policy.scopeIds || [])]),
+        capabilities: Object.freeze([...(policy.capabilityIds || [])]),
+        dynamicCapabilities: Object.freeze([...(policy.capabilityIds || [])]),
+        maxRisk: API_KEY_MAXIMUM_RISK_TO_GRANT_RISK[String(policy.maximumRisk || "")] || "read_only",
+        allowedServiceIds: Object.freeze([...(policy.serviceIds || [])]),
+        allowedSecretBindings: Object.freeze([...(policy.resources?.secretBindingIds || [])])
+      });
+      const subject: any = authorization.subject && typeof authorization.subject === "object"
+        ? authorization.subject
+        : Object.freeze({
+            type: "scoped-api-key",
+            subjectId: String(flat.workloadPrincipalId || ""),
+            organizationNodeId: String(flat.organizationNodeId || ""),
+            scopes: restriction.scopes,
+            capabilities: restriction.capabilities,
+            maxRisk: restriction.maxRisk
+          });
+      return Object.freeze({
+        ...authorization,
+        ok: true,
+        handled: true,
+        apiKeyAuthorization: flat,
+        restriction,
+        subject
+      });
+    }
+    if (String(authorization.grant?.type || "") === "delegated-mcp-child") return authorization;
+    return {
+      handled: true,
+      ok: false,
+      status: 403,
+      reasonCode: "mcp_api_key_required",
+      error: "MCP client access requires a scoped API key."
+    };
+  }
+
+  async function revalidateApiKeyAuthorization(authorization: any = null) : Promise<any> {
+    const current: any = requirePlatform();
+    if (typeof current.apiKeyDistributionProvider?.revalidateAuthorization !== "function") {
+      return {
+        ok: false,
+        status: 503,
+        reasonCode: "api_key_authority_unavailable",
+        error: "API key lifecycle revalidation is unavailable."
+      };
+    }
+    try {
+      const next: any = await Promise.resolve(
+        current.apiKeyDistributionProvider.revalidateAuthorization(authorization)
+      );
+      return { ok: true, apiKeyAuthorization: next };
+    } catch (error: any) {
+      return {
+        ok: false,
+        status: Number(error?.status || error?.statusCode || 403),
+        reasonCode: String(error?.reasonCode || error?.code || "api_key_revision_stale"),
+        error: String(error?.publicMessage || "API key lifecycle changed before the effect.")
+      };
+    }
+  }
+
+  async function authorizeApiKeyOperation({ authorization = null, operation = null }: Record<string, any> = {}) : Promise<any> {
+    const current: any = requirePlatform();
+    if (typeof current.apiKeyDistributionProvider?.authorizeOperation !== "function") {
+      return { ok: false, status: 503, reasonCode: "api_key_authority_unavailable" };
+    }
+    try {
+      const next: any = await Promise.resolve(
+        current.apiKeyDistributionProvider.authorizeOperation({ authorization, operation })
+      );
+      return { ok: true, apiKeyAuthorization: next };
+    } catch (error: any) {
+      return {
+        ok: false,
+        status: Number(error?.status || error?.statusCode || 403),
+        reasonCode: String(error?.reasonCode || error?.code || "api_key_policy_denied")
+      };
+    }
+  }
+
+  function visibleGrantSummary({ authorization = null }: Record<string, any> = {}) : any {
+    const apiKeyAuthorization: any = authorization?.apiKeyAuthorization || null;
+    if (authorization?.credentialKind === "scoped_api_key" && apiKeyAuthorization) {
+      return {
+        credentialKind: "scoped_api_key",
+        principal: "workload-hidden",
+        toolsets: apiKeyAuthorization.policy?.toolsetIds || [],
+        scopes: apiKeyAuthorization.policy?.scopeIds || [],
+        maxRisk: apiKeyAuthorization.policy?.maximumRisk || ""
+      };
+    }
+    const grant: any = authorization?.grant || null;
+    return {
+      id: grant ? "grant-hidden" : "",
+      label: grant?.label || "",
+      toolsets: grant?.toolsets || [],
+      scopes: grant?.scopes || [],
+      maxRisk: grantVisibleRisk(grant)
+    };
+  }
+
+  function audiencePartitionKeys({ authorization = null }: Record<string, any> = {}) : any {
+    const grantId: any = String(authorization?.credentialKind === "scoped_api_key"
+      ? authorization?.apiKeyAuthorization?.workloadPrincipalId
+      : authorization?.grant?.id || "").trim();
+    if (!grantId || typeof resolveAudiencePartitionKeys !== "function") return [];
+    const keys: any = resolveAudiencePartitionKeys(grantId);
+    return [...new Set<any>((Array.isArray(keys) ? keys : []).map((key?: any) : any => String(key || "").trim()).filter(Boolean))].sort();
+  }
+
+  function audienceCatalogFacts({ authorization = null }: Record<string, any> = {}) : any {
+    const grantId: any = String(authorization?.credentialKind === "scoped_api_key"
+      ? authorization?.apiKeyAuthorization?.workloadPrincipalId
+      : authorization?.grant?.id || "").trim();
+    if (!grantId || typeof resolveAudienceCatalogFacts !== "function") return null;
+    const facts: any = resolveAudienceCatalogFacts(grantId);
+    if (!facts || typeof facts !== "object") return null;
+    const sourceRevision: any = Number(facts.sourceRevision);
+    const audienceRevision: any = Number(facts.audienceRevision);
+    const catalogRevision: any = String(facts.catalogRevision || "").trim();
+    const partitionKeys: any = [...new Set<any>((facts.partitionKeys || [])
+      .map((key?: any) : any => String(key || "").trim())
+      .filter(Boolean))].sort();
+    if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 0 ||
+        !Number.isSafeInteger(audienceRevision) || audienceRevision < 0 ||
+        !catalogRevision || partitionKeys.length === 0) return null;
+    return Object.freeze({ sourceRevision, catalogRevision, audienceRevision, partitionKeys });
+  }
+
+  function listVisibleTools({ authorization = null }: Record<string, any> = {}) : any {
+    const snapshot: any = visibleToolSnapshot();
+    const grant: any = authorization?.grant || null;
+    const apiKeyAuthorization: any = authorization?.credentialKind === "scoped_api_key"
+      ? authorization.apiKeyAuthorization
+      : null;
+    return snapshot.activeTools
+      .filter((tool?: any) : any => apiKeyAuthorization
+        ? apiKeyCanSeeTool(tool, apiKeyAuthorization)
+        : !grant || grantCanSeeTool(tool, grant))
+      .filter((tool?: any) : any => tool.upstreamProjectedOperation !== true ||
+        evaluateToolAudience?.({
+          authorization,
+          apiKeyAuthorization,
+          restriction: authorization?.restriction || null,
+          subject: authorization?.subject || null,
+          grant,
+          tool,
+          purpose: "discovery"
+        })?.allowed === true);
+  }
+
+  function resolveActiveTool(toolId: unknown): unknown {
+    const tool = (visibleToolSnapshot().toolsById.get(String(toolId || "")) || null) as { status?: unknown } | null;
+    return tool?.status === "active" ? tool : null;
+  }
+
+  async function executeTool({ toolId, input = {}, request = null, authorization = null, context = {}, dryRun = false, signal = null }: Record<string, any> = {}) : Promise<any> {
+    const current: any = requirePlatform();
+    if (!current.runtime?.executeTool) {
+      return {
+        ok: false,
+        status: 503,
+        payload: {
+          error: {
+            code: "tool_runtime_unavailable",
+            message: "Tool execution runtime is unavailable."
+          }
+        }
+      };
+    }
+    const snapshot: any = visibleToolSnapshot();
+    const tool: any = snapshot.toolsById.get(String(toolId || "")) ||
+      current.registry?.getTool?.(toolId) ||
+      null;
+    const contextualCapability: any = context?.dynamicCapability && typeof context.dynamicCapability === "object" && !Array.isArray(context.dynamicCapability)
+      ? context.dynamicCapability
+      : null;
+    if (tool?.upstreamProjectedOperation === true) {
+      const grant: any = authorization?.grant || null;
+      const apiKeyAuthorization: any = authorization?.credentialKind === "scoped_api_key"
+        ? authorization.apiKeyAuthorization
+        : null;
+      const audienceTool: any = contextualCapability
+        ? {
+            ...tool,
+            serviceId: contextualCapability.serviceId,
+            requiredScopes: contextualCapability.requiredScopes,
+            toolsets: contextualCapability.toolsets,
+            risk: contextualCapability.risk,
+            resourceContext: contextualCapability.resourceContext,
+            dynamicCapability: contextualCapability,
+            _meta: {
+              ...(tool._meta || {}),
+              upstreamMcp: true
+            }
+          }
+        : tool;
+      const audienceDecision: any = evaluateToolAudience?.({
+        authorization,
+        apiKeyAuthorization,
+        restriction: authorization?.restriction || null,
+        subject: authorization?.subject || null,
+        grant,
+        tool: audienceTool,
+        purpose: "execution"
+      }) || null;
+      if ((!grant && !apiKeyAuthorization) || audienceDecision?.allowed !== true) {
+        return {
+          ok: false,
+          status: 403,
+          payload: {
+            error: {
+              code: "upstream_audience_denied",
+              message: "The upstream operation is not available for this grant."
+            }
+          }
+        };
+      }
+    }
+    const dynamicCapability: any = contextualCapability || (
+      tool?.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
+        ? tool.dynamicCapability
+        : null
+    );
+    return current.runtime.executeTool({
+      toolId,
+      input,
+      request,
+      apiKeyAuthorization: authorization?.credentialKind === "scoped_api_key"
+        ? authorization.apiKeyAuthorization
+        : null,
+      context: dynamicCapability
+        ? {
+            ...context,
+            requestedScopes: dynamicCapability.requiredScopes || [],
+            requestedCapabilities: [dynamicCapability.capabilityId],
+            dynamicCapability,
+            resourceContext: dynamicCapability.resourceContext || {},
+            upstreamTool: {
+              toolName: dynamicCapability.upstreamToolName || tool.id,
+              serviceId: dynamicCapability.serviceId || "",
+              operationKey: dynamicCapability.operationKey || "",
+              risk: dynamicCapability.risk || "",
+              capabilityId: dynamicCapability.capabilityId || ""
+            }
+          }
+        : context,
+      dryRun,
+      signal
+    });
+  }
+
+  async function runApiKeyMcpInvocation({ authorization = null, ...input }: Record<string, any> = {}) : Promise<any> {
+    const current: any = requirePlatform();
+    if (typeof current.runtime?.runApiKeyMcpInvocation !== "function") {
+      throw Object.assign(new Error("API Key MCP execution authority is unavailable."), {
+        code: "api_key_authority_unavailable",
+        statusCode: 503
+      });
+    }
+    let keyAuthorization: any = null;
+    if (authorization?.credentialKind === "scoped_api_key") {
+      keyAuthorization = authorization.apiKeyAuthorization;
+      if (keyAuthorization?.credentialKind !== "scoped_api_key") {
+        throw Object.assign(new Error("API Key MCP execution authority is unavailable."), {
+          code: "api_key_authority_unavailable",
+          statusCode: 503
+        });
+      }
+    }
+    return current.runtime.runApiKeyMcpInvocation({ ...input, authorization: keyAuthorization });
+  }
+
+  async function resolveMcpWorkspaceInput({ input, request, context = {}, signal = null }: Record<string, any> = {}) : Promise<any> {
+    if (!inputMayNeedWorkspaceResolution(input)) {
+      return { input, workspaceDirectory: null };
+    }
+    const workspaceDirectory: any = await loadMcpWorkspaceDirectory({ request, context, signal });
+    return {
+      input: resolveWorkspaceReferencesInInput(input, workspaceDirectory),
+      workspaceDirectory
+    };
+  }
+
+  async function publicMcpToolPayload({ payload, workspaceDirectory, request, context = {}, signal = null }: Record<string, any> = {}) : Promise<any> {
+    const workspaces: any = collectWorkspaces(payload);
+    let directory: any = workspaces.length ? workspaceDirectoryFromWorkspaces(workspaces) : workspaceDirectory;
+    if (!directory && valueContainsWorkspaceId(payload)) {
+      directory = await loadMcpWorkspaceDirectory({ request, context, signal });
+    }
+    return sanitizeMcpOutputValue(payload, directory || workspaceDirectoryFromWorkspaces([]));
+  }
+
+  async function createDelegatedMcpGrant(input: Record<string, any> = {}) : Promise<any> {
+    return createDelegatedMcpGrantForPlatform(requirePlatform(), input);
+  }
+
+  async function revokeDelegatedMcpGrant(input: Record<string, any> = {}) : Promise<any> {
+    return revokeDelegatedMcpGrantForPlatform(requirePlatform(), input);
+  }
+
+  async function handleOperationPermissionHttpRequest(input: Record<string, any> = {}) : Promise<any> {
+    const current: any = requirePlatform();
+    if (!current.router?.handleOperationPermissionHttpRequest) {
+      return false;
+    }
+    return current.router.handleOperationPermissionHttpRequest({
+      ...input,
+      serverAudience
+    });
+  }
+
+  /** Never trusts a wire approval flag: only the current, stored Operation Permission resume may authorize. */
+  async function verifyCurrentApprovedMcpOperation({ request, authorization, toolId, operationInput }: Record<string, any> = {}) : Promise<any> {
+    const attested: any = request?.__meshrixToolRuntimeAuthorization?.approvedPendingOperation;
+    const pendingId: string = String(attested?.pendingOperationId || "");
+    if (!pendingId || !authorization?.ok) return null;
+    const current: any = requirePlatform();
+    if (typeof current.store?.getPendingOperation !== "function" || typeof securityPermissions?.getGovernanceApproval !== "function") return null;
+    const pending: any = await current.store.getPendingOperation(pendingId, { includeOriginalInput: true });
+    const now: number = Date.now();
+    if (!pending || pending.status !== "approved" || pending.resumedToolExecutionId ||
+        !Number.isFinite(Date.parse(pending.expiresAt || "")) || Date.parse(pending.expiresAt) <= now ||
+        pending.toolId !== toolId || pending.toolId !== attested.toolId ||
+        !pending.grantId || pending.grantId !== String(authorization.grant?.id || "") ||
+        !Array.isArray(pending.approvalLayers) || pending.approvalLayers.length === 0 ||
+        pending.resolvedAt !== attested.resolvedAt || pending.resolvedBy !== attested.resolvedBy) return null;
+    const binding: any = pending.requiredApproval?.operationBinding;
+    if (!binding?.bindingDigest || binding.bindingDigest !== attested.requiredApproval?.operationBinding?.bindingDigest ||
+        binding.approvalActorId !== pending.resolvedBy) return null;
+    if (canonicalJson(pending.originalInput) !== canonicalJson(operationInput)) return null;
+    if (authorization.credentialKind === "scoped_api_key") {
+      const original: any = pending.credentialAuthorization;
+      const latest: any = authorization.apiKeyAuthorization;
+      if (!original || !latest || original.keyId !== latest.keyId || original.policyFingerprint !== latest.policyFingerprint ||
+          original.lifecycleRevision !== latest.lifecycleRevision) return null;
+    }
+    const approval: any = await securityPermissions.getGovernanceApproval(`pending-${pendingId}`);
+    if (!approval || approval.effect !== "allow" || approval.revokedAt || !Number.isFinite(Date.parse(approval.expiresAt || "")) || Date.parse(approval.expiresAt) <= now ||
+        !Array.isArray(approval.approvalLayers) || pending.approvalLayers.some((layer: string) => !approval.approvalLayers.includes(layer))) return null;
+    return Object.freeze({ status: "approved", ref: pendingId, revision: pending.resolvedAt,
+      expiresAt: Math.min(Date.parse(approval.expiresAt), Date.parse(pending.expiresAt)),
+      approvedPendingOperation: Object.freeze({ pendingOperationId: pendingId, status: "approved", operationId: pending.operationId, approvalScope: pending.approvalScope }) });
+  }
+
+  return Object.freeze({
+    protocolVersion: OPERATION_PERMISSION_FACADE_PROTOCOL_VERSION,
+    describe() : any {
+      return {
+        schemaVersion: "v0.0.1:schema:definition-1",
+        protocolVersion: OPERATION_PERMISSION_FACADE_PROTOCOL_VERSION,
+        capabilities: [
+          "tool_catalog",
+          "tool_grants",
+          "tool_execution",
+          "mcp_delegated_child_grant",
+          "mcp_workspace_reference_projection"
+        ]
+      };
+    },
+    authenticateAdmission,
+    configurePublicOrigin,
+    getPublicOrigin,
+    authorizeRequest,
+    authorizeMcpClientRequest,
+    verifyCurrentApprovedMcpOperation,
+    revalidateApiKeyAuthorization,
+    authorizeApiKeyOperation,
+    visibleGrantSummary,
+    audiencePartitionKeys,
+    audienceCatalogFacts,
+    listVisibleTools,
+    resolveActiveTool,
+    executeTool,
+    runApiKeyMcpInvocation,
+    resolveMcpWorkspaceInput,
+    publicMcpToolPayload,
+    createDelegatedMcpGrant,
+    revokeDelegatedMcpGrant,
+    handleOperationPermissionHttpRequest,
+    getRefactorInstrumentation
+  });
+}
+
+const API_KEY_RISK_RANK: Readonly<Record<string, any>> = Object.freeze({
+  read_only: 0,
+  safe_write: 1,
+  repair_write: 2,
+  destructive: 3
+});
+
+const API_KEY_MAXIMUM_RISK_RANK: Readonly<Record<string, any>> = Object.freeze({
+  low: 0,
+  medium: 1,
+  high: 2
+});
+
+const API_KEY_MAXIMUM_RISK_TO_GRANT_RISK: Readonly<Record<string, any>> = Object.freeze({
+  low: "read_only",
+  medium: "safe_write",
+  high: "repair_write"
+});
+
+function apiKeyCanSeeTool(tool: any = null, authorization: any = null) : any {
+  const policy: any = authorization?.policy;
+  if (!tool || tool.status !== "active" || !policy || policy.protocol !== "mcp") return false;
+  const toolId: any = String(tool.id || "");
+  const dynamicCapability: any = tool.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
+    ? tool.dynamicCapability
+    : null;
+  if (!dynamicCapability) {
+    if ((policy.deniedTools || []).includes(toolId)) return false;
+    if ((policy.allowedTools || []).length > 0 && !policy.allowedTools.includes(toolId)) return false;
+  }
+  const requiredScopes: any[] = Array.isArray(tool.requiredScopes) ? tool.requiredScopes : [];
+  const toolsets: any[] = Array.isArray(tool.toolsets) ? tool.toolsets : [];
+  const toolsetDenied: any = dynamicCapability
+    ? toolsets.length === 0 || !toolsets.some((toolset?: any) : any => (policy.toolsetIds || []).includes(toolset))
+    : toolsets.some((toolset?: any) : any => !(policy.toolsetIds || []).includes(toolset));
+  if (requiredScopes.some((scope?: any) : any => !(policy.scopeIds || []).includes(scope)) || toolsetDenied) return false;
+  const serviceId: any = String(tool.serviceId || dynamicCapability?.serviceId || "");
+  const capabilityId: any = String(dynamicCapability?.capabilityId || "");
+  if (dynamicCapability && (!capabilityId || !(policy.capabilityIds || []).includes(capabilityId))) return false;
+  if (serviceId && (policy.serviceIds || []).length > 0 && !(policy.serviceIds || []).includes(serviceId)) return false;
+  const positiveAuthority: any = (policy.allowedTools || []).includes(toolId) ||
+    (serviceId && (policy.serviceIds || []).includes(serviceId)) ||
+    (capabilityId && (policy.capabilityIds || []).includes(capabilityId)) ||
+    toolsets.some((toolset?: any) : any => (policy.toolsetIds || []).includes(toolset)) ||
+    requiredScopes.some((scope?: any) : any => (policy.scopeIds || []).includes(scope));
+  if (!positiveAuthority) return false;
+  const toolRiskRank: any = API_KEY_RISK_RANK[String(tool.risk || "read_only")];
+  const maximumRiskRank: any = API_KEY_MAXIMUM_RISK_RANK[String(policy.maximumRisk || "")];
+  if (!Number.isInteger(toolRiskRank) || !Number.isInteger(maximumRiskRank) || toolRiskRank > maximumRiskRank) return false;
+  return apiKeyResourcePolicyAllowsOperation(policy, tool);
+}

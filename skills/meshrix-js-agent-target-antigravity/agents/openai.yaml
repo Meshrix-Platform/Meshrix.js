@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Antigravity"
+  short_description: "Antigravity configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-antigravity to locate Antigravity configuration facts and the current Meshrix.js MCP integration owner."

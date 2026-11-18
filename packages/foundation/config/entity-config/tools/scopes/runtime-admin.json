@@ -1,0 +1,5 @@
+{
+  "id": "runtime:admin",
+  "label": "Administer runtime",
+  "description": "Manage runtime mounts, modules, backups, runtime capabilities, and other server runtime controls."
+}

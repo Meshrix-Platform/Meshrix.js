@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "id": "nord",
+  "label": {
+    "en": "Nord",
+    "zh-CN": "诺德风格"
+  },
+  "mode": "dark",
+  "tokens": {
+    "bg-base": "#2e3440",
+    "bg-surface": "#3b4252",
+    "bg-subtle": "#434c5e",
+    "bg-inset": "#242933",
+    "border-subtle": "#4c566a",
+    "border-strong": "#5e6a83",
+    "text-primary": "#eceff4",
+    "text-secondary": "#e5e9f0",
+    "text-muted": "#c5ccd8",
+    "text-disabled": "#7e889c",
+    "text-on-brand": "#1f2933",
+    "brand": "#88c0d0",
+    "brand-strong": "#8fbcbb",
+    "brand-subtle": "#30444f",
+    "brand-muted": "#3f5664",
+    "info": "#81a1c1",
+    "info-surface": "#2d4054",
+    "info-border": "#5e81ac",
+    "success": "#a3be8c",
+    "success-surface": "#33442f",
+    "success-border": "#73935d",
+    "warning": "#ebcb8b",
+    "warning-text": "#f3dca9",
+    "warning-surface": "#473b25",
+    "warning-border": "#b08b4f",
+    "danger": "#bf616a",
+    "danger-surface": "#452b35",
+    "danger-border": "#8f4750"
+  }
+}

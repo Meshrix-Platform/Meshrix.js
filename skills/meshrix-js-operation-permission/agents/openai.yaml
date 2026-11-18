@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Operation Permission"
+  short_description: "Guide governed operation access from discovery to audit"
+  default_prompt: "Use $meshrix-js-operation-permission to design, implement, or verify the governed operation access capability flow."

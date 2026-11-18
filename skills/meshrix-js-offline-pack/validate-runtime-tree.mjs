@@ -1,0 +1,71 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+
+const within = (root, candidate) => candidate === root || candidate.startsWith(`${root}${path.sep}`);
+const realDirectory = (input) => {
+  const lexical = path.resolve(input);
+  const entry = fs.lstatSync(lexical);
+  if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error("invalid-directory");
+  return fs.realpathSync(lexical);
+};
+
+const validate = (boundaryInput, scanInput) => {
+  const boundary = realDirectory(boundaryInput);
+  const scanLexical = path.resolve(scanInput);
+  const scanEntry = fs.lstatSync(scanLexical);
+  if (!scanEntry.isDirectory() || scanEntry.isSymbolicLink()) throw new Error("invalid-scan-root");
+  const scan = fs.realpathSync(scanLexical);
+  if (!within(boundary, scan)) throw new Error("outside-boundary");
+
+  const walk = (directory) => {
+    for (const name of fs.readdirSync(directory).sort()) {
+      if (/[\u0000-\u001f\u007f]/u.test(name)) throw new Error("unsafe-name");
+      const candidate = path.join(directory, name);
+      const entry = fs.lstatSync(candidate);
+      if (entry.isDirectory()) {
+        walk(candidate);
+      } else if (entry.isFile()) {
+        continue;
+      } else if (entry.isSymbolicLink()) {
+        const target = fs.readlinkSync(candidate);
+        if (path.isAbsolute(target)) throw new Error("absolute-link");
+        const lexicalTarget = path.resolve(path.dirname(candidate), target);
+        if (!within(boundary, lexicalTarget)) throw new Error("escaping-link");
+        const realTarget = fs.realpathSync(candidate);
+        if (!within(boundary, realTarget)) throw new Error("escaping-link");
+        const targetEntry = fs.statSync(candidate);
+        if (!targetEntry.isDirectory() && !targetEntry.isFile()) throw new Error("special-link-target");
+      } else {
+        throw new Error("special-entry");
+      }
+    }
+  };
+  walk(scan);
+};
+
+const copyFile = (sourceBoundaryInput, destinationBoundaryInput, sourceRelative, destinationRelative) => {
+  const sourceBoundary = realDirectory(sourceBoundaryInput);
+  const destinationBoundary = realDirectory(destinationBoundaryInput);
+  const sourceLexical = path.resolve(sourceBoundary, sourceRelative);
+  const destination = path.resolve(destinationBoundary, destinationRelative);
+  if (!within(sourceBoundary, sourceLexical) || !within(destinationBoundary, destination)) throw new Error("outside-boundary");
+  const source = fs.realpathSync(sourceLexical);
+  if (!within(sourceBoundary, source)) throw new Error("escaping-source");
+  const sourceEntry = fs.statSync(source);
+  if (!sourceEntry.isFile()) throw new Error("invalid-source");
+  fs.mkdirSync(path.dirname(destination), { recursive: true, mode: 0o755 });
+  const destinationParent = fs.realpathSync(path.dirname(destination));
+  if (!within(destinationBoundary, destinationParent) || fs.existsSync(destination)) throw new Error("invalid-destination");
+  fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
+  fs.chmodSync(destination, sourceEntry.mode & 0o111 ? 0o755 : 0o644);
+};
+
+try {
+  const [mode, ...args] = process.argv.slice(2);
+  if (mode === "validate" && args.length === 2) validate(args[0], args[1]);
+  else if (mode === "copy-file" && args.length === 4) copyFile(args[0], args[1], args[2], args[3]);
+  else process.exitCode = 2;
+} catch {
+  process.exitCode = 1;
+}

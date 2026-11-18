@@ -1,0 +1,123 @@
+import { parentPort, workerData } from "node:worker_threads";
+import { createOperationAuditWorkerStore } from "./operation-audit-worker-store.ts";
+
+const COMMANDS: ReadonlySet<string> = new Set([
+  "append",
+  "appendIdempotent",
+  "getById",
+  "list",
+  "getRetentionPolicy",
+  "setRetentionPolicy",
+  "pruneExpired",
+  "exportRedacted",
+  "getTrace",
+  "getCapacityStats",
+  "close"
+]);
+
+const input = record(workerData);
+const transferredProjectionKey = input.projectionKey;
+let store!: ReturnType<typeof createOperationAuditWorkerStore>;
+try {
+  store = createOperationAuditWorkerStore(input as { userDataPath: string; projectionKey: Uint8Array; projectionKeyId: string });
+  store.ready();
+} catch (error: unknown) {
+  try {
+    store?.close();
+  } catch {
+    // Keep startup failure reporting independent of cleanup errors.
+  }
+  const code = String(record(error).code || "");
+  parentPort?.postMessage({
+    type: "worker-start-error",
+    code: /^operation_audit_[a-z0-9_]{1,80}$/u.test(code) ? code : "operation_audit_initialization_failed"
+  });
+  throw error;
+} finally {
+  if (transferredProjectionKey instanceof Uint8Array) {
+    transferredProjectionKey.fill(0);
+  }
+}
+parentPort?.postMessage({ type: "worker-ready" });
+
+function record(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+}
+
+function errorRecord(error: unknown): Readonly<Record<string, unknown>> {
+  const source = record(error);
+  const details: Record<string, unknown> = {};
+  for (const key of ["actual", "auditId", "limit", "reason", "statusCode"]) {
+    if (source[key] !== undefined) details[key] = source[key];
+  }
+  return Object.freeze({
+    name: String(source.name || "Error"),
+    code: String(source.code || "sqlite_lane_command_failed"),
+    message: String(source.message || "Operation audit command failed."),
+    details
+  });
+}
+
+function capacityStats(): Readonly<Record<string, unknown>> {
+  const meta = record(store.db.prepare(`
+    SELECT row_count AS rowCount,
+           logical_bytes AS logicalBytes,
+           append_count AS appendCount,
+           last_maintenance_at AS lastMaintenanceAt
+    FROM operation_audit_meta
+    WHERE singleton = 1
+  `).get());
+  const pageSize = Number(store.db.pragma("page_size", { simple: true }) || 0);
+  return Object.freeze({
+    ...meta,
+    databaseBytes: Number(store.db.pragma("page_count", { simple: true }) || 0) *
+      pageSize,
+    pageSize,
+    maxPageCount: Number(store.db.pragma("max_page_count", { simple: true }) || 0),
+    autoVacuum: Number(store.db.pragma("auto_vacuum", { simple: true }) || 0),
+    journalSizeLimit: Number(store.db.pragma("journal_size_limit", { simple: true }) || 0)
+  });
+}
+
+parentPort?.on("message", async (message: unknown): Promise<void> => {
+  const request = record(message);
+  const payload = record(request.payload);
+  const reply: Record<string, unknown> = { id: request.id, ok: false };
+  const closeAfterReply = String(request.kind || "") === "close";
+  try {
+    const kind = String(request.kind || "");
+    if (!COMMANDS.has(kind)) {
+      throw Object.assign(new Error("Operation audit SQLite command is not allowed."), {
+        code: "sqlite_lane_command_rejected"
+      });
+    }
+    if (Number(request.deadlineAtMs || 0) > 0 && Date.now() > Number(request.deadlineAtMs)) {
+      throw Object.assign(new Error("Operation audit SQLite command deadline elapsed."), {
+        code: "sqlite_lane_deadline_exceeded"
+      });
+    }
+    if (kind === "getCapacityStats") {
+      reply.result = capacityStats();
+    } else if (kind === "getById") {
+      reply.result = store.getById(payload.auditId);
+    } else if (kind === "getTrace") {
+      reply.result = store.getTrace(payload.traceId, record(payload.input));
+    } else if (kind === "close") {
+      store.close();
+      reply.result = undefined;
+    } else {
+      const command = store[kind as keyof typeof store];
+      if (typeof command !== "function") {
+        throw Object.assign(new Error("Operation audit SQLite command is not implemented."), {
+          code: "sqlite_lane_command_rejected"
+        });
+      }
+      reply.result = await (command as (input: Record<string, unknown>) => unknown)(payload);
+    }
+    reply.ok = true;
+  } catch (error: unknown) {
+    reply.error = errorRecord(error);
+  }
+  parentPort?.postMessage(reply);
+  if (reply.ok === true && closeAfterReply) parentPort?.close();
+});

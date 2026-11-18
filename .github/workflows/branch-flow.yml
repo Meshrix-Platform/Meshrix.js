@@ -1,0 +1,45 @@
+# Public clean-rebuild workflow registration anchor.
+name: Branch flow
+
+env:
+  NODE_OPTIONS: --conditions=source
+
+on:
+  push:
+    branches: ["nightly", "stable", "release"]
+  pull_request:
+    branches: ["nightly", "stable", "release"]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-flow-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Use GitHub's platform execution limit. Preserve healthy work instead of
+# discarding it at a shorter local deadline; failures or operator cancellation stop it.
+jobs:
+  branch-flow:
+    name: Branch flow policy
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.21.0"
+      - name: Verify branch flow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/scripts/verify-branch-flow.ts
+      - name: Verify published tree
+        run: node tools/scripts/verify-git-publication.ts --index

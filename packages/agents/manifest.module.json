@@ -1,0 +1,90 @@
+{
+  "$schema": "../../tools/registry/schema/domain-module.schema.json",
+  "id": "agents",
+  "kind": "domain",
+  "owner": "platform",
+  "directory": "packages/agents",
+  "description": "Agent workspace, memory, upstream gateway, and collaboration features.",
+  "publicApi": [
+    "#meshrix/agents/agent-memory/index",
+    "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
+    "#meshrix/agents/agent-workspace/agent-workspace-materialization-port",
+    "#meshrix/agents/upstream-gateway/index",
+    "#meshrix/agents/workspace-asset-registry/index",
+    "#meshrix/agents/workspace-contribution",
+    "#meshrix/agents/workspace-governance/index"
+  ],
+  "dependsOn": [
+    "contracts",
+    "foundation",
+    "protocols"
+  ],
+  "sourceOwnership": [
+    {
+      "feature": "agent-memory",
+      "path": "src/agent-memory",
+      "fileCount": 1,
+      "testSuites": [
+        "agent-memory.runtime"
+      ]
+    },
+    {
+      "feature": "agent-workspace",
+      "path": "src/agent-workspace",
+      "fileCount": 25,
+      "testSuites": [
+        "agents.agent-workspace-schema"
+      ]
+    },
+    {
+      "feature": "workspace-change-set-authority",
+      "path": "src/core-change-set-authority.ts",
+      "fileCount": 1,
+      "testSuites": [
+        "agents.agent-workspace-schema"
+      ]
+    },
+    {
+      "feature": "upstream-gateway",
+      "path": "src/upstream-gateway",
+      "fileCount": 28,
+      "testSuites": [
+        "upstream-gateway.e2e",
+        "upstream-gateway.service-publishing",
+        "runtime.operation-dispatch-lock"
+      ]
+    },
+    {
+      "feature": "service-events",
+      "path": "src/service-events",
+      "fileCount": 1,
+      "testSuites": [
+        "gateway.*"
+      ]
+    },
+    {
+      "feature": "workspace-assets",
+      "path": "src/workspace-asset-registry",
+      "fileCount": 2,
+      "testSuites": [
+        "workspace-asset-management.runtime"
+      ]
+    },
+    {
+      "feature": "workspace-contribution",
+      "path": "src/workspace-contribution",
+      "fileCount": 9,
+      "testSuites": [
+        "runtime.operation-dispatch-lock"
+      ]
+    },
+    {
+      "feature": "workspace-governance",
+      "path": "src/workspace-governance",
+      "fileCount": 1,
+      "testSuites": [
+        "workspace-governance.runtime"
+      ]
+    }
+  ]
+}

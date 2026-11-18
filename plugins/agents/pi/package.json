@@ -1,0 +1,33 @@
+{
+  "name": "@meshrix/agent-pi-adapter",
+  "version": "0.4.2",
+  "description": "Native Pi MCP registration adapter.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "keywords": [
+    "meshrix",
+    "mcp"
+  ],
+  "files": [
+    "adapter.mjs",
+    "adapter.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "plugins/agents/pi"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/client-adapter-kit": "0.4.2"
+  }
+}

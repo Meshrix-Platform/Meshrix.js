@@ -1,0 +1,56 @@
+{
+  "$schema": "./schema/release-definition.schema.json",
+  "version": "v0.0.1:registry:release-definition-1",
+  "product": "Meshrix.js",
+  "release": {
+    "version": "0.4.2",
+    "tag": "v0.4.2",
+    "channel": "stable"
+  },
+  "packages": {
+    "manifests": [
+      "package.json",
+      "packages/contracts/package.json",
+      "packages/kernel/package.json",
+      "packages/foundation/package.json",
+      "packages/agents/package.json",
+      "packages/capabilities/package.json",
+      "packages/client-adapter-kit/package.json",
+      "packages/protocols/package.json",
+      "packages/server-runtime/package.json",
+      "packages/ui-console/package.json",
+      "plugins/agents/antigravity/package.json",
+      "plugins/agents/claude-code/package.json",
+      "plugins/agents/codex/package.json",
+      "plugins/agents/kimi/package.json",
+      "plugins/agents/meshrix-self-maintenance/package.json",
+      "plugins/agents/openclaw/package.json",
+      "plugins/agents/opencode/package.json",
+      "plugins/agents/pi/package.json",
+      "apps/server/package.json",
+      "apps/mcp-gateway-installer/package.json",
+      "apps/console/package.json"
+    ]
+  },
+  "container": {
+    "target": "runtime-ui",
+    "requiredForRelease": false
+  },
+  "acceptance": {
+    "profile": "single-node",
+    "commandId": "platform-acceptance",
+    "stableRequiredClaim": "functional-complete",
+    "releaseRequiredClaim": "npm-package-installability-passed",
+    "standardsRegistry": "tools/registry/release-acceptance-standards.registry.json"
+  },
+  "github": {
+    "environment": "release-candidate",
+    "nodeVersion": "24.21.0",
+    "npmCliVersion": "11.21.0",
+    "npmCliIntegrity": "sha512-Zov8KhamNneiLdELtj5YALtNmJW4L4fCLTzjfpzXG2w6MSHcf0UxgdlK5uloCuksWT+7mGUU7wi79cO6RqivPg=="
+  },
+  "localVerification": {
+    "engine": "automatic-local",
+    "evidenceAuthority": "local-only"
+  }
+}

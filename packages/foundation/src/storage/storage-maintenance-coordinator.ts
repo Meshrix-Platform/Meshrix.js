@@ -1,0 +1,431 @@
+import path from "node:path";
+
+export interface StorageExecutionBudget {
+  maxFiles: number;
+  maxBytes: number;
+  maxCleanupItems: number;
+  maxQueueDepth: number;
+  maxDurationMs?: number;
+  bufferBytes: number;
+}
+
+export interface StorageWorkAmounts {
+  files?: number;
+  bytes?: number;
+  cleanupItems?: number;
+}
+
+export interface StorageWorkCounters {
+  files: number;
+  bytes: number;
+  cleanupItems: number;
+}
+
+export interface StorageWorkTracker {
+  readonly signal: AbortSignal | null;
+  readonly budget: Readonly<StorageExecutionBudget>;
+  readonly deadlineAt: number;
+  assertActive(): void;
+  assertFits(amounts?: StorageWorkAmounts): Readonly<StorageWorkCounters>;
+  consume(amounts?: StorageWorkAmounts): Readonly<StorageWorkCounters>;
+  snapshot(): Readonly<StorageWorkCounters>;
+}
+
+interface StorageExecutionHardLimits extends StorageExecutionBudget {
+  maxDurationMs: number;
+  maxConcurrentMutationsPerRoot: number;
+  queueAllocationBytes: number;
+  queuedBufferProductBytes: number;
+}
+
+interface MaintenanceEntry {
+  kind: string;
+  task: (tracker: StorageWorkTracker) => unknown | Promise<unknown>;
+  budget: Readonly<StorageExecutionBudget>;
+  controller: AbortController;
+  enqueuedAt: number;
+  resolve(value: unknown): void;
+  reject(reason?: unknown): void;
+  callerSettled: boolean;
+  cancelled: boolean;
+  removeAbortListener: (() => void) | null;
+}
+
+interface MaintenanceLane {
+  root: string;
+  active: MaintenanceEntry | null;
+  fenced: boolean;
+  queue: FixedRingDeque<MaintenanceEntry>;
+}
+
+type StorageMaintenanceError = Error & { code: string; reasonCode: string };
+
+const DEFAULT_EXECUTION_BUDGET: Readonly<Omit<StorageExecutionBudget, "maxDurationMs">> = Object.freeze({
+  maxFiles: 100_000,
+  maxBytes: 1_099_511_627_776,
+  maxCleanupItems: 100_000,
+  maxQueueDepth: 64,
+  bufferBytes: 64 * 1024
+});
+
+export const STORAGE_EXECUTION_BUDGET_HARD_LIMITS: Readonly<StorageExecutionHardLimits> = Object.freeze({
+  maxFiles: 1_000_000,
+  maxBytes: 4 * 1024 * 1024 * 1024 * 1024,
+  maxCleanupItems: 1_000_000,
+  maxQueueDepth: 1024,
+  maxDurationMs: 24 * 60 * 60 * 1000,
+  bufferBytes: 16 * 1024 * 1024,
+  maxConcurrentMutationsPerRoot: 1,
+  queueAllocationBytes: 64 * 1024,
+  queuedBufferProductBytes: 1024 * 1024 * 1024
+});
+
+const ARRAY_SLOT_BYTES = 8;
+const lanes = new Map<string, MaintenanceLane>();
+
+function maintenanceError(code: string, message: string): StorageMaintenanceError {
+  const error = new Error(message) as StorageMaintenanceError;
+  error.name = "StorageMaintenanceError";
+  error.code = code;
+  error.reasonCode = code;
+  return error;
+}
+
+function boundedPositiveInteger(value: unknown, fallback: undefined, maximum: number, field: string): number | undefined;
+function boundedPositiveInteger(value: unknown, fallback: number, maximum: number, field: string): number;
+function boundedPositiveInteger(value: unknown, fallback: number | undefined, maximum: number, field: string): number | undefined {
+  if (value === undefined || value === null || value === "") return fallback;
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 1) {
+    throw maintenanceError("storage_execution_budget_invalid", `${field} must be a positive safe integer.`);
+  }
+  if (number > maximum) {
+    throw maintenanceError(
+      "storage_execution_budget_limit_exceeded",
+      `${field} exceeds the storage runtime hard limit.`
+    );
+  }
+  return number;
+}
+
+export function normalizeStorageExecutionBudget(value: unknown = {}): Readonly<StorageExecutionBudget> {
+  const source: Record<string, unknown> = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const normalized: StorageExecutionBudget = {
+    maxFiles: boundedPositiveInteger(
+      source.maxFiles,
+      DEFAULT_EXECUTION_BUDGET.maxFiles,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxFiles,
+      "maxFiles"
+    ),
+    maxBytes: boundedPositiveInteger(
+      source.maxBytes,
+      DEFAULT_EXECUTION_BUDGET.maxBytes,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxBytes,
+      "maxBytes"
+    ),
+    maxCleanupItems: boundedPositiveInteger(
+      source.maxCleanupItems,
+      DEFAULT_EXECUTION_BUDGET.maxCleanupItems,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxCleanupItems,
+      "maxCleanupItems"
+    ),
+    maxQueueDepth: boundedPositiveInteger(
+      source.maxQueueDepth,
+      DEFAULT_EXECUTION_BUDGET.maxQueueDepth,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxQueueDepth,
+      "maxQueueDepth"
+    ),
+    ...(source.maxDurationMs === undefined || source.maxDurationMs === null
+      ? {}
+      : {
+          maxDurationMs: boundedPositiveInteger(
+            source.maxDurationMs,
+            undefined,
+            STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxDurationMs,
+            "maxDurationMs"
+          )
+        }),
+    bufferBytes: boundedPositiveInteger(
+      source.bufferBytes,
+      DEFAULT_EXECUTION_BUDGET.bufferBytes,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.bufferBytes,
+      "bufferBytes"
+    )
+  };
+  const queueAllocationBytes = normalized.maxQueueDepth * ARRAY_SLOT_BYTES;
+  const queuedBufferProductBytes = normalized.maxQueueDepth * normalized.bufferBytes;
+  if (
+    !Number.isSafeInteger(queueAllocationBytes) ||
+    queueAllocationBytes > STORAGE_EXECUTION_BUDGET_HARD_LIMITS.queueAllocationBytes ||
+    !Number.isSafeInteger(queuedBufferProductBytes) ||
+    queuedBufferProductBytes > STORAGE_EXECUTION_BUDGET_HARD_LIMITS.queuedBufferProductBytes
+  ) {
+    throw maintenanceError(
+      "storage_execution_budget_product_exceeded",
+      "Storage queue and buffer capacity product exceeds the runtime allocation limit."
+    );
+  }
+  return Object.freeze(normalized);
+}
+
+class FixedRingDeque<T> {
+  readonly capacity: number;
+  head: number;
+  length: number;
+  readonly values: Array<T | undefined>;
+  constructor(capacity: number) {
+    if (
+      !Number.isSafeInteger(capacity) ||
+      capacity < 1 ||
+      capacity > STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxQueueDepth ||
+      capacity * ARRAY_SLOT_BYTES > STORAGE_EXECUTION_BUDGET_HARD_LIMITS.queueAllocationBytes
+    ) {
+      throw maintenanceError(
+        "storage_operation_queue_capacity_invalid",
+        "Storage maintenance queue capacity exceeds its allocation boundary."
+      );
+    }
+    this.capacity = capacity;
+    this.values = Array.from({ length: capacity });
+    this.head = 0;
+    this.length = 0;
+  }
+
+  push(value: T): boolean {
+    if (this.length >= this.capacity) return false;
+    this.values[(this.head + this.length) % this.capacity] = value;
+    this.length += 1;
+    return true;
+  }
+
+  shift(): T | null {
+    if (this.length === 0) return null;
+    const value = this.values[this.head];
+    this.values[this.head] = undefined;
+    this.head = (this.head + 1) % this.capacity;
+    this.length -= 1;
+    return value ?? null;
+  }
+}
+
+export function createStorageWorkTracker({
+  signal = null,
+  budget = {},
+  startedAt = Date.now()
+}: {
+  signal?: AbortSignal | null;
+  budget?: unknown;
+  startedAt?: number;
+} = {}): Readonly<StorageWorkTracker> {
+  const limits = normalizeStorageExecutionBudget(budget);
+  const counters: StorageWorkCounters = { files: 0, bytes: 0, cleanupItems: 0 };
+  const deadlineAt = limits.maxDurationMs === undefined
+    ? Number.POSITIVE_INFINITY
+    : startedAt + limits.maxDurationMs;
+
+  function assertActive(): void {
+    if (signal?.aborted) {
+      throw signal.reason || maintenanceError("storage_operation_cancelled", "Storage operation was cancelled.");
+    }
+    if (Number.isFinite(deadlineAt) && Date.now() > deadlineAt) {
+      throw maintenanceError("storage_operation_timeout", "Storage operation exceeded its execution deadline.");
+    }
+  }
+
+  function checkedNextCounters({
+    files = 0,
+    bytes = 0,
+    cleanupItems = 0
+  }: StorageWorkAmounts = {}): StorageWorkCounters {
+    assertActive();
+    const next: StorageWorkCounters = { ...counters };
+    for (const [field, amount] of Object.entries({ files, bytes, cleanupItems }) as Array<[keyof StorageWorkCounters, number]>) {
+      if (!Number.isSafeInteger(amount) || amount < 0) {
+        throw maintenanceError("storage_execution_budget_invalid", `${field} consumption must be a non-negative safe integer.`);
+      }
+      next[field] += amount;
+    }
+    if (
+      next.files > limits.maxFiles ||
+      next.bytes > limits.maxBytes ||
+      next.cleanupItems > limits.maxCleanupItems
+    ) {
+      throw maintenanceError("storage_execution_budget_exceeded", "Storage operation exceeded its execution budget.");
+    }
+    return next;
+  }
+
+  function consume(amounts: StorageWorkAmounts = {}): Readonly<StorageWorkCounters> {
+    Object.assign(counters, checkedNextCounters(amounts));
+    return Object.freeze({ ...counters });
+  }
+
+  return Object.freeze({
+    signal,
+    budget: limits,
+    deadlineAt,
+    assertActive,
+    assertFits(amounts: StorageWorkAmounts = {}): Readonly<StorageWorkCounters> {
+      return Object.freeze(checkedNextCounters(amounts));
+    },
+    consume,
+    snapshot(): Readonly<StorageWorkCounters> {
+      return Object.freeze({ ...counters });
+    }
+  });
+}
+
+function normalizedRoot(value?: string): string {
+  return path.resolve(String(value || "."));
+}
+
+function rejectCaller(entry: MaintenanceEntry, error: unknown): void {
+  if (entry.callerSettled) return;
+  entry.callerSettled = true;
+  entry.reject(error);
+}
+
+function resolveCaller(entry: MaintenanceEntry, value: unknown): void {
+  if (entry.callerSettled) return;
+  entry.callerSettled = true;
+  entry.resolve(value);
+}
+
+function beginNext(lane: MaintenanceLane): void {
+  if (lane.active) return;
+  let entry = lane.queue.shift();
+  while (entry?.cancelled) {
+    entry.removeAbortListener?.();
+    entry = lane.queue.shift();
+  }
+  if (!entry) {
+    lanes.delete(lane.root);
+    return;
+  }
+  lane.active = entry;
+  const remainingMs = entry.budget.maxDurationMs === undefined
+    ? null
+    : entry.enqueuedAt + entry.budget.maxDurationMs - Date.now();
+  if (remainingMs !== null && remainingMs <= 0) {
+    rejectCaller(entry, maintenanceError("storage_operation_timeout", "Storage operation expired before admission."));
+    lane.active = null;
+    beginNext(lane);
+    return;
+  }
+
+  const timeout = remainingMs === null ? null : setTimeout((): void => {
+    const error = maintenanceError("storage_operation_timeout", "Storage operation exceeded its execution deadline.");
+    lane.fenced = true;
+    entry.controller.abort(error);
+  }, remainingMs);
+  timeout?.unref?.();
+
+  const tracker = createStorageWorkTracker({
+    signal: entry.controller.signal,
+    budget: entry.budget,
+    startedAt: entry.enqueuedAt
+  });
+  Promise.resolve()
+    .then(() => {
+      if (entry.controller.signal.aborted) {
+        throw entry.controller.signal.reason || maintenanceError(
+          "storage_operation_cancelled",
+          "Storage operation was cancelled before dispatch."
+        );
+      }
+      return entry.task(tracker);
+    })
+    .then(
+      (result) => resolveCaller(entry, result),
+      (error: unknown) => rejectCaller(entry, error)
+    )
+    .finally(() => {
+      if (timeout) clearTimeout(timeout);
+      entry.removeAbortListener?.();
+      lane.active = null;
+      lane.fenced = false;
+      beginNext(lane);
+    });
+}
+
+export function runStorageMaintenanceMutation<T>(
+  storageRoot: string,
+  task: (tracker: StorageWorkTracker) => T | Promise<T>,
+  {
+    signal = null,
+    budget = {},
+    kind = "storage.maintenance"
+  }: { signal?: AbortSignal | null; budget?: unknown; kind?: string } = {}
+): Promise<T> {
+  if (typeof task !== "function") {
+    throw new TypeError("runStorageMaintenanceMutation requires a task function.");
+  }
+  const root = normalizedRoot(storageRoot);
+  const normalizedBudget = normalizeStorageExecutionBudget(budget);
+  let lane = lanes.get(root);
+  if (!lane) {
+    lane = {
+      root,
+      active: null,
+      fenced: false,
+      queue: new FixedRingDeque<MaintenanceEntry>(normalizedBudget.maxQueueDepth)
+    };
+    lanes.set(root, lane);
+  }
+  if (lane.fenced) {
+    return Promise.reject(maintenanceError(
+      "storage_operation_fenced",
+      "Storage maintenance is fenced by an indeterminate earlier mutation."
+    ));
+  }
+  if (lane.queue.length >= Math.min(lane.queue.capacity, normalizedBudget.maxQueueDepth)) {
+    return Promise.reject(maintenanceError("storage_operation_queue_full", "Storage maintenance queue is full."));
+  }
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason || maintenanceError("storage_operation_cancelled", "Storage operation was cancelled."));
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const controller = new AbortController();
+    const entry: MaintenanceEntry = {
+      kind,
+      task,
+      budget: normalizedBudget,
+      controller,
+      enqueuedAt: Date.now(),
+      resolve: (value: unknown) => resolve(value as T),
+      reject,
+      callerSettled: false,
+      cancelled: false,
+      removeAbortListener: null
+    };
+    if (signal) {
+      const onAbort = (): void => {
+        const error: unknown = signal.reason || maintenanceError("storage_operation_cancelled", "Storage operation was cancelled.");
+        entry.cancelled = lane.active !== entry;
+        if (lane.active === entry) lane.fenced = true;
+        controller.abort(error);
+        if (entry.cancelled) rejectCaller(entry, error);
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      entry.removeAbortListener = () => signal.removeEventListener("abort", onAbort);
+    }
+    if (!lane.queue.push(entry)) {
+      entry.removeAbortListener?.();
+      reject(maintenanceError("storage_operation_queue_full", "Storage maintenance queue is full."));
+      return;
+    }
+    beginNext(lane);
+  });
+}
+
+export function storageMaintenanceLaneStatus(storageRoot?: string): Readonly<{ active: boolean; fenced: boolean; queued: number }> {
+  const lane = lanes.get(normalizedRoot(storageRoot));
+  return Object.freeze({
+    active: Boolean(lane?.active),
+    fenced: lane?.fenced === true,
+    queued: lane?.queue.length || 0
+  });
+}

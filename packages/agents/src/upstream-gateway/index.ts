@@ -1,0 +1,3444 @@
+import { createHash, randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
+import { evaluateUniversalTagPolicy, hasUniversalTagPolicyRules } from "@meshrix/foundation/security/authorization/universal-tag-policy";
+import {
+  claimFinalProtectedSinkAttempt,
+  digestFinalProtectedSinkInput
+} from "@meshrix/foundation/security/final-protected-sink-permit";
+import { createSecurityAlertStore } from "@meshrix/foundation/security/security-alerts";
+import { fetchWithPinnedDns, requestWithPinnedDns } from "@meshrix/foundation/security/outbound-egress-policy";
+import {
+  assertJsonRpcResponse,
+  collectCompleteMcpToolsList,
+  createUpstreamMcpSessionManager
+} from "@meshrix/protocols/mcp/upstream-mcp-gateway-transport";
+import { createModernUpstreamAdapter } from "@meshrix/protocols/mcp/modern-upstream";
+import {
+  UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+  asArray,
+  callerRoutingOverrideFields,
+  clone,
+  configuredHeaders,
+  configuredHttpMethod,
+  configuredRpcMethod,
+  jsonRpcRequestBody,
+  nowIso,
+  normalizeOptionalTimeoutMs,
+  object,
+  parsePublicUpstreamMcpToolName,
+  publicService,
+  rejectUpstreamDestinationOverrideFields,
+  responseBodyForPublic,
+  runtimePath,
+  safePublicToolSegment,
+  safeTargetUrl,
+  summarizeUrl,
+  text
+} from "./support.ts";
+import { publicUpstreamMcpTool } from "./tool-projection.ts";
+import { resolveCredentialMaterial, resolveMcpServiceConfigWithCredentials } from "./credential-material.ts";
+import { createUpstreamOAuthClient } from "./oauth-client.ts";
+import { createGatewayRuntime } from "./registry-runtime.ts";
+import {
+  assertResponseBodyPolicy,
+  bodyMetadata,
+  readAsyncBodyBufferWithLimit,
+  readResponseBufferWithLimit
+} from "./response-policy.ts";
+import { publicTagPolicyDecision } from "./tag-policy-decision.ts";
+import { createEndpointTrafficController } from "./endpoint-traffic.ts";
+import { callerApprovalOverrideFields, pendingApproval, trustedApprovalForForward } from "./approval.ts";
+import { evaluateRequestContentPolicy } from "./content-policy.ts";
+import {
+  evaluateUpstreamPolicyGate,
+  normalizePolicyGateTimeoutMs,
+  type UpstreamPolicyGate,
+  type UpstreamPolicyGateContext
+} from "./policy-gate.ts";
+import { audienceGrantForSubject, compileUpstreamOperationCapability, evaluateDynamicOperationAuthorization, operationWithUpstreamCapability } from "./operation-capability.ts";
+import { createMcpExecutionAdapter, normalizeMcpResultForDownstream, publicMcpResult } from "./mcp-execution-adapter.ts";
+import { constructWithOwnedResourceCleanup, createForwardAbortContext } from "./registry-lifecycle.ts";
+import { fingerprint } from "./manifest-compiler.ts";
+import { upstreamProjectedOperationId, projectedOperationForwardInput } from "./operation-projection.ts";
+import { createUpstreamManifestSnapshotCommitter } from "./manifest-snapshot-commit.ts";
+import { evaluateAudienceDecision } from "./audience-projection.ts";
+import {
+  assertDeclaredSha256Digest,
+  compilePayloadTransport,
+  createPayloadCountingTransform,
+  payloadRepresentationError,
+  selectRequestRepresentationHeaders,
+  selectResponseRepresentationHeaders
+} from "./payload-contract.ts";
+import { createArtifactBodySource, createMultipartBodyStream } from "./multipart-stream.ts";
+import type {
+  UpstreamEndpointTrafficController,
+  UpstreamGatewayArtifactDownload,
+  UpstreamGatewayArtifactTransaction,
+  UpstreamGatewayArtifactTransitPort,
+  UpstreamGatewayAudienceDecision,
+  UpstreamGatewayAuditListResult,
+  UpstreamGatewayCallOptions,
+  UpstreamGatewayEndpointCircuit,
+  UpstreamGatewayEndpointCursor,
+  UpstreamGatewayForwardPreview,
+  UpstreamGatewayForwardResult,
+  UpstreamGatewayHealthResult,
+  UpstreamGatewayInvokeTypedMcpResult,
+  UpstreamGatewayManifestFinalizationResult,
+  UpstreamGatewayManifestRevision,
+  UpstreamGatewayManifestSnapshotDiff,
+  UpstreamGatewayManifestSnapshotState,
+  UpstreamGatewayMcpSessionManagerPort,
+  UpstreamGatewayMcpToolCallResult,
+  UpstreamGatewayMcpToolCacheEntry,
+  UpstreamGatewayMcpToolCacheRecord,
+  UpstreamGatewayMcpToolConfigPreparation,
+  UpstreamGatewayMcpToolRefreshFlight,
+  UpstreamGatewayMcpToolRefreshWaiter,
+  UpstreamGatewayMcpToolListResult,
+  UpstreamGatewayMetrics,
+  UpstreamGatewayOperationRecord,
+  UpstreamGatewayOperationSelection,
+  UpstreamGatewayPluginCallResult,
+  UpstreamGatewayProjectedOperationTarget,
+  UpstreamGatewayPublicMcpTool,
+  UpstreamGatewayPublicService,
+  UpstreamGatewayRefactorInstrumentation,
+  UpstreamGatewayRegistry,
+  UpstreamGatewayResolvedCredentialMaterial,
+  UpstreamGatewayRegistryOptions,
+  UpstreamGatewayResolvedMcpServiceConfig,
+  UpstreamGatewayRuntime,
+  UpstreamGatewayServiceListResult,
+  UpstreamGatewayServiceRecord,
+  UpstreamGatewaySkillHubSubscription,
+  UpstreamGatewayStreamForwardResult,
+  UpstreamGatewayStructuredTargetFacts,
+  UpstreamGatewayTagPolicyEvaluation,
+  UpstreamGatewayTagStorePort,
+  UpstreamGatewayTrafficBucket,
+  UpstreamMcpRouteForwardResult,
+  UpstreamSkillHubUpdate
+} from "./registry-types.ts";
+
+const PROJECTED_PROVIDER_INPUT: any = Symbol(
+  "meshrix.upstream-gateway.projected-provider-input"
+);
+
+export { UPSTREAM_GATEWAY_PROTOCOL_VERSION } from "./support.ts";
+export { fingerprint } from "./manifest-compiler.ts";
+export { createUpstreamManifestObserver } from "./manifest-observer.ts";
+export {
+  createUpstreamPublishingApplication,
+  UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION
+} from "./publishing-application.ts";
+export type {
+  UpstreamConfigServicePreparation,
+  UpstreamPublishingApplication,
+  UpstreamPublishingExecuteOptions,
+  UpstreamPublishingRequestOptions,
+  UpstreamPublishingSubject
+} from "./publishing-application.ts";
+export {
+  compileUpstreamOperationProjection,
+  projectedOperationForwardInput,
+  upstreamProjectedOperationId
+} from "./operation-projection.ts";
+export {
+  AUDIENCE_PUBLICATION_SCHEMA_VERSION,
+  AUDIENCE_PUBLICATION_TOPIC,
+  compileAudienceProjection,
+  createAudiencePublicationEvent,
+  evaluateAudienceDecision,
+  evaluateAudienceParity,
+  opaqueAudiencePartitionKey
+} from "./audience-projection.ts";
+export { createUpstreamManifestSnapshotCommitter } from "./manifest-snapshot-commit.ts";
+export { UpstreamSchemaPortError } from "./schema-port.ts";
+export type {
+  UpstreamSchemaPort,
+  UpstreamSchemaValidationInput,
+  UpstreamSchemaValidationOutcome
+} from "./schema-port.ts";
+export type * from "./registry-types.ts";
+export function createUpstreamGatewayRegistry({
+  userDataPath = "",
+  tagStore = null,
+  securityPermissions = null,
+  mcpSessionManager = null,
+  artifactTransitPort = null,
+  secretKeyProvider = null,
+  publishSkillHubUpdate = null,
+  schemaPort = null,
+  claimProtectedSinkAttempt = claimFinalProtectedSinkAttempt,
+  policyGate = null,
+  policyGateTimeoutMs = null
+}: UpstreamGatewayRegistryOptions = {}) : UpstreamGatewayRegistry {
+  if (!schemaPort || typeof schemaPort.validate !== "function" || typeof schemaPort.assertSchemaBudget !== "function") {
+    throw new TypeError("Upstream gateway registry requires the injected schema port.");
+  }
+  const persistenceEnabled: boolean = Boolean(userDataPath);
+  const filePath: string = persistenceEnabled ? runtimePath(userDataPath) : "";
+  let services: Map<string, UpstreamGatewayServiceRecord> = new Map<string, UpstreamGatewayServiceRecord>();
+  let projectedOperationTargets: Map<string, UpstreamGatewayProjectedOperationTarget> = new Map<string, UpstreamGatewayProjectedOperationTarget>();
+  let mcpServicesByPublicPrefix: ReadonlyMap<string, UpstreamGatewayServiceRecord> = new Map<string, UpstreamGatewayServiceRecord>();
+  let manifestSnapshotRevision: Readonly<{ sourceRevision: number; sourceDigest: string }> = Object.freeze({ sourceRevision: 0, sourceDigest: "" });
+  const trafficBuckets: Map<string, UpstreamGatewayTrafficBucket> = new Map<string, UpstreamGatewayTrafficBucket>();
+  const endpointCursors: Map<string, UpstreamGatewayEndpointCursor> = new Map<string, UpstreamGatewayEndpointCursor>();
+  const endpointCircuits: Map<string, UpstreamGatewayEndpointCircuit> = new Map<string, UpstreamGatewayEndpointCircuit>();
+  const mcpToolCache: Map<string, UpstreamGatewayMcpToolCacheRecord> = new Map<string, UpstreamGatewayMcpToolCacheRecord>();
+  const mcpToolRefreshInFlight: Map<string, UpstreamGatewayMcpToolRefreshFlight> = new Map<string, UpstreamGatewayMcpToolRefreshFlight>();
+  const deferredMcpToolRefreshesByService: Map<string, Map<string, UpstreamGatewayMcpToolRefreshFlight>> = new Map<string, Map<string, UpstreamGatewayMcpToolRefreshFlight>>();
+  const mcpToolConfigPreparations: Map<string, Set<AbortController>> = new Map<string, Set<AbortController>>();
+  const mcpRegistryCloseController = new AbortController();
+  const activeRegistryWork: Set<Promise<unknown>> = new Set<Promise<unknown>>();
+  const skillHubAdmissionCarrier = Symbol("skillHubAdmissionCarrier");
+  const skillHubAdmissionSubjects = new WeakMap<object, string>();
+  const skillHubEventSubscriptions: Map<string, UpstreamGatewaySkillHubSubscription> = new Map<string, UpstreamGatewaySkillHubSubscription>();
+  let targetedCallMapHits: number = 0;
+  let targetedServiceIndexHits: number = 0;
+  let serviceDiscoveryCount: number = 0;
+
+  function compilePublicToolTargetIndexes(serviceMap: ReadonlyMap<string, UpstreamGatewayServiceRecord>) : Readonly<{ mcpByPrefix: ReadonlyMap<string, UpstreamGatewayServiceRecord> }> {
+    const mcpByPrefix: Map<string, UpstreamGatewayServiceRecord> = new Map<string, UpstreamGatewayServiceRecord>();
+    for (const service of serviceMap.values()) {
+      if (service.disabled === true) continue;
+      if (service.serviceProtocol !== "mcp") continue;
+      const prefix: any = service.mcp?.toolNamePrefix || safePublicToolSegment(service.serviceId);
+      if (mcpByPrefix.has(prefix)) {
+        throw new TypeError("Upstream gateway manifest snapshot contains duplicate MCP tool prefixes.");
+      }
+      mcpByPrefix.set(prefix, service);
+    }
+    return Object.freeze({ mcpByPrefix });
+  }
+
+  function cancelMcpToolRefreshes(serviceIds: readonly unknown[] | null = null) : Promise<unknown>[] {
+    const prefixes: string[] | null = serviceIds === null
+      ? null
+      : asArray(serviceIds).map((serviceId?: unknown) : string => `${text(serviceId)}::`);
+    const pending: Promise<unknown>[] = [];
+    for (const [key, flight] of mcpToolRefreshInFlight) {
+      if (prefixes && !prefixes.some((prefix: string) : boolean => String(key).startsWith(prefix))) continue;
+      pending.push(flight.promise);
+      removeDeferredMcpToolRefresh(flight.serviceId, key, flight);
+      flight.controller.abort();
+      mcpToolRefreshInFlight.delete(key);
+    }
+    return pending;
+  }
+
+  function cancelMcpToolConfigPreparations(serviceIds: readonly unknown[] | null = null) : void {
+    const selectedServiceIds: string[] = serviceIds === null
+      ? [...mcpToolConfigPreparations.keys()]
+      : asArray(serviceIds).map(text);
+    for (const serviceId of selectedServiceIds) {
+      const controllers: Set<AbortController> | undefined = mcpToolConfigPreparations.get(serviceId);
+      mcpToolConfigPreparations.delete(serviceId);
+      for (const controller of controllers || []) controller.abort();
+    }
+  }
+
+  function trackMcpToolConfigPreparation(serviceId?: unknown) : UpstreamGatewayMcpToolConfigPreparation {
+    const normalizedServiceId: string = text(serviceId);
+    const controller: AbortController = new AbortController();
+    let disposed = false;
+    let controllers: Set<AbortController> | undefined = mcpToolConfigPreparations.get(normalizedServiceId);
+    if (!controllers) {
+      controllers = new Set<AbortController>();
+      mcpToolConfigPreparations.set(normalizedServiceId, controllers);
+    }
+    controllers.add(controller);
+    return {
+      controller,
+      dispose() : boolean {
+        if (disposed) return false;
+        disposed = true;
+        const current: Set<AbortController> | undefined = mcpToolConfigPreparations.get(normalizedServiceId);
+        current?.delete(controller);
+        if (current?.size === 0) mcpToolConfigPreparations.delete(normalizedServiceId);
+        return true;
+      }
+    };
+  }
+
+  function hasMcpToolConfigPreparations(serviceId?: unknown) : boolean {
+    return (mcpToolConfigPreparations.get(text(serviceId))?.size || 0) > 0;
+  }
+
+  function removeDeferredMcpToolRefresh(serviceId?: unknown, cacheKey?: unknown, flight?: UpstreamGatewayMcpToolRefreshFlight | null) : void {
+    if (!flight) return;
+    const normalizedServiceId: string = text(serviceId);
+    const deferred: Map<string, UpstreamGatewayMcpToolRefreshFlight> | undefined = deferredMcpToolRefreshesByService.get(normalizedServiceId);
+    if (deferred?.get(text(cacheKey)) === flight) {
+      deferred.delete(text(cacheKey));
+      if (deferred.size === 0) deferredMcpToolRefreshesByService.delete(normalizedServiceId);
+    }
+  }
+
+  function deferMcpToolRefreshCancellation(serviceId?: unknown, cacheKey?: unknown, flight?: UpstreamGatewayMcpToolRefreshFlight | null) : void {
+    if (!flight) return;
+    const normalizedServiceId: string = text(serviceId);
+    let deferred: Map<string, UpstreamGatewayMcpToolRefreshFlight> | undefined = deferredMcpToolRefreshesByService.get(normalizedServiceId);
+    if (!deferred) {
+      deferred = new Map<string, UpstreamGatewayMcpToolRefreshFlight>();
+      deferredMcpToolRefreshesByService.set(normalizedServiceId, deferred);
+    }
+    deferred.set(text(cacheKey), flight);
+  }
+
+  function cancelMcpToolRefreshIfUnobserved(serviceId?: unknown, cacheKey?: unknown, flight?: UpstreamGatewayMcpToolRefreshFlight | null) : void {
+    if (!flight) return;
+    if (flight.waiters.size > 0) {
+      removeDeferredMcpToolRefresh(serviceId, cacheKey, flight);
+      return;
+    }
+    if (mcpToolRefreshInFlight.get(text(cacheKey)) !== flight) {
+      removeDeferredMcpToolRefresh(serviceId, cacheKey, flight);
+      return;
+    }
+    if (hasMcpToolConfigPreparations(serviceId)) {
+      deferMcpToolRefreshCancellation(serviceId, cacheKey, flight);
+      return;
+    }
+    removeDeferredMcpToolRefresh(serviceId, cacheKey, flight);
+    mcpToolRefreshInFlight.delete(text(cacheKey));
+    if (!flight.controller.signal.aborted) flight.controller.abort();
+  }
+
+  function settleDeferredMcpToolRefreshes(serviceId?: unknown) : void {
+    if (hasMcpToolConfigPreparations(serviceId)) return;
+    const normalizedServiceId: string = text(serviceId);
+    const deferred: Map<string, UpstreamGatewayMcpToolRefreshFlight> | undefined = deferredMcpToolRefreshesByService.get(normalizedServiceId);
+    if (!deferred) return;
+    deferredMcpToolRefreshesByService.delete(normalizedServiceId);
+    for (const [cacheKey, flight] of deferred) {
+      if (flight.waiters.size === 0 && mcpToolRefreshInFlight.get(cacheKey) === flight) {
+        mcpToolRefreshInFlight.delete(cacheKey);
+        if (!flight.controller.signal.aborted) flight.controller.abort();
+      }
+    }
+  }
+
+  function finishMcpToolConfigPreparation(serviceId?: unknown, preparation?: UpstreamGatewayMcpToolConfigPreparation | null) : void {
+    if (!preparation?.dispose?.()) return;
+    settleDeferredMcpToolRefreshes(serviceId);
+  }
+
+  function clearServiceRuntimeState(serviceIds: readonly unknown[] = []) : void {
+    const prefixes: string[] = asArray(serviceIds).map((serviceId?: unknown) : string => `${serviceId}::`);
+    if (prefixes.length === 0) return;
+    for (const serviceId of asArray(serviceIds).map(text).filter(Boolean)) {
+      const subscription: UpstreamGatewaySkillHubSubscription | undefined = skillHubEventSubscriptions.get(serviceId);
+      if (subscription) {
+        subscription.controller.abort();
+        skillHubEventSubscriptions.delete(serviceId);
+      }
+    }
+    cancelMcpToolConfigPreparations(serviceIds);
+    cancelMcpToolRefreshes(serviceIds);
+    for (const stateMap of [trafficBuckets, endpointCursors, endpointCircuits]) {
+      for (const key of stateMap.keys()) {
+        if (prefixes.some((prefix: string) : boolean => String(key).startsWith(prefix))) stateMap.delete(key);
+      }
+    }
+    for (const serviceId of asArray(serviceIds).map(text).filter(Boolean)) mcpToolCache.delete(serviceId);
+  }
+
+  function discoveryCancelledError(cause?: unknown) : Error {
+    return Object.assign(new Error("Upstream MCP discovery was cancelled."), {
+      status: 499,
+      reasonCode: "upstream_mcp_cancelled",
+      name: "AbortError",
+      cause
+    });
+  }
+
+  function discoveryRegistryClosedError() : Error {
+    return Object.assign(new Error("Upstream MCP registry is closed."), {
+      status: 503,
+      reasonCode: "upstream_mcp_registry_closed"
+    });
+  }
+
+  function waitForAbortable<T>(promise: Promise<T>, signal?: AbortSignal | null) : Promise<T> {
+    if (!signal) return promise;
+    if (signal.aborted) return Promise.reject(discoveryCancelledError(signal.reason));
+    return new Promise<T>((resolve?: (value: T) => void, reject?: (reason?: unknown) => void) : void => {
+      let settled = false;
+      const finish: (fn?: (value?: any) => void, value?: any) => void = (fn?: (value?: any) => void, value?: any) : void => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        fn?.(value);
+      };
+      const onAbort: () => void = () : void => finish(reject, discoveryCancelledError(signal.reason));
+      signal.addEventListener("abort", onAbort, { once: true });
+      promise.then(
+        (value?: T) : void => finish(resolve as (value?: any) => void, value),
+        (error?: unknown) : void => finish(reject, error)
+      );
+    });
+  }
+
+  function mcpToolCacheKey(service: UpstreamGatewayServiceRecord, config: UpstreamGatewayResolvedMcpServiceConfig) : string {
+    return `${service.serviceId}::${service.updatedAt || ""}::${JSON.stringify(config.sessionGeneration || {})}`;
+  }
+
+  function cacheEntryFromTools(tools: readonly UpstreamGatewayPublicMcpTool[] = []) : UpstreamGatewayMcpToolCacheEntry {
+    return {
+      loadedAt: Date.now(),
+      tools,
+      byPublicName: new Map<string, UpstreamGatewayPublicMcpTool>(tools.map((tool: UpstreamGatewayPublicMcpTool) : [string, UpstreamGatewayPublicMcpTool] => [tool.name, tool])),
+      byUpstreamName: new Map<string, UpstreamGatewayPublicMcpTool>(
+        tools
+          .filter((tool: UpstreamGatewayPublicMcpTool) : boolean => Boolean(text(tool._meta?.upstreamToolName)))
+          .map((tool: UpstreamGatewayPublicMcpTool) : [string, UpstreamGatewayPublicMcpTool] => [String(tool._meta.upstreamToolName), tool])
+      )
+    };
+  }
+  const securityAlertStore: any = persistenceEnabled
+    ? createSecurityAlertStore({ userDataPath })
+    : null;
+  let closed: boolean = false;
+  let closePromise: Promise<void> | null = null;
+  async function withRegistryWork<T>(options: UpstreamGatewayCallOptions = {}, run?: ((options: UpstreamGatewayCallOptions & { signal: AbortSignal }) => Promise<T>) | null) : Promise<T> {
+    if (closed || closePromise || mcpRegistryCloseController.signal.aborted) throw discoveryRegistryClosedError();
+    if (typeof run !== "function") throw new TypeError("Upstream registry work requires an operation.");
+    if (options.timeoutMs !== null) normalizeOptionalTimeoutMs(options.timeoutMs, "request.timeoutMs");
+    const operation = run;
+    const abortContext: any = createForwardAbortContext(options.signal || null, null, mcpRegistryCloseController.signal);
+    let work: Promise<T> | null = null;
+    try {
+      if (abortContext.ownerAborted()) throw discoveryRegistryClosedError();
+      if (abortContext.callerAborted()) {
+        throw Object.assign(new Error("Upstream gateway request was cancelled."), {
+          status: 499,
+          reasonCode: "upstream_forward_cancelled",
+          name: "AbortError"
+        });
+      }
+      work = Promise.resolve().then(() => operation({ ...options, signal: abortContext.signal }));
+      activeRegistryWork.add(work);
+      return await work;
+    } finally {
+      if (work) activeRegistryWork.delete(work);
+      abortContext.dispose();
+    }
+  }
+  const resolvedTagStore: UpstreamGatewayTagStorePort | null =
+    tagStore ||
+    securityPermissions?.tagManagementStore ||
+    null;
+  const gatewayRuntime: UpstreamGatewayRuntime = constructWithOwnedResourceCleanup(
+    securityAlertStore,
+    () : any => createGatewayRuntime({
+      persistenceEnabled,
+      filePath,
+      securityAlertStore
+    })
+  );
+  const {
+    auditEvents,
+    metrics,
+    appendAudit,
+    appendSecurityAlert,
+    recordMetric,
+    persist,
+    close: closeGatewayRuntime,
+    getRefactorInstrumentation,
+    getShedMetricDimensions
+  } = gatewayRuntime;
+  const endpointTraffic: UpstreamEndpointTrafficController = constructWithOwnedResourceCleanup(
+    securityAlertStore,
+    () : any => createEndpointTrafficController({
+      trafficBuckets,
+      endpointCursors,
+      endpointCircuits,
+      appendAudit,
+      recordMetric,
+      persist
+    })
+  );
+  const {
+    endpointsFor,
+    publicEndpoint,
+    recordEndpointOutcome,
+    retireServices: retireEndpointTrafficServices,
+    selectEndpointTraffic,
+    withTrafficSlot
+  } = endpointTraffic;
+
+  /**
+   * Bounded response cache for read-only operations that opt in through
+   * `operation.responseCache`. A hit serves the stored result without
+   * credential resolution, permit claims or upstream contact; entries key on
+   * the service's `updatedAt` so any republish orphans prior data, and both a
+   * global entry cap and per-service `maxEntries` bound memory. The stored
+   * payload never carries the original `auditId` — each hit audits its own
+   * `upstream.forward.cache_hit` event.
+   */
+  const responseCacheEntries: Map<string, {
+    serviceId: string;
+    storedAt: number;
+    expiresAt: number;
+    payload: unknown;
+  }> = new Map();
+  const RESPONSE_CACHE_GLOBAL_LIMIT = 512;
+
+  function responseCacheKeyFor(service: any, operation: any, input: any) : string | null {
+    const spec: any = operation?.responseCache;
+    if (!spec || operation.risk !== "read_only" || operation.requiresApproval === true) return null;
+    return createHash("sha256").update(canonicalJson({
+      serviceId: text(service.serviceId),
+      serviceRevision: text(service.updatedAt),
+      operationKey: text(operation.operationKey),
+      input: object(input)
+    })).digest("base64url");
+  }
+
+  function responseCacheGet(key: string) : { serviceId: string; storedAt: number; expiresAt: number; payload: unknown } | null {
+    const entry: any = responseCacheEntries.get(key);
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+      responseCacheEntries.delete(key);
+      return null;
+    }
+    return entry;
+  }
+
+  function responseCachePut(key: string, serviceId: string, outcome: any, spec: any) : void {
+    const payload: any = { ...object(outcome) };
+    delete payload.auditId;
+    delete payload.cache;
+    const sizeBytes: any = Buffer.byteLength(canonicalJson(payload), "utf8");
+    if (sizeBytes > Number(spec.maxBytes)) return;
+    for (const [existingKey, entry] of responseCacheEntries) {
+      if (entry.expiresAt <= Date.now()) responseCacheEntries.delete(existingKey);
+    }
+    let serviceCount: any = 0;
+    for (const entry of responseCacheEntries.values()) {
+      if (entry.serviceId === serviceId) serviceCount += 1;
+    }
+    while (responseCacheEntries.size >= RESPONSE_CACHE_GLOBAL_LIMIT ||
+           serviceCount >= Number(spec.maxEntries)) {
+      const oldest: any = responseCacheEntries.keys().next().value;
+      if (oldest === undefined) break;
+      const oldestEntry: any = responseCacheEntries.get(oldest);
+      responseCacheEntries.delete(oldest);
+      if (oldestEntry?.serviceId === serviceId) serviceCount -= 1;
+    }
+    responseCacheEntries.set(key, {
+      serviceId,
+      storedAt: Date.now(),
+      expiresAt: Date.now() + Number(spec.ttlMs),
+      payload
+    });
+  }
+  const upstreamMcpSessions: UpstreamGatewayMcpSessionManagerPort = mcpSessionManager || createUpstreamMcpSessionManager({
+    fetchTransport: fetchConfiguredMcpUpstream
+  });
+  const recordMcpExecution: any = constructWithOwnedResourceCleanup(
+    securityAlertStore,
+    () : any => createMcpExecutionAdapter({
+      appendAudit,
+      invokeTypedMcp,
+      claimMcpProtectedSink,
+      persist,
+      publicEndpoint,
+      schemaPort,
+      recordEndpointOutcome,
+      recordMetric
+    })
+  );
+
+  function upstreamEgressPolicies(service?: any) : any {
+    return {
+      egress: {
+        allowLocalForConfiguredModelService: service.allowLocalNetwork === true
+      }
+    };
+  }
+
+  function fetchConfiguredUpstream(service?: any, url?: any, init?: any, label?: any) : any {
+    return fetchWithPinnedDns({
+      url,
+      label,
+      policies: upstreamEgressPolicies(service),
+      init,
+      responseTimeouts: { headersTimeout: 0, bodyTimeout: 0 },
+      maxRedirects: 0
+    });
+  }
+
+  function requestConfiguredUpstream(service?: any, url?: any, init?: any, label?: any) : any {
+    return requestWithPinnedDns({
+      url,
+      label,
+      policies: upstreamEgressPolicies(service),
+      init: { headersTimeout: 0, bodyTimeout: 0, ...init }
+    });
+  }
+
+  // OAuth client-credentials tokens for upstream calls share the same
+  // pinned-DNS egress boundary and the service's local-network posture; the
+  // client owns per-registry caching and single-flight coalescing.
+  const upstreamOAuthClient: any = createUpstreamOAuthClient({
+    fetchToken: (service?: any, url?: any, init?: any) : any =>
+      fetchConfiguredUpstream(service, url, init, `upstream-gateway.${text(service?.serviceId || "oauth")}.oauth`)
+  });
+
+  function fetchConfiguredMcpUpstream(url?: any, init?: any, { config = {}, beforeFetch }: Record<string, any> = {}) : any {
+    return fetchWithPinnedDns({
+      url,
+      label: `upstream-gateway.${text(config.gatewayServiceId || "mcp")}.mcp`,
+      policies: {
+        egress: {
+          allowLocalForConfiguredModelService: config.allowLocalNetwork === true
+        }
+      },
+      init,
+      responseTimeouts: { headersTimeout: 0, bodyTimeout: 0 },
+      beforeFetch
+    });
+  }
+
+  function requireService(serviceId?: unknown) : UpstreamGatewayServiceRecord {
+    const service: UpstreamGatewayServiceRecord | undefined = services.get(text(serviceId));
+    if (!service) {
+      throw new Error(`Upstream service not found: ${serviceId}`);
+    }
+    return service;
+  }
+  function operationFor(service?: any, operationKey: any = "") : any {
+    const key: any = text(operationKey || "default");
+    const operation: any = asArray(service.operations).find((item?: any) : any => item.operationKey === key) ||
+      asArray(service.operations)[0];
+    if (!operation) {
+      throw new Error(`Upstream operation not found: ${key}`);
+    }
+    return operation;
+  }
+
+  function sha256Canonical(value?: any) : any {
+    return createHash("sha256")
+      .update(canonicalJson(value))
+      .digest("hex");
+  }
+
+  function finalEffectAuthorityRequired() : any {
+    throw Object.assign(
+      new Error("A final upstream effect authority is required."),
+      {
+        code: "upstream_final_effect_authority_required",
+        reasonCode: "upstream_final_effect_authority_required",
+        status: 403,
+        statusCode: 403
+      }
+    );
+  }
+
+  function structuredTargetFacts({
+    service,
+    operation,
+    input,
+    endpoint,
+    inputDigest,
+    targetSelectorInputDigest = inputDigest
+  }: Record<string, any>) : UpstreamGatewayStructuredTargetFacts {
+    const mcpConfig: Record<string, any> = object(service?.mcp);
+    if (service?.serviceProtocol === "mcp" || text(operation?.protocol).toLowerCase() === "mcp") {
+      const transport = text(mcpConfig.transport || "stdio").toLowerCase();
+      const stdio = transport === "stdio";
+      const mcpTargetUrl: URL | null = stdio ? null : new URL(text(mcpConfig.url || service.baseUrl));
+      const launchIdentityDigest = stdio ? sha256Canonical({
+        command: text(mcpConfig.command),
+        args: asArray(mcpConfig.args).map((argument?: any) : any => String(argument))
+      }) : "";
+      const mcpConfigurationVersion = text(mcpConfig.protocolVersion);
+      const protocolVersionHint = text(mcpConfig.protocolVersionHint);
+      const callDigest = text(inputDigest) || digestFinalProtectedSinkInput(object(input));
+      const targetSelectorDigest = text(targetSelectorInputDigest) || callDigest;
+      const targetTuple: Readonly<Record<string, any>> = Object.freeze({
+        schemaVersion: "v0.0.1:upstream-gateway:mcp-final-effect-target-1",
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        protocol: "mcp",
+        transport,
+        method: "tools/call",
+        endpointId: text(endpoint?.endpointId || "primary"),
+        ...(stdio ? { launchIdentityDigest } : { url: mcpTargetUrl?.toString() || "" }),
+        callDigest,
+        mcpConfigurationVersion,
+        protocolVersionHint,
+        manifestSetRevision: manifestSnapshotRevision.sourceRevision,
+        manifestSetDigest: manifestSnapshotRevision.sourceDigest,
+        serviceRevision: service.serviceRevision,
+        manifestDigest: service.manifestDigest
+      });
+      const resourceRevision = sha256Canonical({
+        schemaVersion: "v0.0.1:upstream-gateway:structured-resource-revision-1",
+        manifestSetRevision: targetTuple.manifestSetRevision,
+        manifestSetDigest: targetTuple.manifestSetDigest,
+        serviceRevision: targetTuple.serviceRevision,
+        manifestDigest: targetTuple.manifestDigest,
+        transport,
+        ...(stdio ? { launchIdentityDigest } : { url: mcpTargetUrl?.toString() || "" }),
+        mcpConfigurationVersion,
+        protocolVersionHint
+      });
+      return Object.freeze({
+        targetUrl: mcpTargetUrl,
+        method: stdio ? "stdio" : "POST",
+        protocol: "mcp",
+        rpcMethod: "tools/call",
+        targetSelector: Object.freeze({ inputDigest: targetSelectorDigest, operationKey: operation.operationKey, serviceId: service.serviceId }),
+        effect: Object.freeze({ kind: stdio ? "upstream-mcp-stdio-tools-call" : "upstream-mcp-http-tools-call", targetDigest: sha256Canonical(targetTuple) }),
+        resourceRevision
+      });
+    }
+    const targetUrl: any = safeTargetUrl(service, operation, input, endpoint);
+    const method: any = configuredHttpMethod(operation);
+    const protocol: any = text(operation.protocol || "http").toLowerCase();
+    const rpcMethod: any = protocol === "json-rpc"
+      ? configuredRpcMethod(operation)
+      : "";
+    const endpointIdentity: Readonly<Record<string, any>> = Object.freeze({
+      endpointId: text(endpoint?.endpointId || "primary"),
+      baseUrl: text(endpoint?.baseUrl || service.baseUrl)
+    });
+    const targetTuple: Readonly<Record<string, any>> = Object.freeze({
+      schemaVersion:
+        "v0.0.1:upstream-gateway:structured-final-effect-target-1",
+      serviceId: service.serviceId,
+      operationKey: operation.operationKey,
+      protocol,
+      method,
+      rpcMethod,
+      targetUrl: targetUrl.toString(),
+      endpoint: endpointIdentity,
+      manifestSetRevision: manifestSnapshotRevision.sourceRevision,
+      manifestSetDigest: manifestSnapshotRevision.sourceDigest,
+      serviceRevision: service.serviceRevision,
+      manifestDigest: service.manifestDigest
+    });
+    const resourceRevision: any = sha256Canonical({
+      schemaVersion:
+        "v0.0.1:upstream-gateway:structured-resource-revision-1",
+      manifestSetRevision: targetTuple.manifestSetRevision,
+      manifestSetDigest: targetTuple.manifestSetDigest,
+      serviceRevision: targetTuple.serviceRevision,
+      manifestDigest: targetTuple.manifestDigest
+    });
+    return Object.freeze({
+      targetUrl,
+      method,
+      protocol,
+      rpcMethod,
+      targetSelector: Object.freeze({
+        inputDigest,
+        operationKey: operation.operationKey,
+        serviceId: service.serviceId
+      }),
+      effect: Object.freeze({
+        kind: "upstream-http-request",
+        targetDigest: sha256Canonical(targetTuple)
+      }),
+      resourceRevision
+    });
+  }
+
+  function currentStructuredTargetFacts({
+    serviceId,
+    operationKey,
+    endpointId,
+    input,
+    inputDigest
+  }: Record<string, any>) : UpstreamGatewayStructuredTargetFacts {
+    const currentService: any = services.get(text(serviceId));
+    if (!currentService || currentService.disabled === true) {
+      throw Object.assign(
+        new Error("The current upstream service is unavailable."),
+        { code: "upstream_final_effect_resource_stale", statusCode: 403 }
+      );
+    }
+    const currentOperation: any = asArray(currentService.operations).find(
+      (candidate?: any) : any => candidate.operationKey === operationKey
+    );
+    if (
+      !currentOperation ||
+      currentService.serviceProtocol === "mcp" ||
+      currentOperation.protocol === "mcp"
+    ) {
+      throw Object.assign(
+        new Error("The current upstream operation is unavailable."),
+        { code: "upstream_final_effect_resource_stale", statusCode: 403 }
+      );
+    }
+    const currentEndpoint: any = endpointsFor(currentService).find(
+      (candidate?: any) : any =>
+        text(candidate.endpointId || "primary") === text(endpointId || "primary")
+    );
+    if (!currentEndpoint) {
+      throw Object.assign(
+        new Error("The current upstream endpoint is unavailable."),
+        { code: "upstream_final_effect_resource_stale", statusCode: 403 }
+      );
+    }
+    return structuredTargetFacts({
+      service: currentService,
+      operation: operationWithUpstreamCapability(
+        currentService,
+        currentOperation
+      ),
+      input,
+      endpoint: currentEndpoint,
+      inputDigest
+    });
+  }
+
+  function currentMcpTargetFacts({ serviceId, operationKey, endpointId, input, inputDigest, targetSelectorInputDigest = inputDigest }: Record<string, any>) : UpstreamGatewayStructuredTargetFacts {
+    const currentService: any = services.get(text(serviceId));
+    const currentOperation: any = asArray(currentService?.operations).find((candidate?: any) : any => candidate.operationKey === operationKey);
+    if (!currentService || currentService.disabled === true || !currentOperation ||
+        currentService.serviceProtocol !== "mcp" && currentOperation.protocol !== "mcp") {
+      throw Object.assign(new Error("The current upstream MCP operation is unavailable."), { code: "upstream_final_effect_resource_stale", statusCode: 403 });
+    }
+    const endpoint: any = endpointsFor(currentService).find((candidate?: any) : any => text(candidate.endpointId || "primary") === text(endpointId || "primary"));
+    if (!endpoint) throw Object.assign(new Error("The current upstream MCP target is unavailable."), { code: "upstream_final_effect_resource_stale", statusCode: 403 });
+    return structuredTargetFacts({ service: currentService, operation: operationWithUpstreamCapability(currentService, currentOperation), input, endpoint, inputDigest, targetSelectorInputDigest });
+  }
+
+  async function claimMcpProtectedSink(service: any, operation: any, input: Record<string, any>, endpoint: any, options: Record<string, any>): Promise<any> {
+    // Preserve the original Operation Permission input before clone drops its private symbol.
+    const providerInput: any = input?.[PROJECTED_PROVIDER_INPUT];
+    const sinkInput: any = clone(input);
+    const mcpCallInput: any = object(options.mcpCallInput || sinkInput);
+    const sinkInputDigest: any = digestFinalProtectedSinkInput(mcpCallInput);
+    const targetSelectorInputDigest: any = digestFinalProtectedSinkInput(
+      providerInput ? clone(providerInput) : sinkInput
+    );
+    const targetFacts: any = structuredTargetFacts({ service, operation, input: mcpCallInput, endpoint, inputDigest: sinkInputDigest, targetSelectorInputDigest });
+    const finalProtectedSinkPermit: any = options.finalProtectedSinkPermit;
+    if (!finalProtectedSinkPermit && claimProtectedSinkAttempt === claimFinalProtectedSinkAttempt) finalEffectAuthorityRequired();
+    return claimProtectedSinkAttempt({
+      attempt: finalProtectedSinkPermit,
+      targetSelector: targetFacts.targetSelector,
+      effect: targetFacts.effect,
+      resourceRevision: targetFacts.resourceRevision,
+      resolveCurrentResource: async () : Promise<any> => {
+        const currentFacts: any = currentMcpTargetFacts({ serviceId: service.serviceId, operationKey: operation.operationKey,
+          endpointId: endpoint?.endpointId || "primary", input: mcpCallInput, inputDigest: sinkInputDigest, targetSelectorInputDigest });
+        return Object.freeze({ effect: currentFacts.effect, resourceRevision: currentFacts.resourceRevision });
+      }
+    });
+  }
+
+  function previewFor(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, subject: Record<string, any> = {}) : UpstreamGatewayForwardPreview {
+    const { traffic } = selectEndpointTraffic(service, operation, { consume: false });
+    const subjectScopes: any = new Set<any>(asArray(subject.scopes).map(text));
+    const roleId: any = text(subject.roleId || subject.role || "");
+    const bypass: any = ["owner", "admin"].includes(roleId) ||
+      ["auth:admin", "runtime:admin", "gateway:admin"].some((scope?: any) : any => subjectScopes.has(scope));
+    const missingScopes: any = bypass ? [] : operation.requiredScopes.filter((scope?: any) : any => !subjectScopes.has(scope));
+    const tagPolicy: any = evaluateServiceTagPolicy(service, subject);
+    const dynamicAuthorization: any = evaluateDynamicOperationAuthorization(subject, operation);
+    return {
+      protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+      serviceId: service.serviceId,
+      operationKey: operation.operationKey,
+      allowed: !service.disabled && missingScopes.length === 0 && traffic.allowed && tagPolicy.allowed && dynamicAuthorization.allowed,
+      disabled: service.disabled === true,
+      requiredScopes: operation.requiredScopes,
+      missingScopes,
+      risk: operation.risk,
+      dynamicCapability: operation.dynamicCapability || compileUpstreamOperationCapability(service, operation),
+      dynamicAuthorization,
+      requiresApproval: operation.requiresApproval === true,
+      traffic: {
+        allowed: traffic.allowed,
+        algorithm: traffic.algorithm,
+        routingAlgorithm: traffic.routingAlgorithm,
+        endpoint: traffic.endpoint,
+        circuit: traffic.circuit,
+        perMinute: traffic.perMinute,
+        burst: traffic.burst,
+        maxConcurrent: traffic.maxConcurrent,
+        remainingTokens: traffic.remainingTokens,
+        inFlight: traffic.inFlight,
+        serviceLimit: traffic.serviceLimit,
+        endpointLimit: traffic.endpointLimit,
+        retryAfterMs: traffic.retryAfterMs,
+        deniedReason: traffic.deniedReason,
+        deniedScope: traffic.deniedScope,
+        resetAt: traffic.resetAt
+      },
+      tagPolicy: tagPolicy.public
+    };
+  }
+
+  function uniqueEntityRefs(values: any = []) : any {
+    const seen: any = new Set<any>();
+    const output: any[] = [];
+    for (const entry of asArray(values)) {
+      const entityType: any = text(entry?.entityType || entry?.type);
+      const entityId: any = text(entry?.entityId || entry?.id);
+      if (!entityType || !entityId) continue;
+      const key: any = `${entityType}\0${entityId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      output.push({ entityType, entityId });
+    }
+    return output;
+  }
+
+  function evaluateServiceTagPolicy(service: UpstreamGatewayServiceRecord, subject: Record<string, any> = {}) : UpstreamGatewayTagPolicyEvaluation {
+    if (!hasUniversalTagPolicyRules(service.tagPolicy || {})) {
+      return {
+        allowed: true,
+        public: {
+          enabled: false,
+          allowed: true
+        }
+      };
+    }
+    const configuredEntityRefs: any[] = asArray(
+      service.tagPolicy?.entityRefs || service.tagPolicy?.entities
+    );
+    const callerSubjectId: any = text(subject.subjectId || subject.workloadPrincipalId || subject.id);
+    const subjectEntityRefs: any[] = [
+      callerSubjectId ? { entityType: "subject", entityId: callerSubjectId } : null,
+      (subject.organizationNodeId || subject.organizationId)
+        ? { entityType: "organization", entityId: subject.organizationNodeId || subject.organizationId }
+        : null,
+      subject.teamId ? { entityType: "team", entityId: subject.teamId } : null,
+      subject.roleId ? { entityType: "role", entityId: subject.roleId } : null
+    ].filter(Boolean);
+    // Discovery evaluates caller identity first. A publishing descriptor may also
+    // persist a default service entityRef; that must not replace caller audience.
+    const entityRefs: any[] = uniqueEntityRefs([...subjectEntityRefs, ...configuredEntityRefs]);
+    const decision: any = evaluateUniversalTagPolicy({
+      tagStore: resolvedTagStore,
+      ...service.tagPolicy,
+      entityRefs
+    });
+    return {
+      allowed: decision.allowed === true,
+      decision,
+      public: publicTagPolicyDecision(decision)
+    };
+  }
+
+  function rejectServiceTagPolicy(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, decision: Readonly<Record<string, unknown>> = {}) : never {
+    recordMetric({ serviceId: service.serviceId, statusCode: 403, failed: true });
+    const audit: any = appendAudit("upstream.tag_policy.denied", {
+      serviceId: service.serviceId,
+      operationKey: operation.operationKey,
+      protocol: operation.protocol,
+      reason: text(decision.reasonCode || "tag_policy_denied"),
+      tagPolicy: publicTagPolicyDecision(decision)
+    });
+    persist();
+    throw Object.assign(new Error("Upstream gateway tag policy denied."), {
+      status: 403,
+      details: {
+        protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        tagPolicy: publicTagPolicyDecision(decision)
+      },
+      audit
+    });
+  }
+
+  const upstreamPolicyGate: UpstreamPolicyGate | null = typeof policyGate === "function" ? policyGate : null;
+  const upstreamPolicyGateTimeoutMs: number = normalizePolicyGateTimeoutMs(policyGateTimeoutMs);
+
+  async function enforceUpstreamPolicyGate(
+    service: UpstreamGatewayServiceRecord,
+    operation: UpstreamGatewayOperationRecord,
+    input: Record<string, any> = {},
+    subject: Readonly<Record<string, unknown>> = {},
+    signal: AbortSignal | null = null
+  ) : Promise<void> {
+    if (!upstreamPolicyGate) return;
+    const context: UpstreamPolicyGateContext = {
+      serviceId: service.serviceId,
+      operationKey: operation.operationKey,
+      protocol: text(operation.protocol || service.serviceProtocol),
+      method: text(operation.method).toUpperCase(),
+      risk: text(operation.risk || operation.safety?.risk),
+      requiresApproval: operation.requiresApproval === true,
+      subject: {
+        type: text(subject?.type || "subject"),
+        subjectId: text(subject?.subjectId),
+        grantId: text(subject?.grantId),
+        scopes: asArray(subject?.scopes).map(text).filter(Boolean).slice(0, 64)
+      },
+      input: Object.freeze({ ...input })
+    };
+    const outcome: any = await evaluateUpstreamPolicyGate(upstreamPolicyGate, context, {
+      signal,
+      timeoutMs: upstreamPolicyGateTimeoutMs
+    });
+    if (outcome.kind === "allowed") return;
+    const denied: boolean = outcome.kind === "denied";
+    const reasonCode: string = denied ? "upstream_policy_gate_denied" : "upstream_policy_gate_unavailable";
+    recordMetric({ serviceId: service.serviceId, statusCode: 403, failed: true });
+    const audit: any = appendAudit(denied ? "upstream.policy_gate.denied" : "upstream.policy_gate.error", {
+      serviceId: service.serviceId,
+      operationKey: operation.operationKey,
+      protocol: operation.protocol,
+      reason: denied ? outcome.reason : reasonCode,
+      policyGate: denied
+        ? { reason: outcome.reason, detail: outcome.detail }
+        : { detail: outcome.detail }
+    });
+    persist();
+    throw Object.assign(new Error(denied
+      ? "Upstream gateway policy gate denied."
+      : "Upstream gateway policy gate is unavailable."), {
+      status: 403,
+      reasonCode,
+      details: {
+        protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        reasonCode,
+        policyGate: denied ? { reason: outcome.reason } : undefined
+      },
+      audit
+    });
+  }
+
+  function enforceRequestContentPolicy(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, input: Record<string, any> = {}) : void {
+    const denial: any = evaluateRequestContentPolicy(service, operation, input);
+    if (!denial) return;
+    recordMetric({ serviceId: service.serviceId, statusCode: 403, failed: true });
+    const contentPolicy: Record<string, any> = {
+      ruleId: denial.ruleId,
+      scope: denial.scope
+    };
+    if (denial.inputLimitExceeded) contentPolicy.inputLimitExceeded = true;
+    const audit: any = appendAudit("upstream.content_policy.denied", {
+      serviceId: service.serviceId,
+      operationKey: operation.operationKey,
+      protocol: operation.protocol,
+      reason: "upstream_content_policy_denied",
+      contentPolicy
+    });
+    persist();
+    throw Object.assign(new Error("Upstream gateway content policy denied."), {
+      status: 403,
+      reasonCode: "upstream_content_policy_denied",
+      details: {
+        protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        reasonCode: "upstream_content_policy_denied",
+        contentPolicy
+      },
+      audit
+    });
+  }
+
+  function rejectCallerApprovalOverride(input: Record<string, any> = {}, service?: any, operation?: any, subject: Record<string, any> = {}) : any {
+    const deniedFields: any = callerApprovalOverrideFields(input);
+    if (deniedFields.length === 0) return;
+    appendSecurityAlert({
+      reasonCode: "upstream_approval_override_denied",
+      severity: "critical",
+      title: "Upstream gateway caller approval override denied",
+      serviceId: service.serviceId,
+      operationKey: operation.operationKey,
+      evidence: {
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        deniedFields,
+        subjectType: subject?.type || "subject"
+      }
+    });
+    recordMetric({ serviceId: service.serviceId, statusCode: 400, failed: true });
+    persist();
+    throw Object.assign(new Error("Upstream gateway approval cannot be supplied by request body."), {
+      status: 400,
+      reasonCode: "upstream_approval_override_denied",
+      details: {
+        protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        deniedFields,
+        reasonCode: "upstream_approval_override_denied"
+      }
+    });
+  }
+
+  function authorizeForwardPreview(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, subject?: Record<string, any>) : UpstreamGatewayForwardPreview {
+    const preview: any = previewFor(service, operation, subject);
+    if (preview.missingScopes.length > 0) {
+      throw Object.assign(new Error("Upstream gateway scope denied."), { status: 403, details: preview });
+    }
+    if (!preview.dynamicAuthorization.allowed) {
+      throw Object.assign(new Error("Upstream gateway dynamic operation capability denied."), {
+        status: 403,
+        reasonCode: preview.dynamicAuthorization.reasonCode,
+        details: {
+          protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+          serviceId: service.serviceId,
+          operationKey: operation.operationKey,
+          reasonCode: preview.dynamicAuthorization.reasonCode
+        }
+      });
+    }
+    if (preview.tagPolicy?.enabled && !preview.tagPolicy.allowed) {
+      rejectServiceTagPolicy(service, operation, evaluateServiceTagPolicy(service, subject).decision);
+    }
+    return preview;
+  }
+
+  function authorizeMcpDiscoverySubject(subject: Record<string, any> = {}) : any {
+    const scopes: any = new Set<any>(asArray(subject.scopes).map(text).filter(Boolean));
+    if (["gateway:admin", "gateway:read", "gateway:write"].some((scope?: any) : any => scopes.has(scope))) return;
+    throw Object.assign(new Error("Upstream MCP discovery scope denied."), {
+      status: 403,
+      reasonCode: "upstream_mcp_discovery_scope_denied"
+    });
+  }
+
+  async function credentialMaterialFor(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationSelection, options: Record<string, any> = {}) : Promise<UpstreamGatewayResolvedCredentialMaterial> {
+    return resolveCredentialMaterial({
+      userDataPath,
+      service,
+      operation,
+      secretKeyProvider,
+      oauthProvider: upstreamOAuthClient,
+      ...object(options)
+    });
+  }
+
+  async function mcpServiceConfigWithCredentials(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationSelection, options: Record<string, any> = {}) : Promise<UpstreamGatewayResolvedMcpServiceConfig> {
+    return resolveMcpServiceConfigWithCredentials({
+      userDataPath,
+      service,
+      operation,
+      secretKeyProvider,
+      oauthProvider: upstreamOAuthClient,
+      signal: options.signal || null,
+      purpose: options.purpose || "discovery",
+      subject: options.subject || null
+    });
+  }
+
+  async function readModernMcpEventStreamResponse(response: any, requestId: string, maxResponseBytes: number) : Promise<Record<string, any>> {
+    const limit = Number(maxResponseBytes);
+    const declaredLength = Number(response?.headers?.get?.("content-length") || 0);
+    if (!Number.isSafeInteger(limit) || limit <= 0 || (Number.isFinite(declaredLength) && declaredLength > limit)) {
+      await response?.body?.cancel?.().catch?.(() : any => {});
+      throw Object.assign(new Error("Upstream response exceeds its configured limit."), {
+        code: "upstream_response_too_large",
+        status: 502,
+        maxBytes: limit,
+        receivedBytes: declaredLength
+      });
+    }
+    if (typeof response?.body?.getReader !== "function") {
+      throw Object.assign(new Error("Upstream MCP event stream did not include a readable body."), {
+        status: 502,
+        reasonCode: "upstream_mcp_response_invalid"
+      });
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let totalBytes = 0;
+    const invalidResponse = () : Error & Record<string, any> => Object.assign(new Error("Upstream MCP event stream did not contain a valid response."), {
+      status: 502,
+      reasonCode: "upstream_mcp_response_invalid"
+    });
+    const responseFromEvent = (eventText: string) : Record<string, any> | null => {
+      const data = eventText.split(/\r?\n/u)
+        .filter((line) => line === "data" || line.startsWith("data:"))
+        .map((line) => {
+          const value = line === "data" ? "" : line.slice(5);
+          return value.startsWith(" ") ? value.slice(1) : value;
+        })
+        .join("\n");
+      if (!data) return null;
+
+      let message: any;
+      try {
+        message = JSON.parse(data);
+      } catch {
+        throw invalidResponse();
+      }
+      if (!message || typeof message !== "object" || Array.isArray(message) || message.jsonrpc !== "2.0") {
+        throw invalidResponse();
+      }
+      if (typeof message.method === "string" && !Object.hasOwn(message, "id")) return null;
+      if (Object.hasOwn(message, "method") || message.id !== requestId) throw invalidResponse();
+      return message;
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (value) {
+          totalBytes += value.byteLength;
+          if (totalBytes > limit) {
+            await reader.cancel().catch(() : any => {});
+            throw Object.assign(new Error("Upstream response exceeds its configured limit."), {
+              code: "upstream_response_too_large",
+              status: 502,
+              maxBytes: limit,
+              receivedBytes: totalBytes
+            });
+          }
+        }
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        let delimiter: RegExpExecArray | null;
+        while ((delimiter = /\r?\n\r?\n/u.exec(buffer))) {
+          const eventText = buffer.slice(0, delimiter.index);
+          buffer = buffer.slice(delimiter.index + delimiter[0].length);
+          const matchedResponse = responseFromEvent(eventText);
+          if (matchedResponse) {
+            await reader.cancel().catch(() : any => {});
+            return matchedResponse;
+          }
+        }
+        if (done) break;
+      }
+      if (buffer.trim()) {
+        const matchedResponse = responseFromEvent(buffer);
+        if (matchedResponse) return matchedResponse;
+      }
+      throw invalidResponse();
+    } finally {
+      await reader.cancel().catch(() : any => {});
+      reader.releaseLock?.();
+    }
+  }
+
+  function createConfiguredModernMcpAdapter(config: UpstreamGatewayResolvedMcpServiceConfig, maxResponseBytes: number, options: Record<string, any> = {}) : any {
+    const transport: any = {
+      send: async ({ request, headers, signal }: Record<string, any>) : Promise<any> => {
+        const timeoutMs: any = timeoutFor({ timeoutMs: config.timeoutMs }, options);
+        const abortContext: any = createForwardAbortContext(signal || null, timeoutMs);
+        let pinned: any = null;
+        try {
+          pinned = await fetchConfiguredMcpUpstream(config.url, {
+            method: "POST",
+            headers: { ...object(config.headers), ...object(headers), "content-type": "application/json" },
+            body: JSON.stringify(request),
+            signal: abortContext.signal
+          }, {
+            config,
+            ...(request.method === "tools/call" && typeof options.beforeSend === "function"
+              ? { beforeFetch: options.beforeSend }
+              : {})
+          });
+          const response: any = pinned.response;
+          if (response.status < 200 || response.status >= 300) {
+            await response.body?.cancel?.().catch?.(() : any => {});
+            return { status: response.status, headers: Object.fromEntries(response.headers.entries()), body: {} };
+          }
+          const contentType = String(response.headers.get("content-type") || "").trim();
+          const body: any = /^text\/event-stream(?:\s*;|$)/iu.test(contentType)
+            ? await readModernMcpEventStreamResponse(response, String(request.id), maxResponseBytes)
+            : JSON.parse((await readResponseBufferWithLimit(response, maxResponseBytes)).toString("utf8"));
+          if (response.status < 400) {
+            try {
+              assertJsonRpcResponse(body, request.id);
+            } catch (error: any) {
+              // Preserve a valid upstream JSON-RPC error body for the gateway's
+              // normal error projection, while rejecting mismatched or malformed
+              // response envelopes for every modern MCP method.
+              if (!error?.mcpJsonRpcError) throw error;
+            }
+          }
+          return { status: response.status, headers: Object.fromEntries(response.headers.entries()), body };
+        } finally {
+          await pinned?.close?.().catch?.(() : any => {});
+          abortContext.dispose();
+        }
+      }
+    };
+    return createModernUpstreamAdapter({ transport });
+  }
+
+  /** Single configured modern/legacy transport for platform tools and Console's governed forward path. */
+  async function invokeTypedMcp(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationRecord, params: Record<string, any>, options: Record<string, any> = {}) : Promise<UpstreamGatewayInvokeTypedMcpResult> {
+    const config: any = await mcpServiceConfigWithCredentials(service, operation, { purpose: "execution", subject: options.subject });
+    const protocolVersion: any = text(config.protocolVersion) || "2025-06-18";
+    const requestId: any = `gateway-${randomUUID()}`;
+    if (protocolVersion === "2026-07-28") {
+      if (text(config.transport) === "stdio") throw Object.assign(new Error("Modern stdio peer transport is not configured."), { status: 501, reasonCode: "upstream_mcp_transport_unavailable" });
+      const adapter: any = createConfiguredModernMcpAdapter(config, operation.responseMaxBytes, options);
+      try {
+        const response: any = await adapter.invoke({ request: { id: requestId, method: "tools/call", params,
+          protocolVersion, headers: {}, ...(options.requestState !== undefined ? { requestState: options.requestState } : {}) },
+          route: { upstreamName: params.name, protocolVersion }, signal: options.signal });
+        const body = object(response.body);
+        if (response.status < 200 || response.status >= 300) {
+          return { requestId, protocolVersion, httpFailure: { status: response.status } };
+        }
+        if (Object.hasOwn(body, "error")) {
+          return {
+            requestId,
+            protocolVersion,
+            jsonRpcError: {
+              jsonrpc: "2.0",
+              id: requestId,
+              error: { code: -32000, message: "Upstream MCP request failed." }
+            }
+          };
+        }
+        const result = body.result;
+        if (!result || typeof result !== "object" || Array.isArray(result) || typeof result.resultType !== "string") {
+          throw Object.assign(new Error("Upstream MCP tool returned an invalid result."), {
+            status: 502,
+            reasonCode: "upstream_mcp_response_invalid"
+          });
+        }
+        if (result.resultType === "input_required") {
+          if (!Array.isArray(result.inputRequests) && (!result.inputRequests || typeof result.inputRequests !== "object") && typeof result.requestState !== "string") {
+            throw Object.assign(new Error("Upstream MCP tool returned an invalid result."), {
+              status: 502,
+              reasonCode: "upstream_mcp_response_invalid"
+            });
+          }
+        } else if (result.resultType === "complete") {
+          if (!Array.isArray(result.content) || (Object.hasOwn(result, "isError") && typeof result.isError !== "boolean")) {
+            throw Object.assign(new Error("Upstream MCP tool returned an invalid result."), {
+              status: 502,
+              reasonCode: "upstream_mcp_response_invalid"
+            });
+          }
+        } else {
+          throw Object.assign(new Error("Upstream MCP tool returned an unsupported result type."), {
+            status: 502,
+            reasonCode: "upstream_mcp_result_type_unnegotiated"
+          });
+        }
+        return { requestId, protocolVersion, result };
+      } finally { await adapter.close(); }
+    }
+    if (typeof upstreamMcpSessions.invokeGateway !== "function") throw Object.assign(new Error("Typed legacy MCP session port is unavailable."), { status: 503, reasonCode: "upstream_mcp_transport_unavailable" });
+    const response: any = await upstreamMcpSessions.invokeGateway(config, { method: "tools/call", params }, {
+      signal: options.signal,
+      onNotification: options.onNotification,
+      ...(Object.hasOwn(options, "timeoutMs") ? { timeoutMs: options.timeoutMs } : {}),
+      ...(typeof options.beforeSend === "function" ? { beforeSend: options.beforeSend } : {})
+    });
+    return { requestId, protocolVersion, result: response.result };
+  }
+
+  function eventDelay(milliseconds?: any, signal?: any) : any {
+    return new Promise((resolve?: any) : any => {
+      if (signal?.aborted) return resolve(null);
+      const onAbort = () : void => {
+        clearTimeout(timer);
+        resolve(null);
+      };
+      const timer: any = setTimeout(() : void => {
+        signal?.removeEventListener?.("abort", onAbort);
+        resolve(null);
+      }, milliseconds);
+      timer.unref?.();
+      signal?.addEventListener?.("abort", onAbort, { once: true });
+    });
+  }
+
+  async function ensureSkillHubEventSubscription(service: UpstreamGatewayServiceRecord, operation: UpstreamGatewayOperationSelection = {}) : Promise<void> {
+    if (typeof publishSkillHubUpdate !== "function" || skillHubEventSubscriptions.has(service.serviceId)) return;
+    const controller: AbortController = new AbortController();
+    let resolveReady: (value: boolean) => void = () : void => {};
+    const ready: Promise<boolean> = new Promise<boolean>((resolve: (value: boolean) => void) : void => { resolveReady = resolve; });
+    const state: UpstreamGatewaySkillHubSubscription = { controller, cursor: 0, ready, promise: null };
+    skillHubEventSubscriptions.set(service.serviceId, state);
+    state.promise = (async () : Promise<void> => {
+      let retryMs: any = 250;
+      let firstAttempt = true;
+      while (!controller.signal.aborted) {
+        let pinnedFetch: any = null;
+        try {
+          const endpoint: any = endpointsFor(service)[0];
+          const targetUrl: any = safeTargetUrl(service, { path: `/v1/events?cursor=${state.cursor}` }, {}, endpoint);
+          const credentials: any = await credentialMaterialFor(service, operation, { targetUrl });
+          pinnedFetch = await fetchConfiguredUpstream(service, targetUrl, {
+            method: "GET",
+            redirect: "manual",
+            signal: controller.signal,
+            headers: { ...configuredHeaders(service), ...credentials.headers }
+          }, `upstream-gateway.${service.serviceId}.events`);
+          const response: any = pinnedFetch.response;
+          if (!response.ok || !response.body) throw new Error("Skill Hub event subscription failed.");
+          // Reconcile the authoritative catalog after every connection. A
+          // process or journal failure can happen after a business commit but
+          // before its change hint becomes durable.
+          publishSkillHubUpdate(Object.freeze({
+            schemaVersion: "v0.0.1:meshrix:skill-hub-update-1",
+            revision: state.cursor,
+            operationId: "skill_hub.catalog.refresh"
+          }));
+          if (firstAttempt) { firstAttempt = false; resolveReady(true); }
+          retryMs = 250;
+          let buffer: any = "";
+          const decoder: any = new TextDecoder();
+          for await (const chunk of response.body) {
+            buffer += decoder.decode(chunk, { stream: true });
+            if (Buffer.byteLength(buffer, "utf8") > 64 * 1024) throw new Error("Skill Hub event frame limit exceeded.");
+            let separator: any;
+            while ((separator = /\r?\n\r?\n/u.exec(buffer))) {
+              const boundary: any = separator.index;
+              const frame: any = buffer.slice(0, boundary);
+              buffer = buffer.slice(boundary + separator[0].length);
+              const data: any = frame.split(/\r?\n/u)
+                .filter((line?: any) : any => line.startsWith("data:"))
+                .map((line?: any) : any => line.slice(5).trimStart())
+                .join("\n");
+              if (!data) continue;
+              const event: any = JSON.parse(data);
+              if (event?.eventType !== "skill-hub.catalog.changed" || !Number.isSafeInteger(event?.eventId) ||
+                  event.eventId <= state.cursor || !/^skill_hub\.[a-z][a-z0-9.]*$/u.test(String(event?.operationId || ""))) continue;
+              state.cursor = event.eventId;
+              publishSkillHubUpdate(Object.freeze({
+                schemaVersion: "v0.0.1:meshrix:skill-hub-update-1",
+                revision: event.serviceRevision,
+                operationId: event.operationId
+              }));
+            }
+          }
+        } catch {
+          if (firstAttempt) { firstAttempt = false; resolveReady(false); }
+          if (controller.signal.aborted) break;
+        } finally {
+          await pinnedFetch?.close?.().catch?.(() : any => {});
+        }
+        await eventDelay(retryMs, controller.signal);
+        retryMs = Math.min(retryMs * 2, 10_000);
+      }
+    })();
+    await state.ready;
+  }
+
+  function requireArtifactTransitPort() : any {
+    if (
+      !artifactTransitPort ||
+      typeof artifactTransitPort.openRead !== "function" ||
+      typeof artifactTransitPort.beginWrite !== "function" ||
+      typeof artifactTransitPort.commit !== "function" ||
+      typeof artifactTransitPort.abort !== "function"
+    ) {
+      throw payloadRepresentationError(
+        "artifact_transit_unavailable",
+        "Artifact transit is unavailable.",
+        503
+      );
+    }
+    return artifactTransitPort;
+  }
+
+  function rawHeader(headers: Record<string, any> = {}, name: any = "") : any {
+    const value: any = headers?.[name.toLowerCase()];
+    return Array.isArray(value) ? String(value[0] || "") : String(value || "");
+  }
+
+  function artifactNameFromHeaders(headers: Record<string, any> = {}) : any {
+    const disposition: any = rawHeader(headers, "content-disposition");
+    const encoded: any = /filename\*=UTF-8''([^;]+)/iu.exec(disposition)?.[1];
+    if (encoded) {
+      try {
+        return decodeURIComponent(encoded);
+      } catch {
+        // Fall through to the quoted filename.
+      }
+    }
+    return /filename="([^"]+)"/iu.exec(disposition)?.[1] ||
+      /filename=([^;\s]+)/iu.exec(disposition)?.[1] ||
+      "upstream-artifact.bin";
+  }
+
+  function requestArguments(input: Record<string, any> = {}) : any {
+    return object(input.arguments || input.params || input.payload || input.body);
+  }
+
+  function timeoutFor(operation?: any, options: Record<string, any> = {}, service: any = null) : any {
+    if (Object.hasOwn(options, "timeoutMs") && options.timeoutMs === null) return null;
+    const requestedTimeoutMs: any = normalizeOptionalTimeoutMs(options.timeoutMs, "request.timeoutMs");
+    const operationTimeoutMs: any = normalizeOptionalTimeoutMs(operation?.timeoutMs, "operation.timeoutMs");
+    const mcpTimeoutMs: any = service?.serviceProtocol === "mcp"
+      ? normalizeOptionalTimeoutMs(service.mcp?.timeoutMs, "mcp.timeoutMs")
+      : undefined;
+    const budgets: number[] = [requestedTimeoutMs, operationTimeoutMs, mcpTimeoutMs]
+      .filter((value?: any) : any => value !== undefined);
+    return budgets.length ? Math.min(...budgets) : null;
+  }
+
+  async function requestBodySourceFor(operation?: any, input?: any, subject?: any, readAccess: Record<string, any> = {}) : Promise<any> {
+    const transport: any = compilePayloadTransport(operation);
+    const requestPolicy: any = transport.request;
+    if (requestPolicy.mode === "artifact_body") {
+      const argumentsValue: any = requestArguments(input);
+      return createArtifactBodySource({
+        reference: argumentsValue[requestPolicy.artifactArgument],
+        artifactPort: requireArtifactTransitPort(),
+        subject,
+        readAccess,
+        maxBytes: requestPolicy.maxBytes
+      });
+    }
+    if (requestPolicy.mode === "artifact_multipart") {
+      return createMultipartBodyStream({
+        mapping: requestPolicy.multipart,
+        fields: requestArguments(input),
+        artifactPort: requireArtifactTransitPort(),
+        subject,
+        readAccess,
+        maxBytes: requestPolicy.maxBytes
+      });
+    }
+    if (requestPolicy.mode === "opaque_stream") {
+      throw payloadRepresentationError(
+        "artifact_staging_required",
+        "Opaque request streaming requires the native HTTP transit route.",
+        409
+      );
+    }
+    const rpcMethod: any = operation.protocol === "json-rpc"
+      ? configuredRpcMethod(operation)
+      : "";
+    const source: any = operation.protocol === "json-rpc"
+      ? jsonRpcRequestBody(input, operation, rpcMethod)
+      : input.bodyJson !== undefined
+        ? input.bodyJson
+        : input.body === undefined
+          ? object(input.payload)
+          : input.body;
+    const bytes: any = Buffer.from(typeof source === "string" ? source : JSON.stringify(source), "utf8");
+    if (bytes.byteLength > requestPolicy.maxBytes) {
+      throw payloadRepresentationError("request_body_too_large", "Structured request exceeds its published limit.", 413);
+    }
+    return Object.freeze({
+      contentType: "application/json",
+      contentLength: bytes.byteLength,
+      replayable: true,
+      metadata: null,
+      openBody: () : any => Readable.from([bytes]),
+      structuredValue: source
+    });
+  }
+
+  async function forwardRepresentationOperation({
+    service,
+    operation,
+    input,
+    subject,
+    options,
+    traffic,
+    endpoint
+  }: Record<string, any>) : Promise<any> {
+    const effectiveTimeoutMs: any = timeoutFor(operation, options, service);
+    const transport: any = compilePayloadTransport(operation);
+    const targetUrl: any = safeTargetUrl(service, operation, input, endpoint);
+    const method: any = configuredHttpMethod(operation);
+    const credentials: any = await credentialMaterialFor(service, operation, { targetUrl });
+    const sinkInput: any = clone(input);
+    const providerInput: any = input?.[PROJECTED_PROVIDER_INPUT];
+    const sinkInputDigest: any = digestFinalProtectedSinkInput(
+      providerInput ? clone(providerInput) : sinkInput
+    );
+    const targetFacts: any = structuredTargetFacts({
+      service,
+      operation,
+      input: sinkInput,
+      endpoint,
+      inputDigest: sinkInputDigest
+    });
+    const finalProtectedSinkPermit: any = options.finalProtectedSinkPermit;
+    if (!finalProtectedSinkPermit && claimProtectedSinkAttempt === claimFinalProtectedSinkAttempt) {
+      finalEffectAuthorityRequired();
+    }
+    const governedExecutionReceipt: any = await claimProtectedSinkAttempt({
+      attempt: finalProtectedSinkPermit,
+      targetSelector: targetFacts.targetSelector,
+      effect: targetFacts.effect,
+      resourceRevision: targetFacts.resourceRevision,
+      resolveCurrentResource: async () : Promise<any> => {
+        const currentFacts: any = currentStructuredTargetFacts({
+          serviceId: service.serviceId,
+          operationKey: operation.operationKey,
+          endpointId: endpoint?.endpointId || "primary",
+          input: sinkInput,
+          inputDigest: sinkInputDigest
+        });
+        return Object.freeze({
+          effect: currentFacts.effect,
+          resourceRevision: currentFacts.resourceRevision
+        });
+      }
+    });
+    const source: any = ["GET", "HEAD"].includes(method)
+      ? null
+      : await requestBodySourceFor(operation, input, subject, {
+          governedExecutionReceipt,
+          signal: options.signal || null
+        });
+    const headers: Record<string, any> = {
+      ...configuredHeaders(service),
+      ...credentials.headers,
+      ...(source?.contentType ? { "content-type": source.contentType } : {}),
+      ...(Number.isSafeInteger(source?.contentLength) ? { "content-length": String(source.contentLength) } : {}),
+      "x-meshrix-gateway-service": service.serviceId
+    };
+    const requestBodyMetadata: any = bodyMetadata(
+      source?.structuredValue,
+      operation.sensitiveBodyFields,
+      {
+        byteLength: Number(source?.contentLength || 0),
+        contentType: source?.contentType || ""
+      }
+    );
+    const startedAt: any = Date.now();
+    const abortContext: any = createForwardAbortContext(options.signal || null, effectiveTimeoutMs);
+    let pinnedRequest: any = null;
+    let artifactTransaction: UpstreamGatewayArtifactTransaction | null = null;
+    let artifactWriterPort: UpstreamGatewayArtifactTransitPort | null = null;
+    try {
+      pinnedRequest = await requestConfiguredUpstream(service, targetUrl, {
+        method,
+        headers,
+        body: source?.openBody?.(),
+        signal: abortContext.signal,
+        headersTimeout: effectiveTimeoutMs ?? 0,
+        bodyTimeout: effectiveTimeoutMs ?? 0
+      }, `upstream-gateway.${service.serviceId}.${operation.operationKey}.payload`);
+      const response: any = pinnedRequest.response;
+      const status: any = Number(response.statusCode || 0);
+      const contentType: any = rawHeader(response.headers, "content-type") || "application/octet-stream";
+      const responseHeaders: any = selectResponseRepresentationHeaders(response.headers, transport.response);
+      const declaredLength: any = Number(rawHeader(response.headers, "content-length") || 0);
+      if (Number.isFinite(declaredLength) && declaredLength > transport.response.maxBytes) {
+        response.body?.destroy?.();
+        throw payloadRepresentationError(
+          "upstream_response_too_large",
+          "Upstream response exceeds its published limit.",
+          502
+        );
+      }
+      recordEndpointOutcome(service, operation, endpoint, {
+        statusCode: status,
+        ok: status >= 200 && status < 300
+      });
+      if (transport.response.mode === "structured_json") {
+        const buffer: any = await readAsyncBodyBufferWithLimit(
+          response.body || Readable.from([]),
+          response.headers,
+          transport.response.maxBytes
+        );
+        assertDeclaredSha256Digest(
+          responseHeaders,
+          createHash("sha256").update(buffer).digest("hex"),
+          "response"
+        );
+        const responsePolicy: any = assertResponseBodyPolicy(contentType, buffer, operation);
+        const audit: any = appendAudit("upstream.forward.completed", {
+          serviceId: service.serviceId,
+          operationKey: operation.operationKey,
+          protocol: operation.protocol,
+          method,
+          target: summarizeUrl(targetUrl),
+          endpoint: traffic.endpoint,
+          circuit: traffic.circuit,
+          statusCode: status,
+          requestBody: requestBodyMetadata,
+          responseBody: bodyMetadata(Buffer.from(buffer).toString("utf8"), operation.sensitiveBodyFields, {
+            byteLength: buffer.byteLength,
+            contentType
+          }),
+          responsePolicy: {
+            schemaValidated: responsePolicy.schemaValidated === true,
+            projectionValidated: responsePolicy.projectionValidated === true,
+            publicFieldCount: asArray(operation.publicResponseFields).length
+          },
+          responseBytes: buffer.byteLength,
+          durationMs: Date.now() - startedAt
+        });
+        recordMetric({ serviceId: service.serviceId, statusCode: status, failed: status < 200 || status >= 300 });
+        persist();
+        return {
+          protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+          ok: status >= 200 && status < 300,
+          serviceId: service.serviceId,
+          operationKey: operation.operationKey,
+          dynamicCapability: operation.dynamicCapability,
+          upstream: {
+            status,
+            endpoint: traffic.endpoint,
+            contentType,
+            responseBytes: buffer.byteLength,
+            durationMs: Date.now() - startedAt
+          },
+          response: responseBodyForPublic(contentType, buffer, operation.sensitiveBodyFields, operation.publicResponseFields),
+          auditId: audit.auditId
+        };
+      }
+      const artifactResponse: any = transport.response.mode === "artifact" || options.responseAdapter === "artifact";
+      if (!artifactResponse) {
+        response.body?.destroy?.();
+        throw payloadRepresentationError(
+          "opaque_response_requires_stream",
+          "Opaque responses require native HTTP transit or the artifact response adapter.",
+          409
+        );
+      }
+      const artifactPort: UpstreamGatewayArtifactTransitPort = requireArtifactTransitPort();
+      artifactWriterPort = artifactPort;
+      artifactTransaction = await artifactPort.beginWrite(subject, {
+        name: artifactNameFromHeaders(response.headers),
+        mediaType: contentType
+      }, {
+        maxBytes: transport.response.maxBytes
+      });
+      const counter: any = createPayloadCountingTransform(transport.response.maxBytes, {
+        tooLargeCode: "upstream_response_too_large",
+        tooLargeStatus: 502
+      });
+      await pipeline(
+        response.body || Readable.from([]),
+        counter,
+        artifactTransaction.writable,
+        { signal: abortContext.signal }
+      );
+      assertDeclaredSha256Digest(responseHeaders, counter.sha256, "response");
+      const resource: any = await artifactPort.commit(artifactTransaction, {
+        byteLength: counter.byteLength,
+        sha256: counter.sha256
+      });
+      artifactTransaction = null;
+      const audit: any = appendAudit("upstream.forward.completed", {
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        protocol: operation.protocol,
+        method,
+        target: summarizeUrl(targetUrl),
+        endpoint: traffic.endpoint,
+        circuit: traffic.circuit,
+        statusCode: status,
+        requestBody: requestBodyMetadata,
+        responseBody: bodyMetadata(undefined, operation.sensitiveBodyFields, {
+          byteLength: resource.byteLength,
+          contentType
+        }),
+        responseBytes: resource.byteLength,
+        responseRepresentation: "artifact",
+        durationMs: Date.now() - startedAt
+      });
+      recordMetric({ serviceId: service.serviceId, statusCode: status, failed: status < 200 || status >= 300 });
+      persist();
+      return {
+        protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+        ok: status >= 200 && status < 300,
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        dynamicCapability: operation.dynamicCapability,
+        upstream: {
+          status,
+          endpoint: traffic.endpoint,
+          contentType,
+          responseBytes: resource.byteLength,
+          durationMs: Date.now() - startedAt
+        },
+        response: { artifact: resource, headers: responseHeaders },
+        resource,
+        auditId: audit.auditId
+      };
+    } catch (error: any) {
+      if (artifactTransaction) {
+        await artifactWriterPort?.abort(artifactTransaction, String(error?.code || "artifact_write_aborted")).catch(() : any => {});
+      }
+      const callerAborted: any = abortContext.callerAborted();
+      const timedOut: any = !callerAborted && (abortContext.timedOut() || error?.name === "AbortError");
+      const status: any = callerAborted ? 499 : timedOut ? 504 : error?.status || 502;
+      const reasonCode: any = callerAborted
+        ? "upstream_forward_cancelled"
+        : timedOut
+          ? "upstream_forward_timeout"
+          : text(error?.reasonCode || error?.code || "upstream_forward_failed");
+      recordEndpointOutcome(service, operation, endpoint, { statusCode: status, ok: false });
+      recordMetric({ serviceId: service.serviceId, statusCode: status, failed: true });
+      const audit: any = appendAudit("upstream.forward.failed", {
+        serviceId: service.serviceId,
+        operationKey: operation.operationKey,
+        protocol: operation.protocol,
+        method,
+        target: summarizeUrl(targetUrl),
+        endpoint: traffic.endpoint,
+        circuit: traffic.circuit,
+        statusCode: status,
+        requestBody: requestBodyMetadata,
+        reasonCode,
+        durationMs: Date.now() - startedAt
+      });
+      persist();
+      throw Object.assign(error instanceof Error ? error : new Error("Upstream gateway forwarding failed."), {
+        status,
+        reasonCode,
+        audit
+      });
+    } finally {
+      await pinnedRequest?.close?.().catch?.(() : any => {});
+      abortContext.dispose();
+    }
+  }
+
+  async function ensureMcpToolCache(service: UpstreamGatewayServiceRecord, {
+    refresh = false,
+    signal = null,
+    onNotification = null,
+    purpose = "discovery",
+    countCacheHit = false
+  }: UpstreamGatewayCallOptions = {}) : Promise<UpstreamGatewayMcpToolCacheEntry> {
+    if (service.serviceProtocol !== "mcp") {
+      return cacheEntryFromTools([]);
+    }
+    if (closed || closePromise || mcpRegistryCloseController.signal.aborted) throw discoveryRegistryClosedError();
+    if (signal?.aborted) throw discoveryCancelledError(signal.reason);
+    let config: UpstreamGatewayResolvedMcpServiceConfig;
+    const preparation: UpstreamGatewayMcpToolConfigPreparation = trackMcpToolConfigPreparation(service.serviceId);
+    try {
+      const signals: AbortSignal[] = [preparation.controller.signal, mcpRegistryCloseController.signal];
+      if (signal) signals.push(signal);
+      const configSignal: AbortSignal = AbortSignal.any(signals);
+      config = await waitForAbortable(mcpServiceConfigWithCredentials(service, {
+        operationKey: "tools/list",
+        requiredScopes: ["gateway:read"]
+      }, { purpose: purpose === "health" ? "health" : "discovery" }), configSignal);
+    } catch (cause: any) {
+      finishMcpToolConfigPreparation(service.serviceId, preparation);
+      if (signal?.aborted) throw discoveryCancelledError(cause);
+      if (mcpRegistryCloseController.signal.aborted) throw discoveryRegistryClosedError();
+      if (cause?.name === "AbortError") throw discoveryCancelledError(cause);
+      throw Object.assign(new Error("Upstream MCP discovery failed."), {
+        status: 502,
+        reasonCode: "upstream_mcp_discovery_failed",
+        cause
+      });
+    }
+    let cacheKey: string;
+    let flight: UpstreamGatewayMcpToolRefreshFlight | null | undefined;
+    let waiter: UpstreamGatewayMcpToolRefreshWaiter;
+    try {
+      if (signal?.aborted) throw discoveryCancelledError(signal.reason);
+      if (preparation.controller.signal.aborted) throw discoveryCancelledError(preparation.controller.signal.reason);
+      if (closed || closePromise || mcpRegistryCloseController.signal.aborted) throw discoveryRegistryClosedError();
+      cacheKey = mcpToolCacheKey(service, config);
+      let cachedRecord: UpstreamGatewayMcpToolCacheRecord | undefined = mcpToolCache.get(service.serviceId);
+      if (cachedRecord && cachedRecord.cacheKey !== cacheKey) {
+        mcpToolCache.delete(service.serviceId);
+        cachedRecord = undefined;
+      }
+      const cached: UpstreamGatewayMcpToolCacheEntry | undefined = cachedRecord?.entry;
+      const ttlMs: number = Number(service.mcp?.toolsCacheTtlMs || 0);
+      if (!refresh && cached && ttlMs > 0 && Date.now() - cached.loadedAt <= ttlMs) {
+        if (countCacheHit) targetedCallMapHits += 1;
+        finishMcpToolConfigPreparation(service.serviceId, preparation);
+        return cached;
+      }
+      flight = mcpToolRefreshInFlight.get(cacheKey);
+      if (flight?.controller.signal.aborted) {
+        removeDeferredMcpToolRefresh(service.serviceId, cacheKey, flight);
+        mcpToolRefreshInFlight.delete(cacheKey);
+        flight = null;
+      }
+      if (!flight) {
+        const controller: AbortController = new AbortController();
+        const waiters: Set<UpstreamGatewayMcpToolRefreshWaiter> = new Set<UpstreamGatewayMcpToolRefreshWaiter>();
+        const work: Promise<UpstreamGatewayMcpToolCacheEntry> = (async () : Promise<UpstreamGatewayMcpToolCacheEntry> => {
+          let listed: any;
+          try {
+            serviceDiscoveryCount += 1;
+            if (text(config.protocolVersion) === "2026-07-28") {
+              if (text(config.transport) === "stdio") {
+                throw Object.assign(new Error("Modern stdio peer transport is not configured."), {
+                  status: 501,
+                  reasonCode: "upstream_mcp_transport_unavailable"
+                });
+              }
+              const adapter: any = createConfiguredModernMcpAdapter(config, 8 * 1024 * 1024);
+              try {
+                const tools: any = await collectCompleteMcpToolsList(async (cursor?: any) : Promise<any> => {
+                  const requestId: any = `gateway-list-${randomUUID()}`;
+                  const response: any = await adapter.invoke({
+                    request: {
+                      id: requestId,
+                      method: "tools/list",
+                      params: cursor === undefined ? {} : { cursor },
+                      protocolVersion: "2026-07-28",
+                      headers: {}
+                    },
+                    route: { upstreamName: "tools/list", protocolVersion: "2026-07-28" },
+                    signal: controller.signal
+                  });
+                  if (response.status >= 400) {
+                    throw Object.assign(new Error("Modern MCP tools/list request failed."), {
+                      code: "upstream_mcp_tools_list_failed",
+                      status: 502
+                    });
+                  }
+                  const result: any = assertJsonRpcResponse(object(response.body), requestId);
+                  if (result.resultType !== "complete") {
+                    throw Object.assign(new Error("Modern MCP tools/list returned an incomplete result."), {
+                      code: "upstream_mcp_tools_list_malformed",
+                      status: 502
+                    });
+                  }
+                  return result;
+                });
+                listed = { protocolVersion: "2026-07-28", tools };
+              } finally {
+                await adapter.close();
+              }
+            } else {
+              listed = await upstreamMcpSessions.listTools(config, {
+                signal: controller.signal,
+                onNotification
+              });
+            }
+          } catch (cause: any) {
+            if (controller.signal.aborted || cause?.name === "AbortError") {
+              throw discoveryCancelledError(cause);
+            }
+            if (cause?.reasonCode === "upstream_mcp_transport_unavailable") throw cause;
+            throw Object.assign(new Error("Upstream MCP discovery failed."), {
+              status: 502,
+              reasonCode: "upstream_mcp_discovery_failed",
+              cause
+            });
+          }
+          const claimedNames: Set<string> = new Set<string>();
+          const tools: any = asArray(listed.tools)
+            .filter((tool?: any) : any => text(tool.name))
+            .map((tool?: any) : any => publicUpstreamMcpTool({ service, tool, schemaPort, claimedNames }))
+            .filter((tool?: any) : any => tool !== null);
+          const entry: UpstreamGatewayMcpToolCacheEntry = cacheEntryFromTools(tools);
+          if (controller.signal.aborted) throw discoveryCancelledError(controller.signal.reason);
+          mcpToolCache.set(service.serviceId, { cacheKey, entry });
+          return entry;
+        })();
+        const nextFlight: UpstreamGatewayMcpToolRefreshFlight = { serviceId: service.serviceId, promise: work, controller, waiters };
+        flight = nextFlight;
+        mcpToolRefreshInFlight.set(cacheKey, flight);
+        const releaseFlight: () => void = () : void => {
+          removeDeferredMcpToolRefresh(service.serviceId, cacheKey, flight);
+          if (mcpToolRefreshInFlight.get(cacheKey) === flight) {
+            mcpToolRefreshInFlight.delete(cacheKey);
+          }
+        };
+        void work.then(releaseFlight, releaseFlight);
+      }
+      waiter = { signal, onNotification };
+      flight.waiters.add(waiter);
+      removeDeferredMcpToolRefresh(service.serviceId, cacheKey, flight);
+      finishMcpToolConfigPreparation(service.serviceId, preparation);
+    } catch (cause: any) {
+      finishMcpToolConfigPreparation(service.serviceId, preparation);
+      throw cause;
+    }
+    try {
+      return await waitForAbortable(flight.promise, signal);
+    } finally {
+      flight.waiters.delete(waiter);
+      if (flight.waiters.size === 0 && mcpToolRefreshInFlight.get(cacheKey) === flight) {
+        if (hasMcpToolConfigPreparations(service.serviceId)) {
+          deferMcpToolRefreshCancellation(service.serviceId, cacheKey, flight);
+        } else {
+          cancelMcpToolRefreshIfUnobserved(service.serviceId, cacheKey, flight);
+        }
+      }
+    }
+  }
+
+  async function listMcpToolsForService(service: UpstreamGatewayServiceRecord, options: UpstreamGatewayCallOptions = {}) : Promise<readonly UpstreamGatewayPublicMcpTool[]> {
+    const entry: UpstreamGatewayMcpToolCacheEntry = await ensureMcpToolCache(service, options);
+    return clone(entry.tools);
+  }
+
+  function serviceForPublicMcpToolName(publicName?: unknown) : Readonly<{
+    service: UpstreamGatewayServiceRecord;
+    upstreamToolName: string;
+  }> | null {
+    const parsed: Readonly<{ prefix: string; upstreamToolName: string }> | null = parsePublicUpstreamMcpToolName(publicName);
+    if (!parsed) return null;
+    const service: UpstreamGatewayServiceRecord | undefined = mcpServicesByPublicPrefix.get(parsed.prefix);
+    if (!service) return null;
+    targetedServiceIndexHits += 1;
+    return {
+      service,
+      upstreamToolName: parsed.upstreamToolName
+    };
+  }
+
+  async function resolvedMcpOperationForInput(service?: any, operation?: any, input: Record<string, any> = {}, options: Record<string, any> = {}, catalogEntry: any = null) : Promise<any> {
+    if (service.serviceProtocol !== "mcp" && operation.protocol !== "mcp") {
+      return operation;
+    }
+    const upstreamToolName: any = text(
+      input.toolName ||
+        input.name ||
+        input.mcpTool ||
+        input.upstreamToolName ||
+        operation.toolName ||
+        (operation.operationKey !== "tools/call" ? operation.operationKey : "")
+    );
+    if (!upstreamToolName) {
+      return operation;
+    }
+    const entry: any = catalogEntry || await ensureMcpToolCache(service, options);
+    const publicTool: any =
+      (text(input.publicToolName) && entry.byPublicName.get(input.publicToolName)) ||
+      (text(input.upstreamPublicToolName) && entry.byPublicName.get(input.upstreamPublicToolName)) ||
+      entry.byUpstreamName.get(upstreamToolName) ||
+      null;
+    if (!publicTool) {
+      return operation;
+    }
+    const meta: any = object(publicTool._meta);
+    return {
+      ...operation,
+      inputSchema: publicTool.inputSchema,
+      dynamicCapability: meta.dynamicCapability || compileUpstreamOperationCapability(service, operation, { upstreamToolName }),
+      requiredScopes: asArray(meta.requiredScopes || operation.requiredScopes).map(text).filter(Boolean),
+      risk: text(meta.risk || operation.risk),
+      requiresApproval: meta.requiresApproval === true ||
+        meta.risk === "repair_write" ||
+        meta.risk === "destructive" ||
+        operation.requiresApproval === true
+    };
+  }
+
+  /**
+   * Narrow the manifest snapshot container through the same checks the commit
+   * path always performed; per-service validation happened in the compiler.
+   */
+  function manifestSnapshotEntries(snapshot?: unknown) : Readonly<{
+    setRevision: number;
+    setDigest: string;
+    serviceEntries: readonly (readonly [string, UpstreamGatewayServiceRecord])[];
+  }> {
+    const source: any = object(snapshot);
+    const entries: any = source.serviceEntries ||
+      (source.services instanceof Map ? [...source.services.entries()] : null);
+    if (!Array.isArray(entries) || !Number.isSafeInteger(source.setRevision)) {
+      throw new TypeError("Upstream gateway manifest snapshot is invalid.");
+    }
+    return {
+      setRevision: source.setRevision,
+      setDigest: source.setDigest,
+      serviceEntries: entries
+    };
+  }
+
+  function capturedManifestSnapshotState(state?: unknown) : UpstreamGatewayManifestSnapshotState {
+    const source: any = object(state);
+    if (!Array.isArray(source.serviceEntries) || !Array.isArray(source.projectedOperationTargets)) {
+      throw new TypeError("Upstream gateway manifest snapshot rollback state is invalid.");
+    }
+    return source;
+  }
+
+  return {
+    protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+    listServices() : UpstreamGatewayServiceListResult {
+      const items: readonly UpstreamGatewayPublicService[] = [...services.values()].map(publicService);
+      return {
+        protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+        items,
+        count: items.length
+      };
+    },
+    getService(serviceId?: unknown) : UpstreamGatewayPublicService {
+      return publicService(requireService(serviceId));
+    },
+    evaluateProjectedOperationAudience({
+      grant = null,
+      restriction = null,
+      subject = null,
+      tool = null,
+      purpose = "discovery"
+    }: Record<string, any> = {}) : UpstreamGatewayAudienceDecision {
+      if (tool?.upstreamProjectedOperation !== true) {
+        return Object.freeze({
+          allowed: true,
+          reasonCode: "audience_not_applicable",
+          purpose: purpose === "execution" ? "execution" : "discovery",
+          visibleMetadata: true
+        });
+      }
+      const serviceId: any = text(tool.serviceId || tool.dynamicCapability?.serviceId);
+      const service: any = services.get(serviceId) || null;
+      return evaluateAudienceDecision({
+        grant,
+        restriction,
+        subject,
+        service,
+        tagStore: resolvedTagStore,
+        purpose,
+        operation: {
+          id: text(tool.operationId),
+          toolId: text(tool.id),
+          requiredScopes: asArray(tool.requiredScopes),
+          toolsets: asArray(tool.toolsets),
+          safety: { risk: text(tool.risk || tool.dynamicCapability?.risk || "read_only") },
+          _meta: {
+            serviceId,
+            risk: text(tool.risk || tool.dynamicCapability?.risk || "read_only"),
+            dynamicCapability: tool.dynamicCapability || null
+          }
+        }
+      });
+    },
+    evaluateDiscoveredMcpToolAudience({
+      grant = null,
+      restriction = null,
+      subject = null,
+      tool = null,
+      purpose = "discovery"
+    }: Record<string, any> = {}) : UpstreamGatewayAudienceDecision {
+      const meta: any = object(tool?._meta);
+      if (meta.upstreamMcp !== true) {
+        return Object.freeze({
+          allowed: false,
+          reasonCode: "audience_operation_unavailable",
+          purpose: purpose === "execution" ? "execution" : "discovery",
+          visibleMetadata: false
+        });
+      }
+      const service: any = services.get(text(meta.serviceId)) || null;
+      return evaluateAudienceDecision({
+        grant,
+        restriction,
+        subject,
+        service,
+        tagStore: resolvedTagStore,
+        purpose,
+        operation: {
+          id: text(tool.name),
+          toolId: text(tool.name),
+          requiredScopes: asArray(meta.requiredScopes),
+          toolsets: asArray(meta.toolsets),
+          safety: { risk: text(meta.risk || meta.dynamicCapability?.risk || "read_only") },
+          _meta: {
+            upstreamMcp: true,
+            serviceId: text(meta.serviceId),
+            risk: text(meta.risk || meta.dynamicCapability?.risk || "read_only"),
+            dynamicCapability: meta.dynamicCapability || null
+          }
+        }
+      });
+    },
+    async listMcpTools(input: Record<string, any> = {}, options: UpstreamGatewayCallOptions = {}) : Promise<UpstreamGatewayMcpToolListResult> {
+      const requestedServiceId: any = text(input.serviceId || "");
+      const refresh: any = input.refresh === true;
+      const query: any = text(input.query || "").slice(0, 200).toLowerCase();
+      const items: any[] = [];
+      let attemptedMcp: any = 0;
+      let succeededMcp: any = 0;
+      let lastMcpError: any = null;
+      const selected: any = requestedServiceId
+        ? [services.get(requestedServiceId)].filter(Boolean)
+        : [...services.values()];
+      for (const service of selected) {
+        if (service.disabled) continue;
+        if (service.serviceProtocol === "mcp") {
+          attemptedMcp += 1;
+          try {
+            const tools: any = await listMcpToolsForService(service, {
+              refresh,
+              signal: options.signal || null,
+              onNotification: options.onNotification || null
+            });
+            succeededMcp += 1;
+            items.push(...tools);
+          } catch (error: any) {
+            lastMcpError = error;
+            if (requestedServiceId) throw error;
+          }
+        }
+      }
+      if (attemptedMcp > 0 && succeededMcp === 0 && lastMcpError) {
+        throw lastMcpError;
+      }
+      const filtered: any = query
+        ? items.filter((tool: any) : any =>
+          text(tool.name).toLowerCase().includes(query) ||
+          text(tool.title).toLowerCase().includes(query) ||
+          text(tool.description).toLowerCase().includes(query)
+        )
+        : items;
+      return {
+        protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+        items: filtered,
+        count: filtered.length
+      };
+    },
+    getMcpServiceForPublicToolName(publicName?: unknown) : UpstreamGatewayPublicService | null {
+      const target: any = serviceForPublicMcpToolName(publicName);
+      return target ? publicService(target.service) : null;
+    },
+    async resolveMcpToolByPublicName(publicName?: unknown, options: UpstreamGatewayCallOptions = {}) : Promise<UpstreamGatewayPublicMcpTool | null> {
+      const target: any = serviceForPublicMcpToolName(publicName);
+      if (!target) return null;
+      const entry: any = await ensureMcpToolCache(target.service, {
+        signal: options.signal || null,
+        onNotification: options.onNotification || null
+      });
+      const tool: any = entry.byPublicName.get(publicName) || null;
+      return tool ? clone(tool) : null;
+    },
+    async callMcpToolByPublicName(publicName: any = "", input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<UpstreamGatewayMcpToolCallResult> {
+      try {
+        const forwarded: any = await this.executePublishedMcpRoute(publicName, { ...input, arguments: object(input.arguments || input.args || input.input || input.body || input.payload) }, subject,
+          { ...options, ...(input.requestState === undefined ? {} : { requestState: input.requestState }) });
+        const body: any = object(forwarded?.body);
+        if (forwarded?.status >= 400) {
+          throw Object.assign(new Error("Upstream MCP tool failed."), {
+            status: Number(forwarded.status || 502),
+            reasonCode: "upstream_mcp_call_failed"
+          });
+        }
+        if (Object.hasOwn(body, "error")) {
+          throw Object.assign(new Error("Upstream MCP tool failed."), {
+            status: 502,
+            reasonCode: "upstream_jsonrpc_error"
+          });
+        }
+        const result: any = body.result ?? forwarded?.body;
+        return { protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION, ok: true, serviceId: forwarded?.serviceId, operationKey: "tools/call",
+          upstream: { protocol: "mcp", toolName: forwarded?.upstreamToolName }, response: result, auditId: forwarded?.auditId || "" };
+      } catch (error: any) {
+        if (error?.status === 404) throw error;
+        throw Object.assign(new Error("Upstream MCP forwarding failed."), { status: Number(error?.status || 502), reasonCode: text(error?.reasonCode || "upstream_mcp_call_failed") });
+      }
+    },
+    /** Governed gateway final sink: resolves the currently configured target and calls its real transport. */
+    async executePublishedMcpRoute(publicName: any = "", input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<UpstreamMcpRouteForwardResult> {
+      return withRegistryWork(options, async (registryOptions?: any) : Promise<any> => {
+      options = registryOptions;
+      const target: any = serviceForPublicMcpToolName(publicName);
+      if (!target) throw Object.assign(new Error("Published MCP route is unavailable."), { status: 404 });
+      authorizeMcpDiscoverySubject(subject);
+      const entry: any = await ensureMcpToolCache(target.service, { signal: options.signal || null, onNotification: options.onNotification || null, countCacheHit: true });
+      if (!entry.byPublicName.get(publicName)) throw Object.assign(new Error("Published MCP tool was removed."), { status: 404 });
+      const service: any = requireService(target.service.serviceId);
+      const configuredOperation: any = operationWithUpstreamCapability(service, operationFor(service, "tools/call"));
+      const operation: any = operationWithUpstreamCapability(service, await resolvedMcpOperationForInput(service, configuredOperation, {
+        serviceId: service.serviceId, operationKey: "tools/call", toolName: target.upstreamToolName, upstreamPublicToolName: publicName, arguments: object(input.arguments)
+      }, options, entry));
+      const effectiveTimeoutMs: any = timeoutFor(operation, options, service);
+      const preview: any = authorizeForwardPreview(service, operation, subject);
+      if (!preview.traffic.allowed) {
+        // Refuse under the same stable capacity code `withTrafficSlot` declares, so the
+        // declared public failure carries the throttling class rather than the origin fallback.
+        const deniedReason: any = text(preview.traffic.deniedReason) || "traffic_limit_exceeded";
+        throw Object.assign(new Error("Upstream gateway traffic limit exceeded."), {
+          code: `upstream_gateway_${deniedReason}`,
+          reasonCode: `upstream_gateway_${deniedReason}`,
+          status: 429,
+          details: preview
+        });
+      }
+      rejectCallerApprovalOverride(input, service, operation, subject);
+      if (operation.requiresApproval && !trustedApprovalForForward(subject, operation)) return pendingApproval(service, operation);
+      enforceRequestContentPolicy(service, operation, input);
+      await enforceUpstreamPolicyGate(service, operation, input, subject, options.signal || null);
+      return withTrafficSlot(service, operation, preview, async (_traffic?: any, endpoint?: any) : Promise<any> => {
+        const abortContext: any = createForwardAbortContext(options.signal || null, effectiveTimeoutMs);
+        const startedAt = Date.now();
+        try {
+        const args = object(input.arguments);
+        const readOnly = text(operation.risk || operation.safety?.risk).toLowerCase() === "read_only";
+        const mcpCallInput: Record<string, any> = {
+          name: target.upstreamToolName,
+          arguments: args,
+          ...(options.requestState !== undefined ? { requestState: options.requestState } : {}),
+          ...(input.inputResponses !== undefined ? { inputResponses: input.inputResponses } : {})
+        };
+        let effectLifecycle: any = null;
+        if (!readOnly) {
+          const lifecyclePort = options.platformEffectLifecycle;
+          if (typeof lifecyclePort?.prepare !== "function") {
+            throw Object.assign(new Error("Durable operation proof is unavailable for this MCP effect."), {
+              code: "operation_proof_unavailable",
+              status: 503
+            });
+          }
+          const targetFacts = structuredTargetFacts({
+            service,
+            operation,
+            input: mcpCallInput,
+            endpoint,
+            inputDigest: digestFinalProtectedSinkInput(mcpCallInput)
+          });
+          effectLifecycle = await lifecyclePort.prepare({
+            service,
+            operation,
+            input: mcpCallInput,
+            endpoint,
+            targetFacts,
+            upstreamToolName: target.upstreamToolName,
+            subject
+          });
+        }
+        const beforeSend = effectLifecycle ? async () : Promise<void> => {
+          await effectLifecycle.beginDispatch();
+          await claimMcpProtectedSink(service, operation, mcpCallInput, endpoint, {
+            ...options,
+            finalProtectedSinkPermit: effectLifecycle.finalProtectedSinkPermit
+          });
+          effectLifecycle.markDispatchStarted();
+        } : undefined;
+        const { requestId, result, httpFailure, jsonRpcError, protocolVersion }: any = await invokeTypedMcp(service, operation, mcpCallInput, {
+          ...options,
+          subject,
+          signal: abortContext.signal,
+          timeoutMs: null,
+          ...(beforeSend ? { beforeSend } : {})
+        });
+        if (httpFailure) {
+          const audit: any = appendAudit("upstream.mcp.gateway.failed", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            upstreamToolName: target.upstreamToolName,
+            protocol: "mcp",
+            endpoint: publicEndpoint(endpoint),
+            statusCode: 502,
+            reasonCode: "upstream_mcp_call_failed",
+            durationMs: Date.now() - startedAt
+          });
+          recordEndpointOutcome(service, operation, endpoint, { statusCode: 502, ok: false });
+          recordMetric({ serviceId: service.serviceId, statusCode: 502, failed: true });
+          persist();
+          return {
+            status: 502,
+            body: {
+              jsonrpc: "2.0",
+              id: requestId,
+              error: { code: -32000, message: "Upstream MCP request failed." }
+            },
+            serviceId: service.serviceId,
+            upstreamToolName: target.upstreamToolName,
+            auditId: audit.auditId
+          };
+        }
+        if (jsonRpcError) {
+          // Preserve the JSON-RPC error shape for the kernel without exposing provider text.
+          recordEndpointOutcome(service, operation, endpoint, { statusCode: 502, ok: false });
+          recordMetric({ serviceId: service.serviceId, statusCode: 502, failed: true });
+          const audit: any = appendAudit("upstream.mcp.gateway.failed", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            upstreamToolName: target.upstreamToolName,
+            protocol: "mcp",
+            endpoint: publicEndpoint(endpoint),
+            statusCode: 502,
+            reasonCode: "upstream_jsonrpc_error",
+            durationMs: Date.now() - startedAt
+          });
+          persist();
+          return { status: 200, body: jsonRpcError, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName, auditId: audit.auditId };
+        }
+        if (result?.resultType === "input_required") {
+          return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        if (typeof result?.resultType === "string" && result.resultType !== "complete") {
+          return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        if (!result || typeof result !== "object" || Array.isArray(result)) {
+          return { status: 200, body: { jsonrpc: "2.0", id: requestId, result }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName };
+        }
+        const publicResponse: any = publicMcpResult(result, operation);
+        const projectedResult = normalizeMcpResultForDownstream(publicResponse.result, protocolVersion);
+        const audit: any = appendAudit("upstream.mcp.gateway.completed", { serviceId: service.serviceId, operationKey: operation.operationKey,
+          upstreamToolName: target.upstreamToolName, protocol: "mcp", endpoint: publicEndpoint(endpoint), responseBytes: Buffer.byteLength(JSON.stringify(projectedResult)) });
+        recordEndpointOutcome(service, operation, endpoint, { statusCode: 200, ok: true });
+        recordMetric({ serviceId: service.serviceId, statusCode: 200, failed: false });
+        persist();
+        return { status: 200, body: { jsonrpc: "2.0", id: requestId, result: projectedResult }, serviceId: service.serviceId, upstreamToolName: target.upstreamToolName, auditId: audit.auditId };
+        } catch (error: any) {
+          // The governed final sink owns its failure accounting, exactly as the forwarding
+          // paths do: without this a failed upstream MCP call never reaches
+          // `recordEndpointOutcome`, so the endpoint circuit can never open.
+          const callerAborted: any = abortContext.callerAborted();
+          const timedOut: any = !callerAborted && (abortContext.timedOut() || error?.name === "AbortError");
+          const failureStatus: any = callerAborted ? 499 : timedOut ? 504 : Number(error?.status || error?.statusCode || 502);
+          const candidateReasonCode = text(error?.reasonCode);
+          const failureReasonCode = callerAborted
+            ? "upstream_mcp_cancelled"
+            : timedOut
+              ? "upstream_mcp_timeout"
+              : /^upstream_mcp_[a-z0-9_]{1,48}$/u.test(candidateReasonCode)
+                ? candidateReasonCode
+                : "upstream_mcp_call_failed";
+          recordEndpointOutcome(service, operation, endpoint, { statusCode: failureStatus, ok: false });
+          recordMetric({ serviceId: service.serviceId, statusCode: failureStatus, failed: true });
+          appendAudit("upstream.mcp.gateway.failed", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            upstreamToolName: target.upstreamToolName,
+            protocol: "mcp",
+            endpoint: publicEndpoint(endpoint),
+            statusCode: failureStatus,
+            reasonCode: failureReasonCode,
+            durationMs: Date.now() - startedAt
+          });
+          persist();
+          throw error;
+        } finally {
+          abortContext.dispose();
+        }
+      });
+      });
+    },
+    previewPolicy(input: Record<string, any> = {}, subject: Record<string, any> = {}) : UpstreamGatewayForwardPreview {
+      const service: any = requireService(input.serviceId);
+      const operation: any = operationWithUpstreamCapability(service, operationFor(service, input.operationKey));
+      return previewFor(service, operation, subject);
+    },
+    async health(serviceId?: unknown) : Promise<UpstreamGatewayHealthResult> {
+      const service: any = requireService(serviceId);
+      const resolvedServiceId: string = text(serviceId);
+      if (service.serviceProtocol === "mcp") {
+        const startedAt: any = Date.now();
+        try {
+          const tools: any = await listMcpToolsForService(service, { refresh: true, purpose: "health" });
+          return {
+            ok: true,
+            serviceId: resolvedServiceId,
+            status: 200,
+            protocol: "mcp",
+            toolCount: tools.length,
+            latencyMs: Date.now() - startedAt,
+            checkedAt: nowIso()
+          };
+        } catch (error: any) {
+          return {
+            ok: false,
+            serviceId: resolvedServiceId,
+            status: 0,
+            protocol: "mcp",
+            latencyMs: Date.now() - startedAt,
+            checkedAt: nowIso(),
+            error: text(error?.reasonCode || "upstream_mcp_health_failed")
+          };
+        }
+      }
+      const startedAt: any = Date.now();
+      const endpoints: any = endpointsFor(service);
+      const checks: any[] = [];
+      const controller: any = new AbortController();
+      const timeout: any = setTimeout(() : any => controller.abort(), 3000);
+      try {
+        for (const endpoint of endpoints) {
+          const url: any = safeTargetUrl(service, { path: service.healthPath }, {}, endpoint);
+          const pinnedFetch: any = await fetchConfiguredUpstream(service, url, {
+            method: "GET",
+            redirect: "manual",
+            signal: controller.signal
+          }, `upstream-gateway.${service.serviceId}.health`);
+          try {
+            const response: any = pinnedFetch.response;
+            checks.push({
+              endpoint: publicEndpoint(endpoint),
+              ok: response.ok,
+              status: response.status
+            });
+            await response.body?.cancel?.().catch?.(() : any => {});
+            if (response.ok) break;
+          } finally {
+            await pinnedFetch.close();
+          }
+        }
+        const firstOk: any = checks.find((item?: any) : any => item.ok) || checks[0] || { ok: false, status: 0 };
+        return {
+          ok: firstOk.ok,
+          serviceId: resolvedServiceId,
+          status: firstOk.status,
+          endpointCount: endpoints.length,
+          healthyEndpointCount: checks.filter((item?: any) : any => item.ok).length,
+          endpoints: checks,
+          latencyMs: Date.now() - startedAt,
+          checkedAt: nowIso()
+        };
+      } catch (error: any) {
+        return {
+          ok: false,
+          serviceId: resolvedServiceId,
+          status: 0,
+          latencyMs: Date.now() - startedAt,
+          checkedAt: nowIso(),
+          error: text(error?.reasonCode || error?.code || (error instanceof Error ? error.name : "health_failed"))
+        };
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+    async requestPluginExternalService(request: Record<string, any> = {}, { subject = {}, signal = null }: Record<string, any> = {}) : Promise<UpstreamGatewayPluginCallResult> {
+      const timeoutMs: any = normalizeOptionalTimeoutMs(request.timeoutMs, "request.timeoutMs");
+      const serviceRef: any = text(request.serviceRef);
+      const operationRef: any = text(request.operationRef);
+      const pluginId: any = text(request.pluginId);
+      const callerOperationId: any = text(request.operationId);
+      const governance: any = object(request.governance);
+      if (!pluginId || !serviceRef || !operationRef || operationRef !== callerOperationId ||
+          !text(governance.authorizationContextDigest) || !text(governance.riskDecisionRef) ||
+          !text(governance.policyRevision)) {
+        throw Object.assign(new Error("Plugin external service binding is invalid."), { status: 403 });
+      }
+      const service: any = requireService(serviceRef);
+      if (service.disabled) {
+        throw Object.assign(new Error("Upstream service is disabled."), { status: 403 });
+      }
+      const configuredOperation: any = operationWithUpstreamCapability(
+        service,
+        operationFor(service, operationRef)
+      );
+      if (pluginId === "skill-hub") {
+        await ensureSkillHubEventSubscription(service, configuredOperation);
+      }
+      const requestInput: any = object(request.input);
+      const forwardOptions: Record<string, any> = {
+        signal,
+        ...(timeoutMs === undefined ? {} : { timeoutMs })
+      };
+      if (service.serviceProtocol === "mcp" || configuredOperation.protocol === "mcp") {
+        const protocolMethod: any = text(requestInput.protocolMethod);
+        if (protocolMethod === "tools/list") {
+          authorizeMcpDiscoverySubject(subject);
+          authorizeForwardPreview(service, configuredOperation, subject);
+          const items: any = await listMcpToolsForService(service, {
+            refresh: requestInput.refresh === true,
+            signal
+          });
+          const audienceGrant: any = audienceGrantForSubject(subject);
+          const visible: any = items.filter((tool: any) : any => this.evaluateDiscoveredMcpToolAudience({
+            grant: audienceGrant,
+            subject,
+            tool,
+            purpose: "discovery"
+          }).allowed === true);
+          return Object.freeze({
+            ok: true,
+            status: 200,
+            data: Object.freeze({ items: clone(visible), count: visible.length })
+          });
+        }
+        if (protocolMethod !== "tools/call") {
+          throw Object.assign(new Error("Plugin external MCP method is invalid."), { status: 400 });
+        }
+        const toolName: any = text(requestInput.toolName);
+        if (!toolName) {
+          throw Object.assign(new Error("Plugin external MCP tool is required."), { status: 400 });
+        }
+        const forwarded: any = await this.forward({
+          serviceId: serviceRef,
+          operationKey: operationRef,
+          toolName,
+          arguments: object(requestInput.arguments),
+          ...(request.idempotencyKey ? { idempotencyKey: text(request.idempotencyKey) } : {})
+        }, subject, forwardOptions);
+        return Object.freeze({
+          ok: forwarded?.ok === true,
+          status: forwarded?.ok === true ? 200 : Number(forwarded?.upstream?.status || 502),
+          data: clone(forwarded?.response ?? null),
+          ...(forwarded?.auditId ? { receiptRef: text(forwarded.auditId) } : {})
+        });
+      }
+
+      if (pluginId === "skill-hub") {
+        const subjectRef = text(requestInput.meshrixContext?.principal?.subjectRef);
+        if (!/^skill_hub_subject_[a-f0-9]{64}$/u.test(subjectRef)) {
+          throw Object.assign(new Error("Skill Hub admission subject is unavailable."), { status: 403 });
+        }
+        // Only this Core-owned bound service invocation can set the carrier.
+        // A public forward input, option or configured header cannot self-assert it.
+        const carrier = Object.freeze({});
+        skillHubAdmissionSubjects.set(carrier, subjectRef);
+        Reflect.set(forwardOptions, skillHubAdmissionCarrier, carrier);
+      }
+
+      const pathParameterNames: any = [...text(configuredOperation.path).matchAll(/\{([A-Za-z][A-Za-z0-9_]{0,63})\}/gu)]
+        .map((match?: any) : any => match[1]);
+      const pathParameters: Record<string, any> = {};
+      for (const name of pathParameterNames) {
+        if (!Object.hasOwn(requestInput, name)) {
+          throw Object.assign(new Error("Plugin external service path parameter is missing."), { status: 400 });
+        }
+        pathParameters[name] = requestInput[name];
+      }
+      const providerInput: any = Object.fromEntries((Object.entries(requestInput) as [string, any][])
+        .filter(([name]: any[]) : any => !pathParameterNames.includes(name)));
+      const method: any = configuredHttpMethod(configuredOperation);
+      const forwarded: any = await this.forward({
+        serviceId: serviceRef,
+        operationKey: operationRef,
+        ...(pathParameterNames.length > 0 ? { pathParameters } : {}),
+        ...(configuredOperation.protocol === "json-rpc"
+          ? { rpcParams: providerInput }
+          : ["GET", "HEAD"].includes(method)
+            ? { query: providerInput }
+            : { body: providerInput }),
+        ...(request.idempotencyKey ? { idempotencyKey: text(request.idempotencyKey) } : {})
+      }, subject, forwardOptions);
+      const response: any = object(forwarded?.response);
+      const data: any = Object.hasOwn(response, "json")
+        ? response.json
+        : Object.hasOwn(response, "text")
+          ? response.text
+          : response;
+      return Object.freeze({
+        ok: forwarded?.ok === true,
+        status: Number(forwarded?.upstream?.status || (forwarded?.ok === true ? 200 : 502)),
+        data: clone(data),
+        ...(forwarded?.auditId ? { receiptRef: text(forwarded.auditId) } : {})
+      });
+    },
+    previewHttpStream(input: Record<string, any> = {}, subject: Record<string, any> = {}) : Readonly<{ ok: true; serviceId: string; operationKey: string }> {
+      const service: any = requireService(input.serviceId);
+      const operation: any = operationWithUpstreamCapability(service, operationFor(service, input.operationKey));
+      if (service.disabled) {
+        throw Object.assign(new Error("Upstream service is disabled."), { status: 403 });
+      }
+      const preview: any = authorizeForwardPreview(service, operation, subject);
+      if (!preview.traffic.allowed) {
+        throw Object.assign(new Error("Upstream gateway traffic limit exceeded."), { status: 429, details: preview });
+      }
+      if (operation.requiresApproval && !trustedApprovalForForward(subject, operation)) {
+        throw payloadRepresentationError(
+          "artifact_staging_required",
+          "Approval-bound payloads must be staged as owner-bound artifacts.",
+          409
+        );
+      }
+      enforceRequestContentPolicy(service, operation, input);
+      const payloadTransport: any = compilePayloadTransport(operation);
+      if (
+        payloadTransport.request.mode !== "opaque_stream" ||
+        payloadTransport.response.mode !== "opaque_stream"
+      ) {
+        throw payloadRepresentationError(
+          "payload_policy_conflict",
+          "Direct HTTP transit requires opaque_stream request and response modes.",
+          409
+        );
+      }
+      const method: any = configuredHttpMethod(operation);
+      const hasRequestBody: any = !["GET", "HEAD"].includes(method);
+      selectRequestRepresentationHeaders(input.requestHeaders || {}, payloadTransport.request, { hasBody: hasRequestBody });
+      if (hasRequestBody && input.contentLength !== null && input.contentLength !== undefined) {
+        const declaredLength: any = Number(input.contentLength);
+        if (!Number.isSafeInteger(declaredLength) || declaredLength < 0) {
+          throw payloadRepresentationError("request_length_invalid", "Request content length is invalid.", 400);
+        }
+        if (declaredLength > payloadTransport.request.maxBytes) {
+          throw payloadRepresentationError("request_body_too_large", "Request body exceeds its published limit.", 413);
+        }
+      }
+      return Object.freeze({ ok: true, serviceId: service.serviceId, operationKey: operation.operationKey });
+    },
+    async forwardHttpStream(input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<UpstreamGatewayStreamForwardResult> {
+      return withRegistryWork(options, async (registryOptions?: any) : Promise<any> => {
+      options = registryOptions;
+      const service: any = requireService(input.serviceId);
+      const operation: any = operationWithUpstreamCapability(service, operationFor(service, input.operationKey));
+      const effectiveTimeoutMs: any = timeoutFor(operation, options, service);
+      if (service.disabled) {
+        throw Object.assign(new Error("Upstream service is disabled."), { status: 403 });
+      }
+      const preview: any = authorizeForwardPreview(service, operation, subject);
+      if (!preview.traffic.allowed) {
+        throw Object.assign(new Error("Upstream gateway traffic limit exceeded."), { status: 429, details: preview });
+      }
+      if (operation.requiresApproval && !trustedApprovalForForward(subject, operation)) {
+        throw payloadRepresentationError(
+          "artifact_staging_required",
+          "Approval-bound payloads must be staged as owner-bound artifacts.",
+          409
+        );
+      }
+      enforceRequestContentPolicy(service, operation, input);
+      await enforceUpstreamPolicyGate(service, operation, input, subject, options.signal || null);
+      const payloadTransport: any = compilePayloadTransport(operation);
+      if (
+        payloadTransport.request.mode !== "opaque_stream" ||
+        payloadTransport.response.mode !== "opaque_stream"
+      ) {
+        throw payloadRepresentationError(
+          "payload_policy_conflict",
+          "Direct HTTP transit requires opaque_stream request and response modes.",
+          409
+        );
+      }
+      if (typeof options.consumeResponse !== "function") {
+        throw new TypeError("Native payload transit requires a response consumer.");
+      }
+      return withTrafficSlot(service, operation, preview, async (traffic?: any, endpoint?: any) : Promise<any> => {
+        const targetUrl: any = safeTargetUrl(service, operation, input, endpoint);
+        const method: any = configuredHttpMethod(operation);
+        const hasRequestBody: any = !["GET", "HEAD"].includes(method);
+        const credentials: any = await credentialMaterialFor(service, operation, { targetUrl });
+        const representationHeaders: any = selectRequestRepresentationHeaders(
+          input.requestHeaders || {},
+          payloadTransport.request,
+          { hasBody: hasRequestBody }
+        );
+        const declaredLength: any = hasRequestBody && input.contentLength !== null && input.contentLength !== undefined
+          ? Number(input.contentLength)
+          : null;
+        if (declaredLength !== null && Number.isFinite(declaredLength) && declaredLength > payloadTransport.request.maxBytes) {
+          throw payloadRepresentationError("request_body_too_large", "Request body exceeds its published limit.", 413);
+        }
+        const headers: Record<string, any> = {
+          ...configuredHeaders(service),
+          ...credentials.headers,
+          ...representationHeaders,
+          ...(hasRequestBody && declaredLength !== null && Number.isSafeInteger(declaredLength) && declaredLength >= 0
+            ? { "content-length": String(declaredLength) }
+            : {}),
+          "x-meshrix-gateway-service": service.serviceId
+        };
+        const startedAt: any = Date.now();
+        const abortContext: any = createForwardAbortContext(options.signal || null, effectiveTimeoutMs);
+        const requestCounter: any = createPayloadCountingTransform(payloadTransport.request.maxBytes, {
+          tooLargeCode: "request_body_too_large",
+          tooLargeStatus: 413
+        });
+        const body: any = hasRequestBody
+          ? (input.requestStream || Readable.from([])).pipe(requestCounter)
+          : undefined;
+        let pinnedRequest: any = null;
+        try {
+          pinnedRequest = await requestConfiguredUpstream(service, targetUrl, {
+            method,
+            headers,
+            body,
+            signal: abortContext.signal,
+            headersTimeout: effectiveTimeoutMs ?? 0,
+            bodyTimeout: effectiveTimeoutMs ?? 0
+          }, `upstream-gateway.${service.serviceId}.${operation.operationKey}.stream`);
+          const upstreamResponse: any = pinnedRequest.response;
+          const status: any = Number(upstreamResponse.statusCode || 0);
+          const responseHeaders: any = selectResponseRepresentationHeaders(
+            upstreamResponse.headers,
+            payloadTransport.response
+          );
+          const responseDeclaredLength: any = Number(rawHeader(upstreamResponse.headers, "content-length") || 0);
+          if (Number.isFinite(responseDeclaredLength) && responseDeclaredLength > payloadTransport.response.maxBytes) {
+            upstreamResponse.body?.destroy?.();
+            throw payloadRepresentationError(
+              "upstream_response_too_large",
+              "Upstream response exceeds its published limit.",
+              502
+            );
+          }
+          const responseCounter: any = createPayloadCountingTransform(payloadTransport.response.maxBytes, {
+            tooLargeCode: "upstream_response_too_large",
+            tooLargeStatus: 502
+          });
+          const responseBody: any = (upstreamResponse.body || Readable.from([])).pipe(responseCounter);
+          const cancelResponseBody: any = () : any => responseBody.destroy(
+            abortContext.signal.reason instanceof Error
+              ? abortContext.signal.reason
+              : new Error("Upstream response stream was cancelled.")
+          );
+          abortContext.signal.addEventListener("abort", cancelResponseBody, { once: true });
+          try {
+            await options.consumeResponse({
+              status,
+              headers: responseHeaders,
+              body: responseBody,
+              signal: abortContext.signal
+            });
+          } finally {
+            abortContext.signal.removeEventListener("abort", cancelResponseBody);
+          }
+          if (hasRequestBody) {
+            assertDeclaredSha256Digest(representationHeaders, requestCounter.sha256, "request");
+          }
+          assertDeclaredSha256Digest(responseHeaders, responseCounter.sha256, "response");
+          recordEndpointOutcome(service, operation, endpoint, {
+            statusCode: status,
+            ok: status >= 200 && status < 300
+          });
+          const audit: any = appendAudit("upstream.forward.completed", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            protocol: operation.protocol,
+            method,
+            target: summarizeUrl(targetUrl),
+            endpoint: traffic.endpoint,
+            circuit: traffic.circuit,
+            statusCode: status,
+            requestBody: bodyMetadata(undefined, operation.sensitiveBodyFields, {
+              byteLength: requestCounter.byteLength,
+              contentType: representationHeaders["content-type"] || ""
+            }),
+            responseBody: bodyMetadata(undefined, operation.sensitiveBodyFields, {
+              byteLength: responseCounter.byteLength,
+              contentType: responseHeaders["content-type"] || "application/octet-stream"
+            }),
+            responseBytes: responseCounter.byteLength,
+            requestRepresentation: "opaque_stream",
+            responseRepresentation: "opaque_stream",
+            durationMs: Date.now() - startedAt
+          });
+          recordMetric({ serviceId: service.serviceId, statusCode: status, failed: status < 200 || status >= 300 });
+          persist();
+          return Object.freeze({
+            ok: status >= 200 && status < 300,
+            status,
+            requestBytes: requestCounter.byteLength,
+            responseBytes: responseCounter.byteLength,
+            auditId: audit.auditId
+          });
+        } catch (error: any) {
+          const callerAborted: any = abortContext.callerAborted();
+          const timedOut: any = !callerAborted && (abortContext.timedOut() || error?.name === "AbortError");
+          const status: any = callerAborted ? 499 : timedOut ? 504 : error?.status || 502;
+          const reasonCode: any = callerAborted
+            ? "upstream_forward_cancelled"
+            : timedOut
+              ? "upstream_forward_timeout"
+              : text(error?.reasonCode || error?.code || "upstream_forward_failed");
+          recordEndpointOutcome(service, operation, endpoint, { statusCode: status, ok: false });
+          recordMetric({ serviceId: service.serviceId, statusCode: status, failed: true });
+          const audit: any = appendAudit("upstream.forward.failed", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            protocol: operation.protocol,
+            method,
+            target: summarizeUrl(targetUrl),
+            endpoint: traffic.endpoint,
+            circuit: traffic.circuit,
+            statusCode: status,
+            requestBody: bodyMetadata(undefined, operation.sensitiveBodyFields, {
+              byteLength: requestCounter.byteLength,
+              contentType: representationHeaders["content-type"] || ""
+            }),
+            reasonCode,
+            durationMs: Date.now() - startedAt
+          });
+          persist();
+          throw Object.assign(error instanceof Error ? error : new Error("Upstream payload transit failed."), {
+            status,
+            reasonCode,
+            audit
+          });
+        } finally {
+          await pinnedRequest?.close?.().catch?.(() : any => {});
+          abortContext.dispose();
+        }
+      });
+      });
+    },
+    async openArtifactDownload({ artifactId = "", range = "" }: Record<string, any> = {}, subject: Record<string, any> = {}) : Promise<UpstreamGatewayArtifactDownload> {
+      const port: any = requireArtifactTransitPort();
+      const reference: any = `artifact:${String(artifactId || "").trim()}`;
+      const metadata: any = await port.resolve(reference, subject, "download");
+      const total: any = Number(metadata.byteLength || 0);
+      let start: any = 0;
+      let end: any = Math.max(0, total - 1);
+      let partial: any = false;
+      const rangeText: any = String(range || "").trim();
+      if (rangeText) {
+        const match: any = /^bytes=(\d*)-(\d*)$/u.exec(rangeText);
+        if (!match || (!match[1] && !match[2]) || rangeText.includes(",")) {
+          throw payloadRepresentationError("artifact_range_invalid", "Artifact range is invalid.", 416);
+        }
+        if (!match[1]) {
+          const suffix: any = Number(match[2]);
+          if (!Number.isSafeInteger(suffix) || suffix < 1) {
+            throw payloadRepresentationError("artifact_range_invalid", "Artifact range is invalid.", 416);
+          }
+          start = Math.max(0, total - suffix);
+        } else {
+          start = Number(match[1]);
+          end = match[2] ? Number(match[2]) : end;
+        }
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || start >= total) {
+          throw payloadRepresentationError("artifact_range_invalid", "Artifact range is unsatisfiable.", 416);
+        }
+        end = Math.min(end, total - 1);
+        partial = true;
+      }
+      const source: any = await port.openRead(reference, subject, "download", { start, end });
+      return Object.freeze({
+        status: partial ? 206 : 200,
+        headers: Object.freeze({
+          "content-type": metadata.mediaType || "application/octet-stream",
+          "content-length": String(partial ? end - start + 1 : total),
+          "accept-ranges": "bytes",
+          ...(partial ? { "content-range": `bytes ${start}-${end}/${total}` } : {})
+        }),
+        name: metadata.name,
+        body: source.open()
+      });
+    },
+    async forward(input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<UpstreamGatewayForwardResult> {
+      return withRegistryWork(options, async (registryOptions?: any) : Promise<any> => {
+      options = registryOptions;
+      const service: any = requireService(input.serviceId);
+      const configuredOperation: any = operationWithUpstreamCapability(service, operationFor(service, input.operationKey));
+      const routingOverrideFields: any = callerRoutingOverrideFields(input);
+      if (routingOverrideFields.length > 0) {
+        appendSecurityAlert({
+          reasonCode: "upstream_routing_override_denied",
+          severity: "critical",
+          title: "Upstream gateway caller routing override denied",
+          serviceId: service.serviceId,
+          operationKey: configuredOperation.operationKey,
+          evidence: {
+            serviceId: service.serviceId,
+            operationKey: configuredOperation.operationKey,
+            deniedFields: routingOverrideFields,
+            subjectType: subject?.type || "subject"
+          }
+        });
+        rejectUpstreamDestinationOverrideFields(input);
+      }
+      if (service.disabled) {
+        throw Object.assign(new Error("Upstream service is disabled."), { status: 403 });
+      }
+      if (service.serviceProtocol === "mcp" || configuredOperation.protocol === "mcp") {
+        authorizeMcpDiscoverySubject(subject);
+      } else {
+        authorizeForwardPreview(service, configuredOperation, subject);
+      }
+      const operation: any = operationWithUpstreamCapability(service, await resolvedMcpOperationForInput(
+        service,
+        configuredOperation,
+        input,
+        options
+      ));
+      const requestedToolName: any = text(input.toolName || input.name || input.mcpTool || input.upstreamToolName);
+      const boundToolName: any = text(operation.dynamicCapability?.upstreamToolName);
+      const subjectType: any = text(subject?.type);
+      if ((service.serviceProtocol === "mcp" || operation.protocol === "mcp") &&
+          requestedToolName &&
+          boundToolName !== requestedToolName &&
+          subjectType !== "tool-grant" &&
+          subjectType !== "scoped-api-key") {
+        throw Object.assign(new Error("Upstream gateway dynamic operation capability denied."), {
+          status: 403,
+          reasonCode: "missing_dynamic_upstream_capability"
+        });
+      }
+      const effectiveTimeoutMs: any = timeoutFor(operation, options, service);
+      const preview: any = authorizeForwardPreview(service, operation, subject);
+      if (!preview.traffic.allowed) {
+        throw Object.assign(new Error("Upstream gateway traffic limit exceeded."), { status: 429, details: preview });
+      }
+      rejectCallerApprovalOverride(input, service, operation, subject);
+      if (operation.requiresApproval && !trustedApprovalForForward(subject, operation)) {
+        return pendingApproval(service, operation);
+      }
+      enforceRequestContentPolicy(service, operation, input);
+      await enforceUpstreamPolicyGate(service, operation, input, subject, options.signal || null);
+      const responseCacheKey: any = responseCacheKeyFor(service, operation, input);
+      if (responseCacheKey) {
+        const hit: any = responseCacheGet(responseCacheKey);
+        if (hit) {
+          const audit: any = appendAudit("upstream.forward.cache_hit", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey
+          });
+          return {
+            ...clone(hit.payload),
+            auditId: audit.auditId,
+            cache: { hit: true, storedAt: hit.storedAt, expiresAt: hit.expiresAt }
+          };
+        }
+      }
+      const forwardOutcome: any = await withTrafficSlot(service, operation, preview, async (traffic?: any, endpoint?: any) : Promise<any> => {
+        if (service.serviceProtocol === "mcp" || operation.protocol === "mcp") {
+          return recordMcpExecution(service, operation, input, endpoint, { ...options, subject });
+        }
+        const payloadTransport: any = compilePayloadTransport(operation);
+        if (
+          payloadTransport.request.mode !== "structured_json" ||
+          payloadTransport.response.mode !== "structured_json"
+        ) {
+          return forwardRepresentationOperation({
+            service,
+            operation,
+            input,
+            subject,
+            options,
+            traffic,
+            endpoint
+          });
+        }
+        const sinkInput: any = clone(input);
+        const providerInput: any = input?.[PROJECTED_PROVIDER_INPUT];
+        const sinkInputDigest: any = digestFinalProtectedSinkInput(
+          providerInput ? clone(providerInput) : sinkInput
+        );
+        const targetFacts: any = structuredTargetFacts({
+          service,
+          operation,
+          input: sinkInput,
+          endpoint,
+          inputDigest: sinkInputDigest
+        });
+        const finalProtectedSinkPermit: any = options.finalProtectedSinkPermit;
+        if (!finalProtectedSinkPermit && claimProtectedSinkAttempt === claimFinalProtectedSinkAttempt) {
+          finalEffectAuthorityRequired();
+        }
+        await claimProtectedSinkAttempt({
+          attempt: finalProtectedSinkPermit,
+          targetSelector: targetFacts.targetSelector,
+          effect: targetFacts.effect,
+          resourceRevision: targetFacts.resourceRevision,
+          resolveCurrentResource: async () : Promise<any> => {
+            const currentFacts: any = currentStructuredTargetFacts({
+              serviceId: service.serviceId,
+              operationKey: operation.operationKey,
+              endpointId: endpoint?.endpointId || "primary",
+              input: sinkInput,
+              inputDigest: sinkInputDigest
+            });
+            return Object.freeze({
+              effect: currentFacts.effect,
+              resourceRevision: currentFacts.resourceRevision
+            });
+          }
+        });
+        if (options.signal?.aborted === true) {
+          const audit: any = appendAudit("upstream.forward.failed", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            protocol: operation.protocol,
+            method: targetFacts.method,
+            target: summarizeUrl(targetFacts.targetUrl),
+            endpoint: traffic.endpoint,
+            circuit: traffic.circuit,
+            statusCode: 499,
+            reasonCode: "upstream_forward_cancelled"
+          });
+          persist();
+          throw Object.assign(
+            new Error("Upstream gateway request was cancelled."),
+            {
+              code: "upstream_forward_cancelled",
+              reasonCode: "upstream_forward_cancelled",
+              status: 499,
+              statusCode: 499,
+              audit
+            }
+          );
+        }
+        const targetUrl: any = targetFacts.targetUrl;
+        const method: any = targetFacts.method;
+        const credentials: any = await credentialMaterialFor(service, operation, { targetUrl });
+        const headers: Record<string, any> = {
+          ...configuredHeaders(service),
+          ...credentials.headers,
+          "content-type": "application/json",
+          "x-meshrix-gateway-service": service.serviceId
+        };
+        for (const name of Object.keys(headers)) {
+          if (name.toLowerCase() === "x-meshrix-skill-hub-subject") delete headers[name];
+        }
+        const skillHubSubject = skillHubAdmissionSubjects.get(Reflect.get(options, skillHubAdmissionCarrier));
+        if (skillHubSubject) headers["x-meshrix-skill-hub-subject"] = skillHubSubject;
+        const rpcMethod: any = targetFacts.rpcMethod;
+        const bodySource: any = operation.protocol === "json-rpc"
+          ? jsonRpcRequestBody(sinkInput, operation, rpcMethod)
+          : sinkInput.bodyJson !== undefined
+            ? sinkInput.bodyJson
+            : sinkInput.body;
+        const body: any = ["GET", "HEAD"].includes(method)
+          ? undefined
+          : typeof bodySource === "string"
+            ? bodySource
+            : JSON.stringify(
+                bodySource === undefined
+                  ? object(sinkInput.payload)
+                  : bodySource
+              );
+        if (body && Buffer.byteLength(body) > payloadTransport.request.maxBytes) {
+          throw payloadRepresentationError(
+            "request_body_too_large",
+            "Structured request exceeds its published limit.",
+            413
+          );
+        }
+        const requestBodyMetadata: any = bodyMetadata(bodySource === undefined ? object(sinkInput.payload) : bodySource, operation.sensitiveBodyFields, {
+          byteLength: body ? Buffer.byteLength(body) : 0,
+          contentType: "application/json"
+        });
+        const startedAt: any = Date.now();
+        const abortContext: any = createForwardAbortContext(options.signal || null, effectiveTimeoutMs);
+        let pinnedFetch: any = null;
+        try {
+          pinnedFetch = await fetchConfiguredUpstream(service, targetUrl, {
+            method,
+            headers,
+            body,
+            redirect: "manual",
+            signal: abortContext.signal
+          }, `upstream-gateway.${service.serviceId}.${operation.operationKey}`);
+          const response: any = pinnedFetch.response;
+          let buffer: any;
+          try {
+            buffer = await readResponseBufferWithLimit(response, payloadTransport.response.maxBytes);
+          } catch (error: any) {
+            if (error?.code !== "upstream_response_too_large") throw error;
+            recordMetric({ serviceId: service.serviceId, statusCode: response.status, failed: true });
+            const audit: any = appendAudit("upstream.forward.rejected", {
+              serviceId: service.serviceId,
+              operationKey: operation.operationKey,
+              protocol: operation.protocol,
+              reason: "response_too_large",
+              statusCode: response.status,
+              requestBody: requestBodyMetadata,
+              responseBody: bodyMetadata(undefined, operation.sensitiveBodyFields, {
+                byteLength: error.receivedBytes,
+                contentType: response.headers.get("content-type") || "application/octet-stream"
+              }),
+              responseBytes: error.receivedBytes,
+              limitBytes: payloadTransport.response.maxBytes
+            });
+            persist();
+            throw Object.assign(error, { audit });
+          }
+          recordEndpointOutcome(service, operation, endpoint, {
+            statusCode: response.status,
+            ok: response.ok
+          });
+          const contentType: any = response.headers.get("content-type") || "";
+          const responsePolicy: any = assertResponseBodyPolicy(contentType, buffer, operation);
+          const responseBodyMetadata: any = bodyMetadata(
+            /json/i.test(contentType) ? Buffer.from(buffer).toString("utf8") : undefined,
+            operation.sensitiveBodyFields,
+            {
+              byteLength: buffer.byteLength,
+              contentType: contentType || "application/octet-stream"
+            }
+          );
+          const audit: any = appendAudit("upstream.forward.completed", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            protocol: operation.protocol,
+              method,
+              target: summarizeUrl(targetUrl),
+              endpoint: traffic.endpoint,
+              circuit: traffic.circuit,
+              statusCode: response.status,
+            requestBody: requestBodyMetadata,
+            responseBody: responseBodyMetadata,
+            responsePolicy: {
+              schemaValidated: responsePolicy.schemaValidated === true,
+              projectionValidated: responsePolicy.projectionValidated === true,
+              publicFieldCount: asArray(operation.publicResponseFields).length
+            },
+            responseBytes: buffer.byteLength,
+            durationMs: Date.now() - startedAt
+          });
+          recordMetric({ serviceId: service.serviceId, statusCode: response.status, failed: !response.ok });
+          persist();
+          return {
+            protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+            ok: response.ok,
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            dynamicCapability: operation.dynamicCapability,
+            upstream: {
+              status: response.status,
+              endpoint: traffic.endpoint,
+              contentType,
+              responseBytes: buffer.byteLength,
+              durationMs: Date.now() - startedAt
+            },
+            response: responseBodyForPublic(contentType, buffer, operation.sensitiveBodyFields, operation.publicResponseFields),
+            auditId: audit.auditId
+          };
+        } catch (error: any) {
+          const callerAborted: any = abortContext.callerAborted();
+          const timedOut: any = !callerAborted && (
+            abortContext.timedOut() || error?.name === "AbortError"
+          );
+          const status: any = callerAborted ? 499 : timedOut ? 504 : error?.status || 502;
+          const reasonCode: any = callerAborted
+            ? "upstream_forward_cancelled"
+            : timedOut
+              ? "upstream_forward_timeout"
+              : text(error?.reasonCode || error?.code || "upstream_forward_failed");
+          recordEndpointOutcome(service, operation, endpoint, {
+            statusCode: status,
+            ok: false
+          });
+          recordMetric({ serviceId: service.serviceId, statusCode: status, failed: true });
+          const audit: any = error?.audit || appendAudit("upstream.forward.failed", {
+            serviceId: service.serviceId,
+            operationKey: operation.operationKey,
+            protocol: operation.protocol,
+            method,
+            target: summarizeUrl(targetUrl),
+            endpoint: traffic.endpoint,
+            circuit: traffic.circuit,
+            statusCode: status,
+            requestBody: requestBodyMetadata,
+            reasonCode,
+            durationMs: Date.now() - startedAt
+          });
+          persist();
+          const publicError: any = callerAborted
+            ? new Error("Upstream gateway request was cancelled.")
+            : timedOut
+              ? new Error("Upstream gateway request timed out.")
+              : error instanceof Error
+                ? error
+                : new Error("Upstream gateway forwarding failed.");
+          throw Object.assign(publicError, {
+            status,
+            reasonCode,
+            audit
+          });
+        } finally {
+          await pinnedFetch?.close?.().catch?.(() : any => {});
+          abortContext.dispose();
+        }
+      });
+      if (responseCacheKey && forwardOutcome?.ok === true) {
+        responseCachePut(responseCacheKey, service.serviceId, forwardOutcome, operation.responseCache);
+      }
+      return forwardOutcome;
+      });
+    },
+    listAudit(input: Record<string, any> = {}) : UpstreamGatewayAuditListResult {
+      const serviceId: any = text(input.serviceId || "");
+      const limit: any = Math.max(1, Math.min(Number(input.limit || 100), 500));
+      const items: any = auditEvents
+        .filter((event?: any) : any => !serviceId || event.serviceId === serviceId)
+        .slice(-limit)
+        .reverse();
+      return {
+        protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+        items: clone(items),
+        count: items.length
+      };
+    },
+    getMetrics() : UpstreamGatewayMetrics {
+      return {
+        protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+        ...clone(metrics),
+        shedMetricDimensions: Number(getShedMetricDimensions() || 0),
+        boundedRuntimeState: {
+          trafficBucketCount: trafficBuckets.size,
+          endpointCursorCount: endpointCursors.size,
+          endpointCircuitCount: endpointCircuits.size,
+          mcpToolCacheCount: mcpToolCache.size
+        }
+      };
+    },
+    async flushRuntimeState() : Promise<unknown> {
+      return persist();
+    },
+    isClosed() : boolean {
+      return closed;
+    },
+    getManifestSnapshotRevision() : UpstreamGatewayManifestRevision {
+      return manifestSnapshotRevision;
+    },
+    captureManifestSnapshotState() : UpstreamGatewayManifestSnapshotState {
+      return Object.freeze({
+        setRevision: manifestSnapshotRevision.sourceRevision,
+        setDigest: manifestSnapshotRevision.sourceDigest,
+        serviceEntries: Object.freeze([...services.entries()].map(([serviceId, service]: any[]) : any => Object.freeze([serviceId, service]))),
+        projectedOperationTargets: Object.freeze([...projectedOperationTargets.entries()].map(([operationId, target]: any[]) : any => Object.freeze([operationId, target])))
+      });
+    },
+    restoreManifestSnapshotState(state?: unknown) : Readonly<{ ok: true }> {
+      const captured: UpstreamGatewayManifestSnapshotState = capturedManifestSnapshotState(state);
+      services = new Map<string, UpstreamGatewayServiceRecord>(captured.serviceEntries);
+      projectedOperationTargets = new Map<string, UpstreamGatewayProjectedOperationTarget>(captured.projectedOperationTargets);
+      const restoredTargetIndexes = compilePublicToolTargetIndexes(services);
+      mcpServicesByPublicPrefix = restoredTargetIndexes.mcpByPrefix;
+      manifestSnapshotRevision = Object.freeze({
+        sourceRevision: Number.isSafeInteger(captured.setRevision) ? captured.setRevision : 0,
+        sourceDigest: String(captured.setDigest || "")
+      });
+      trafficBuckets.clear();
+      endpointCursors.clear();
+      endpointCircuits.clear();
+      mcpToolCache.clear();
+      return { ok: true };
+    },
+    replaceFromManifestSnapshot(snapshot?: unknown, { deferSideEffects = false }: { deferSideEffects?: boolean } = {}) : UpstreamGatewayManifestSnapshotDiff {
+      const { setRevision, setDigest, serviceEntries } = manifestSnapshotEntries(snapshot);
+      const next: Map<string, UpstreamGatewayServiceRecord> = new Map<string, UpstreamGatewayServiceRecord>(serviceEntries);
+      if (next.size !== serviceEntries.length) {
+        throw new TypeError("Upstream gateway manifest snapshot contains duplicate service identities.");
+      }
+      const nextProjectedTargets: Map<string, UpstreamGatewayProjectedOperationTarget> = new Map<string, UpstreamGatewayProjectedOperationTarget>();
+      for (const [serviceId, service] of next) {
+        if (service.disabled === true) continue;
+        for (const operation of service.operations || []) {
+          const operationId: string = upstreamProjectedOperationId(serviceId, operation.operationKey);
+          if (nextProjectedTargets.has(operationId)) {
+            throw new TypeError("Upstream gateway manifest snapshot contains duplicate projected operations.");
+          }
+          nextProjectedTargets.set(operationId, Object.freeze({ serviceId, operationKey: operation.operationKey }));
+        }
+      }
+      const nextTargetIndexes = compilePublicToolTargetIndexes(next);
+      const added: string[] = [];
+      const updated: string[] = [];
+      const removed: string[] = [];
+      for (const [serviceId, service] of next) {
+        const existing: UpstreamGatewayServiceRecord | undefined = services.get(serviceId);
+        if (!existing) added.push(serviceId);
+        else if (existing.manifestDigest !== service.manifestDigest || existing.serviceRevision !== service.serviceRevision) updated.push(serviceId);
+      }
+      for (const serviceId of services.keys()) {
+        if (!next.has(serviceId)) removed.push(serviceId);
+      }
+      services = next;
+      projectedOperationTargets = nextProjectedTargets;
+      mcpServicesByPublicPrefix = nextTargetIndexes.mcpByPrefix;
+      manifestSnapshotRevision = Object.freeze({
+        sourceRevision: setRevision,
+        sourceDigest: setDigest
+      });
+      clearServiceRuntimeState([...updated, ...removed]);
+      const diff: UpstreamGatewayManifestSnapshotDiff = Object.freeze({
+        setRevision,
+        setDigest,
+        added: Object.freeze(added),
+        updated: Object.freeze(updated),
+        removed: Object.freeze(removed)
+      });
+      if (!deferSideEffects) {
+        void this.finalizeManifestSnapshot(diff);
+      }
+      return diff;
+    },
+    retireMcpGrantScopes(grantId: unknown = "", options: { remove?: boolean } = {}) : Promise<unknown> {
+      return upstreamMcpSessions.retireGrantScopes?.(grantId, options) ||
+        Promise.resolve({ retired: 0, removed: false, scopes: 0 });
+    },
+    async finalizeManifestSnapshot(diff?: UpstreamGatewayManifestSnapshotDiff) : Promise<UpstreamGatewayManifestFinalizationResult> {
+      if (!diff || !Array.isArray(diff.updated) || !Array.isArray(diff.removed)) {
+        throw new TypeError("Upstream gateway manifest snapshot finalization diff is invalid.");
+      }
+      retireEndpointTrafficServices([...diff.updated, ...diff.removed]);
+      const results: unknown[] = [];
+      for (const serviceId of diff.updated) {
+        try {
+          results.push(await (upstreamMcpSessions.retireServiceScopes || upstreamMcpSessions.retireScope)?.(serviceId));
+        } catch {
+          results.push(Object.freeze({ retired: 0, deferred: true }));
+        }
+      }
+      for (const serviceId of diff.removed) {
+        try {
+          results.push(await (upstreamMcpSessions.retireServiceScopes || upstreamMcpSessions.retireScope)?.(serviceId, { remove: true }));
+        } catch {
+          results.push(Object.freeze({ retired: 0, removed: false, deferred: true }));
+        }
+      }
+      return Object.freeze({
+        finalized: true,
+        updated: diff.updated.length,
+        removed: diff.removed.length,
+        retirements: Object.freeze(results)
+      });
+    },
+    async forwardProjectedOperation(operationId?: any, input: Record<string, any> = {}, subject: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
+      const target: any = projectedOperationTargets.get(String(operationId || ""));
+      if (!target) {
+        throw Object.assign(new Error("Projected upstream operation was not found."), { status: 404 });
+      }
+      const service: any = requireService(target.serviceId);
+      const operation: any = operationFor(service, target.operationKey);
+      const providerInput: any = clone(input);
+      const forwardInput: any = projectedOperationForwardInput({
+        protocol: text(operation.protocol || service.serviceProtocol),
+        method: text(operation.method || "POST").toUpperCase(),
+        payloadTransport: operation.payloadTransport || null,
+        upstreamMcp: service.serviceProtocol === "mcp" || operation.protocol === "mcp",
+        upstreamToolName: text(operation.toolName || operation.upstreamToolName ||
+          (operation.operationKey !== "tools/call" ? operation.operationKey : ""))
+      }, providerInput);
+      const projectedInput: Record<string, any> = {
+        ...forwardInput,
+        ...target
+      };
+      Object.defineProperty(projectedInput, PROJECTED_PROVIDER_INPUT, {
+        configurable: false,
+        enumerable: false,
+        value: providerInput,
+        writable: false
+      });
+      return this.forward(projectedInput, subject, options);
+    },
+    async close() : Promise<any> {
+      if (closed) return;
+      if (closePromise) return closePromise;
+      closePromise = (async () : Promise<any> => {
+        let closeFailed: any = false;
+        mcpRegistryCloseController.abort();
+        const pendingMcpRefreshes: any[] = cancelMcpToolRefreshes();
+        mcpToolCache.clear();
+        for (const state of skillHubEventSubscriptions.values()) state.controller.abort();
+        const subscriptions: any = [...skillHubEventSubscriptions.values()].map((state?: any) : any => state.promise);
+        skillHubEventSubscriptions.clear();
+        await Promise.allSettled(subscriptions);
+        await Promise.allSettled([...activeRegistryWork]);
+        try {
+          await schemaPort.close?.();
+        } catch {
+          closeFailed = true;
+        }
+        try {
+          await closeGatewayRuntime?.();
+        } catch {
+          closeFailed = true;
+        }
+        try {
+          await upstreamMcpSessions.close();
+        } catch {
+          closeFailed = true;
+        }
+        await Promise.allSettled(pendingMcpRefreshes);
+        try {
+          await securityAlertStore?.close?.();
+        } catch {
+          closeFailed = true;
+        }
+        if (closeFailed) {
+          throw new Error("Upstream gateway registry did not close cleanly.");
+        }
+        closed = true;
+      })();
+      try {
+        await closePromise;
+      } catch (error: any) {
+        closePromise = null;
+        throw error;
+      }
+    },
+    getRefactorInstrumentation() : UpstreamGatewayRefactorInstrumentation {
+      return {
+        ...getRefactorInstrumentation(),
+        targetedCallMapHits,
+        targetedServiceIndexHits,
+        serviceDiscoveryCount
+      };
+    }
+  };
+}

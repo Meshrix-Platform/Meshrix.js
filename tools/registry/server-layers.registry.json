@@ -1,0 +1,47 @@
+{
+  "$schema": "./schema/server-layer.schema.json",
+  "version": "v0.1.0",
+  "description": "Public platform source layers.",
+  "layers": [
+    {
+      "directory": "apps",
+      "layer": "Application",
+      "role": "Process bootstrap and browser console.",
+      "allowedDependsOn": [
+        "packages"
+      ],
+      "forbiddenDependsOn": [
+        "plugins"
+      ]
+    },
+    {
+      "directory": "packages",
+      "layer": "Packages",
+      "role": "Contracts, foundation, domains, protocols, and runtime packages.",
+      "allowedDependsOn": [],
+      "forbiddenDependsOn": []
+    },
+    {
+      "directory": "plugins",
+      "layer": "Plugins",
+      "role": "Explicitly enabled optional capabilities implemented against public core package contracts.",
+      "allowedDependsOn": [
+        "packages"
+      ],
+      "forbiddenDependsOn": [
+        "apps",
+        "tools"
+      ]
+    },
+    {
+      "directory": "tools",
+      "layer": "Tools",
+      "role": "Repository verification and maintenance scripts.",
+      "allowedDependsOn": [
+        "packages",
+        "plugins"
+      ],
+      "forbiddenDependsOn": []
+    }
+  ]
+}

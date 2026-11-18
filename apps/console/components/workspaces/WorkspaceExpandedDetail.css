@@ -1,0 +1,257 @@
+.ws-card-expanded {
+  padding-top: 0;
+  cursor: default;
+}
+
+.ws-card-expanded .workspace-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ws-card-expanded .workspace-chain-panel {
+  margin: var(--space-4) 0;
+}
+
+.ws-card-expanded .workspace-source-id {
+  margin-right: var(--space-1-5);
+}
+
+.ws-card-expanded .workspace-stack-list {
+  margin-top: var(--space-3);
+}
+
+.ws-card-expanded .workspace-resource-row {
+  justify-content: space-between;
+}
+
+.ws-card-expanded .ws-chain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  font-size: var(--text-base);
+}
+
+.ws-card-expanded .ws-chain-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.ws-card-expanded .ws-chain-item.is-current {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.ws-card-expanded .ws-chain-arrow {
+  color: var(--console-ink-secondary);
+}
+
+.ws-card-expanded .ws-session-events {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.ws-card-expanded .ws-session-event {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--console-rule);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1-5) var(--space-2);
+  background: var(--console-frame);
+  font-size: var(--text-base);
+}
+
+.ws-card-expanded .ws-session-event strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-card-expanded .ws-session-event span,
+.ws-card-expanded .ws-session-event small {
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
+}
+
+.ws-card-expanded .ws-id-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-1) 0;
+  font-size: var(--text-base);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ws-card-expanded .checkpoint-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ws-card-expanded .checkpoint-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.ws-card-expanded .checkpoint-toolbar > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+
+.ws-card-expanded .checkpoint-toolbar span,
+.ws-card-expanded .checkpoint-node-main span,
+.ws-card-expanded .checkpoint-node-main small,
+.ws-card-expanded .checkpoint-tree-item span {
+  color: var(--console-ink-secondary);
+  font-size: var(--text-md);
+}
+
+.ws-card-expanded .checkpoint-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.65fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.ws-card-expanded .checkpoint-tree-list,
+.ws-card-expanded .checkpoint-node-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ws-card-expanded .checkpoint-tree-item,
+.ws-card-expanded .checkpoint-node-card,
+.ws-card-expanded .checkpoint-preview {
+  border: 1px solid var(--console-rule);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.ws-card-expanded .checkpoint-tree-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  padding: var(--space-3);
+  text-align: left;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.ws-card-expanded .checkpoint-tree-item:hover,
+.ws-card-expanded .checkpoint-tree-item.selected,
+.ws-card-expanded .checkpoint-node-card.selected {
+  border-color: var(--border-strong);
+  background: var(--console-selected);
+}
+
+.ws-card-expanded .checkpoint-node-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+}
+
+.ws-card-expanded .checkpoint-node-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.ws-card-expanded .checkpoint-node-main strong,
+.ws-card-expanded .checkpoint-node-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-card-expanded .checkpoint-node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.ws-card-expanded .danger-link {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.ws-card-expanded .checkpoint-preview {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ws-card-expanded .checkpoint-error {
+  color: var(--danger);
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.ws-card-expanded .config-json-preview {
+  font-size: var(--text-md);
+  line-height: 1.5;
+  background: var(--console-frame);
+  border: 1px solid var(--console-rule);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  overflow: auto;
+  max-height: 240px;
+  white-space: pre;
+  margin: 0;
+}
+
+.ws-card-expanded .workspace-delete-actions {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--console-rule);
+  padding-top: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.ws-card-expanded .workspace-delete-button {
+  background: var(--danger-surface);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  padding: var(--space-1-5) var(--space-3);
+  transition: background-color 0.2s ease;
+}
+
+.ws-card-expanded .workspace-delete-button:hover {
+  background: var(--danger-tint);
+}
+
+@media (max-width: 720px) {
+  .ws-card-expanded .checkpoint-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .ws-card-expanded .checkpoint-node-card {
+    grid-template-columns: 1fr;
+  }
+}

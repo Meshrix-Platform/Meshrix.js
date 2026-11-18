@@ -1,0 +1,251 @@
+# Protocols
+
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
+Every protocol surface inherits [Governed Execution And Minimum
+Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md). A
+transport projection cannot weaken the permit or minimum-evidence boundary.
+
+Protocol facts come from the operation registry and protocol packages under `packages/protocols/`.
+Adapters own transport boundaries, negotiation, normalization, and protocol-local ports only.
+Runtime state, domain behavior, sensitive payload stores, and authorization decisions are reached
+through registered operations or explicit facades bound by `packages/server-runtime` composition.
+
+## Surfaces
+
+| Surface | Package root | Purpose |
+| --- | --- | --- |
+| HTTP | `packages/protocols/http/` | Server API, console API, gateway operations, upload sessions, jobs, and administration transport. |
+| MCP | `packages/protocols/mcp/` | Downstream agent entry point. MCP tools are protocol projections of governed operations. |
+| Agent Sync | `packages/protocols/agent-sync/` | Client and agent synchronization protocol contracts. |
+| Downstream client aspect | `packages/protocols/downstream-client-aspect/` | Shared downstream MCP client protocol helpers. |
+| Plugin package | [Plugin Package and Loading](PLUGIN-PACKAGE-AND-LOADING.md) | Closed one-plugin bundle admission, source-neutral acquisition, verified custody, and lifecycle contribution publication. |
+| Plugin external service | Core Host contract plus upstream HTTP/MCP adapters | Operation-scoped, configured external-service invocation with authorization, bounded projection, cancellation, and sanitized errors. |
+| Enterprise recording | [Enterprise Recording Policy Contract](recording.md) (`packages/contracts/src/recording/`) | Versioned recording policy, sink, admission and outcome contracts distinguishing selected histories from minimal correctness state. |
+| Managed endpoints | [Managed Endpoint Protocol](managed-endpoints.md) (`packages/contracts/src/managed-endpoints.ts`) | Organization-governed device enrollment, capability declaration, governed task dispatch, lease-fenced outcomes, and zero-copy log relay with device-owned journal authority. |
+| Pubsub | `packages/protocols/pubsub/` | Runtime notifications for console and operator workflows. |
+| Common | `packages/protocols/common/` | Shared protocol helpers used by the families above. |
+
+Domain surfaces such as Strategy Management, Agent Gateway, and Maintenance Agent are not protocol
+package roots. They remain in `packages/agents` or `packages/capabilities` and are exposed only through
+HTTP or MCP as registered operations.
+
+## Ownership
+
+| Boundary | Current owner |
+| --- | --- |
+| HTTP and console transport | `packages/protocols/http/`, including controllers and response normalization. |
+| MCP adapter and installer | `packages/protocols/mcp/`; Operation Permission visibility and grants arrive through the injected `toolSkillManagementProvider` port. |
+| Checkpoint and upload transport | `packages/protocols/http/controllers/` for transport; server-runtime owns upload-session and job conversion state. |
+| Console domain projections | `packages/ui-console/src/`; concrete providers are injected by server-runtime composition. |
+| Storage operations | `packages/foundation/src/storage/` for storage contracts and providers; server-runtime owns server runtime state. |
+| Cross-layer binding | `packages/server-runtime` only. |
+
+Optional first-party MCP client-adapter components ship with `meshrix.js` and are selected explicitly by the installer. The client applications remain independent products; adapters do not install or update them.
+
+There are no documentation-only protocol package roots for checkpoint, console, or storage. A protocol
+directory owns executable transport or normalization code; runtime state and persistence remain with
+their current domain owners. Protocol packages must not import `packages/agents`,
+`packages/capabilities`, or `packages/server-runtime` internals.
+
+## MCP Outlets
+
+Core MCP outlets are:
+
+- `meshrix.discovery`
+- `meshrix.gateway`
+
+Enabled verified plugins may contribute additional outlets declared by their
+package manifests. Core does not define product-specific plugin outlets.
+
+MCP discovery hides disabled plugin outlets and unauthorized operations and
+refreshes after plugin, grant, or tag-policy changes. Visibility and denial decisions
+come from Operation Permission and tag-policy evaluation on the injected provider port;
+adapters never bypass that path.
+
+Dynamic `upstream.*` tools are direct MCP tools rather than categorized outlets.
+`meshrix.capabilities.list` may include their visible descriptors, but they do not
+declare `mcpOutlet` and do not contribute to the categorized outlet summary.
+
+### Upstream Payload Transit
+
+Published operations choose one explicit request representation; HTTP operations
+may omit the response representation when they want governed native passthrough.
+Meshrix.js then applies the bounded opaque-stream response default, including the
+response size limit and transport-header allowlist. JSON-RPC operations still
+declare a structured response representation.
+The native HTTP surface
+`POST /api/gateway/v1/transit/:serviceId/:operationKey` is reserved for
+`opaque_stream → opaque_stream` and preserves backpressure and content-coded
+bytes. It authenticates and authorizes from headers before consuming the body;
+`Expect: 100-continue` is terminated at Core and acknowledged only after those
+checks. Structured operations continue through the bounded JSON forwarding
+surface.
+
+MCP and other JSON-only callers never embed file bytes in JSON by default. They
+pass owner-bound `upload:`, `artifact:`, or `workspace:` references to a
+declared raw or multipart mapping. A `workspace:<workspaceId>:<relativePath>`
+reference resolves through the same owner-bound workspace access and
+path-containment rules as `workspace.file.download`. File-like results are
+committed as artifacts and projected as MCP `resource_link` content. The
+authenticated
+`GET|HEAD /api/gateway/v1/artifacts/:artifactId` route supports a single byte
+range and never exposes a host path or storage-provider URL.
+
+### Upstream Catalog Invalidation
+
+The publishing protocol uses catalog-change messages as scoped invalidation signals, not catalog replication. After a gateway snapshot and Operation Permission catalog commit agree, the tag and grant projection identifies affected authenticated partitions. The downstream gateway sends only revisions and a fixed reason to connections that negotiated list-change support; it does not send operation schemas, raw tags, subjects, certificate or credential references, or catalog contents.
+
+Compatible downstream consumers may compare the revision, perform an authenticated catalog list, validate the response, and replace their own cache partition. That consumer behavior is outside Core ownership. A stale consumer cache never authorizes execution because the server re-evaluates the current catalog and policy.
+
+### Upstream MCP execution sessions
+
+Upstream execution sessions are scoped to a trusted principal and grant, not to a TCP connection or child process. Effective state survives idle and maximum-lifetime timers and is not evicted for another caller. Lost upstream context returns an explicit state-loss error; the same logical session does not silently rebuild. Capacity rejection applies to new execution callers; existing callers keep a reserved ephemeral channel for catalog refresh and health. Grant or API-key rotation and revocation release matching execution sessions after in-flight work drains. Same-principal business contexts that must not share state need an explicit business handle.
+
+The published protocol is the complete server-client boundary. Core owns only server-side schema, negotiation, authentication, authorization, scoped notification, pull, acknowledgement, disconnect, and reconnect-fence semantics. Core plans, source, tests, gates, and receipts must not depend on a client repository, implementation, build, plan, test, report, or receipt. Server conformance is proven with protocol-owned schemas, frozen wire corpora, and neutral mock peers. Client adoption is independently verified by each client owner and cannot block or promote a server receipt.
+
+### Native downstream Streamable HTTP
+
+The `/mcp` endpoint accepts standard `initialize` and authenticated
+`notifications/initialized` for the tools profile. It negotiates `2025-11-25`,
+`2025-06-18`, or `2025-03-26`; an unsupported offered version receives the newest
+supported version. It advertises tools/list-change support, not unsupported
+resource, prompt, or continuation capabilities. Completed tool results use the
+standard shape; modern continuation or extension results become explicit
+capability errors without replaying the operation.
+
+`Mcp-Session-Id` correlates protocol state but is never a credential. Every
+request is authenticated and bound to the original tenant, principal and
+credential identity. `notifications/cancelled` cancels only the matching typed
+request id within that authenticated session. HTTP request disconnection releases
+its work; DELETE, authorization revocation, and gateway shutdown retire sessions.
+There are no elapsed-time session or request cutoffs. Admission is count-bounded
+(defaults: 1,024 sessions and 128 concurrent requests per session); embedding
+composition may configure those limits.
+
+After initialization, authenticated GET opens one SSE notification stream per
+session. It uses the existing partition isolation, per-delivery authorization,
+revocation and backpressure protections. It does not require modern subscription
+acknowledgements or a proxy identity, and imposes no modern acknowledgement
+deadline. Closing the notification socket releases that stream without cancelling
+unrelated tool requests. Query-string capability negotiation is not supported.
+
+Ordinary scoped keys use `X-Meshrix.js-Api-Key`; Bearer placement remains invalid.
+Client-product identity is optional, while any key-required process identity
+remains enforced. Native clients and the modern profile share the same governed
+catalog and invocation dispatcher.
+
+### Modern downstream update subscriptions
+
+The published modern HTTP MCP profile uses protocol revision `2026-07-28`. Ordinary success
+results use `resultType: "complete"`, including `meshrix/catalog/acknowledge`.
+Discover advertises `supportedVersions` and places server identity in
+`_meta["io.modelcontextprotocol/serverInfo"]`. Required request `_meta` and
+`MCP-Protocol-Version` / `Mcp-Method` headers must agree; `tools/call` also
+requires `Mcp-Name`. Malformed or unsafe header values are rejected even when
+they match the body. A name mismatch uses generic text and does not echo the
+body name or resource URI. HTTP POST accepts exactly one JSON-RPC request or
+notification; a batch is rejected before authorization or execution. Modern
+`initialize` is not a method of this modern profile. Its metadata and mirror
+headers are never reinterpreted as a less strict native request. Upstream MCP
+forwarding keeps its independent initialize/session revision.
+
+The connector's local stdio surface separately exposes the standard MCP
+`2025-11-25` tools profile. It answers `initialize` with its own supported
+version and consumes `notifications/initialized` locally; neither message is
+forwarded as an HTTP initialization request. This is a generic connector
+boundary, not a client-product-specific protocol. Initialization establishes
+only the local protocol; upstream availability and API Key authorization
+remain enforced by tool discovery and invocation.
+
+The `meshrix.js` package's `meshrix-mcp` executable and the offline portable
+MCP component both depend on the shared `http-mcp-adapter-client-wire`
+contract, not the server protocol-owner module. Portable vendor assembly copies
+that module next to the existing constants vendor file. A connector that has
+explicitly persisted `autoUpdate: true` opens one authenticated
+`subscriptions/listen` POST stream and requests an object capability filter
+(`toolsListChanged` and the Meshrix extras). Known-but-unsupported types are
+omitted; `false` means not subscribed; unknown types are ignored. The
+subscription id is the original JSON-RPC request id. The first SSE event is
+`notifications/subscriptions/acknowledged`. A false or absent preference opens
+no stream. Standard clients do not need a proxy session header or a private
+identity header.
+
+Skill Hub exposes its own authenticated, cursor-resumable event stream. Core's
+external-service gateway owns that connection and credential, reduces each
+event to a revision and operation id, and publishes it to authenticated MCP
+subscriptions. Notifications trigger catalog refresh; neither Core nor the
+connector executes commands carried by a notification. The modern profile uses
+POST subscriptions; native Streamable HTTP uses the separately negotiated GET
+notification stream described above, not the former query-string registration.
+
+## Delegated MCP Child Calls
+
+Targets that call Meshrix.js MCP on behalf of a parent operation use a `delegated-mcp-child` grant. The MCP request carries the canonical child binding in `delegatedMcp.childOperation` or `delegatedChildOperation`, or through the corresponding headers:
+
+- `X-Meshrix.js-Delegated-Mcp-Grant-Id`
+- `X-Meshrix.js-Delegated-Session-Id`
+- `X-Meshrix.js-Delegated-Turn-Id`
+- `X-Meshrix.js-Delegated-Subject-Id`
+- `X-Meshrix.js-Delegated-Target-Id`
+- `X-Meshrix.js-Delegated-Workspace-Id`
+- `X-Meshrix.js-Delegated-Parent-Operation-Id`
+- `X-Meshrix.js-Delegated-Trace-Id`
+
+The MCP adapter compares every request binding field with the authenticated grant metadata. A missing or mismatched field returns `delegated_child_operation_binding_mismatch` before operation dispatch. The bound workspace from the delegated grant takes precedence over a caller-supplied MCP envelope workspace. The execution context and audit projection use only generic delegated-child field names.
+
+## Adapter Target Scope
+
+The platform downstream adapter target scope is OpenClaw, Codex, Claude Code,
+Antigravity, OpenCode, Pi, and Kimi CLI. Their optional first-party adapter
+components are private modules bundled with `meshrix.js` and operate through
+the bounded JSON-stdio protocol only after an explicit target action. The
+client applications remain independent products. The installer owns the selected
+registration transaction; native registrations reference caller-selected external
+credential custody and do not require a shared device credential store. Supported
+and unqualified combinations are listed in [Compatibility](../COMPATIBILITY.md).
+
+MCP user-device installation uses the `meshrix-mcp` executable shipped by the
+`meshrix.js` Node.js package. That CLI is the single implementation of argument
+validation, credential handling, signed discovery, local client search, client
+configuration, registration, and uninstall. The verified portable archive
+contains the same CLI and Node runtime behind a small POSIX or PowerShell
+launcher; those launchers only start the sibling runtime and forward arguments.
+
+## Governance
+
+Every protocol surface that can cause a protected read, write, external-service
+call, package lifecycle action, or administration action passes the same
+Operation Permission and tag-policy path. Protocol adapters use shared
+permission semantics through injected ports and registered operations.
+Buffered, streaming, multipart, artifact, MCP, asynchronous, and process
+adapters must present the resulting bound execution permit to the first
+protected sink. A transport-local check, header, internal caller, or route name
+is not independent authority.
+
+Protocol telemetry records bounded transfer counts, stable outcomes, and
+irreversible correlations only when required. It does not persist bodies,
+headers, paths, identities, chunks, prompts, results, or one routine success
+record per request. A protocol path without sink-side permit consumption and
+the mandatory compact lifecycle proof is non-converged and fails the
+Functional Release Gate.
+
+Plugin package admission binds each contribution to the verified plugin identity, artifact digest, and active generation. The external-service Host accepts only the exact operation reference and configured service binding selected by Core after current authorization. It returns a bounded, sanitized projection and never exposes credentials or transport internals to plugin code.
+
+## Verification
+
+```bash
+npm run server:verify:protocol-boundary
+npm run vitest -- tests/vitest/server/plugin-mcp-outlet-visibility.test.ts
+npm run verify:plugin-bundle-protocol
+npm run verify:plugin-runtime
+npm test -- --suite domains.manifest
+npm run server:verify:strategy-management
+npm run server:verify:model-gateway
+npm run server:verify:model-gateway-detachment
+npm run server:verify:external-gateway
+npm test
+```

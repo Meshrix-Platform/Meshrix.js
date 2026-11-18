@@ -1,0 +1,1108 @@
+import fs from "node:fs/promises";
+import http from "node:http";
+import dns from "node:dns/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import {
+  createUpstreamGatewayRegistry
+} from "../../../packages/agents/src/upstream-gateway/index.ts";
+import {
+  installUpstreamRuntimeServices,
+  structuredJsonPayloadTransport,
+  structuredUpstreamServiceFixture
+} from "../../helpers/upstream-runtime-snapshot.ts";
+import { activatePlugin as activateModelGateway } from "../../../plugins/model-gateway/runtime.mjs";
+import { createPluginContributionController } from "../../../packages/server-runtime/src/composition/plugin-contribution-controller.ts";
+import { createCapturedResponse, parseCapturedResult } from "../../../packages/server-runtime/src/composition/dispatch-operation-captured-response.ts";
+import {
+  initializeLocalSecret
+} from "../../../packages/foundation/src/security/secret-store/local-secret-store.ts";
+import {
+  createMemoryLocalSecretKeyProvider
+} from "../../../packages/foundation/src/security/secret-store/local-secret-key-provider.ts";
+import {
+  createFinalProtectedSinkAttempt,
+  digestFinalProtectedSinkInput
+} from "#meshrix/foundation/security/final-protected-sink-permit";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "bearer";
+const canned2 = "model_gateway.call";
+const canned3 = "retry.synthetic";
+const canned4 = "read";
+const canned5 = "sensitive-only";
+const canned6 = "public-only";
+const canned7 = "upstream-token-marker";
+const canned8 = "upstream-credential-marker";
+const canned9 = "upstream-secret-marker";
+const canned10 = "echo";
+const canned11 = "json-rpc";
+const canned12 = "authorization-fixture";
+const canned13 = "write";
+
+
+
+
+const FIXTURE_REF: any = "secret://upstream-gateway/security-test";
+const RESOLVED_VALUE: any = "resolved-upstream-secret-token-must-not-leak";
+
+const subject: Record<string, any> = {
+  subjectId: "upstream-gateway-security-test",
+  scopes: ["gateway:read", "gateway:write"]
+};
+const authoritySubject: Readonly<Record<string, any>> = Object.freeze({
+  generation: "1",
+  subjectId: subject.subjectId,
+  tenantId: "upstream-gateway-security-test-tenant",
+  type: "test-subject"
+});
+const authorityContext: Readonly<Record<string, any>> = Object.freeze({
+  approvalRevision: "1",
+  grantRevision: "1",
+  policyRevision: "1",
+  riskRevision: "1",
+  workloadGeneration: authoritySubject.generation
+});
+
+const cleanupTasks: any[] = [];
+
+function listenLoopback(server?: any) : any {
+  return new Promise((resolve?: any, reject?: any) : any => {
+    const onError: any = (error?: any) : any => {
+      server.off("listening", onListening);
+      reject(error);
+    };
+    const onListening: any = () : any => {
+      server.off("error", onError);
+      resolve();
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(0, "127.0.0.1");
+  });
+}
+
+function sendJson(response?: any, status?: any, payload?: any) : any {
+  response.writeHead(status, {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store"
+  });
+  response.end(JSON.stringify(payload));
+}
+
+async function startFixtureServer() : Promise<any> {
+  const hits: any[] = [];
+  const server: any = http.createServer(async (request?: any, response?: any) : Promise<any> => {
+    const chunks: any[] = [];
+    request.on("data", (chunk?: any) : any => chunks.push(chunk));
+    await new Promise((resolve?: any) : any => request.on("end", resolve));
+    const url: any = new URL(request.url || "/", "http://127.0.0.1");
+    const body: any = Buffer.concat(chunks).toString("utf8");
+    hits.push({
+      method: request.method,
+      pathname: url.pathname,
+      search: url.search,
+      headers: request.headers,
+      body
+    });
+    if (url.pathname === "/api/redirect-cross-origin") {
+      response.writeHead(302, {
+        Location: url.searchParams.get("to") || "/api/fallback",
+        "Cache-Control": "no-store"
+      });
+      response.end("");
+      return;
+    }
+    sendJson(response, 200, {
+      ok: true,
+      method: request.method,
+      pathname: url.pathname,
+      search: url.search,
+      body: body ? JSON.parse(body) : null,
+      allowedHeader: request.headers["x-request-id"] || "",
+      credentialOk: request.headers.authorization === `Bearer ${RESOLVED_VALUE}`
+    });
+  });
+  await listenLoopback(server);
+  cleanupTasks.push(() : any => new Promise((resolve?: any) : any => server.close(resolve)));
+  const address: any = server.address();
+  return {
+    hits,
+    baseUrl: `http://127.0.0.1:${address.port}`
+  };
+}
+
+async function startHeldFixtureServer() : Promise<any> {
+  const requestReceived = deferred();
+  const peerClosed = deferred();
+  const release = deferred();
+  const hits: any[] = [];
+  const server: any = http.createServer(async (request?: any, response?: any) : Promise<any> => {
+    const chunks: any[] = [];
+    request.on("data", (chunk?: any) : any => chunks.push(chunk));
+    request.on("aborted", () : any => peerClosed.resolve());
+    response.on("close", () : any => peerClosed.resolve());
+    await new Promise((resolve?: any) : any => request.on("end", resolve));
+    const body = Buffer.concat(chunks).toString("utf8");
+    hits.push({ method: request.method, pathname: new URL(request.url || "/", "http://127.0.0.1").pathname, body });
+    requestReceived.resolve();
+    await release.promise;
+    if (!response.destroyed) sendJson(response, 200, { ok: true });
+  });
+  await listenLoopback(server);
+  cleanupTasks.push(async () : Promise<any> => {
+    release.resolve();
+    await new Promise((resolve?: any) : any => server.close(resolve));
+  });
+  return {
+    hits,
+    requestReceived: requestReceived.promise,
+    peerClosed: peerClosed.promise,
+    release,
+    baseUrl: `http://127.0.0.1:${server.address().port}`
+  };
+}
+
+function deferred() : any {
+  let resolve: any;
+  const promise: Promise<void> = new Promise((complete) => { resolve = complete; });
+  return { promise, resolve };
+}
+
+async function createRegistry(services?: any) : Promise<any> {
+  const { registry } = await createRegistryWithDataDir(services);
+  return registry;
+}
+
+async function createRegistryWithDataDir(services?: any, options: Record<string, any> = {}) : Promise<any> {
+  const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-gateway-ssrf-"));
+  cleanupTasks.push(() : any => fs.rm(userDataPath, { recursive: true, force: true }));
+  const secretKeyProvider: any = options.secretKeyProvider || createMemoryLocalSecretKeyProvider();
+  const rawRegistry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(), userDataPath, ...options, secretKeyProvider });
+  let registry: any;
+  registry = new Proxy(rawRegistry, {
+    get(target: any, property: any) : any {
+      const value: any = Reflect.get(target, property, target);
+      if (property === "forward") {
+        return (input: Record<string, any> = {}, caller: Record<string, any> = {}, forwardOptions: Record<string, any> = {}) : any => {
+          const inputDigest: any = digestFinalProtectedSinkInput(input);
+          const finalProtectedSinkPermit: any = createFinalProtectedSinkAttempt({
+            audience: "upstream-structured-http-final-effect",
+            subject: authoritySubject,
+            operationId: "gateway.forward",
+            requestDigest: inputDigest,
+            context: authorityContext,
+            targetSelector: Object.freeze({
+              inputDigest,
+              operationKey: String(input.operationKey || ""),
+              serviceId: String(input.serviceId || "")
+            }),
+            proofRef: "upstream-gateway-security-test-proof",
+            revalidateCurrentAuthority: async () : Promise<any> => Object.freeze({
+              allowed: true,
+              revoked: false,
+              subject: authoritySubject,
+              context: authorityContext
+            })
+          });
+          return value.call(target, input, caller, {
+            ...forwardOptions,
+            finalProtectedSinkPermit
+          });
+        };
+      }
+      return typeof value === "function" ? value.bind(registry) : value;
+    }
+  });
+  installUpstreamRuntimeServices(
+    registry,
+    services.map((service?: any) : any => structuredUpstreamServiceFixture({ allowLocalNetwork: true, ...service }))
+  );
+  cleanupTasks.push(() : any => registry.close());
+  return {
+    userDataPath,
+    registry,
+    secretKeyProvider
+  };
+}
+
+async function writeLocalSecret({ userDataPath, serviceId, baseUrl, secretKeyProvider }: Record<string, any>) : Promise<any> {
+  const endpoint: any = new URL(baseUrl);
+  await initializeLocalSecret({
+    dataDir: userDataPath,
+    target: {
+      provider: "upstream-gateway-test",
+      family: "upstream-gateway",
+      authType: canned1,
+      secretRef: FIXTURE_REF,
+      scope: {
+        serviceId,
+        allowedHosts: [endpoint.hostname],
+        allowedProtocols: [endpoint.protocol.replace(/:$/, "")],
+        allowedOrigins: [endpoint.origin],
+        scopes: ["gateway:read", "gateway:write"]
+      }
+    },
+    payload: {
+      token: RESOLVED_VALUE
+    },
+    keyProvider: secretKeyProvider
+  });
+}
+
+function createStaticTagStore(projections: any = []) : any {
+  return {
+    listProjections({ entityType = "" }: Record<string, any> = {}) : any {
+      return projections.filter((projection?: any) : any => !entityType || projection.entityType === entityType);
+    },
+    getTag(tagId: any = "") : any {
+      return tagId ? { tagId, status: "active", enabled: true } : null;
+    },
+    getPolicyRevision() : any {
+      return {
+        protocolVersion: "v0.0.1:risk-control:governance-policy-revision-1",
+        revision: 1,
+        updatedAt: "2026-01-01T00:00:00.000Z"
+      };
+    }
+  };
+}
+
+afterEach(async () : Promise<any> => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  while (cleanupTasks.length) {
+    const cleanup: any = cleanupTasks.pop();
+    await cleanup();
+  }
+});
+
+describe("upstream gateway SSRF boundary", () : any => {
+  it("maps a published Model Gateway deadline through the plugin Host facade into one cancellable HTTP request", async () : Promise<any> => {
+    const fixture: any = await startHeldFixtureServer();
+    const serviceId = "model-gateway-timeout-fixture";
+    const { registry } = await createRegistryWithDataDir([{
+      serviceId,
+      baseUrl: fixture.baseUrl,
+      allowLocalNetwork: true,
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      operations: [{
+        operationKey: canned2,
+        method: "POST",
+        path: "/v1/chat/completions",
+        risk: "safe_write",
+        requiredScopes: ["gateway:write"]
+      }]
+    }]);
+    const runtime: any = await activateModelGateway({
+      manifest: { id: "model-gateway" },
+      context: { configuration: { enabled: true, serviceRef: serviceId, timeoutMs: 150 } }
+    });
+    cleanupTasks.push(() => runtime.close());
+    const operationId = "model_gateway.call";
+    const implementation = runtime.contributions.operations[operationId];
+    const operationRecord = Object.freeze({
+      pluginId: "model-gateway",
+      kind: "operations",
+      id: operationId,
+      implementation
+    });
+    const pluginRegistry = Object.freeze({
+      requireOperation: (id: string) => id === operationId ? operationRecord : null
+    });
+    const controller = createPluginContributionController({
+      registry: pluginRegistry,
+      hostPorts: { externalService: registry }
+    });
+    const response: any = createCapturedResponse();
+    const execution = controller.executePluginOperation({
+      operation: { id: operationId },
+      input: {
+        modelRef: "model.synthetic",
+        providerRef: "provider.synthetic",
+        inputRefs: ["input.synthetic"],
+        idempotencyKey: canned3,
+        deadlineMs: 1_000,
+        stream: false
+      },
+      authSession: {
+        user: {
+          userId: "synthetic-subject",
+          tenantId: "synthetic-tenant",
+          scopes: ["gateway:write", "model:call"]
+        }
+      },
+      request: {
+        __meshrixToolRuntimeAuthorization: {
+          ok: true,
+          grant: {
+            id: "synthetic-grant",
+            scopes: ["gateway:write", "model:call"],
+            capabilities: [],
+            metadata: { policyRevision: "synthetic-policy" }
+          },
+          policy: { decisionId: "synthetic-risk-decision" }
+        }
+      },
+      response
+    });
+    let watchdog: ReturnType<typeof setTimeout> | null = null;
+    try {
+      await Promise.race([
+        execution,
+        new Promise<never>((_resolve, reject) => {
+          watchdog = setTimeout(() => reject(new Error("Explicit Model Gateway request budget did not settle.")), 5_000);
+        })
+      ]);
+    } finally {
+      if (watchdog) clearTimeout(watchdog);
+      fixture.release.resolve();
+    }
+    await fixture.requestReceived;
+    await fixture.peerClosed;
+
+    expect(response.statusCode).toBe(504);
+    expect(parseCapturedResult({ operation: { id: operationId }, captured: response })).toMatchObject({
+      ok: false,
+      error: { code: "model_gateway_timeout" }
+    });
+    expect(fixture.hits).toHaveLength(1);
+    expect(fixture.hits[0].pathname).toBe("/v1/chat/completions");
+    expect(JSON.parse(fixture.hits[0].body)).not.toHaveProperty("deadlineMs");
+    expect(fixture.hits[0].body).toContain("model.synthetic");
+  });
+
+  it("requires an explicit service policy before reaching a restricted local target", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const registry: any = await createRegistry([{
+      serviceId: "local-denied",
+      baseUrl: fixture.baseUrl,
+      allowLocalNetwork: false,
+      operations: [{
+        operationKey: canned4,
+        method: "GET",
+        path: "/fixed",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"]
+      }]
+    }]);
+
+    await expect(registry.forward({
+      serviceId: "local-denied",
+      operationKey: canned4
+    }, subject)).rejects.toMatchObject({
+      status: 502,
+      reasonCode: "outbound_egress_denied"
+    });
+    expect(fixture.hits).toHaveLength(0);
+  });
+
+  it("keeps link-local and cloud metadata targets denied when local network access is enabled", async () : Promise<any> => {
+    const fetchMock: any = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const registry: any = await createRegistry([{
+      serviceId: "metadata-denied",
+      baseUrl: "http://169.254.169.254:80",
+      allowLocalNetwork: true,
+      operations: [{
+        operationKey: canned4,
+        method: "GET",
+        path: "/latest/meta-data/",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"]
+      }]
+    }]);
+
+    await expect(registry.forward({
+      serviceId: "metadata-denied",
+      operationKey: canned4
+    }, subject)).rejects.toMatchObject({
+      status: 502,
+      reasonCode: "outbound_egress_denied",
+      decision: {
+        reason: "restricted_address_cloud-metadata",
+        allowLocalForConfiguredModelService: true,
+        allowLinkLocal: false
+      }
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a link-local DNS answer before opening an opted-in local connection", async () : Promise<any> => {
+    const lookup: any = vi.spyOn(dns, "lookup").mockResolvedValue([{
+      address: "169.254.20.30",
+      family: 4
+    }]);
+    const fetchMock: any = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const registry: any = await createRegistry([{
+      serviceId: "link-local-dns-denied",
+      baseUrl: "http://service.internal.test:80",
+      allowLocalNetwork: true,
+      operations: [{
+        operationKey: canned4,
+        method: "GET",
+        path: "/internal",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"]
+      }]
+    }]);
+
+    await expect(registry.forward({
+      serviceId: "link-local-dns-denied",
+      operationKey: canned4
+    }, subject)).rejects.toMatchObject({
+      status: 502,
+      reasonCode: "outbound_egress_denied",
+      decision: {
+        reason: "restricted_dns_address_link-local"
+      }
+    });
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("pins the preflight DNS result for the configured request", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const fixturePort: any = new URL(fixture.baseUrl).port;
+    const lookup: any = vi.spyOn(dns, "lookup").mockResolvedValue([{
+      address: "127.0.0.1",
+      family: 4
+    }]);
+    const registry: any = await createRegistry([{
+      serviceId: "dns-pinned",
+      baseUrl: `http://rebind.example.test:${fixturePort}`,
+      operations: [{
+        operationKey: canned4,
+        method: "GET",
+        path: "/fixed",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"]
+      }]
+    }]);
+
+    await expect(registry.forward({
+      serviceId: "dns-pinned",
+      operationKey: canned4
+    }, subject)).resolves.toMatchObject({ ok: true });
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(fixture.hits).toHaveLength(1);
+  });
+
+  it("cancels an oversized streaming response before reading the remaining body", async () : Promise<any> => {
+    let closedResolve: () => void = () => {};
+    const closed: Promise<boolean> = new Promise((resolve?: any) : any => { closedResolve = () => resolve(true); });
+    let writes: any = 0;
+    const server: any = http.createServer((request?: any, response?: any) : any => {
+      response.writeHead(200, { "content-type": "application/octet-stream" });
+      const timer: any = setInterval(() : any => {
+        writes += 1;
+        if (!response.write(Buffer.alloc(80))) clearInterval(timer);
+      }, 1);
+      response.on("close", () : any => { clearInterval(timer); closedResolve(); });
+    });
+    await listenLoopback(server);
+    cleanupTasks.push(() : any => new Promise((resolve?: any) : any => server.close(resolve)));
+    const address: any = server.address();
+    const registry: any = await createRegistry([{
+      serviceId: "stream-bounded",
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      operations: [{
+        operationKey: canned4,
+        method: "GET",
+        path: "/stream",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"],
+        payloadTransport: structuredJsonPayloadTransport({ responseMaxBytes: 128 })
+      }]
+    }]);
+
+    await expect(registry.forward({
+      serviceId: "stream-bounded",
+      operationKey: canned4
+    }, subject)).rejects.toMatchObject({
+      status: 502,
+      reasonCode: "upstream_response_too_large"
+    });
+    await expect(Promise.race([closed, new Promise<boolean>((resolve?: any) : any => setTimeout(() => resolve(false), 5_000))])).resolves.toBe(true);
+    expect(writes).toBeLessThan(64_000);
+  });
+
+  it("rejects non-JSON and malformed JSON before configured response filtering can fail open", async () : Promise<any> => {
+    const hits: any[] = [];
+    const server: any = http.createServer((request?: any, response?: any) : any => {
+      hits.push(request.url);
+      if (request.url === "/plain") {
+        response.writeHead(200, { "content-type": "text/plain" });
+        response.end("opaque upstream text");
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end("{malformed");
+    });
+    await listenLoopback(server);
+    cleanupTasks.push(() : any => new Promise((resolve?: any) : any => server.close(resolve)));
+    const address: any = server.address();
+    const registry: any = await createRegistry([{
+      serviceId: "response-filter-closed",
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      operations: [{
+        operationKey: canned5,
+        method: "GET",
+        path: "/plain",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"],
+        sensitiveBodyFields: ["credential"]
+      }, {
+        operationKey: canned6,
+        method: "GET",
+        path: "/malformed",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"],
+        publicResponseFields: ["ok"]
+      }]
+    }]);
+
+    await expect(registry.forward({
+      serviceId: "response-filter-closed",
+      operationKey: canned5
+    }, subject)).rejects.toMatchObject({
+      status: 502,
+      reasonCode: "response_projection_unavailable"
+    });
+    await expect(registry.forward({
+      serviceId: "response-filter-closed",
+      operationKey: canned6
+    }, subject)).rejects.toMatchObject({
+      status: 502,
+      reasonCode: "response_projection_unavailable"
+    });
+    expect(hits).toEqual(["/plain", "/malformed"]);
+  });
+
+  it("passes default structured HTTP response fields through without implicit redaction", async () : Promise<any> => {
+    const server: any = http.createServer((request?: any, response?: any) : any => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        token: canned7,
+        credential: canned8,
+        nested: { secret: canned9 }
+      }));
+    });
+    await listenLoopback(server);
+    cleanupTasks.push(() : any => new Promise((resolve?: any) : any => server.close(resolve)));
+    const address: any = server.address();
+    const registry: any = await createRegistry([{
+      serviceId: "default-transparent-response",
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      operations: [{
+        operationKey: canned4,
+        method: "GET",
+        path: "/transparent",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"]
+      }]
+    }]);
+
+    const forwarded: any = await registry.forward({
+      serviceId: "default-transparent-response",
+      operationKey: canned4
+    }, subject);
+
+    expect(forwarded.response.json).toEqual({
+      token: canned7,
+      credential: canned8,
+      nested: { secret: canned9 }
+    });
+  });
+
+  it("keeps caller routing fields rejected while configured operation paths still work", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const registry: any = await createRegistry([
+      {
+        serviceId: "default-closed",
+        baseUrl: fixture.baseUrl,
+        trafficPolicy: { perMinute: 20, burst: 20 },
+        operations: [
+          {
+            operationKey: canned10,
+            method: "POST",
+            path: "/fixed",
+            risk: "safe_write",
+            requiredScopes: ["gateway:write"]
+          },
+          {
+            operationKey: canned11,
+            protocol: "json-rpc",
+            method: "POST",
+            path: "/jsonrpc",
+            rpcMethod: "fixture.echo",
+            risk: "safe_write",
+            requiredScopes: ["gateway:write"]
+          }
+        ]
+      }
+    ]);
+
+    const forwarded: any = await registry.forward({
+      serviceId: "default-closed",
+      operationKey: canned10,
+      body: { message: "configured-path" }
+    }, subject);
+    expect(forwarded.ok).toBe(true);
+    expect(forwarded.response.json.pathname).toBe("/fixed");
+    expect(fixture.hits).toHaveLength(1);
+
+    await expect(registry.forward({
+      serviceId: "default-closed",
+      operationKey: canned10,
+      path: "/api/other",
+      body: { message: "caller-path" }
+    }, subject)).rejects.toMatchObject({ status: 400 });
+    await expect(registry.forward({
+      serviceId: "default-closed",
+      operationKey: canned10,
+      rpcMethod: "fixture.override",
+      body: { message: "caller-rpc-method" }
+    }, subject)).rejects.toMatchObject({ status: 400 });
+
+    const jsonRpcForwarded: any = await registry.forward({
+      serviceId: "default-closed",
+      operationKey: canned11,
+      body: {
+        jsonrpc: "2.0",
+        id: "caller-id",
+        method: "fixture.override",
+        params: { message: "json-rpc-body" }
+      }
+    }, subject);
+    expect(jsonRpcForwarded.ok).toBe(true);
+    expect(JSON.parse(fixture.hits.at(-1).body).method).toBe("fixture.echo");
+    expect(fixture.hits).toHaveLength(2);
+  });
+
+  it("uses the configured relative path and query without caller route fields", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const registry: any = await createRegistry([
+      {
+        serviceId: "controlled",
+        baseUrl: fixture.baseUrl,
+        trafficPolicy: { perMinute: 20, burst: 20 },
+        operations: [
+          {
+            operationKey: canned4,
+            method: "GET",
+            path: "/api/echo",
+            risk: "read_only",
+            requiredScopes: ["gateway:read"]
+          }
+        ]
+      }
+    ]);
+
+    const forwarded: any = await registry.forward({
+      serviceId: "controlled",
+      operationKey: canned4,
+      query: { q: "1" }
+    }, subject);
+
+    expect(forwarded.ok).toBe(true);
+    expect(forwarded.response.json.pathname).toBe("/api/echo");
+    expect(forwarded.response.json.search).toBe("?q=1");
+    expect(forwarded.response.json.allowedHeader).toBe("");
+    expect(fixture.hits).toHaveLength(1);
+  });
+
+  it("injects only the Core-bound Skill Hub subject into the trusted service request", async () => {
+    const fixture = await startFixtureServer();
+    const serviceId = "skill-hub-admission-fixture";
+    const operationId = "skill_hub.fixture.get";
+    const registry = await createRegistry([{ serviceId, baseUrl: fixture.baseUrl,
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      headers: { "X-Meshrix-Skill-Hub-Subject": "untrusted-configured-subject" },
+      operations: [{ operationKey: operationId, method: "POST", path: "/api/fixture", risk: "read_only", requiredScopes: ["gateway:read"] }]
+    }]);
+    const subjectRef = `skill_hub_subject_${"a".repeat(64)}`;
+    const governance = { authorizationContextDigest: canned12, riskDecisionRef: "risk-fixture", policyRevision: "policy-fixture" };
+    await registry.requestPluginExternalService({ pluginId: "skill-hub", operationId, serviceRef: serviceId, operationRef: operationId,
+      governance, input: { meshrixContext: { principal: { subjectRef } } } }, { subject });
+    expect(fixture.hits[0].headers["x-meshrix-skill-hub-subject"]).toBe(subjectRef);
+    expect(JSON.parse(fixture.hits[0].body).meshrixContext.principal.subjectRef).toBe(subjectRef);
+    await registry.forward({ serviceId, operationKey: operationId, body: { meshrixContext: { principal: { subjectRef } } },
+      requestHeaders: { "x-meshrix-skill-hub-subject": subjectRef } }, subject);
+    expect(fixture.hits[1].headers).not.toHaveProperty("x-meshrix-skill-hub-subject");
+    await expect(registry.requestPluginExternalService({ pluginId: "skill-hub", operationId, serviceRef: serviceId, operationRef: operationId,
+      governance, input: { meshrixContext: { principal: { subjectRef: "caller-subject" } } } }, { subject })).rejects.toMatchObject({ status: 403 });
+    expect(fixture.hits).toHaveLength(2);
+  });
+
+  it("refreshes the Skill Hub catalog on SSE connect and reconnect without replaying committed requests", async () => {
+    const updates: Record<string, any>[] = [];
+    const receivedEvent = deferred();
+    const reconnected = deferred();
+    const cursors: string[] = [];
+    const subscriptions: http.ServerResponse[] = [];
+    let calls = 0;
+    const server = http.createServer(async (request, response) => {
+      const url = new URL(request.url || "/", "http://127.0.0.1");
+      if (url.pathname === "/v1/events") {
+        cursors.push(url.searchParams.get("cursor") || "");
+        subscriptions.push(response);
+        response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store" });
+        response.flushHeaders();
+        if (subscriptions.length === 1) {
+          response.write(`id: 7\nevent: skill-hub.catalog.changed\ndata: ${JSON.stringify({
+            eventType: "skill-hub.catalog.changed", eventId: 7, serviceRevision: 7, operationId: "skill_hub.publish"
+          })}\n\n`);
+        }
+        return;
+      }
+      for await (const _chunk of request) { /* consume the one authorized request */ }
+      calls += 1;
+      sendJson(response, 200, { ok: true });
+    });
+    await listenLoopback(server);
+    cleanupTasks.push(async () => {
+      for (const response of subscriptions) response.end();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Fixture did not bind a TCP port.");
+    const serviceId = "skill-hub-events-fixture";
+    const operationId = "skill_hub.fixture.get";
+    const { registry } = await createRegistryWithDataDir([{
+      serviceId, baseUrl: `http://127.0.0.1:${address.port}`,
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      operations: [{ operationKey: operationId, method: "POST", path: "/api/fixture", risk: "read_only", requiredScopes: ["gateway:read"] }]
+    }], {
+      publishSkillHubUpdate(update: Record<string, any>) {
+        updates.push(update);
+        if (update.operationId === "skill_hub.publish") receivedEvent.resolve();
+        if (update.operationId === "skill_hub.catalog.refresh" && update.revision === 7) reconnected.resolve();
+      }
+    });
+    const response = await registry.requestPluginExternalService({
+      pluginId: "skill-hub", operationId, serviceRef: serviceId, operationRef: operationId,
+      governance: { authorizationContextDigest: canned12, riskDecisionRef: "risk-fixture", policyRevision: "policy-fixture" },
+      input: { meshrixContext: { principal: { subjectRef: `skill_hub_subject_${"a".repeat(64)}` } } }
+    }, { subject });
+    expect(response.ok).toBe(true);
+    await receivedEvent.promise;
+    expect(updates[0]).toMatchObject({ operationId: "skill_hub.catalog.refresh", revision: 0 });
+    subscriptions[0].end();
+    await reconnected.promise;
+    expect(cursors).toEqual(["0", "7"]);
+    expect(updates.map((item) => item.operationId)).toEqual([
+      "skill_hub.catalog.refresh", "skill_hub.publish", "skill_hub.catalog.refresh"
+    ]);
+    expect(calls).toBe(1);
+  });
+
+  it("maps a plugin external-service request through its exact published operation", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const serviceId: any = "plugin-external-fixture";
+    const operationId: any = "demo.repository.get";
+    const registry: any = await createRegistry([{
+      serviceId,
+      baseUrl: fixture.baseUrl,
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      operations: [{
+        operationKey: operationId,
+        method: "GET",
+        path: "/repos/{owner}/{repository}",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"]
+      }]
+    }]);
+
+    const result: any = await registry.requestPluginExternalService({
+      pluginId: "demo",
+      operationId,
+      serviceRef: serviceId,
+      operationRef: operationId,
+      governance: {
+        authorizationContextDigest: canned12,
+        riskDecisionRef: "risk-fixture",
+        policyRevision: "policy-fixture"
+      },
+      input: {
+        owner: "synthetic owner",
+        repository: "repository/name",
+        ref: "main"
+      },
+      timeoutMs: 1_000
+    }, { subject });
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: 200,
+      data: {
+        pathname: "/repos/synthetic%20owner/repository%2Fname",
+        search: "?ref=main"
+      },
+      receiptRef: expect.any(String)
+    });
+    expect(fixture.hits).toHaveLength(1);
+
+    await expect(registry.requestPluginExternalService({
+      pluginId: "demo",
+      operationId,
+      serviceRef: serviceId,
+      operationRef: "demo.repository.other",
+      governance: {
+        authorizationContextDigest: canned12,
+        riskDecisionRef: "risk-fixture",
+        policyRevision: "policy-fixture"
+      },
+      input: { owner: "synthetic", repository: "repository" }
+    }, { subject })).rejects.toMatchObject({ status: 403 });
+    await expect(registry.requestPluginExternalService({
+      pluginId: "demo",
+      operationId,
+      serviceRef: serviceId,
+      operationRef: operationId,
+      governance: {
+        authorizationContextDigest: canned12,
+        riskDecisionRef: "risk-fixture",
+        policyRevision: "policy-fixture"
+      },
+      input: { owner: "synthetic" }
+    }, { subject })).rejects.toMatchObject({ status: 400 });
+    expect(fixture.hits).toHaveLength(1);
+  });
+
+  it("resolves scoped local secret credentials without exposing secret material", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const serviceId: any = "credential-bound";
+    const { registry, userDataPath, secretKeyProvider } = await createRegistryWithDataDir([
+      {
+        serviceId,
+        baseUrl: fixture.baseUrl,
+        credentialRefs: [FIXTURE_REF],
+        trafficPolicy: { perMinute: 20, burst: 20 },
+        operations: [
+          {
+            operationKey: canned13,
+            method: "POST",
+            path: "/api/credential",
+            risk: "safe_write",
+            requiredScopes: ["gateway:write"]
+          }
+        ]
+      }
+    ]);
+    await writeLocalSecret({ userDataPath, serviceId, baseUrl: fixture.baseUrl, secretKeyProvider });
+
+    const forwarded: any = await registry.forward({
+      serviceId,
+      operationKey: canned13,
+      body: { message: "credential-check" }
+    }, subject);
+
+    expect(forwarded.ok).toBe(true);
+    expect(forwarded.response.json.credentialOk).toBe(true);
+    expect(JSON.stringify(forwarded)).not.toContain(RESOLVED_VALUE);
+    expect(JSON.stringify(registry.listAudit({ serviceId }))).not.toContain(RESOLVED_VALUE);
+  });
+
+  it("enforces service-level tag policy before forwarding", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const serviceId: any = "tag-governed";
+    const service: Record<string, any> = {
+      serviceId,
+      baseUrl: fixture.baseUrl,
+      tagPolicy: {
+        entityRefs: [{ entityType: "external_services.service", entityId: serviceId }],
+        allowTags: ["upstream-allowed"],
+        denyTags: ["upstream-denied"]
+      },
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      operations: [
+        {
+          operationKey: canned4,
+          method: "GET",
+          path: "/api/tagged",
+          risk: "read_only",
+          requiredScopes: ["gateway:read"]
+        }
+      ]
+    };
+    const allowStore: any = createStaticTagStore([
+      { entityType: "external_services.service", entityId: serviceId, tagId: "upstream-allowed" }
+    ]);
+    const denyStore: any = createStaticTagStore([
+      { entityType: "external_services.service", entityId: serviceId, tagId: "upstream-denied" }
+    ]);
+    const { registry: allowedRegistry } = await createRegistryWithDataDir([service], { tagStore: allowStore });
+    const allowed: any = await allowedRegistry.forward({ serviceId, operationKey: canned4 }, subject);
+    expect(allowed.ok).toBe(true);
+    expect(fixture.hits).toHaveLength(1);
+
+    const { registry: deniedRegistry } = await createRegistryWithDataDir([service], { tagStore: denyStore });
+    await expect(deniedRegistry.forward({ serviceId, operationKey: canned4 }, subject))
+      .rejects.toMatchObject({ status: 403 });
+    expect(fixture.hits).toHaveLength(1);
+    expect(deniedRegistry.previewPolicy({ serviceId, operationKey: canned4 }, subject).tagPolicy).toMatchObject({
+      enabled: true,
+      allowed: false,
+      reasonCode: "tag_policy_denied"
+    });
+  });
+
+  it("applies caller audience tags when the service descriptor also has a default service entityRef", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const serviceId: any = "audience-tagged";
+    const service: Record<string, any> = {
+      serviceId,
+      baseUrl: fixture.baseUrl,
+      tagPolicy: {
+        allowTags: ["audience:allow"],
+        requiredTags: ["audience:required"],
+        denyTags: ["audience:deny"]
+      },
+      trafficPolicy: { perMinute: 20, burst: 20 },
+      operations: [
+        {
+          operationKey: canned4,
+          method: "GET",
+          path: "/api/tagged",
+          risk: "read_only",
+          requiredScopes: ["gateway:read"]
+        }
+      ]
+    };
+    const allowedCaller: Record<string, any> = {
+      ...subject,
+      subjectId: "audience-allowed-principal"
+    };
+    const deniedCaller: Record<string, any> = {
+      ...subject,
+      subjectId: "audience-denied-principal"
+    };
+    const store: any = createStaticTagStore([
+      { entityType: "subject", entityId: allowedCaller.subjectId, tagId: "audience:allow" },
+      { entityType: "subject", entityId: allowedCaller.subjectId, tagId: "audience:required" },
+      { entityType: "subject", entityId: deniedCaller.subjectId, tagId: "audience:allow" },
+      { entityType: "subject", entityId: deniedCaller.subjectId, tagId: "audience:required" },
+      { entityType: "subject", entityId: deniedCaller.subjectId, tagId: "audience:deny" }
+    ]);
+    const { registry } = await createRegistryWithDataDir([service], { tagStore: store });
+    const allowed: any = await registry.forward({ serviceId, operationKey: canned4 }, allowedCaller);
+    expect(allowed.ok).toBe(true);
+    expect(fixture.hits).toHaveLength(1);
+    await expect(registry.forward({ serviceId, operationKey: canned4 }, deniedCaller))
+      .rejects.toMatchObject({ status: 403 });
+    expect(fixture.hits).toHaveLength(1);
+  });
+
+  it("rejects scheme-relative, absolute, backslash, and direct host override inputs before fetch", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const registry: any = await createRegistry([
+      {
+        serviceId: "controlled",
+        baseUrl: fixture.baseUrl,
+        trafficPolicy: { perMinute: 20, burst: 20 },
+        operations: [
+          {
+            operationKey: canned4,
+            method: "GET",
+            path: "/api",
+            risk: "read_only",
+            requiredScopes: ["gateway:read"]
+          }
+        ]
+      }
+    ]);
+
+    for (const input of [
+      { path: "//evil.example/api" },
+      { path: "https://evil.example/api" },
+      { path: "\\\\evil.example\\api" },
+      { host: "evil.example", path: "/api/echo" }
+    ]) {
+      await expect(registry.forward({
+        serviceId: "controlled",
+        operationKey: canned4,
+        ...input
+      }, subject)).rejects.toMatchObject({ status: expect.any(Number) });
+    }
+    expect(fixture.hits).toHaveLength(0);
+  });
+
+  it("rejects caller path, method, and header overrides before fetch", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const registry: any = await createRegistry([
+      {
+        serviceId: "policy-bound",
+        baseUrl: fixture.baseUrl,
+        trafficPolicy: { perMinute: 20, burst: 20 },
+        operations: [
+          {
+            operationKey: canned4,
+            method: "GET",
+            path: "/api",
+            risk: "read_only",
+            requiredScopes: ["gateway:read"]
+          }
+        ]
+      }
+    ]);
+
+    await expect(registry.forward({
+      serviceId: "policy-bound",
+      operationKey: canned4,
+      path: "/admin",
+      method: "GET"
+    }, subject)).rejects.toMatchObject({ status: 400 });
+    await expect(registry.forward({
+      serviceId: "policy-bound",
+      operationKey: canned4,
+      path: "/api/echo",
+      method: "POST"
+    }, subject)).rejects.toMatchObject({ status: 400 });
+    await expect(registry.forward({
+      serviceId: "policy-bound",
+      operationKey: canned4,
+      path: "/api/echo",
+      method: "GET",
+      headers: { "X-Not-Allowed": "nope" }
+    }, subject)).rejects.toMatchObject({ status: 400 });
+    expect(fixture.hits).toHaveLength(0);
+  });
+
+  it("does not follow cross-origin redirects from configured operation responses", async () : Promise<any> => {
+    const fixture: any = await startFixtureServer();
+    const redirectTarget: any = await startFixtureServer();
+    const registry: any = await createRegistry([
+      {
+        serviceId: "redirect-guarded",
+        baseUrl: fixture.baseUrl,
+        trafficPolicy: { perMinute: 20, burst: 20 },
+        operations: [
+          {
+            operationKey: canned4,
+            method: "GET",
+            path: "/api/redirect-cross-origin",
+            risk: "read_only",
+            requiredScopes: ["gateway:read"]
+          }
+        ]
+      }
+    ]);
+
+    const forwarded: any = await registry.forward({
+      serviceId: "redirect-guarded",
+      operationKey: canned4,
+      query: {
+        to: `${redirectTarget.baseUrl}/private`
+      }
+    }, subject);
+
+    expect(forwarded.ok).toBe(false);
+    expect(forwarded.upstream.status).toBe(302);
+    expect(fixture.hits).toHaveLength(1);
+    expect(redirectTarget.hits).toHaveLength(0);
+  });
+});

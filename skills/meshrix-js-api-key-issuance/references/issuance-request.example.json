@@ -1,0 +1,25 @@
+{
+  "workloadDisplayName": "<client-label>",
+  "organizationNodeId": "<authorized-organization-node>",
+  "expiresAt": "<future-ISO-8601-timestamp>",
+  "policy": {
+    "protocol": "mcp",
+    "serviceIds": [],
+    "capabilityIds": ["<selected-dynamic-capability-id>"],
+    "toolsetIds": [],
+    "allowedTools": [],
+    "deniedTools": [],
+    "scopeIds": ["gateway:read"],
+    "maximumRisk": "low",
+    "audience": { "targetIds": [], "connectorPackageIds": [] },
+    "resources": {
+      "mode": "restricted",
+      "workspaceIds": ["<authorized-workspace-id>"],
+      "dataClassifications": [], "egressClasses": [], "semanticFamilies": [],
+      "capabilityDomains": [], "capabilityVerbs": [], "resourceKinds": [],
+      "effectKinds": [], "secretBindingIds": [], "allowedOrigins": [], "allowedCidrs": []
+    },
+    "processIdentity": { "mode": "optional" },
+    "limits": { "maxUses": 10, "requestsPerWindow": 10, "windowSeconds": 60, "maxConcurrentEffects": 1 }
+  }
+}

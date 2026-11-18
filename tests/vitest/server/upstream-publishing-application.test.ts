@@ -1,0 +1,690 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createUpstreamPublishingApplication,
+  UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+  type UpstreamPublishingApplication,
+} from "../../../packages/agents/src/upstream-gateway/publishing-application.ts";
+import type { UpstreamServiceCreateCommand } from "@meshrix/contracts/upstream-service-publishing";
+import { normalizeService } from "../../../packages/agents/src/upstream-gateway/support.ts";
+import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.ts";
+import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+const canned1 = "inventory";
+const canned2 = "create-inventory";
+const canned3 = "lookup";
+const canned4 = "http-standard-port-reload";
+const canned5 = "read";
+const canned6 = "json-rpc-port";
+const canned7 = "mcp-default-port";
+const canned8 = "fixture-material";
+const canned9 = "replace-inventory";
+const canned10 = "disable-inventory";
+const canned11 = "remove-inventory";
+const canned12 = "list";
+const canned13 = "local-denied";
+const canned14 = "local-allowed";
+const canned15 = "local-retarget";
+const canned16 = "public-inventory";
+const canned17 = "public-ok";
+
+
+
+
+const roots: any[] = [];
+
+async function temporaryRoot() : Promise<any> {
+  const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-publishing-"));
+  roots.push(root);
+  return root;
+}
+
+function command(overrides: Record<string, any> = {}) : string {
+  const base: UpstreamServiceCreateCommand = {
+    schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+    action: "create",
+    serviceKey: canned1,
+    expectedServiceRevision: 0,
+    expectedSetRevision: 0,
+    idempotencyKey: canned2,
+    descriptor: {
+      serviceProtocol: "http",
+      label: "Inventory",
+      baseUrl: "https://service.invalid:443",
+      references: [{
+        type: "credential",
+        reference: "credential://vault/inventory",
+        revision: 1,
+        use: "request-auth",
+        protocol: "https"
+      }],
+      operations: [{
+        operationKey: canned3,
+        method: "GET",
+        path: "/items",
+        payloadTransport: structuredJsonPayloadTransport()
+      }]
+    },
+  };
+  return JSON.stringify({ ...base, ...overrides });
+}
+
+function subject(subjectId: any = "developer-one", scopes: any = ["gateway:write", "gateway:maintain"]) : any {
+  return { subjectId, scopes };
+}
+
+async function harness() : Promise<any> {
+  const storageRoot: any = await temporaryRoot();
+  const store: any = createServiceManifestStore({ storageRoot });
+  const audit: any[] = [];
+  const commitManifestSet: any = vi.fn((input?: any) : any => store.writerPort.commitManifestSet(input));
+  const application: UpstreamPublishingApplication = createUpstreamPublishingApplication({
+    writerPort: { commitManifestSet },
+    readerPort: { getSnapshot: store.getCandidateSnapshot },
+    auditPort: { append: async (event?: any) : Promise<any> => audit.push(event) }
+  });
+  return { application, audit, commitManifestSet, storageRoot, store };
+}
+
+afterEach(async () : Promise<any> => {
+  vi.restoreAllMocks();
+  await Promise.all(roots.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
+});
+
+describe("upstream publishing application", () : any => {
+  it("rejects missing authentication and scope before a durable write", async () : Promise<any> => {
+    const { application, commitManifestSet } = await harness();
+    await expect(application.execute(command(), null)).rejects.toMatchObject({
+      code: "upstream_publishing_authentication_required",
+      statusCode: 401
+    });
+    await expect(application.execute(command(), subject("developer", []))).rejects.toMatchObject({
+      code: "upstream_publishing_scope_required",
+      statusCode: 403
+    });
+    expect(commitManifestSet).not.toHaveBeenCalled();
+  });
+
+  it("binds an opaque identity to the authenticated owner and persists typed references without defaults", async () : Promise<any> => {
+    const { application, audit, store } = await harness();
+    const result: any = await application.execute(command(), subject());
+    expect(result).toMatchObject({ ok: true, state: "publishing", serviceRevision: 1, setRevision: 1, replayed: false });
+    expect(result.serviceId).toMatch(/^svc_[A-Za-z0-9_-]{43}$/u);
+    expect(result).not.toHaveProperty("descriptor");
+    expect(result).not.toHaveProperty("ownerSubjectId");
+
+    const record: any = (await store.getCandidateSnapshot()).getService(result.serviceId);
+    expect(record.manifest.references).toEqual([expect.objectContaining({
+      type: "credential",
+      reference: "credential://vault/inventory",
+      revision: 1
+    })]);
+    expect(record.manifest.payload.descriptor).toEqual({
+      baseUrl: "https://service.invalid:443",
+      label: "Inventory",
+      operations: [{
+        method: "GET",
+        operationKey: canned3,
+        path: "/items",
+        payloadTransport: structuredJsonPayloadTransport()
+      }],
+      serviceProtocol: "http"
+    });
+    expect(record.manifest.payload.descriptor).not.toHaveProperty("visibility");
+    expect(record.manifest.payload.descriptor).not.toHaveProperty("trafficPolicy");
+    expect(audit).toHaveLength(1);
+    expect(JSON.stringify(audit[0])).not.toContain("developer-one");
+    expect(JSON.stringify(audit[0])).not.toContain("service.invalid");
+    expect(JSON.stringify(audit[0])).not.toContain("vault/inventory");
+  });
+
+  it("accepts an HTTP operation without an explicit response transport", async () : Promise<any> => {
+    const { application, store } = await harness();
+    const input: any = JSON.parse(command());
+    delete input.descriptor.operations[0].payloadTransport.response;
+
+    const result: any = await application.execute(JSON.stringify(input), subject());
+    const record: any = (await store.getCandidateSnapshot()).getService(result.serviceId);
+    expect(record.manifest.payload.descriptor.operations[0].payloadTransport).toEqual({
+      request: structuredJsonPayloadTransport().request
+    });
+  });
+
+  it("publishes HTTP, JSON-RPC, and MCP URLs with omitted or standard ports and reloads normalized HTTP state", async () : Promise<any> => {
+    const descriptors: Array<Record<string, any>> = [
+      {
+        serviceKey: canned4,
+        url: "https://api.example:443/v1",
+        descriptor: {
+          serviceProtocol: "http",
+          label: "HTTP standard port reload",
+          baseUrl: "https://api.example:443/v1",
+          operations: [{
+            operationKey: canned5,
+            method: "GET",
+            path: "/v1",
+            payloadTransport: structuredJsonPayloadTransport()
+          }]
+        }
+      },
+      {
+        serviceKey: canned6,
+        url: "https://rpc.example:443/rpc",
+        descriptor: {
+          serviceProtocol: "json-rpc",
+          label: "JSON-RPC endpoint ports",
+          baseUrl: "https://rpc.example/rpc",
+          endpoints: [{ endpointId: "primary", baseUrl: "https://rpc.example:443/rpc", weight: 1 }],
+          operations: [{
+            operationKey: canned3,
+            method: "POST",
+            path: "/rpc",
+            jsonRpcMethod: "catalog.lookup",
+            payloadTransport: structuredJsonPayloadTransport()
+          }]
+        }
+      },
+      {
+        serviceKey: canned7,
+        url: "https://mcp.example/mcp",
+        descriptor: {
+          serviceProtocol: "mcp",
+          label: "MCP default port",
+          mcp: {
+            transport: "http",
+            url: "https://mcp.example/mcp",
+            protocolVersion: "2026-07-28"
+          }
+        }
+      }
+    ];
+
+    for (const [index, entry] of descriptors.entries()) {
+      const { application, storageRoot, store } = await harness();
+      const result: any = await application.execute(command({
+        serviceKey: entry.serviceKey,
+        idempotencyKey: ("create-"+entry.serviceKey),
+        descriptor: entry.descriptor
+      }), subject());
+      expect(result).toMatchObject({ ok: true, state: "publishing", serviceRevision: 1 });
+
+      const snapshot: any = index === 0
+        ? await createServiceManifestStore({ storageRoot }).getCandidateSnapshot()
+        : await store.getCandidateSnapshot();
+      const record: any = snapshot.getService(result.serviceId);
+      expect(record.manifest.payload.descriptor.serviceProtocol).toBe(entry.descriptor.serviceProtocol);
+      const storedUrl: any = entry.descriptor.serviceProtocol === "mcp"
+        ? record.manifest.payload.descriptor.mcp.url
+        : record.manifest.payload.descriptor.endpoints?.[0]?.baseUrl || record.manifest.payload.descriptor.baseUrl;
+      expect(storedUrl).toBe(entry.url);
+
+      if (index === 0) {
+        const reloadedDescriptor: any = record.manifest.payload.descriptor;
+        const runtimeService: any = normalizeService({ ...reloadedDescriptor, serviceId: result.serviceId });
+        const normalizedAgain: any = normalizeService(runtimeService);
+        expect(runtimeService.baseUrl).toBe("https://api.example/v1");
+        expect(normalizedAgain.baseUrl).toBe(runtimeService.baseUrl);
+        const parsedRuntimeUrl: any = new URL(runtimeService.baseUrl);
+        expect({
+          protocol: parsedRuntimeUrl.protocol,
+          hostname: parsedRuntimeUrl.hostname,
+          pathname: parsedRuntimeUrl.pathname
+        }).toEqual({ protocol: "https:", hostname: "api.example", pathname: "/v1" });
+      }
+    }
+  });
+
+  it("rejects embedded credentials and malformed ports at HTTP, JSON-RPC endpoint, and MCP publishing boundaries", async () : Promise<any> => {
+    const at = `${["fixture", "placeholder"].join(":")}@`;
+    const credentials = at;
+    const invalidDescriptors: Array<{ descriptor: Record<string, any>; message: string }> = [
+      {
+        descriptor: {
+          serviceProtocol: "http",
+          label: "Invalid HTTP URL",
+          baseUrl: `https://${credentials}api.example/v1`,
+          operations: [{ operationKey: canned5, method: "GET", path: "/v1", payloadTransport: structuredJsonPayloadTransport() }]
+        },
+        message: "descriptor.baseUrl must use an HTTP(S) URL without embedded credentials."
+      },
+      {
+        descriptor: {
+          serviceProtocol: "json-rpc",
+          label: "Invalid JSON-RPC endpoint",
+          baseUrl: "https://rpc.example/rpc",
+          endpoints: [{ endpointId: "primary", baseUrl: "https://rpc.example:65536/rpc", weight: 1 }],
+          operations: [{
+            operationKey: canned3,
+            method: "POST",
+            path: "/rpc",
+            jsonRpcMethod: "catalog.lookup",
+            payloadTransport: structuredJsonPayloadTransport()
+          }]
+        },
+        message: "descriptor.endpoints.baseUrl must be a remote URL."
+      },
+      {
+        descriptor: {
+          serviceProtocol: "mcp",
+          label: "Invalid MCP URL",
+          mcp: { transport: "http", url: `https://${credentials}mcp.example/mcp`, protocolVersion: "2026-07-28" }
+        },
+        message: "descriptor.mcp.url must use an HTTP(S) URL without embedded credentials."
+      }
+    ];
+
+    for (const [index, entry] of invalidDescriptors.entries()) {
+      const { application, audit, commitManifestSet } = await harness();
+      await expect(application.execute(command({ descriptor: entry.descriptor }), subject())).rejects.toMatchObject({
+        statusCode: 400,
+        message: entry.message
+      });
+      expect(commitManifestSet, `descriptor ${index}`).not.toHaveBeenCalled();
+      expect(audit, `descriptor ${index}`).toEqual([]);
+    }
+  });
+
+  it("projects publishing until the durable terminal snapshot and paired revision facts agree", async () : Promise<any> => {
+    const store: any = createServiceManifestStore({ storageRoot: await temporaryRoot() });
+    let publicationFacts: any = null;
+    const application: UpstreamPublishingApplication = createUpstreamPublishingApplication({
+      writerPort: store.writerPort,
+      readerPort: { getSnapshot: store.getCandidateSnapshot },
+      publishedReaderPort: store.readerPort,
+      getPublicationFacts: () : any => publicationFacts,
+      auditPort: { append: async () : Promise<any> => {} }
+    });
+    const created: any = await application.execute(command(), subject());
+    const readerSubject: any = subject("developer-one", ["gateway:read", "gateway:write", "gateway:maintain"]);
+    expect(created.publication).toMatchObject({ status: "publishing", candidateRevision: 1 });
+    expect((await application.get(created.serviceId, readerSubject)).service.publication.status).toBe("publishing");
+
+    const candidate: any = await store.getCandidateSnapshot();
+    await store.acknowledgePublished({
+      setRevision: candidate.setRevision,
+      setDigest: candidate.setDigest
+    });
+    publicationFacts = Object.freeze({
+      ready: true,
+      sourceRevision: candidate.setRevision,
+      sourceDigest: candidate.setDigest,
+      catalogRevision: "catalog-revision",
+      audienceRevision: 3,
+      protocolRevision: 3
+    });
+    expect((await application.get(created.serviceId, readerSubject)).service.publication).toMatchObject({
+      status: "server_published",
+      terminal: {
+        sourceRevision: 1,
+        sourceDigest: candidate.setDigest,
+        catalogRevision: "catalog-revision",
+        audienceRevision: 3,
+        protocolRevision: 3
+      }
+    });
+  });
+
+  it("rejects non-reference sensitive material before audit or durable write", async () : Promise<any> => {
+    const { application, audit, commitManifestSet, store } = await harness();
+    const invalidReferences: any[] = [
+      {
+        type: "credential",
+        reference: "credential://vault/inventory",
+        revision: 1,
+        use: "request-auth",
+        secretValue: canned8
+      },
+      {
+        type: "certificate",
+        reference: "-----BEGIN CERTIFICATE-----fixture",
+        revision: 1,
+        use: "server-auth"
+      },
+      {
+        type: "private-key",
+        reference: "secret://vault/signing-key",
+        revision: 1,
+        use: "request-signing"
+      },
+      {
+        type: "trust-anchor",
+        reference: "trust-anchor://vault/service-root",
+        revision: 1,
+        use: "server-auth",
+        resolvedMaterial: "fixture-material"
+      }
+    ];
+
+    for (const reference of invalidReferences) {
+      const input: any = JSON.parse(command());
+      input.descriptor.references = [reference];
+      await expect(application.execute(JSON.stringify(input), subject())).rejects.toMatchObject({
+        code: expect.stringMatching(/^storage_manifest_/u)
+      });
+    }
+
+    const rawMaterialCommands: any[] = [
+      (() : any => {
+        const input: any = JSON.parse(command());
+        input.descriptor.description = ["Bear", "er placeholder-value"].join("");
+        return input;
+      })(),
+      (() : any => {
+        const input: any = JSON.parse(command());
+        input.descriptor.operations[0].requestSchema = {
+          type: "string",
+          const: ["Bear", "er placeholder-value"].join("")
+        };
+        return input;
+      })(),
+      (() : any => {
+        const input: any = JSON.parse(command());
+        input.descriptor.references[0].reference = [
+          "credential://s",
+          "k-synthetic-placeholder-value"
+        ].join("");
+        return input;
+      })()
+    ];
+    for (const input of rawMaterialCommands) {
+      await expect(application.execute(JSON.stringify(input), subject())).rejects.toMatchObject({
+        code: expect.stringMatching(/^(?:storage_manifest_sensitive_material|upstream_publishing_schema_invalid)$/u)
+      });
+    }
+
+    expect(commitManifestSet).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+    expect((await store.getCandidateSnapshot()).setRevision).toBe(0);
+  });
+
+  it("returns the durable result for identical replay and rejects conflicting reuse", async () : Promise<any> => {
+    const { application, store } = await harness();
+    const first: any = await application.execute(command(), subject());
+    const replay: any = await application.execute(command(), subject());
+    expect(replay).toEqual({ ...first, replayed: true });
+
+    const conflicting: any = JSON.parse(command());
+    conflicting.descriptor.label = "Changed";
+    await expect(application.execute(JSON.stringify(conflicting), subject())).rejects.toMatchObject({
+      code: "storage_manifest_replay_conflict",
+      statusCode: 409
+    });
+    expect((await store.getCandidateSnapshot()).setRevision).toBe(1);
+  });
+
+  it("enforces ownership and expected revisions before replacement", async () : Promise<any> => {
+    const { application, store } = await harness();
+    const created: any = await application.execute(command(), subject());
+    const replace: any = command({
+      action: "replace",
+      serviceKey: undefined,
+      serviceId: created.serviceId,
+      expectedServiceRevision: 1,
+      expectedSetRevision: 1,
+      idempotencyKey: canned9
+    });
+    await expect(application.execute(replace, subject("developer-two"))).rejects.toMatchObject({
+      code: "upstream_publishing_owner_required",
+      statusCode: 403
+    });
+
+    const stale: any = JSON.parse(replace);
+    stale.expectedServiceRevision = 0;
+    await expect(application.execute(JSON.stringify(stale), subject())).rejects.toMatchObject({
+      code: "storage_manifest_service_revision_stale",
+      statusCode: 409
+    });
+    expect((await store.getCandidateSnapshot()).setRevision).toBe(1);
+  });
+
+  it("persists disable and removal as monotonic reference-free tombstones", async () : Promise<any> => {
+    const { application, store } = await harness();
+    const created: any = await application.execute(command(), subject());
+    const disabled: any = await application.execute(command({
+      action: "disable",
+      serviceKey: undefined,
+      serviceId: created.serviceId,
+      descriptor: undefined,
+      expectedServiceRevision: 1,
+      expectedSetRevision: 1,
+      idempotencyKey: canned10
+    }), subject());
+    expect(disabled).toMatchObject({ state: "disabled", serviceRevision: 2, setRevision: 2 });
+
+    const removed: any = await application.execute(command({
+      action: "remove",
+      serviceKey: undefined,
+      serviceId: created.serviceId,
+      descriptor: undefined,
+      expectedServiceRevision: 2,
+      expectedSetRevision: 2,
+      idempotencyKey: canned11
+    }), subject());
+    expect(removed).toMatchObject({ state: "removed", serviceRevision: 3, setRevision: 3 });
+    const tombstone: any = (await store.getCandidateSnapshot()).getService(created.serviceId).manifest;
+    expect(tombstone.references).toEqual([]);
+    expect(tombstone.payload).toEqual({ state: "removed" });
+  });
+
+  it("rejects duplicate, unknown, implicit protocol, local-process and raw-secret input before persistence", async () : Promise<any> => {
+    const { application, audit, commitManifestSet } = await harness();
+    const cases: any[] = [
+      command().replace('"action":"create"', '"action":"create","action":"replace"'),
+      command({ unsupported: true }),
+      command({ descriptor: { label: "Missing protocol" } }),
+      command({ descriptor: { serviceProtocol: "mcp", command: "tool" } }),
+      command({ descriptor: {
+        serviceProtocol: "http",
+        [["pass", "word"].join("")]: "synthetic-placeholder-value"
+      } }),
+      command({ descriptor: { serviceProtocol: "http", baseUrl: "file:///local/service", operations: [] } }),
+      command({ descriptor: { serviceProtocol: "http", baseUrl: "https://service.invalid:443", permissions: { command: "tool" } } }),
+      command({ descriptor: {
+        serviceProtocol: "http",
+        baseUrl: "https://service.invalid:443",
+        operations: [{
+          operationKey: canned5,
+          method: "GET",
+          path: "/read",
+          shell: "tool",
+          payloadTransport: structuredJsonPayloadTransport()
+        }]
+      } })
+    ];
+    for (const input of cases) {
+      await expect(application.execute(input, subject())).rejects.toMatchObject({ statusCode: 400 });
+    }
+    expect(commitManifestSet).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("fails closed when redacted audit persistence fails", async () : Promise<any> => {
+    const store: any = createServiceManifestStore({ storageRoot: await temporaryRoot() });
+    const commitManifestSet: any = vi.fn((input?: any) : any => store.writerPort.commitManifestSet(input));
+    const application: UpstreamPublishingApplication = createUpstreamPublishingApplication({
+      writerPort: { commitManifestSet },
+      readerPort: { getSnapshot: store.getCandidateSnapshot },
+      auditPort: { append: async () : Promise<any> => { throw new Error("audit unavailable"); } }
+    });
+    await expect(application.execute(command(), subject())).rejects.toThrow("audit unavailable");
+    expect(commitManifestSet).not.toHaveBeenCalled();
+  });
+
+  it("round-trips every publishing field while keeping typed references separate and owner-scoped", async () : Promise<any> => {
+    const { application } = await harness();
+    const descriptor: Record<string, any> = {
+      serviceProtocol: "json-rpc",
+      label: "Catalog",
+      description: "Explicit fixture",
+      baseUrl: "https://service.invalid:443/rpc",
+      endpoints: [{ endpointId: "primary", baseUrl: "https://service.invalid:443/rpc", weight: 1 }],
+      healthPath: "/health",
+      allowLocalNetwork: false,
+      visibility: "organization",
+      dataClass: "internal",
+      tags: ["catalog"],
+      references: [{
+        type: "certificate",
+        reference: "certificate://authority/catalog",
+        revision: 2,
+        use: "server-auth",
+        host: "service.invalid",
+        protocol: "https",
+        scopes: ["connect"]
+      }, {
+        type: "credential",
+        reference: "credential://vault/catalog",
+        revision: 3,
+        use: "request-auth"
+      }, {
+        type: "private-key",
+        reference: "private-key://vault/catalog-signing",
+        revision: 4,
+        use: "request-signing"
+      }, {
+        type: "trust-anchor",
+        reference: "trust-anchor://authority/catalog-root",
+        revision: 5,
+        use: "server-auth"
+      }],
+      interfaceSchemas: { request: { type: "object" }, response: { type: "object" } },
+      permissions: { requiredScopes: ["catalog:read"] },
+      approvalPolicy: { required: true, scope: "catalog:approve" },
+      trafficPolicy: { perMinute: 30, burst: 5 },
+      audience: {
+        organizations: ["org-a"], teams: ["team-a"], roles: ["maintainer"], directGrants: ["grant-a"]
+      },
+      tagPolicy: { requiredTags: ["catalog"] },
+      circuitBreaker: { enabled: true, failureThreshold: 3 },
+      operations: [{
+        operationKey: canned12, method: "POST", path: "/rpc", requiredScopes: ["catalog:read"],
+        jsonRpcMethod: "catalog.list",
+        requestSchema: { type: "object" }, responseSchema: { type: "object" },
+        payloadTransport: structuredJsonPayloadTransport({ requestMaxBytes: 4096, responseMaxBytes: 4096 })
+      }]
+    };
+    const created: any = await application.execute(command({ descriptor }), subject());
+    const detail: any = await application.get(created.serviceId, subject("developer-one", ["gateway:read"]));
+    expect(detail.service.descriptor).toEqual(Object.fromEntries(
+      (Object.entries(descriptor) as [string, any][]).filter(([key]: any[]) : any => key !== "references")
+    ));
+    expect(detail.service.references).toEqual(descriptor.references.map((reference?: any) : any => reference.type === "credential"
+      ? { ...reference, origin: "https://service.invalid" }
+      : reference).sort((left?: any, right?: any) : any =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right))
+    ));
+    expect((await application.list(subject("developer-two", ["gateway:read"]))).services).toEqual([]);
+    await expect(application.get(created.serviceId, subject("developer-two", ["gateway:read"])))
+      .rejects.toMatchObject({ code: "upstream_publishing_owner_required", statusCode: 403 });
+  });
+
+  it("rejects unreachable target classes and undeclared local targets before persistence", async () : Promise<any> => {
+    const { application, commitManifestSet } = await harness();
+    const httpDescriptor = (baseUrl: any, allowLocalNetwork?: any) : any => ({
+      serviceProtocol: "http",
+      baseUrl,
+      ...(allowLocalNetwork === undefined ? {} : { allowLocalNetwork }),
+      references: [],
+      operations: [{
+        operationKey: canned5, method: "GET", path: "/read",
+        payloadTransport: structuredJsonPayloadTransport()
+      }]
+    });
+    const admin = subject("admin-one", ["gateway:admin"]);
+    let key = 0;
+    for (const [baseUrl, allowLocalNetwork, actor] of [
+      ["http://169.254.169.254/latest/meta-data", undefined, admin],
+      ["http://169.254.169.254/latest/meta-data", true, admin],
+      ["http://metadata.google.internal/", true, admin],
+      ["http://0.0.0.0/", true, admin],
+      ["http://100.64.0.1/", true, admin],
+      ["http://127.0.0.1:8080/", undefined, admin],
+      ["http://localhost:8080/", undefined, admin],
+      [["http://", "10.0.0.9", "/"].join(""), undefined, admin],
+      ["http://[::1]/", undefined, admin],
+      ["http://[fd00::1]/", undefined, admin]
+    ] as const) {
+      key += 1;
+      await expect(application.execute(
+        command({ descriptor: httpDescriptor(baseUrl, allowLocalNetwork), idempotencyKey: ("target-"+key) }),
+        actor
+      )).rejects.toMatchObject({
+        code: "upstream_publishing_target_restricted",
+        statusCode: 400
+      });
+    }
+    expect(commitManifestSet).not.toHaveBeenCalled();
+  });
+
+  it("requires gateway:admin to declare local-network services", async () : Promise<any> => {
+    const { application, commitManifestSet } = await harness();
+    const descriptor = (allowLocalNetwork?: any) : any => ({
+      serviceProtocol: "http",
+      baseUrl: "http://127.0.0.1:8080/",
+      ...(allowLocalNetwork === undefined ? {} : { allowLocalNetwork }),
+      references: [],
+      operations: [{
+        operationKey: canned5, method: "GET", path: "/read",
+        payloadTransport: structuredJsonPayloadTransport()
+      }]
+    });
+    const maintainer = subject("maintainer-one", ["gateway:write", "gateway:maintain"]);
+
+    await expect(application.execute(
+      command({ descriptor: descriptor(true), idempotencyKey: canned13 }),
+      maintainer
+    )).rejects.toMatchObject({ code: "upstream_publishing_scope_required", statusCode: 403 });
+    expect(commitManifestSet).not.toHaveBeenCalled();
+
+    const created: any = await application.execute(
+      command({ descriptor: descriptor(true), idempotencyKey: canned14 }),
+      subject("maintainer-one", ["gateway:admin"])
+    );
+    expect(created.ok).toBe(true);
+
+    // Without gateway:admin the same subject cannot retarget the local service
+    // to a different local target while inheriting its allowLocalNetwork flag.
+    await expect(application.execute(JSON.stringify({
+      schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
+      action: "replace",
+      serviceId: created.serviceId,
+      expectedServiceRevision: created.serviceRevision,
+      expectedSetRevision: created.setRevision,
+      idempotencyKey: canned15,
+      descriptor: {
+        serviceProtocol: "http",
+        baseUrl: ["http://", "10.0.0.9", "/"].join(""),
+        references: [],
+        operations: [{
+          operationKey: canned5, method: "GET", path: "/read",
+          payloadTransport: structuredJsonPayloadTransport()
+        }]
+      }
+    }), maintainer)).rejects.toMatchObject({
+      code: "upstream_publishing_scope_required",
+      statusCode: 403
+    });
+
+    // Public targets stay on the ordinary write scopes.
+    const publicDescriptor: any = {
+      serviceProtocol: "http",
+      baseUrl: "https://service.invalid:443",
+      references: [],
+      operations: [{
+        operationKey: canned5, method: "GET", path: "/read",
+        payloadTransport: structuredJsonPayloadTransport()
+      }]
+    };
+    const published: any = await application.execute(
+      command({
+        serviceKey: canned16,
+        descriptor: publicDescriptor,
+        idempotencyKey: canned17,
+        expectedSetRevision: created.setRevision
+      }),
+      maintainer
+    );
+    expect(published.ok).toBe(true);
+  });
+});

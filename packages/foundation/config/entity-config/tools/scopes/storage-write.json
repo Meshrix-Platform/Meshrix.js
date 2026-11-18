@@ -1,0 +1,5 @@
+{
+  "id": "storage:write",
+  "label": "Write storage",
+  "description": "Write workspace artifacts and related storage records."
+}

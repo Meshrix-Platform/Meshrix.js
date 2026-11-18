@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Codex"
+  short_description: "Codex configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-codex to locate Codex configuration facts and the current Meshrix.js MCP integration owner."

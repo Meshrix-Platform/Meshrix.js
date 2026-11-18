@@ -1,0 +1,1152 @@
+import fs from "node:fs";
+import { createOperationRouteIndex } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
+import { createConsoleAuth } from "../../../packages/foundation/src/security/auth/console-auth.ts";
+import { createTagStoreAdapter } from "../../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
+import { dispatchRegisteredHttpOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
+import { sendJson } from "../../../packages/protocols/http/http-utils.ts";
+import { modernHttpRequest } from "../gateway/support.ts";
+import { EventEmitter } from "node:events";
+import { Readable } from "node:stream";
+import { createHttpServerRequestHandler } from "../../../apps/server/runtime/http-server-routes.ts";
+import { createFixedWindowRateLimiter } from "../../../apps/server/runtime/http-server-middleware.ts";
+import { authenticateMcpApiKey, authenticateMcpApiKeyAdmission } from "../../../packages/capabilities/src/skills/mcp-api-key-authentication.ts";
+import { createRequestBodyAdmissionController } from "../../../packages/protocols/http/http-utils.ts";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { createMemoryApiKeyVerifierKeyProvider } from "../../../packages/foundation/src/security/authorization/api-key-verifier-key-provider.ts";
+import {
+  API_KEY_MANAGEMENT_ACTION,
+  evaluateApiKeyIssuerScopes
+} from "../../../packages/foundation/src/security/authorization/api-key-issuer-authority.ts";
+import {
+  createApiKeyDistributionProvider,
+  parseApiKeyCredential,
+  registerApiKeyOwnerRecoveryAssignmentSync
+} from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution.ts";
+import { createToolCatalog } from "../../../packages/capabilities/src/operation-permission-core/catalog.ts";
+import { createOperationPermissionStore } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
+import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
+import { STRATEGY_PERMISSION_OPERATION_DEFINITIONS } from "../../../packages/contracts/src/operations/strategy-permission-operation-definitions.ts";
+const canned1 = "catalog-1";
+const canned2 = "tenant:anonymous:127.0.0.1";
+const canned3 = "subject:anonymous:127.0.0.1";
+const canned4 = "api-key";
+const canned5 = "api-key-admission";
+const canned6 = "secret-binding-opaque";
+const canned7 = "secret-binding-sibling";
+const canned8 = "scoped_api_key";
+
+
+
+
+const temporaryDirectories: string[] = [];
+
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: any) => void;
+  const promise = new Promise<T>((settle, fail) => { resolve = settle; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+afterEach(async () : Promise<any> => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory?: any) : any =>
+    fs.promises.rm(directory, { recursive: true, force: true })));
+});
+
+function governanceFixture(): any {
+  let configured: any = true;
+  let organizationRevision: any = 7;
+  let authorizationRevision: any = 11;
+  let nodes: any[] = [
+    { nodeId: "root", nodeType: "group", parentId: "", name: "Root" },
+    { nodeId: "issuer", nodeType: "organization", parentId: "root", name: "Issuer" },
+    { nodeId: "child", nodeType: "department", parentId: "issuer", name: "Child" },
+    { nodeId: "peer", nodeType: "organization", parentId: "root", name: "Peer" }
+  ];
+  const roles: any[] = [{
+    roleId: "key-manager",
+    name: "Key manager",
+    scopeNodeId: "issuer",
+    scopeNodeType: "organization",
+    managementActions: [API_KEY_MANAGEMENT_ACTION]
+  }];
+  return {
+    securityPermissions: {
+      getOrganizationGovernance: () : any => ({
+        configured,
+        revision: organizationRevision,
+        nodes,
+        roles
+      }),
+      getGovernanceSummary: () : any => ({
+        policyRevision: { revision: authorizationRevision, updatedAt: "2026-08-03T00:00:00.000Z" },
+        roles: roles.map((role?: any) : any => ({ ...role, enabled: true })),
+        userPolicies: [{ userId: "admin", enabled: true, roleIds: ["key-manager"] }],
+        apiKeyRecoveryAssignments: []
+      }),
+      getGovernancePolicyRevision: () : any => ({ revision: authorizationRevision }),
+      verifyProcessIdentity: (evidence: any) : any => evidence
+    },
+    setUnconfigured() : any { configured = false; organizationRevision = 0; nodes = []; },
+    moveChildToPeer() : any {
+      nodes = nodes.map((node?: any) : any => node.nodeId === "child" ? { ...node, parentId: "peer" } : node);
+      organizationRevision += 1;
+    },
+    bumpAuthorization() : any { authorizationRevision += 1; }
+  };
+}
+
+function policy(catalogFingerprint = canned1, overrides: Record<string, any> = {}): any {
+  return {
+    protocol: "mcp",
+    serviceIds: [],
+    capabilityIds: [],
+    toolsetIds: [],
+    allowedTools: ["tools.echo"],
+    deniedTools: [],
+    scopeIds: [],
+    maximumRisk: "high",
+    audience: {
+      serverAudience: "https://meshrix.invalid",
+      targetIds: ["server"],
+      connectorPackageIds: []
+    },
+    resources: {
+      mode: "restricted",
+      workspaceIds: ["workspace-1"],
+      dataClassifications: [],
+      egressClasses: [],
+      semanticFamilies: [],
+      capabilityDomains: [],
+      capabilityVerbs: [],
+      resourceKinds: [],
+      effectKinds: [],
+      secretBindingIds: [],
+      allowedOrigins: [],
+      allowedCidrs: []
+    },
+    processIdentity: { mode: "optional" },
+    limits: {
+      maxUses: 2,
+      requestsPerWindow: 2,
+      windowSeconds: 60,
+      maxConcurrentEffects: 1
+    },
+    catalogFingerprint,
+    ...overrides
+  };
+}
+
+function harness(catalogOverrides: Record<string, any> = {}): any {
+  const directory: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-api-key-"));
+  temporaryDirectories.push(directory);
+  const governance: any = governanceFixture();
+  let timestamp: any = Date.parse("2026-08-03T00:00:00.000Z");
+  let randomCounter: any = 0;
+  const registry: any = {
+    getCatalog: () : any => ({
+      fingerprint: canned1,
+      tools: [{ id: "tools.echo" }],
+      toolsets: [],
+      scopes: [],
+      ...catalogOverrides
+    })
+  };
+  const store: any = createOperationPermissionStore({
+    userDataPath: directory,
+    registry,
+    securityPermissions: governance.securityPermissions,
+    capabilityBindingGuard: false,
+    apiKeyVerifierKeyProvider: createMemoryApiKeyVerifierKeyProvider(Buffer.alloc(32, 91)),
+    apiKeyClock: () : any => timestamp,
+    apiKeyRandomBytes(size: number) : any {
+      randomCounter += 1;
+      return Buffer.alloc(size, randomCounter);
+    }
+  });
+  const provider: any = createApiKeyDistributionProvider({ store });
+  return {
+    directory,
+    registry,
+    store,
+    governance,
+    provider,
+    advance(ms: number) : any { timestamp += ms; },
+    now() : number { return timestamp; },
+    close() : any { return store.close(); }
+  };
+}
+
+describe("scoped API Key distribution", () : any => {
+  it("recognizes real Keys before body retention and isolates source, subjects and organization budgets", async () => {
+    const current = harness();
+    const tagManagementStore = createTagStoreAdapter({ userDataPath: current.directory });
+    const cookieAuth = createConsoleAuth({ userDataPath: current.directory, tagManagementStore });
+    try {
+      const owner = await cookieAuth.ensureInitialOwner();
+      const login: any = await cookieAuth.login({ username: owner.username, password: owner.password }, { socket: { remoteAddress: "127.0.0.1" }, headers: {} });
+      const cookie = login.cookies.map((value: string) => value.split(";")[0]).join("; ");
+      const create = (organizationNodeId: string) => current.provider.create({ subjectId: "admin", workloadDisplayName: "Admission fixture", organizationNodeId,
+        expiresAt: "2026-08-04T00:00:00.000Z", policy: policy("catalog-1", { audience: { serverAudience: "meshrix.invalid", targetIds: ["server"], connectorPackageIds: [] } }) });
+      const first = await create("child");
+      const peer = await create("child");
+      const otherTenant = await create("issuer");
+      const limiter = (limit: number) => createFixedWindowRateLimiter({ limit, windowMs: 60000 });
+      const bodyAdmission = createRequestBodyAdmissionController({ maxInFlightRequests: 8, maxInFlightRequestsPerTenant: 2, maxInFlightRequestsPerSubject: 1 });
+      const anonymousLease = bodyAdmission.acquire({ tenantKey: canned2, subjectKey: canned3, contentLength: 2 });
+      const handler = createHttpServerRequestHandler({ activeApiOperations: SERVER_API_OPERATIONS.filter((operation: any) => operation.id === "auth.session"), consoleAuth: cookieAuth,
+        controllers: { system: { handleAuthSession({ request, response }: any) { sendJson(response, 200, cookieAuth.getSummary(request)); } } }, distPath: "",
+        registeredCoreProvider: { findProxyRegisteredApiRequest: () => null, dispatchRegisteredHttpOperation: (input: any) => dispatchRegisteredHttpOperation({ ...input, routeIndex: createOperationRouteIndex(input.operations) }) },
+        getDiscoveryState: () => ({}), getListenUrl: () => "http://127.0.0.1", getOperationPermissionPlatform: () => null,
+        lifecycle: { beginRequest: () => new AbortController(), endRequest() {}, markSocketActive() {}, markSocketIdle() {} },
+        rateLimits: { windowMs: 60000 }, runtimeLogger: { debug() {}, info() {}, warn() {}, error() {} },
+        subjectRateLimiter: limiter(1), tenantRateLimiter: limiter(2), ipRateLimiter: limiter(1),
+        securityPermissions: cookieAuth, toolSkillManagementProvider: { authenticateAdmission: ({ request }: any) => authenticateMcpApiKeyAdmission({ request, serverAudience: "meshrix.invalid", apiKeyDistributionProvider: current.provider }) },
+        requestBodyAdmissionController: bodyAdmission, platformMcpGatewayAdapter: {
+          async handle({ rawRequest, requestBody, url, method }: any) {
+            const authentication = await authenticateMcpApiKey({ request: rawRequest, requestBody, url, method, serverAudience: "meshrix.invalid", apiKeyDistributionProvider: current.provider });
+            if (!authentication.ok) return { status: 401, body: { denied: true } };
+            const principal = authentication.apiKeyAuthorization;
+            const charge = rawRequest.__meshrixPrincipalAdmission({ credentialKind: canned4, subjectId: principal.workloadPrincipalId, tenantId: principal.organizationNodeId });
+            return charge.allowed ? { status: 200, body: { jsonrpc: "2.0", id: 1, result: { tools: [] } } } : { status: 429, body: {} };
+          }
+        } });
+      const invoke = async (apiKey?: string, sessionCookie = "") => {
+        let bodyReads = 0;
+        const message = modernHttpRequest("tools/list", 1);
+        const body = JSON.stringify(message.body);
+        const request: any = new Readable({ read() { bodyReads++; this.push(body); this.push(null); } });
+        request.method = sessionCookie ? "GET" : "POST"; request.url = sessionCookie ? "/api/auth/session" : "/mcp";
+        request.headers = { ...message.headers, host: "meshrix.invalid", "content-length": String(Buffer.byteLength(body)), ...(apiKey ? { "x-meshrix.js-api-key": apiKey } : {}), ...(sessionCookie ? { cookie: sessionCookie } : {}) };
+        request.socket = { remoteAddress: "127.0.0.1" };
+        const response: any = new EventEmitter();
+        response.statusCode = 200; response.headers = {};
+        response.setHeader = (name: string, value: any) => { response.headers[name.toLowerCase()] = value; };
+        response.getHeader = (name: string) => response.headers[name.toLowerCase()];
+        response.writeHead = (status: number, headers: any) => { response.statusCode = status; Object.assign(response.headers, headers); };
+        response.write = () => {};
+        response.end = () => response.emit("finish");
+        await handler(request, response);
+        return { status: response.statusCode, bodyReads };
+      };
+      // Anonymous body capacity/source traffic cannot charge either valid Key.
+      expect((await invoke()).status).toBe(429);
+      expect((await invoke(first.apiKey)).status).toBe(200);
+      expect((await invoke(first.apiKey))).toMatchObject({ status: 429, bodyReads: 0 });
+      expect((await invoke(peer.apiKey)).status).toBe(200);
+      expect((await invoke(otherTenant.apiKey)).status).toBe(200);
+      expect((await invoke(undefined, cookie)).status).toBe(200);
+      const third = await create("child");
+      expect((await invoke(third.apiKey))).toMatchObject({ status: 429, bodyReads: 0 });
+      const invalid = first.apiKey.slice(0, -1) + (first.apiKey.endsWith("A") ? "B" : "A");
+      expect((await invoke(invalid))).toMatchObject({ status: 429, bodyReads: 0 });
+      anonymousLease.release();
+    } finally { await cookieAuth.close(); tagManagementStore.close(); await current.close(); }
+  });
+
+  it("keeps narrow admission separate from signed process authorization and effect permits", async () => {
+    const current = harness();
+    try {
+      const created = await current.provider.create({ subjectId: "admin", workloadDisplayName: "Signed admission", organizationNodeId: "child", expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", { processIdentity: { mode: "required", allowedPublicKeyFingerprints: ["sha256:fixture"] } }) });
+      const input = { credential: created.apiKey, serverAudience: "https://meshrix.invalid", targetId: "server", connectorPackageId: null };
+      const admission = await current.provider.authenticateAdmission(input);
+      expect(admission).toEqual({ credentialKind: canned5, subjectId: created.record.workloadPrincipalId, tenantId: "child" });
+      await expect(current.provider.authenticateRuntime({ ...input, processIdentityEvidence: null })).rejects.toMatchObject({ code: "api_key_process_identity_required" });
+      await expect(current.provider.authorizeOperation({ authorization: admission, operation: { toolId: "tools.echo" } })).rejects.toMatchObject({ code: "api_key_invalid" });
+      await current.provider.revoke({ subjectId: "admin", keyId: created.record.keyId, expectedLifecycleRevision: created.record.lifecycleRevision, reasonCode: "administrator_request" });
+      await expect(current.provider.authenticateAdmission(input)).rejects.toMatchObject({ code: "api_key_inactive" });
+    } finally { await current.close(); }
+  });
+
+  it("authorizes selected Core and exact upstream operations through one restricted API Key", async () : Promise<any> => {
+    const coreResource: any = {
+      capabilityDomain: "runtime",
+      capabilityVerb: "health",
+      resourceKind: "system-health",
+      effectKind: "repair-write"
+    };
+    const upstreamResource: any = {
+      serviceId: "opaque-service",
+      serviceIds: ["opaque-service"],
+      requestedEgress: "mcp",
+      requestedEgresses: ["mcp"],
+      secretBindingId: canned6,
+      secretBindingIds: ["secret-binding-opaque"],
+      capabilityDomain: "upstream-gateway",
+      capabilityVerb: "tools/call",
+      resourceKind: "upstream-service-operation"
+    };
+    const capabilityId: any = "cap:upstream:opaque-service:tools-call-records-list";
+    const current: any = harness({
+      tools: [
+        {
+          id: "tools.echo",
+          toolsets: ["meshrix.runtime.read"],
+          requiredScopes: ["runtime:read"],
+          risk: "repair_write",
+          resourceContext: coreResource
+        },
+        {
+          id: "upstream.opaque-service.records-list",
+          serviceId: "opaque-service",
+          toolsets: ["meshrix.gateway.read"],
+          requiredScopes: ["gateway:read"],
+          risk: "read_only",
+          resourceContext: upstreamResource,
+          dynamicCapability: {
+            capabilityId,
+            serviceId: "opaque-service",
+            risk: "read_only",
+            requiredScopes: ["gateway:read"],
+            toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
+            credentialBindingIds: ["secret-binding-opaque"],
+            resourceContext: upstreamResource
+          }
+        }
+      ],
+      toolsets: [
+        { id: "meshrix.runtime.read", requiredScopes: ["runtime:read"] },
+        { id: "meshrix.gateway.read", requiredScopes: ["gateway:read"] }
+      ],
+      scopes: [{ id: "runtime:read" }, { id: "gateway:read" }]
+    });
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Unified Core and upstream worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          serviceIds: [],
+          capabilityIds: [],
+          toolsetIds: ["meshrix.runtime.read", "meshrix.gateway.read"],
+          allowedTools: ["tools.echo", "upstream.opaque-service.records-list"],
+          scopeIds: ["runtime:read", "gateway:read"],
+          maximumRisk: "high",
+          resources: {
+            ...policy().resources,
+            mode: "restricted",
+            workspaceIds: []
+          },
+          limits: { maxUses: 20, requestsPerWindow: 20, windowSeconds: 60, maxConcurrentEffects: 4 }
+        })
+      });
+      expect(created.record.policy).toMatchObject({
+        serviceIds: ["opaque-service"],
+        capabilityIds: expect.arrayContaining([capabilityId]),
+        maximumRisk: "high",
+        resources: {
+          mode: "restricted",
+          egressClasses: ["mcp"],
+          capabilityDomains: ["runtime", "upstream-gateway"],
+          capabilityVerbs: ["health", "tools/call"],
+          resourceKinds: ["system-health", "upstream-service-operation"],
+          effectKinds: ["repair-write"],
+          secretBindingIds: ["secret-binding-opaque"]
+        }
+      });
+
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const coreOperation: any = {
+        toolId: "tools.echo",
+        toolsetIds: ["meshrix.runtime.read"],
+        scopeIds: ["runtime:read"],
+        risk: "repair_write",
+        resourceContext: coreResource
+      };
+      const upstreamOperation: any = {
+        toolId: "upstream.opaque-service.records-list",
+        serviceId: "opaque-service",
+        capabilityId,
+        dynamicCapability: true,
+        toolsetIds: ["meshrix.gateway.read", "upstream:opaque-service"],
+        scopeIds: ["gateway:read"],
+        risk: "read_only",
+        resourceContext: upstreamResource
+      };
+      await expect(current.provider.authorizeOperation({ authorization, operation: coreOperation }))
+        .resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(current.provider.authorizeOperation({ authorization, operation: upstreamOperation }))
+        .resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(current.provider.authorizeOperation({
+        authorization,
+        operation: { ...coreOperation, resourceContext: { ...coreResource, effectKind: "destructive" } }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      await expect(current.provider.authorizeOperation({
+        authorization,
+        operation: { ...upstreamOperation, capabilityId: `${capabilityId}-sibling` }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      const { requestedEgress: _removedEgress, requestedEgresses: _removedEgresses, ...missingEgress } = upstreamResource;
+      await expect(current.provider.authorizeOperation({
+        authorization,
+        operation: { ...upstreamOperation, resourceContext: missingEgress }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      await expect(current.provider.authorizeOperation({
+        authorization,
+        operation: {
+          ...upstreamOperation,
+          resourceContext: {
+            ...upstreamResource,
+            secretBindingId: canned7,
+            secretBindingIds: ["secret-binding-sibling"]
+          }
+        }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("preserves explicitly selected upstream tool capabilities beside the gateway operation capability", async () : Promise<any> => {
+    const gatewayCapabilityId: any = "cap:upstream:opaque-service:tools-call";
+    const selectedToolCapabilityId: any = `${gatewayCapabilityId}-records-list`;
+    const current: any = harness({
+      tools: [{
+        id: "upstream.opaque-service.tools-call",
+        toolsets: ["meshrix.gateway.read"],
+        requiredScopes: ["gateway:read"],
+        risk: "read_only",
+        dynamicCapability: {
+          capabilityId: gatewayCapabilityId,
+          serviceId: "opaque-service",
+          risk: "read_only",
+          requiredScopes: ["gateway:read"],
+          toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
+          credentialBindingIds: [],
+          resourceContext: {
+            serviceId: "opaque-service",
+            requestedEgress: "mcp",
+            capabilityDomain: "upstream-gateway",
+            capabilityVerb: "tools/call",
+            resourceKind: "upstream-service-operation"
+          }
+        }
+      }],
+      toolsets: [{ id: "meshrix.gateway.read", requiredScopes: ["gateway:read"] }],
+      scopes: [{ id: "gateway:read" }]
+    });
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Upstream MCP tool worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          serviceIds: ["opaque-service"],
+          capabilityIds: [selectedToolCapabilityId],
+          toolsetIds: ["meshrix.gateway.read"],
+          allowedTools: ["upstream.opaque-service.tools-call"],
+          deniedTools: [],
+          scopeIds: ["gateway:read"],
+          maximumRisk: "low",
+          resources: {
+            ...policy().resources,
+            mode: "restricted",
+            workspaceIds: [],
+            egressClasses: ["mcp"],
+            capabilityDomains: ["upstream-gateway"],
+            capabilityVerbs: ["tools/call"],
+            resourceKinds: ["upstream-service-operation"]
+          }
+        })
+      });
+
+      expect(created.record.policy.capabilityIds).toEqual([
+        gatewayCapabilityId,
+        selectedToolCapabilityId
+      ]);
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("revalidates dynamic MCP effects by exact capability while accepting their non-catalog toolset identity", async () : Promise<any> => {
+    const current: any = harness({
+      toolsets: [{ id: "meshrix.gateway.read" }],
+      scopes: [{ id: "gateway:read" }]
+    });
+    const capabilityId: any = "cap:upstream:opaque-service:tools-call-records-list";
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Dynamic MCP worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          serviceIds: ["opaque-service"],
+          capabilityIds: [capabilityId],
+          toolsetIds: ["meshrix.gateway.read"],
+          deniedTools: ["tools.echo"],
+          scopeIds: ["gateway:read"],
+          maximumRisk: "low",
+          resources: {
+            ...policy().resources,
+            workspaceIds: [],
+            egressClasses: ["mcp"],
+            capabilityDomains: ["upstream-gateway"],
+            capabilityVerbs: ["tools/call"],
+            resourceKinds: ["upstream-service-operation"],
+            secretBindingIds: ["secret-binding-opaque"]
+          }
+        })
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const operation: any = {
+        toolId: "tools.echo",
+        serviceId: "opaque-service",
+        capabilityId,
+        toolsetIds: ["meshrix.gateway.read", "upstream:opaque-service"],
+        scopeIds: ["gateway:read"],
+        risk: "read_only",
+        resourceContext: {
+          requestedEgress: "mcp",
+          requestedEgresses: ["mcp"],
+          secretBindingId: canned6,
+          secretBindingIds: ["secret-binding-opaque"],
+          capabilityDomain: "upstream-gateway",
+          capabilityVerb: "tools/call",
+          resourceKind: "upstream-service-operation"
+        }
+      };
+      const lease: any = await current.provider.reserveEffect({ authorization, operation });
+      await current.provider.releaseEffect(lease);
+      await expect(current.provider.reserveEffect({
+        authorization,
+        operation: { ...operation, capabilityId: "", dynamicCapability: true }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      await expect(current.provider.reserveEffect({
+        authorization,
+        operation: { ...operation, capabilityId: `${capabilityId}-sibling` }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("grants the enabled owner a server-authored recovery scope when organization governance is published after startup", () : any => {
+    let organization: any = { configured: false, revision: 0, nodes: [] };
+    let listener: any = null;
+    const assignments: any[] = [];
+    const unsubscribe: any = registerApiKeyOwnerRecoveryAssignmentSync({
+      securityPermissions: {
+        getOrganizationGovernance: () : any => organization,
+        listUsers: () : any => [
+          { userId: "owner-user", roleId: "owner", enabled: true },
+          { userId: "viewer-user", roleId: "viewer", enabled: true }
+        ],
+        authorizationGovernanceStore: {
+          listApiKeyRecoveryAssignments: () : any => assignments,
+          upsertApiKeyRecoveryAssignment(input: any) : any {
+            assignments.push({ ...input, serverAuthored: true });
+          }
+        },
+        tagManagementStore: {
+          registerChangeHandler(handler: any) : any {
+            listener = handler;
+            return () : any => { listener = null; };
+          }
+        }
+      }
+    });
+
+    expect(assignments).toEqual([]);
+    organization = {
+      configured: true,
+      revision: 1,
+      nodes: [
+        { nodeId: "organization:group", nodeType: "group", parentId: "" },
+        { nodeId: "group:team", nodeType: "team", parentId: "organization:group" }
+      ]
+    };
+    listener({ eventType: "organization-governance-published" });
+    listener({ eventType: "organization-governance-published" });
+    expect(assignments).toEqual([{
+      subjectId: "owner-user",
+      rootNodeId: "organization:group",
+      action: API_KEY_MANAGEMENT_ACTION,
+      enabled: true,
+      serverAuthored: true
+    }]);
+    unsubscribe();
+    expect(listener).toBeNull();
+  });
+
+  it("projects an uninitialized organization as an empty issuer scope instead of a service failure", async () : Promise<any> => {
+    const fixture: any = harness();
+    fixture.governance.setUnconfigured();
+    await expect(fixture.provider.getIssuerScopes({ subjectId: "admin" })).resolves.toMatchObject({
+      organizationRevision: 0,
+      eligibleRoots: [],
+      eligibleNodes: []
+    });
+    await expect(fixture.provider.list({ subjectId: "admin", limit: 10 })).resolves.toEqual({
+      items: [],
+      nextCursor: ""
+    });
+    await fixture.close();
+  });
+
+  it("catalogs the owner-bound upload operations used by scoped API keys", () : any => {
+    const tools: any = createToolCatalog({ operations: SERVER_API_OPERATIONS }).tools;
+    const uploadTools: any = tools
+      .filter((tool: any) => String(tool.operationId || "").startsWith("uploads."))
+      .map((tool: any) => tool.id);
+    expect(uploadTools).toEqual([
+      "uploads.create_session",
+      "uploads.get_session",
+      "uploads.upload_chunk"
+    ]);
+  });
+
+  it("uses login as the outer gate and delegates write authority to organization governance", () : any => {
+    const operations: any[] = STRATEGY_PERMISSION_OPERATION_DEFINITIONS.filter((operation: any) =>
+      String(operation.id || "").startsWith("operation_permission.api_keys."));
+    expect(operations.map((operation: any) => operation.id)).toEqual([
+      "operation_permission.api_keys.issuer_scopes",
+      "operation_permission.api_keys.list",
+      "operation_permission.api_keys.create",
+      "operation_permission.api_keys.rotate",
+      "operation_permission.api_keys.revoke"
+    ]);
+    expect(Object.fromEntries(operations.map((operation: any) => [operation.id, operation.requiredScopes]))).toEqual({
+      "operation_permission.api_keys.issuer_scopes": ["console:read"],
+      "operation_permission.api_keys.list": ["console:read"],
+      "operation_permission.api_keys.create": ["auth:admin"],
+      "operation_permission.api_keys.rotate": ["auth:admin"],
+      "operation_permission.api_keys.revoke": ["auth:admin"]
+    });
+  });
+
+  it("derives restricted issuer roots only from current explicit assignments", () : any => {
+    const governance: any = governanceFixture();
+    const allowed: any = evaluateApiKeyIssuerScopes({
+      subjectId: "admin",
+      organizationSnapshot: governance.securityPermissions.getOrganizationGovernance(),
+      governanceSummary: governance.securityPermissions.getGovernanceSummary()
+    });
+    expect(allowed.roots.map((node: any) : any => node.nodeId)).toEqual(["issuer"]);
+    expect(allowed.eligibleNodeIds).toEqual(["child", "issuer"]);
+    const denied: any = evaluateApiKeyIssuerScopes({
+      subjectId: "peer-user",
+      organizationSnapshot: governance.securityPermissions.getOrganizationGovernance(),
+      governanceSummary: governance.securityPermissions.getGovernanceSummary()
+    });
+    expect(denied.eligibleNodeIds).toEqual([]);
+
+    const staleRole: any = evaluateApiKeyIssuerScopes({
+      subjectId: "admin",
+      organizationSnapshot: governance.securityPermissions.getOrganizationGovernance(),
+      governanceSummary: {
+        ...governance.securityPermissions.getGovernanceSummary(),
+        roles: [{ roleId: "key-manager", enabled: true, scopeNodeId: "issuer", managementActions: [] }]
+      }
+    });
+    expect(staleRole.eligibleNodeIds).toEqual([]);
+
+    expect(() : any => evaluateApiKeyIssuerScopes({
+      subjectId: "admin",
+      organizationSnapshot: {
+        ...governance.securityPermissions.getOrganizationGovernance(),
+        nodes: [
+          ...governance.securityPermissions.getOrganizationGovernance().nodes,
+          { nodeId: "second-root", nodeType: "group", parentId: "", name: "Second root" }
+        ]
+      },
+      governanceSummary: governance.securityPermissions.getGovernanceSummary()
+    })).toThrowError(expect.objectContaining({ code: "api_key_authority_unavailable", statusCode: 503 }));
+  });
+
+  it("parses only the canonical mxak1 envelope", () : any => {
+    const keyId: any = Buffer.alloc(16, 1).toString("base64url");
+    const secret: any = Buffer.alloc(32, 2).toString("base64url");
+    const valid: any = `mxak1.${keyId}.${secret}`;
+    expect(parseApiKeyCredential(valid)).toEqual({ keyId, secret });
+    for (const invalid of [
+      ` ${valid}`,
+      `${valid} `,
+      valid.replace("mxak1", "mxak2"),
+      `${valid}.extra`,
+      valid.replace(keyId, `${keyId}=`),
+      valid.replace(secret, secret.slice(0, -1)),
+      valid.replace(secret[0], "+")
+    ]) {
+      expect(parseApiKeyCredential(invalid)).toBeNull();
+    }
+  });
+
+  it("stores only an indexed irreversible verifier and returns plaintext once", async () : Promise<any> => {
+    const current: any = harness();
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Neutral worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy()
+      });
+      const issuerScopes: any = await current.provider.getIssuerScopes({ subjectId: "admin" });
+      expect(issuerScopes).toMatchObject({
+        organizationRevision: 7,
+        authorizationRevision: 11,
+        catalogFingerprint: canned1,
+        eligibleRoots: [{ nodeId: "issuer", breadcrumb: ["Root", "Issuer"] }]
+      });
+      expect(Object.keys(issuerScopes).sort()).toEqual([
+        "authorizationRevision", "authorizationUpdatedAt", "catalogFingerprint",
+        "eligibleNodes", "eligibleRoots", "organizationRevision"
+      ]);
+      expect(issuerScopes.eligibleNodes.map((node: any) : any => node.nodeId)).toEqual(["child", "issuer"]);
+      expect(parseApiKeyCredential(created.apiKey)?.keyId).toBe(created.record.keyId);
+      expect(JSON.stringify(created.record)).not.toContain(created.apiKey);
+      expect(JSON.stringify(await current.provider.list({ subjectId: "admin", limit: 10 }))).not.toContain(created.apiKey);
+      expect((await current.provider.explainLookupPlan()).some((entry: any) : any =>
+        /primary key|index/i.test(String(entry.detail || "")))).toBe(true);
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      expect(authorization.workloadPrincipalId).toBe(created.record.workloadPrincipalId);
+      expect(authorization).not.toHaveProperty("grantProjection");
+      await expect(current.provider.authenticateRuntime({
+        credential: (created.apiKey.slice(0, -1)+"A"),
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      })).rejects.toMatchObject({ code: "api_key_invalid", statusCode: 401 });
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("fences rotation, lineage, use, rate, and concurrency atomically", async () : Promise<any> => {
+    const current: any = harness();
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Neutral worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy()
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const lease: any = await current.provider.reserveEffect({
+        authorization,
+        operation: { toolId: "tools.echo", risk: "low", resourceContext: { workspaceId: "workspace-1" } }
+      });
+      await expect(current.provider.reserveEffect({
+        authorization,
+        operation: { toolId: "tools.echo", risk: "low", resourceContext: { workspaceId: "workspace-1" } }
+      })).rejects.toMatchObject({ code: "api_key_concurrency_limit_reached" });
+      await current.provider.releaseEffect(lease);
+      const rotated: any = await current.provider.rotate({
+        subjectId: "admin",
+        keyId: created.record.keyId,
+        expectedLifecycleRevision: 1
+      });
+      expect(rotated.record.useCount).toBe(1);
+      expect(rotated.record.policyFingerprint).toBe(created.record.policyFingerprint);
+      await expect(current.provider.revalidateEffect(lease)).rejects.toMatchObject({ code: "api_key_revision_stale" });
+      await expect(current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      })).rejects.toMatchObject({ code: "api_key_invalid" });
+      const rotatedAuthorization: any = await current.provider.authenticateRuntime({
+        credential: rotated.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      current.governance.moveChildToPeer();
+      await expect(current.provider.reserveEffect({
+        authorization: rotatedAuthorization,
+        operation: { toolId: "tools.echo", risk: "low", resourceContext: { workspaceId: "workspace-1" } }
+      })).rejects.toMatchObject({ code: "api_key_inactive" });
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("enforces restricted resources, risk, rate, max-use, expiry, and terminal revocation", async () : Promise<any> => {
+    const current: any = harness();
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Bound worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-03T00:02:00.000Z",
+        policy: policy("catalog-1", {
+          maximumRisk: "low",
+          limits: { maxUses: 2, requestsPerWindow: 1, windowSeconds: 60, maxConcurrentEffects: 2 }
+        })
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      await expect(current.provider.reserveEffect({
+        authorization,
+        operation: { toolId: "tools.echo", risk: "read_only", resourceContext: {} }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      await expect(current.provider.reserveEffect({
+        authorization,
+        operation: { toolId: "tools.echo", risk: "safe_write", resourceContext: { workspaceId: "workspace-1" } }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      const first: any = await current.provider.reserveEffect({
+        authorization,
+        operation: { toolId: "tools.echo", risk: "read_only", resourceContext: { workspaceId: "workspace-1" } }
+      });
+      await expect(current.provider.reserveEffect({
+        authorization,
+        operation: { toolId: "tools.echo", risk: "read_only", resourceContext: { workspaceId: "workspace-1" } }
+      })).rejects.toMatchObject({ code: "api_key_rate_limited" });
+      await current.provider.releaseEffect(first);
+      current.advance(60_000);
+      const second: any = await current.provider.reserveEffect({
+        authorization,
+        operation: { toolId: "tools.echo", risk: "read_only", resourceContext: { workspaceId: "workspace-1" } }
+      });
+      await current.provider.revalidateEffect(second);
+      await current.provider.releaseEffect(second);
+      await expect(current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      })).rejects.toMatchObject({ code: "api_key_use_limit_reached" });
+
+      const expiring: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Expiring worker",
+        organizationNodeId: "issuer",
+        expiresAt: "2026-08-03T00:01:01.000Z",
+        policy: policy()
+      });
+      current.advance(1_000);
+      await expect(current.provider.list({ subjectId: "admin", status: "expired" }))
+        .resolves.toMatchObject({ items: [expect.objectContaining({ keyId: expiring.record.keyId, status: "expired" })] });
+      const activePage: any = await current.provider.list({ subjectId: "admin", status: "active" });
+      expect(activePage.items.some((record: any) : any => record.keyId === expiring.record.keyId)).toBe(false);
+      await expect(current.provider.authenticateRuntime({
+        credential: expiring.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      })).rejects.toMatchObject({ code: "api_key_inactive" });
+
+      const revocable: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Revocable worker",
+        organizationNodeId: "issuer",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy()
+      });
+      const revoked: any = await current.provider.revoke({
+        subjectId: "admin",
+        keyId: revocable.record.keyId,
+        expectedLifecycleRevision: revocable.record.lifecycleRevision,
+        reasonCode: "administrator_request"
+      });
+      expect(revoked.status).toBe("revoked");
+      await expect(current.provider.rotate({
+        subjectId: "admin",
+        keyId: revocable.record.keyId,
+        expectedLifecycleRevision: revoked.lifecycleRevision
+      })).rejects.toMatchObject({ code: "api_key_inactive" });
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("holds one invocation reservation beyond five minutes and releases it only after execution settles", async () : Promise<any> => {
+    const current: any = harness();
+    const entered = deferred<void>();
+    const finish = deferred<void>();
+    let revalidate: (() => Promise<any>) | null = null;
+    const operation = {
+      toolId: "tools.echo",
+      risk: "low",
+      resourceContext: { workspaceId: "workspace-1" }
+    };
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Long-running worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          limits: { maxUses: 3, requestsPerWindow: 10, windowSeconds: 3600, maxConcurrentEffects: 1 }
+        })
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const execution = current.provider.withEffectReservation({
+        authorization,
+        operation,
+        execute: async ({ revalidate: check }: Record<string, any>) : Promise<string> => {
+          revalidate = check;
+          entered.resolve();
+          await finish.promise;
+          await check();
+          return "settled";
+        }
+      });
+      await entered.promise;
+      current.advance(6 * 60 * 1000);
+      await expect(revalidate?.()).resolves.toMatchObject({
+        credentialKind: canned8,
+        keyId: created.record.keyId,
+        lifecycleRevision: created.record.lifecycleRevision
+      });
+      await expect(current.provider.reserveEffect({ authorization, operation }))
+        .rejects.toMatchObject({ code: "api_key_concurrency_limit_reached" });
+      finish.resolve();
+      await expect(execution).resolves.toBe("settled");
+      await expect(current.provider.withEffectReservation({
+        authorization,
+        operation,
+        execute: async () : Promise<string> => "next"
+      })).resolves.toBe("next");
+      await expect(current.provider.list({ subjectId: "admin", status: "active" }))
+        .resolves.toMatchObject({ items: [expect.objectContaining({ keyId: created.record.keyId, useCount: 2 })] });
+    } finally {
+      finish.resolve();
+      await current.close();
+    }
+  });
+
+  it("completes an exhausted reserved last use but still enforces actual key expiry", async () : Promise<any> => {
+    const current: any = harness();
+    const entered = deferred<void>();
+    const finish = deferred<void>();
+    let revalidate: (() => Promise<any>) | null = null;
+    const operation = {
+      toolId: "tools.echo",
+      risk: "low",
+      resourceContext: { workspaceId: "workspace-1" }
+    };
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Last-use worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-03T00:01:00.000Z",
+        policy: policy("catalog-1", {
+          limits: { maxUses: 1, requestsPerWindow: 10, windowSeconds: 3600, maxConcurrentEffects: 1 }
+        })
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const execution = current.provider.withEffectReservation({
+        authorization,
+        operation,
+        execute: async ({ revalidate: check }: Record<string, any>) : Promise<string> => {
+          revalidate = check;
+          await check();
+          entered.resolve();
+          await finish.promise;
+          return "last-use-completed";
+        }
+      });
+      await entered.promise;
+      await expect(current.provider.list({ subjectId: "admin", status: "exhausted" }))
+        .resolves.toMatchObject({ items: [expect.objectContaining({ keyId: created.record.keyId, useCount: 1 })] });
+      await expect(current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      })).rejects.toMatchObject({ code: "api_key_use_limit_reached" });
+      current.advance(60_001);
+      await expect(revalidate?.()).rejects.toMatchObject({ code: "api_key_inactive" });
+      finish.resolve();
+      await expect(execution).resolves.toBe("last-use-completed");
+    } finally {
+      finish.resolve();
+      await current.close();
+    }
+  });
+
+  it("cancels and drains an owned invocation before closing and reopening its SQLite owner", async () : Promise<any> => {
+    const current: any = harness();
+    const entered = deferred<void>();
+    const operation = {
+      toolId: "tools.echo",
+      risk: "low",
+      resourceContext: { workspaceId: "workspace-1" }
+    };
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Closable worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          limits: { maxUses: 3, requestsPerWindow: 10, windowSeconds: 3600, maxConcurrentEffects: 1 }
+        })
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const execution = current.provider.withEffectReservation({
+        authorization,
+        operation,
+        execute: ({ signal }: Record<string, any>) => new Promise<string>((resolve) => {
+          entered.resolve();
+          if (signal.aborted) resolve("cancelled");
+          else signal.addEventListener("abort", () => resolve("cancelled"), { once: true });
+        })
+      });
+      await entered.promise;
+      await current.provider.close();
+      await expect(execution).resolves.toBe("cancelled");
+      expect(() => createOperationPermissionStore({
+        userDataPath: current.directory,
+        registry: current.registry,
+        securityPermissions: current.governance.securityPermissions,
+        capabilityBindingGuard: false,
+        apiKeyVerifierKeyProvider: createMemoryApiKeyVerifierKeyProvider(Buffer.alloc(32, 91))
+      })).toThrowError(expect.objectContaining({ code: "operation_permission_owner_active" }));
+      await current.close();
+
+      const reopenedStore: any = createOperationPermissionStore({
+        userDataPath: current.directory,
+        registry: current.registry,
+        securityPermissions: current.governance.securityPermissions,
+        capabilityBindingGuard: false,
+        apiKeyVerifierKeyProvider: createMemoryApiKeyVerifierKeyProvider(Buffer.alloc(32, 91)),
+        apiKeyClock: () => current.now()
+      });
+      const reopenedProvider: any = createApiKeyDistributionProvider({ store: reopenedStore });
+      try {
+        const lease = await reopenedProvider.reserveEffect({ authorization, operation });
+        await reopenedProvider.releaseEffect(lease);
+      } finally {
+        await reopenedStore.close();
+      }
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("admits an MCP client that omits optional identity headers and denies a presented mismatch", async () : Promise<any> => {
+    const current: any = harness();
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Optional identity worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          audience: {
+            serverAudience: "https://meshrix.invalid",
+            targetIds: ["server"],
+            connectorPackageIds: ["package.codex"]
+          }
+        })
+      });
+      const admit = (targetId: unknown, connectorPackageId: unknown) : Promise<any> => current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId,
+        connectorPackageId,
+        processIdentityEvidence: null
+      });
+      await expect(admit("", "")).resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(admit(null, null)).resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(admit("server", "package.codex")).resolves.toMatchObject({ keyId: created.record.keyId });
+      await expect(admit("other", null)).rejects.toMatchObject({ code: "api_key_policy_denied", statusCode: 403 });
+      await expect(admit("server", "package.other")).rejects.toMatchObject({ code: "api_key_policy_denied", statusCode: 403 });
+    } finally {
+      await current.close();
+    }
+  });
+
+  it("derives unclaimed expiry past the claim window and claims keys on first authentication", async () : Promise<any> => {
+    const current: any = harness();
+    try {
+      const mint = (workloadDisplayName: string) : Promise<any> => current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName,
+        organizationNodeId: "issuer",
+        expiresAt: "2027-01-01T00:00:00.000Z",
+        policy: policy("catalog-1")
+      });
+      const recordOf = async (keyId: string) : Promise<any> =>
+        ((await current.provider.list({ subjectId: "admin" })).items || [])
+          .find((record: any) : any => record.keyId === keyId);
+
+      const orphan: any = await mint("Never delivered key");
+      current.advance(73 * 60 * 60 * 1000);
+      expect((await recordOf(orphan.record.keyId)).status).toBe("unclaimed");
+      await expect(current.provider.authenticateRuntime({
+        credential: orphan.apiKey,
+        serverAudience: "https://meshrix.invalid"
+      })).rejects.toMatchObject({ code: "api_key_unclaimed_expired" });
+      // The failed touch settled the record to stored "expired"; the audit
+      // event keeps the api_key_unclaimed reason.
+      expect((await recordOf(orphan.record.keyId)).status).toBe("expired");
+
+      const live: any = await mint("Claimed key");
+      await expect(current.provider.authenticateRuntime({
+        credential: live.apiKey,
+        serverAudience: "https://meshrix.invalid"
+      })).resolves.toMatchObject({ keyId: live.record.keyId });
+      expect((await recordOf(live.record.keyId)).claimedAt).toBeTruthy();
+      current.advance(73 * 60 * 60 * 1000);
+      await expect(current.provider.authenticateRuntime({
+        credential: live.apiKey,
+        serverAudience: "https://meshrix.invalid"
+      })).resolves.toMatchObject({ keyId: live.record.keyId });
+    } finally {
+      await current.close();
+    }
+  });
+});

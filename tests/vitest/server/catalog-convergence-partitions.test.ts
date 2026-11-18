@@ -1,0 +1,481 @@
+import { EventEmitter } from "node:events";
+import { createHash } from "node:crypto";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { MCP_CATALOG_DELIVERY_SCHEMA_VERSION } from "../../../packages/contracts/src/mcp-catalog-delivery.ts";
+import {
+  MCP_SSE_CONNECTION_LIMITS,
+  bindMcpSseConnectionPartitions,
+  acknowledgeMcpCatalogConvergence,
+  broadcastMcpNotification,
+  disconnectMcpSseConnectionsByGrant,
+  getMcpCatalogConvergenceCohort,
+  getMcpSseConnectionState,
+  registerMcpSseConnection,
+  resetMcpSseConnectionStateForTests
+} from "../../../packages/server-runtime/src/state/sse-connection-state.ts";
+import {
+  configureMcpNotificationBus,
+  registerMcpGatewaySubscription,
+  broadcastAudienceCatalogInvalidation,
+  broadcastMcpToolListChanged
+} from "../../../packages/protocols/mcp/notifications.ts";
+import { broadcastMcpNotification as sseBroadcast } from "../../../packages/server-runtime/src/state/sse-connection-state.ts";
+
+function responseFixture({ writeResult = true }: Record<string, any> = {}) : any {
+  return {
+    statusCode: 200,
+    headers: {},
+    chunks: [],
+    destroyed: false,
+    writableEnded: false,
+    writableLength: 0,
+    write: vi.fn(function write(chunk?: any) : any {
+      this.chunks.push(String(chunk));
+      return writeResult;
+    }),
+    end(chunk: any = "") : any {
+      if (chunk) this.chunks.push(String(chunk));
+      this.writableEnded = true;
+    },
+    destroy: vi.fn(function destroy() : any {
+      this.destroyed = true;
+    })
+  };
+}
+
+function connectionFixture({
+  grantId,
+  remoteAddress,
+  partitionKeys = [],
+  negotiatedCapabilities = ["notifications/tools/list_changed"],
+  proxySessionId = "abcdefghijklmnopqrstuvwx",
+  deliveryMode = "direct",
+  writeResult = true
+}: Record<string, any>) : any {
+  const request: any = new EventEmitter();
+  request.socket = { remoteAddress };
+  const response: any = responseFixture({ writeResult });
+  const registration: any = registerMcpSseConnection({
+    request,
+    response,
+    grantId,
+    grant: { id: grantId },
+    privateOnly: true,
+    partitionKeys,
+    negotiatedCapabilities,
+    proxySessionId,
+    deliveryMode
+  });
+  return { request, response, registration };
+}
+
+function grantDigest(grantId?: any) : any {
+  return createHash("sha256").update(String(grantId)).digest("base64url");
+}
+
+afterEach(() : any => {
+  vi.useRealTimers();
+  configureMcpNotificationBus();
+  resetMcpSseConnectionStateForTests();
+});
+
+describe("MCP catalog convergence partitions", () : any => {
+  it("keeps adapter-delivered standard streams under capacity/backpressure without modern acknowledgement deadlines", async () => {
+    vi.useFakeTimers();
+    const fixture = connectionFixture({ grantId: "standard-grant", remoteAddress: "127.0.0.1", partitionKeys: ["part-standard"], proxySessionId: "", deliveryMode: "adapter" });
+    expect(fixture.registration.ok).toBe(true);
+    const result = broadcastMcpNotification({ method: "notifications/tools/list_changed", params: { change: { sourceRevision: 1, audienceRevision: 1, catalogRevision: "standard-1", affectedPartitions: ["part-standard"] } } }, { grantId: "standard-grant", includePrivate: true });
+    expect(result.deliveredConnectionCount).toBe(0);
+    expect(fixture.response.chunks).toEqual([]);
+    expect(fixture.registration.write("event: message\ndata: {}\n\n")).toBe(true);
+    await vi.advanceTimersByTimeAsync(MCP_SSE_CONNECTION_LIMITS.acknowledgementTimeoutMs + 1);
+    expect(getMcpSseConnectionState().activeConnectionCount).toBe(1);
+    expect(getMcpCatalogConvergenceCohort()).toEqual([]);
+    fixture.response.writableLength = MCP_SSE_CONNECTION_LIMITS.maxBufferedBytes + 1;
+    expect(fixture.registration.write("event: message\ndata: {}\n\n")).toBe(false);
+    expect(getMcpSseConnectionState().activeConnectionCount).toBe(0);
+  });
+  it("delivers revision-only invalidation only to affected partitions and digests", () : any => {
+    configureMcpNotificationBus({ broadcastNotification: sseBroadcast });
+    const affected: any = connectionFixture({
+      grantId: "grant-affected",
+      remoteAddress: "10.0.0.1",
+      partitionKeys: ["part-a"]
+    });
+    const other: any = connectionFixture({
+      grantId: "grant-other",
+      remoteAddress: "10.0.0.2",
+      partitionKeys: ["part-b"]
+    });
+    expect(affected.registration.ok).toBe(true);
+    expect(other.registration.ok).toBe(true);
+
+    const delivery: any = broadcastAudienceCatalogInvalidation({
+      sourceRevision: 3,
+      catalogRevision: "catalog-3",
+      audienceRevision: 7,
+      affectedPartitions: ["part-a"],
+      partitions: new Map<any, any>([
+        ["part-a", { grantIdDigest: grantDigest("grant-affected"), audienceDigest: "ad-a" }],
+        ["part-b", { grantIdDigest: grantDigest("grant-other"), audienceDigest: "ad-b" }]
+      ]),
+      reasonCode: "upstream_audiences_published"
+    });
+
+    expect(delivery).toMatchObject({
+      ok: true,
+      sourceRevision: 3,
+      catalogRevision: "catalog-3",
+      audienceRevision: 7,
+      matchedConnectionCount: 1,
+      deliveredConnectionCount: 1
+    });
+    const affectedPayloadText: any = affected.response.chunks.join("")
+      .split("\n")
+      .find((line?: any) : any => line.startsWith("data: "))
+      ?.slice("data: ".length);
+    const affectedPayload: any = JSON.parse(affectedPayloadText);
+    expect(affectedPayload).toEqual({
+      jsonrpc: "2.0",
+      method: "notifications/tools/list_changed",
+      params: {
+        change: {
+          schemaVersion: MCP_CATALOG_DELIVERY_SCHEMA_VERSION,
+          reasonCode: "upstream_audiences_published",
+          sourceRevision: 3,
+          catalogRevision: "catalog-3",
+          audienceRevision: 7,
+          affectedPartitions: ["part-a"]
+        }
+      }
+    });
+    expect(affected.response.chunks.join("")).not.toMatch(/tools\"\s*:/);
+    expect(other.response.chunks.join("")).toBe("");
+  });
+
+  it("requires exact grant matching for gateway subscriptions, including API Keys", () : any => {
+    const matching: any[] = [];
+    const other: any[] = [];
+    const unscoped: any[] = [];
+    const unregister: any[] = [
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "api-key-a",
+        publish: (event?: any) : any => matching.push(event)
+      }),
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "api-key-b",
+        publish: (event?: any) : any => other.push(event)
+      }),
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "",
+        publish: (event?: any) : any => unscoped.push(event)
+      })
+    ];
+
+    try {
+      broadcastMcpToolListChanged({
+        grantId: "api-key-a",
+        sourceRevision: 2,
+        catalogRevision: "catalog-2",
+        audienceRevision: 2,
+        partitionKeys: ["partition-a"],
+        grantIdDigests: [grantDigest("api-key-a")],
+        grantPartitions: new Map([[grantDigest("api-key-a"), ["partition-a"]]])
+      });
+      expect(matching).toHaveLength(1);
+      expect(other).toHaveLength(0);
+      expect(unscoped).toHaveLength(0);
+      expect(matching[0].payload.change.affectedPartitions).toEqual(["partition-a"]);
+    } finally {
+      unregister.forEach((remove?: any) : any => remove());
+    }
+  });
+
+  it("fans audience invalidations only to matching grants and hides other grant partitions", () : any => {
+    const first: any[] = [];
+    const second: any[] = [];
+    const unregister: any[] = [
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "grant-first",
+        publish: (event?: any) : any => first.push(event)
+      }),
+      registerMcpGatewaySubscription({
+        methods: ["notifications/tools/list_changed"],
+        grantId: "grant-second",
+        publish: (event?: any) : any => second.push(event)
+      })
+    ];
+
+    try {
+      broadcastAudienceCatalogInvalidation({
+        sourceRevision: 1,
+        catalogRevision: "catalog-1",
+        audienceRevision: 1,
+        affectedPartitions: ["partition-first", "partition-second"],
+        partitions: new Map<any, any>([
+          ["partition-first", { grantIdDigest: grantDigest("grant-first") }],
+          ["partition-second", { grantIdDigest: grantDigest("grant-second") }]
+        ])
+      });
+      expect(first).toHaveLength(1);
+      expect(second).toHaveLength(1);
+      expect(first[0].payload.change.affectedPartitions).toEqual(["partition-first"]);
+      expect(second[0].payload.change.affectedPartitions).toEqual(["partition-second"]);
+    } finally {
+      unregister.forEach((remove?: any) : any => remove());
+    }
+  });
+
+  it("binds partition keys after registration and scopes grant-digest fan-out", () : any => {
+    const fixture: any = connectionFixture({
+      grantId: "grant-bind",
+      remoteAddress: "10.0.0.3"
+    });
+    expect(bindMcpSseConnectionPartitions(fixture.registration.connection, ["part-x", "part-y"])).toBe(true);
+    expect(getMcpSseConnectionState().partitionCount).toBe(2);
+
+    const delivery: any = broadcastMcpNotification(
+      { jsonrpc: "2.0", method: "notifications/tools/list_changed", params: { change: { audienceRevision: 1 } } },
+      { grantIdDigests: [grantDigest("grant-bind")] }
+    );
+    expect(delivery.matchedConnectionCount).toBe(1);
+    expect(delivery.deliveredConnectionCount).toBe(1);
+  });
+
+  it("keeps list_changed change payload free of catalog tool arrays", () : any => {
+    let deliveredPayload: any = null;
+    configureMcpNotificationBus({
+      broadcastNotification: (payload?: any) : any => {
+        deliveredPayload = payload;
+        return {
+        activeConnectionCount: 0,
+        matchedConnectionCount: 0,
+        deliveredConnectionCount: 0
+        };
+      }
+    });
+    const result: any = broadcastMcpToolListChanged({
+      sourceRevision: 1,
+      catalogRevision: "fp-1",
+      audienceRevision: 2,
+      partitionKeys: ["p1"],
+      details: { tools: [{ name: "secret.tool" }] }
+    });
+    expect(result.sourceRevision).toBe(1);
+    expect(result.audienceRevision).toBe(2);
+    expect(deliveredPayload.params.change).not.toHaveProperty("tools");
+    expect(deliveredPayload.params.change).not.toHaveProperty("details");
+    expect(deliveredPayload.params.change).not.toHaveProperty("grantId");
+    expect(deliveredPayload.params.change).not.toHaveProperty("changedAt");
+    expect(Object.keys(deliveredPayload.params)).toEqual(["change"]);
+  });
+
+  it("does not deliver list changes to clients that did not negotiate the capability", () : any => {
+    const unsupported: any = connectionFixture({
+      grantId: "grant-unsupported",
+      remoteAddress: "10.0.0.4",
+      partitionKeys: ["part-a"],
+      negotiatedCapabilities: []
+    });
+    const delivery: any = broadcastMcpNotification(
+      {
+        jsonrpc: "2.0",
+        method: "notifications/tools/list_changed",
+        params: { change: { audienceRevision: 2 } }
+      },
+      { partitionKeys: ["part-a"] }
+    );
+    expect(delivery.matchedConnectionCount).toBe(0);
+    expect(delivery.deliveredConnectionCount).toBe(0);
+    expect(unsupported.response.chunks).toEqual([]);
+  });
+
+  it("projects only each connection's affected opaque partitions into its notification", () : any => {
+    const first: any = connectionFixture({
+      grantId: "grant-first",
+      remoteAddress: "10.0.0.9",
+      partitionKeys: ["part-first"]
+    });
+    const second: any = connectionFixture({
+      grantId: "grant-second",
+      remoteAddress: "10.0.0.10",
+      partitionKeys: ["part-second"]
+    });
+    const delivery: any = broadcastMcpNotification({
+      jsonrpc: "2.0",
+      method: "notifications/tools/list_changed",
+      params: {
+        change: {
+          sourceRevision: 2,
+          catalogRevision: "catalog-2",
+          audienceRevision: 2,
+          affectedPartitions: ["part-first", "part-second"]
+        }
+      }
+    }, { partitionKeys: ["part-first", "part-second"] });
+    expect(delivery.deliveredConnectionCount).toBe(2);
+    expect(first.response.chunks.join("")).toContain("part-first");
+    expect(first.response.chunks.join("")).not.toContain("part-second");
+    expect(second.response.chunks.join("")).toContain("part-second");
+    expect(second.response.chunks.join("")).not.toContain("part-first");
+    first.request.emit("close");
+    second.request.emit("close");
+  });
+
+  it("tracks applied cohort acknowledgement against grant, session, revisions, and partitions", () : any => {
+    const fixture: any = connectionFixture({
+      grantId: "grant-ack",
+      remoteAddress: "10.0.0.5",
+      partitionKeys: ["part-a"]
+    });
+    const payload: Record<string, any> = {
+      jsonrpc: "2.0",
+      method: "notifications/tools/list_changed",
+      params: {
+        change: {
+          sourceRevision: 3,
+          catalogRevision: "catalog-3",
+          audienceRevision: 7,
+          affectedPartitions: ["part-a"]
+        }
+      }
+    };
+    expect(broadcastMcpNotification(payload, { partitionKeys: ["part-a"] }))
+      .toMatchObject({ deliveredConnectionCount: 1 });
+    expect(getMcpCatalogConvergenceCohort()).toEqual([
+      expect.objectContaining({ outcome: "pending", sourceRevision: 3, partitionCount: 1 })
+    ]);
+    expect(acknowledgeMcpCatalogConvergence({
+      grantId: "grant-other",
+      proxySessionId: "abcdefghijklmnopqrstuvwx",
+      sourceRevision: 3,
+      catalogRevision: "catalog-3",
+      audienceRevision: 7,
+      partitionKeys: ["part-a"]
+    }).ok).toBe(false);
+    expect(acknowledgeMcpCatalogConvergence({
+      grantId: "grant-ack",
+      proxySessionId: "abcdefghijklmnopqrstuvwx",
+      sourceRevision: 3,
+      catalogRevision: "catalog-3",
+      audienceRevision: 7,
+      partitionKeys: ["part-a"]
+    })).toEqual({ ok: true, appliedConnectionCount: 1 });
+    expect(getMcpCatalogConvergenceCohort()).toEqual([
+      expect.objectContaining({ outcome: "applied", audienceRevision: 7 })
+    ]);
+    fixture.request.emit("close");
+  });
+
+  it("requires an exact partition set and keeps the latest revision timeout after an older acknowledgement", async () : Promise<any> => {
+    vi.useFakeTimers();
+    const fixture: any = connectionFixture({
+      grantId: "grant-exact",
+      remoteAddress: "10.0.0.11",
+      partitionKeys: ["part-a", "part-b"]
+    });
+    const notify: any = (sourceRevision?: any, audienceRevision?: any, affectedPartitions?: any) : any => broadcastMcpNotification({
+      jsonrpc: "2.0",
+      method: "notifications/tools/list_changed",
+      params: { change: {
+        sourceRevision,
+        catalogRevision: `catalog-${sourceRevision}`,
+        audienceRevision,
+        affectedPartitions
+      } }
+    }, { partitionKeys: affectedPartitions });
+    notify(1, 1, ["part-a"]);
+    notify(2, 2, ["part-b"]);
+
+    expect(acknowledgeMcpCatalogConvergence({
+      grantId: "grant-exact",
+      proxySessionId: "abcdefghijklmnopqrstuvwx",
+      sourceRevision: 1,
+      catalogRevision: "catalog-1",
+      audienceRevision: 1,
+      partitionKeys: ["part-a", "part-b"]
+    }).ok).toBe(false);
+    expect(acknowledgeMcpCatalogConvergence({
+      grantId: "grant-exact",
+      proxySessionId: "abcdefghijklmnopqrstuvwx",
+      sourceRevision: 1,
+      catalogRevision: "catalog-1",
+      audienceRevision: 1,
+      partitionKeys: ["part-a"]
+    }).ok).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(MCP_SSE_CONNECTION_LIMITS.acknowledgementTimeoutMs);
+    expect(fixture.response.destroy).toHaveBeenCalledOnce();
+    expect(getMcpCatalogConvergenceCohort()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ outcome: "fenced", sourceRevision: 2 })
+    ]));
+  });
+
+  it("disconnects all active streams when their grant is retired", () : any => {
+    const first: any = connectionFixture({
+      grantId: "grant-retired",
+      remoteAddress: "10.0.0.7",
+      partitionKeys: ["part-a"]
+    });
+    const second: any = connectionFixture({
+      grantId: "grant-other",
+      remoteAddress: "10.0.0.8",
+      partitionKeys: ["part-b"]
+    });
+    expect(disconnectMcpSseConnectionsByGrant("grant-retired"))
+      .toEqual({ disconnectedConnectionCount: 1 });
+    expect(first.response.destroy).toHaveBeenCalledOnce();
+    expect(second.response.destroy).not.toHaveBeenCalled();
+    expect(getMcpSseConnectionState().activeConnectionCount).toBe(1);
+    second.request.emit("close");
+  });
+
+  it("disconnects and fences a cohort that misses its acknowledgement deadline", async () : Promise<any> => {
+    vi.useFakeTimers();
+    const fixture: any = connectionFixture({
+      grantId: "grant-timeout",
+      remoteAddress: "10.0.0.6",
+      partitionKeys: ["part-timeout"]
+    });
+    broadcastMcpNotification({
+      jsonrpc: "2.0",
+      method: "notifications/tools/list_changed",
+      params: {
+        change: {
+          sourceRevision: 4,
+          catalogRevision: "catalog-4",
+          audienceRevision: 8,
+          affectedPartitions: ["part-timeout"]
+        }
+      }
+    }, { partitionKeys: ["part-timeout"] });
+    await vi.advanceTimersByTimeAsync(MCP_SSE_CONNECTION_LIMITS.acknowledgementTimeoutMs);
+    expect(fixture.response.destroy).toHaveBeenCalledOnce();
+    expect(getMcpSseConnectionState().activeConnectionCount).toBe(0);
+    expect(getMcpCatalogConvergenceCohort()).toEqual([
+      expect.objectContaining({ outcome: "fenced", sourceRevision: 4 })
+    ]);
+    expect(connectionFixture({
+      grantId: "grant-timeout",
+      remoteAddress: "10.0.0.12",
+      partitionKeys: ["part-timeout"]
+    }).registration).toMatchObject({
+      ok: false,
+      status: 409,
+      code: "mcp_sse_convergence_session_fenced"
+    });
+    const freshSession: any = connectionFixture({
+      grantId: "grant-timeout",
+      remoteAddress: "10.0.0.13",
+      partitionKeys: ["part-timeout"],
+      proxySessionId: "zyxwvutsrqponmlkjihgfedc"
+    });
+    expect(freshSession.registration.ok).toBe(true);
+    freshSession.request.emit("close");
+  });
+});

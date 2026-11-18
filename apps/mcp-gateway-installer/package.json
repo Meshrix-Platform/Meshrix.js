@@ -1,0 +1,56 @@
+{
+  "name": "@meshrix/lite",
+  "version": "0.4.2",
+  "private": false,
+  "description": "Standalone Meshrix MCP gateway: aggregates upstream MCP services behind Operation Permission governance.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
+  },
+  "dependencies": {
+    "@meshrix/capabilities": "0.4.2",
+    "@meshrix/client-adapter-kit": "0.4.2",
+    "@meshrix/contracts": "0.4.2",
+    "@meshrix/foundation": "0.4.2",
+    "@meshrix/kernel": "0.4.2",
+    "@meshrix/protocols": "0.4.2",
+    "re2js": "^2.8.6",
+    "undici": "^8.11.2"
+  },
+  "bin": {
+    "meshrix-lite": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "source": "./src/cli.ts",
+      "types": "./dist/cli.d.ts",
+      "default": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "apps/mcp-gateway-installer"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bundleDependencies": [
+    "@meshrix/capabilities",
+    "@meshrix/client-adapter-kit",
+    "@meshrix/contracts",
+    "@meshrix/foundation",
+    "@meshrix/protocols"
+  ]
+}

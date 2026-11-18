@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "bundleType": "meshrix.runbook.bundle",
+  "runbookId": "meshrix.project.release",
+  "protocolVersion": "v0.0.1:platform:project-release-runbook-1",
+  "permissions": {
+    "allowDownstream": false
+  },
+  "files": {
+    "instructions": "README.md",
+    "dependencies": "dependencies.json"
+  },
+  "lightweightBundle": true
+}

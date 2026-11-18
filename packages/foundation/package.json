@@ -1,0 +1,640 @@
+{
+  "name": "@meshrix/foundation",
+  "version": "0.4.2",
+  "description": "Meshrix.js pure infrastructure primitives — security, policy, config, storage, proof, checkpoint, workflow, observability, module-system",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.19.0 <23 || >=24.3.0 <25"
+  },
+  "type": "module",
+  "imports": {
+    "#meshrix/authorization-engine": {
+      "source": "./src/security/authorization/authorization-engine.ts",
+      "types": "./dist/security/authorization/authorization-engine.d.ts",
+      "default": "./dist/security/authorization/authorization-engine.js"
+    },
+    "#meshrix/client-strings": {
+      "source": "./src/security/client-strings.ts",
+      "types": "./dist/security/client-strings.d.ts",
+      "default": "./dist/security/client-strings.js"
+    },
+    "#meshrix/server-config": {
+      "source": "./src/config/server-config.ts",
+      "types": "./dist/config/server-config.d.ts",
+      "default": "./dist/config/server-config.js"
+    },
+    "#meshrix/trusted-client-ip": {
+      "source": "./src/security/trusted-client-ip.ts",
+      "types": "./dist/security/trusted-client-ip.d.ts",
+      "default": "./dist/security/trusted-client-ip.js"
+    }
+  },
+  "exports": {
+    "./checkpoint/tree/checkpoint-tree-projection": {
+      "source": "./src/checkpoint/tree/checkpoint-tree-projection.ts",
+      "types": "./dist/checkpoint/tree/checkpoint-tree-projection.d.ts",
+      "default": "./dist/checkpoint/tree/checkpoint-tree-projection.js"
+    },
+    "./checkpoint/tree/data-structure-substrate": {
+      "source": "./src/checkpoint/tree/data-structure-substrate.ts",
+      "types": "./dist/checkpoint/tree/data-structure-substrate.d.ts",
+      "default": "./dist/checkpoint/tree/data-structure-substrate.js"
+    },
+    "./checkpoint/tree/data-structure-substrate-register": {
+      "source": "./src/checkpoint/tree/data-structure-substrate-register.ts",
+      "types": "./dist/checkpoint/tree/data-structure-substrate-register.d.ts",
+      "default": "./dist/checkpoint/tree/data-structure-substrate-register.js"
+    },
+    "./checkpoint/tree/merkle-state-substrate": {
+      "source": "./src/checkpoint/tree/merkle-state-substrate.ts",
+      "types": "./dist/checkpoint/tree/merkle-state-substrate.d.ts",
+      "default": "./dist/checkpoint/tree/merkle-state-substrate.js"
+    },
+    "./checkpoint/tree/pactium-runtime": {
+      "source": "./src/checkpoint/tree/pactium-runtime.ts",
+      "types": "./dist/checkpoint/tree/pactium-runtime.d.ts",
+      "default": "./dist/checkpoint/tree/pactium-runtime.js"
+    },
+    "./checkpoint/tree/weighted-cache-substrate": {
+      "source": "./src/checkpoint/tree/weighted-cache-substrate.ts",
+      "types": "./dist/checkpoint/tree/weighted-cache-substrate.d.ts",
+      "default": "./dist/checkpoint/tree/weighted-cache-substrate.js"
+    },
+    "./concurrency/lock-manager": {
+      "source": "./src/concurrency/lock-manager.ts",
+      "types": "./dist/concurrency/lock-manager.d.ts",
+      "default": "./dist/concurrency/lock-manager.js"
+    },
+    "./config/entity-config/*.json": {
+      "source": "./config/entity-config/*.json",
+      "default": "./config/entity-config/*.json"
+    },
+    "./config/server-config": {
+      "source": "./src/config/server-config.ts",
+      "types": "./dist/config/server-config.d.ts",
+      "default": "./dist/config/server-config.js"
+    },
+    "./config/server-env": {
+      "source": "./src/config/server-env.ts",
+      "types": "./dist/config/server-env.d.ts",
+      "default": "./dist/config/server-env.js"
+    },
+    "./environment-compatibility/host-services": {
+      "source": "./src/environment-compatibility/host-services.ts",
+      "types": "./dist/environment-compatibility/host-services.d.ts",
+      "default": "./dist/environment-compatibility/host-services.js"
+    },
+    "./environment-compatibility/index": {
+      "source": "./src/environment-compatibility/index.ts",
+      "types": "./dist/environment-compatibility/index.d.ts",
+      "default": "./dist/environment-compatibility/index.js"
+    },
+    "./execution-sandbox/contracts": {
+      "source": "./src/execution-sandbox/contracts.ts",
+      "types": "./dist/execution-sandbox/contracts.d.ts",
+      "default": "./dist/execution-sandbox/contracts.js"
+    },
+    "./execution-sandbox/custody-contracts": {
+      "source": "./src/execution-sandbox/custody-contracts.ts",
+      "types": "./dist/execution-sandbox/custody-contracts.d.ts",
+      "default": "./dist/execution-sandbox/custody-contracts.js"
+    },
+    "./execution-sandbox/index": {
+      "source": "./src/execution-sandbox/index.ts",
+      "types": "./dist/execution-sandbox/index.d.ts",
+      "default": "./dist/execution-sandbox/index.js"
+    },
+    "./execution-sandbox/policy-compiler": {
+      "source": "./src/execution-sandbox/policy-compiler.ts",
+      "types": "./dist/execution-sandbox/policy-compiler.d.ts",
+      "default": "./dist/execution-sandbox/policy-compiler.js"
+    },
+    "./http/http-response": {
+      "source": "./src/http/http-response.ts",
+      "types": "./dist/http/http-response.d.ts",
+      "default": "./dist/http/http-response.js"
+    },
+    "./module-system/github-release-plugin-package-source": {
+      "source": "./src/module-system/github-release-plugin-package-source.ts",
+      "types": "./dist/module-system/github-release-plugin-package-source.d.ts",
+      "default": "./dist/module-system/github-release-plugin-package-source.js"
+    },
+    "./module-system/local-plugin-package-source": {
+      "source": "./src/module-system/local-plugin-package-source.ts",
+      "types": "./dist/module-system/local-plugin-package-source.d.ts",
+      "default": "./dist/module-system/local-plugin-package-source.js"
+    },
+    "./module-system/module-management-provider": {
+      "source": "./src/module-system/module-management-provider.ts",
+      "types": "./dist/module-system/module-management-provider.d.ts",
+      "default": "./dist/module-system/module-management-provider.js"
+    },
+    "./module-system/mount-config": {
+      "source": "./src/module-system/mount-config.ts",
+      "types": "./dist/module-system/mount-config.d.ts",
+      "default": "./dist/module-system/mount-config.js"
+    },
+    "./module-system/mount-manager": {
+      "source": "./src/module-system/mount-manager.ts",
+      "types": "./dist/module-system/mount-manager.d.ts",
+      "default": "./dist/module-system/mount-manager.js"
+    },
+    "./module-system/plugin-artifact-authority": {
+      "source": "./src/module-system/plugin-artifact-authority.ts",
+      "types": "./dist/module-system/plugin-artifact-authority.d.ts",
+      "default": "./dist/module-system/plugin-artifact-authority.js"
+    },
+    "./module-system/plugin-artifact-trust": {
+      "source": "./src/module-system/plugin-artifact-trust.ts",
+      "types": "./dist/module-system/plugin-artifact-trust.d.ts",
+      "default": "./dist/module-system/plugin-artifact-trust.js"
+    },
+    "./module-system/plugin-lifecycle-state-port": {
+      "source": "./src/module-system/plugin-lifecycle-state-port.ts",
+      "types": "./dist/module-system/plugin-lifecycle-state-port.d.ts",
+      "default": "./dist/module-system/plugin-lifecycle-state-port.js"
+    },
+    "./module-system/plugin-package-acquisition": {
+      "source": "./src/module-system/plugin-package-acquisition.ts",
+      "types": "./dist/module-system/plugin-package-acquisition.d.ts",
+      "default": "./dist/module-system/plugin-package-acquisition.js"
+    },
+    "./module-system/plugin-package-acquisition-port": {
+      "source": "./src/module-system/plugin-package-acquisition-port.ts",
+      "types": "./dist/module-system/plugin-package-acquisition-port.d.ts",
+      "default": "./dist/module-system/plugin-package-acquisition-port.js"
+    },
+    "./module-system/plugin-package-artifact-installer": {
+      "source": "./src/module-system/plugin-package-artifact-installer.ts",
+      "types": "./dist/module-system/plugin-package-artifact-installer.d.ts",
+      "default": "./dist/module-system/plugin-package-artifact-installer.js"
+    },
+    "./module-system/plugin-package-custody": {
+      "source": "./src/module-system/plugin-package-custody.ts",
+      "types": "./dist/module-system/plugin-package-custody.d.ts",
+      "default": "./dist/module-system/plugin-package-custody.js"
+    },
+    "./module-system/plugin-package-lifecycle": {
+      "source": "./src/module-system/plugin-package-lifecycle.ts",
+      "types": "./dist/module-system/plugin-package-lifecycle.d.ts",
+      "default": "./dist/module-system/plugin-package-lifecycle.js"
+    },
+    "./module-system/plugin-package-tar": {
+      "source": "./src/module-system/plugin-package-tar.ts",
+      "types": "./dist/module-system/plugin-package-tar.d.ts",
+      "default": "./dist/module-system/plugin-package-tar.js"
+    },
+    "./module-system/plugin-package-validator": {
+      "source": "./src/module-system/plugin-package-validator.ts",
+      "types": "./dist/module-system/plugin-package-validator.d.ts",
+      "default": "./dist/module-system/plugin-package-validator.js"
+    },
+    "./module-system/plugin-console-isolation": {
+      "source": "./src/module-system/plugin-console-isolation.ts",
+      "types": "./dist/module-system/plugin-console-isolation.d.ts",
+      "default": "./dist/module-system/plugin-console-isolation.js"
+    },
+    "./module-system/plugin-registry": {
+      "source": "./src/module-system/plugin-registry.ts",
+      "types": "./dist/module-system/plugin-registry.d.ts",
+      "default": "./dist/module-system/plugin-registry.js"
+    },
+    "./module-system/register": {
+      "source": "./src/module-system/register.ts",
+      "types": "./dist/module-system/register.d.ts",
+      "default": "./dist/module-system/register.js"
+    },
+    "./observability/alert-contract": {
+      "source": "./src/observability/alert-contract.ts",
+      "types": "./dist/observability/alert-contract.d.ts",
+      "default": "./dist/observability/alert-contract.js"
+    },
+    "./observability/alert-service": {
+      "source": "./src/observability/alert-service.ts",
+      "types": "./dist/observability/alert-service.d.ts",
+      "default": "./dist/observability/alert-service.js"
+    },
+    "./observability/architecture-live-map": {
+      "source": "./src/observability/architecture-live-map.ts",
+      "types": "./dist/observability/architecture-live-map.d.ts",
+      "default": "./dist/observability/architecture-live-map.js"
+    },
+    "./observability/background-process-status": {
+      "source": "./src/observability/background-process-status.ts",
+      "types": "./dist/observability/background-process-status.d.ts",
+      "default": "./dist/observability/background-process-status.js"
+    },
+    "./observability/executive-report": {
+      "source": "./src/observability/executive-report.ts",
+      "types": "./dist/observability/executive-report.d.ts",
+      "default": "./dist/observability/executive-report.js"
+    },
+    "./observability/metric-registry": {
+      "source": "./src/observability/metric-registry.ts",
+      "types": "./dist/observability/metric-registry.d.ts",
+      "default": "./dist/observability/metric-registry.js"
+    },
+    "./observability/observability-budgets": {
+      "source": "./src/observability/observability-budgets.ts",
+      "types": "./dist/observability/observability-budgets.d.ts",
+      "default": "./dist/observability/observability-budgets.js"
+    },
+    "./observability/observability-config": {
+      "source": "./src/observability/observability-config.ts",
+      "types": "./dist/observability/observability-config.d.ts",
+      "default": "./dist/observability/observability-config.js"
+    },
+    "./observability/readiness-baseline/baseline-provider": {
+      "source": "./src/observability/readiness-baseline/baseline-provider.ts",
+      "types": "./dist/observability/readiness-baseline/baseline-provider.d.ts",
+      "default": "./dist/observability/readiness-baseline/baseline-provider.js"
+    },
+    "./observability/report-reader": {
+      "source": "./src/observability/report-reader.ts",
+      "types": "./dist/observability/report-reader.d.ts",
+      "default": "./dist/observability/report-reader.js"
+    },
+    "./observability/runtime-logger": {
+      "source": "./src/observability/runtime-logger.ts",
+      "types": "./dist/observability/runtime-logger.d.ts",
+      "default": "./dist/observability/runtime-logger.js"
+    },
+    "./observability/sample-capability-pack": {
+      "source": "./src/observability/sample-capability-pack.ts",
+      "types": "./dist/observability/sample-capability-pack.d.ts",
+      "default": "./dist/observability/sample-capability-pack.js"
+    },
+    "./observability/sensitive-report-scan": {
+      "source": "./src/observability/sensitive-report-scan.ts",
+      "types": "./dist/observability/sensitive-report-scan.d.ts",
+      "default": "./dist/observability/sensitive-report-scan.js"
+    },
+    "./observability/trace-context": {
+      "source": "./src/observability/trace-context.ts",
+      "types": "./dist/observability/trace-context.d.ts",
+      "default": "./dist/observability/trace-context.js"
+    },
+    "./proof/proof-substrate/index": {
+      "source": "./src/proof/proof-substrate/index.ts",
+      "types": "./dist/proof/proof-substrate/index.d.ts",
+      "default": "./dist/proof/proof-substrate/index.js"
+    },
+    "./proof/proof-substrate/register": {
+      "source": "./src/proof/proof-substrate/register.ts",
+      "types": "./dist/proof/proof-substrate/register.d.ts",
+      "default": "./dist/proof/proof-substrate/register.js"
+    },
+    "./recording/content-capture": {
+      "source": "./src/recording/recording-content-capture.ts",
+      "types": "./dist/recording/recording-content-capture.d.ts",
+      "default": "./dist/recording/recording-content-capture.js"
+    },
+    "./recording/producer": {
+      "source": "./src/recording/recording-producer.ts",
+      "types": "./dist/recording/recording-producer.d.ts",
+      "default": "./dist/recording/recording-producer.js"
+    },
+    "./recording/sink-store": {
+      "source": "./src/recording/recording-sink-store.ts",
+      "types": "./dist/recording/recording-sink-store.d.ts",
+      "default": "./dist/recording/recording-sink-store.js"
+    },
+    "./security/auth/console-auth": {
+      "source": "./src/security/auth/console-auth.ts",
+      "types": "./dist/security/auth/console-auth.d.ts",
+      "default": "./dist/security/auth/console-auth.js"
+    },
+    "./security/authorization/api-key-issuer-authority": {
+      "source": "./src/security/authorization/api-key-issuer-authority.ts",
+      "types": "./dist/security/authorization/api-key-issuer-authority.d.ts",
+      "default": "./dist/security/authorization/api-key-issuer-authority.js"
+    },
+    "./security/authorization/api-key-verifier-key-provider": {
+      "source": "./src/security/authorization/api-key-verifier-key-provider.ts",
+      "types": "./dist/security/authorization/api-key-verifier-key-provider.d.ts",
+      "default": "./dist/security/authorization/api-key-verifier-key-provider.js"
+    },
+    "./security/authorization/authorization-engine": {
+      "source": "./src/security/authorization/authorization-engine.ts",
+      "types": "./dist/security/authorization/authorization-engine.d.ts",
+      "default": "./dist/security/authorization/authorization-engine.js"
+    },
+    "./security/authorization/capability-kernel-status": {
+      "source": "./src/security/authorization/capability-kernel-status.ts",
+      "types": "./dist/security/authorization/capability-kernel-status.d.ts",
+      "default": "./dist/security/authorization/capability-kernel-status.js"
+    },
+    "./security/authorization/capability-binding-guard": {
+      "source": "./src/security/authorization/capability-binding-guard.ts",
+      "types": "./dist/security/authorization/capability-binding-guard.d.ts",
+      "default": "./dist/security/authorization/capability-binding-guard.js"
+    },
+    "./security/authorization/capability-security-helper-client": {
+      "source": "./src/security/authorization/capability-security-helper-client.ts",
+      "types": "./dist/security/authorization/capability-security-helper-client.d.ts",
+      "default": "./dist/security/authorization/capability-security-helper-client.js"
+    },
+    "./security/authorization/opaque-capability-key": {
+      "source": "./src/security/authorization/opaque-capability-key.ts",
+      "types": "./dist/security/authorization/opaque-capability-key.d.ts",
+      "default": "./dist/security/authorization/opaque-capability-key.js"
+    },
+    "./security/authorization/opaque-capability-key-provider": {
+      "source": "./src/security/authorization/opaque-capability-key-provider.ts",
+      "types": "./dist/security/authorization/opaque-capability-key-provider.d.ts",
+      "default": "./dist/security/authorization/opaque-capability-key-provider.js"
+    },
+    "./security/authorization/capability-binding-guard-core": {
+      "source": "./src/security/authorization/capability-binding-guard-core.ts",
+      "types": "./dist/security/authorization/capability-binding-guard-core.d.ts",
+      "default": "./dist/security/authorization/capability-binding-guard-core.js"
+    },
+    "./security/authorization/organization-model": {
+      "source": "./src/security/authorization/organization-model.ts",
+      "types": "./dist/security/authorization/organization-model.d.ts",
+      "default": "./dist/security/authorization/organization-model.js"
+    },
+    "./security/authorization/tag-store-provider-registry": {
+      "source": "./src/security/authorization/tag-store-provider-registry.ts",
+      "types": "./dist/security/authorization/tag-store-provider-registry.d.ts",
+      "default": "./dist/security/authorization/tag-store-provider-registry.js"
+    },
+    "./security/authorization/tag-store.port": {
+      "source": "./src/security/authorization/tag-store.port.ts",
+      "types": "./dist/security/authorization/tag-store.port.d.ts",
+      "default": "./dist/security/authorization/tag-store.port.js"
+    },
+    "./security/authorization/tag-tree": {
+      "source": "./src/security/authorization/tag-tree.ts",
+      "types": "./dist/security/authorization/tag-tree.d.ts",
+      "default": "./dist/security/authorization/tag-tree.js"
+    },
+    "./security/authorization/universal-tag-policy": {
+      "source": "./src/security/authorization/universal-tag-policy.ts",
+      "types": "./dist/security/authorization/universal-tag-policy.d.ts",
+      "default": "./dist/security/authorization/universal-tag-policy.js"
+    },
+    "./security/client-strings": {
+      "source": "./src/security/client-strings.ts",
+      "types": "./dist/security/client-strings.d.ts",
+      "default": "./dist/security/client-strings.js"
+    },
+    "./security/closed-json-schema": {
+      "source": "./src/security/closed-json-schema.ts",
+      "types": "./dist/security/closed-json-schema.d.ts",
+      "default": "./dist/security/closed-json-schema.js"
+    },
+    "./security/final-protected-sink-permit": {
+      "source": "./src/security/final-protected-sink-permit.ts",
+      "types": "./dist/security/final-protected-sink-permit.d.ts",
+      "default": "./dist/security/final-protected-sink-permit.js"
+    },
+    "./security/governed-execution-permit-authority": {
+      "source": "./src/security/governed-execution-permit-authority.ts",
+      "types": "./dist/security/governed-execution-permit-authority.d.ts",
+      "default": "./dist/security/governed-execution-permit-authority.js"
+    },
+    "./security/gateway-permit": {
+      "source": "./src/security/gateway-permit/index.ts",
+      "types": "./dist/security/gateway-permit/index.d.ts",
+      "default": "./dist/security/gateway-permit/index.js"
+    },
+    "./security/gateway-continuation-ledger": {
+      "source": "./src/security/gateway-continuation-ledger.ts",
+      "types": "./dist/security/gateway-continuation-ledger.d.ts",
+      "default": "./dist/security/gateway-continuation-ledger.js"
+    },
+    "./security/local-path-boundary": {
+      "source": "./src/security/local-path-boundary.ts",
+      "types": "./dist/security/local-path-boundary.d.ts",
+      "default": "./dist/security/local-path-boundary.js"
+    },
+    "./security/operation-audit": {
+      "source": "./src/security/operation-audit.ts",
+      "types": "./dist/security/operation-audit.d.ts",
+      "default": "./dist/security/operation-audit.js"
+    },
+    "./security/outbound-egress-policy": {
+      "source": "./src/security/outbound-egress-policy.ts",
+      "types": "./dist/security/outbound-egress-policy.d.ts",
+      "default": "./dist/security/outbound-egress-policy.js"
+    },
+    "./security/outbound-host-classifier": {
+      "source": "./src/security/outbound-host-classifier.ts",
+      "types": "./dist/security/outbound-host-classifier.d.ts",
+      "default": "./dist/security/outbound-host-classifier.js"
+    },
+    "./security/process-identity/index": {
+      "source": "./src/security/process-identity/index.ts",
+      "types": "./dist/security/process-identity/index.d.ts",
+      "default": "./dist/security/process-identity/index.js"
+    },
+    "./security/production-ingress-contract": {
+      "source": "./src/security/production-ingress-contract.ts",
+      "types": "./dist/security/production-ingress-contract.d.ts",
+      "default": "./dist/security/production-ingress-contract.js"
+    },
+    "./security/register": {
+      "source": "./src/security/register.ts",
+      "types": "./dist/security/register.d.ts",
+      "default": "./dist/security/register.js"
+    },
+    "./security/risk-control/index": {
+      "source": "./src/security/risk-control/index.ts",
+      "types": "./dist/security/risk-control/index.d.ts",
+      "default": "./dist/security/risk-control/index.js"
+    },
+    "./security/secret-store/local-secret-key-provider": {
+      "source": "./src/security/secret-store/local-secret-key-provider.ts",
+      "types": "./dist/security/secret-store/local-secret-key-provider.d.ts",
+      "default": "./dist/security/secret-store/local-secret-key-provider.js"
+    },
+    "./security/secret-store/local-secret-envelope": {
+      "source": "./src/security/secret-store/local-secret-envelope.ts",
+      "types": "./dist/security/secret-store/local-secret-envelope.d.ts",
+      "default": "./dist/security/secret-store/local-secret-envelope.js"
+    },
+    "./security/secret-store/local-secret-store": {
+      "source": "./src/security/secret-store/local-secret-store.ts",
+      "types": "./dist/security/secret-store/local-secret-store.d.ts",
+      "default": "./dist/security/secret-store/local-secret-store.js"
+    },
+    "./security/security-alerts": {
+      "source": "./src/security/security-alerts.ts",
+      "types": "./dist/security/security-alerts.d.ts",
+      "default": "./dist/security/security-alerts.js"
+    },
+    "./security/security-permissions-provider": {
+      "source": "./src/security/security-permissions-provider.ts",
+      "types": "./dist/security/security-permissions-provider.d.ts",
+      "default": "./dist/security/security-permissions-provider.js"
+    },
+    "./security/trusted-client-ip": {
+      "source": "./src/security/trusted-client-ip.ts",
+      "types": "./dist/security/trusted-client-ip.d.ts",
+      "default": "./dist/security/trusted-client-ip.js"
+    },
+    "./serialization/canonical-json": {
+      "source": "./src/serialization/canonical-json.ts",
+      "types": "./dist/serialization/canonical-json.d.ts",
+      "default": "./dist/serialization/canonical-json.js"
+    },
+    "./storage/artifact-transit-port": {
+      "source": "./src/storage/artifact-transit-port.ts",
+      "types": "./dist/storage/artifact-transit-port.d.ts",
+      "default": "./dist/storage/artifact-transit-port.js"
+    },
+    "./storage/backup-contract": {
+      "source": "./src/storage/backup-contract.ts",
+      "types": "./dist/storage/backup-contract.d.ts",
+      "default": "./dist/storage/backup-contract.js"
+    },
+    "./storage/bounded-jsonl": {
+      "source": "./src/storage/bounded-jsonl.ts",
+      "types": "./dist/storage/bounded-jsonl.d.ts",
+      "default": "./dist/storage/bounded-jsonl.js"
+    },
+    "./storage/object-store": {
+      "source": "./src/storage/object-store.ts",
+      "types": "./dist/storage/object-store.d.ts",
+      "default": "./dist/storage/object-store.js"
+    },
+    "./storage/ops-tools": {
+      "source": "./src/storage/ops-tools.ts",
+      "types": "./dist/storage/ops-tools.d.ts",
+      "default": "./dist/storage/ops-tools.js"
+    },
+    "./storage/private-file-atomic": {
+      "source": "./src/storage/private-file-atomic.ts",
+      "types": "./dist/storage/private-file-atomic.d.ts",
+      "default": "./dist/storage/private-file-atomic.js"
+    },
+    "./storage/private-storage-capacity": {
+      "source": "./src/storage/private-storage-capacity.ts",
+      "types": "./dist/storage/private-storage-capacity.d.ts",
+      "default": "./dist/storage/private-storage-capacity.js"
+    },
+    "./storage/private-sqlite": {
+      "source": "./src/storage/private-sqlite.ts",
+      "types": "./dist/storage/private-sqlite.d.ts",
+      "default": "./dist/storage/private-sqlite.js"
+    },
+    "./storage/register": {
+      "source": "./src/storage/register.ts",
+      "types": "./dist/storage/register.d.ts",
+      "default": "./dist/storage/register.js"
+    },
+    "./storage/restore-offline": {
+      "source": "./src/storage/restore-offline.ts",
+      "types": "./dist/storage/restore-offline.d.ts",
+      "default": "./dist/storage/restore-offline.js"
+    },
+    "./storage/sqlite-database": {
+      "source": "./src/storage/sqlite-database.ts",
+      "types": "./dist/storage/sqlite-database.d.ts",
+      "default": "./dist/storage/sqlite-database.js"
+    },
+    "./storage/sqlite-execution-lane": {
+      "source": "./src/storage/sqlite-execution-lane.ts",
+      "types": "./dist/storage/sqlite-execution-lane.d.ts",
+      "default": "./dist/storage/sqlite-execution-lane.js"
+    },
+    "./storage/sqlite-migrations": {
+      "source": "./src/storage/sqlite-migrations.ts",
+      "types": "./dist/storage/sqlite-migrations.d.ts",
+      "default": "./dist/storage/sqlite-migrations.js"
+    },
+    "./storage/state-coordinator": {
+      "source": "./src/storage/state-coordinator.ts",
+      "types": "./dist/storage/state-coordinator.d.ts",
+      "default": "./dist/storage/state-coordinator.js"
+    },
+    "./storage/storage-kernel": {
+      "source": "./src/storage/storage-kernel.ts",
+      "types": "./dist/storage/storage-kernel.d.ts",
+      "default": "./dist/storage/storage-kernel.js"
+    },
+    "./storage/storage-lifecycle-lock": {
+      "source": "./src/storage/storage-lifecycle-lock.ts",
+      "types": "./dist/storage/storage-lifecycle-lock.d.ts",
+      "default": "./dist/storage/storage-lifecycle-lock.js"
+    },
+    "./storage/storage-ports": {
+      "source": "./src/storage/storage-ports.ts",
+      "types": "./dist/storage/storage-ports.d.ts",
+      "default": "./dist/storage/storage-ports.js"
+    },
+    "./storage/storage-provider": {
+      "source": "./src/storage/storage-provider.ts",
+      "types": "./dist/storage/storage-provider.d.ts",
+      "default": "./dist/storage/storage-provider.js"
+    },
+    "./unified-registration-core/unified-registration": {
+      "source": "./src/unified-registration-core/unified-registration.ts",
+      "types": "./dist/unified-registration-core/unified-registration.d.ts",
+      "default": "./dist/unified-registration-core/unified-registration.js"
+    },
+    "./work-queue/index": {
+      "source": "./src/work-queue/index.ts",
+      "types": "./dist/work-queue/index.d.ts",
+      "default": "./dist/work-queue/index.js"
+    },
+    "./work-queue/sqlite-store-lane": {
+      "source": "./src/work-queue/sqlite-store-lane.ts",
+      "types": "./dist/work-queue/sqlite-store-lane.d.ts",
+      "default": "./dist/work-queue/sqlite-store-lane.js"
+    },
+    "./workflow/durable-workflow-substrate": {
+      "source": "./src/workflow/durable-workflow-substrate.ts",
+      "types": "./dist/workflow/durable-workflow-substrate.d.ts",
+      "default": "./dist/workflow/durable-workflow-substrate.js"
+    },
+    "./workflow/state-machine/engine/state-machine-core": {
+      "source": "./src/workflow/state-machine/engine/state-machine-core.ts",
+      "types": "./dist/workflow/state-machine/engine/state-machine-core.d.ts",
+      "default": "./dist/workflow/state-machine/engine/state-machine-core.js"
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "config/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js.git",
+    "directory": "packages/foundation"
+  },
+  "homepage": "https://github.com/Meshrix-Platform/Meshrix.js#readme",
+  "bugs": {
+    "url": "https://github.com/Meshrix-Platform/Meshrix.js/issues"
+  },
+  "private": true,
+  "peerDependencies": {
+    "@meshrix/contracts": "0.4.2",
+    "better-sqlite3": "^12.9.0",
+    "pactium": "0.8.4",
+    "pg": "^8.22.0",
+    "smol-toml": "^1.9.1",
+    "undici": "^8.11.2"
+  },
+  "dependencies": {
+    "re2js": "^2.8.6"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    },
+    "pactium": {
+      "optional": true
+    },
+    "smol-toml": {
+      "optional": true
+    }
+  }
+}

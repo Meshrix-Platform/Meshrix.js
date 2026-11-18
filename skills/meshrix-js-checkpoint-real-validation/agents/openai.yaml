@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Checkpoint Real Validation"
+  short_description: "Run one real-user route with isolated repair reruns"
+  default_prompt: "Use $meshrix-js-checkpoint-real-validation to design or run one evidence-backed Meshrix.js real-user journey with checkpoint receipts and clean-context repair reruns."

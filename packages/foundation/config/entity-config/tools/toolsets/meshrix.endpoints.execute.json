@@ -1,0 +1,11 @@
+{
+  "id": "meshrix.endpoints.execute",
+  "label": "Managed endpoints execute",
+  "requiredScopes": [
+    "endpoints:read",
+    "endpoints:execute"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

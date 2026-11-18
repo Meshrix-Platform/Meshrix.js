@@ -1,0 +1,542 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { upstreamOperationCapabilityId } from "../../../packages/agents/src/upstream-gateway/operation-capability.ts";
+import { mcpModernHttpRequest } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-client-wire.ts";
+
+import {
+  bindVerifierApiKey,
+  createVerifierApiKeyAccess,
+  verifierMcpRequestHeaders
+} from "./verifier-mcp-api-key.ts";
+import {
+  OPERATION_PERMISSION_TAG_GOVERNED_E2E,
+  TAG_GOVERNED_ENTITY_REFS
+} from "./operation-permission-tag-governed-e2e-constants.ts";
+import { issueVerifierMcpApiKey } from "./verifier-mcp-api-key.ts";
+import {
+  closeServer,
+  createTagGovernedFixtureState,
+  startTagGovernedFixtureServer,
+  seedTagGovernedUpstreamService
+} from "./operation-permission-tag-governed-e2e-fixture.ts";
+import {
+  createOperationPermissionTagGovernedE2eReportHarness
+} from "./operation-permission-tag-governed-e2e-report.ts";
+const canned1 = "echo";
+
+
+export {
+  OPERATION_PERMISSION_TAG_GOVERNED_E2E,
+  TAG_GOVERNED_ENTITY_REFS
+} from "./operation-permission-tag-governed-e2e-constants.ts";
+
+
+
+function parseSseBlock(block: any = "") : any {
+  const dataLines: any = block
+    .split(/\r?\n/)
+    .filter((line?: any) : any => line.startsWith("data:"))
+    .map((line?: any) : any => line.slice("data:".length).trim());
+  if (!dataLines.length) {
+    return null;
+  }
+  try {
+    return JSON.parse(dataLines.join("\n"));
+  } catch {
+    return null;
+  }
+}
+
+export async function createOperationPermissionTagGovernedE2eHarness() : Promise<any> {
+  const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-permission-tag-e2e-"));
+  const fixtureState: any = createTagGovernedFixtureState();
+  const createdGrantIds: any[] = [];
+  const mcpIdentityByToken: any = new Map<any, any>();
+
+  let server: any = null;
+  let fixture: any = null;
+  let fixtureUrl: any = "";
+  let mcpToken: any = "";
+  let mcpGrantId: any = "";
+  let operationOutletByName: any = new Map<any, any>();
+  const reportHarness: any = createOperationPermissionTagGovernedE2eReportHarness({
+    userDataPath,
+    getFixtureUrl: () : any => fixtureUrl
+  });
+  const {
+    trackSecret,
+    redactText,
+    safeEvidence,
+    assertNoLeak,
+    writeReport,
+    test,
+    destructiveTest
+  } = reportHarness;
+
+  async function startFixture() : Promise<any> {
+    const started: any = await startTagGovernedFixtureServer(fixtureState);
+    fixture = started.server;
+    fixtureUrl = started.url;
+    trackSecret(fixtureUrl, new URL(fixtureUrl).host);
+    return started;
+  }
+
+  async function writeUpstreamGatewayConfig() : Promise<any> {
+    await seedTagGovernedUpstreamService({ userDataPath, fixtureUrl });
+  }
+
+  async function fetchJson(routeOrUrl?: any, options: Record<string, any> = {}) : Promise<any> {
+    const { expectedStatuses = null, allowSecretPayload = false, ...fetchOptions } = options;
+    const url: any = String(routeOrUrl).startsWith("http")
+      ? routeOrUrl
+      : `${server.url}${routeOrUrl}`;
+    const response: any = await fetch(url, fetchOptions);
+    const text: any = await response.text();
+    const payload: any = text.trim() ? JSON.parse(text) : {};
+    const publicPayload: any = allowSecretPayload ? null : safeEvidence(payload);
+    if (!allowSecretPayload) {
+      assertNoLeak(publicPayload, String(routeOrUrl));
+    }
+    if (expectedStatuses) {
+      const diagnostic: any = publicPayload === null ? "" : `: ${JSON.stringify(publicPayload)}`;
+      assert.equal(
+        expectedStatuses.includes(response.status),
+        true,
+        `Unexpected status ${response.status} for ${routeOrUrl}${diagnostic}`
+      );
+    }
+    return { status: response.status, ok: response.ok, payload };
+  }
+
+  async function api(method?: any, route?: any, body: any = undefined, options: Record<string, any> = {}) : Promise<any> {
+    const { headers = {}, ...requestOptions } = options;
+    return fetchJson(route, {
+      method,
+      headers: { "Content-Type": "application/json", ...headers },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      ...requestOptions
+    });
+  }
+
+  function mcpHeaders(token: any = mcpToken, {
+    method = "POST",
+    body = "",
+    url = `${server.url}/mcp`,
+    extraHeaders = {}
+  }: Record<string, any> = {}) : any {
+    return verifierMcpRequestHeaders({
+      identityByToken: mcpIdentityByToken,
+      token,
+      target: "codex",
+      method,
+      url,
+      body,
+      extraHeaders
+    });
+  }
+
+  async function createVerifierApiKey(input: Record<string, any> = {}) : Promise<any> {
+    const verifierAccess: any = createVerifierApiKeyAccess({
+      target: "codex",
+      label: "verify-operation-permission-tag-governed-e2e"
+    });
+    const requestedToolsets: any = [
+      "meshrix.gateway.write",
+      "meshrix.gateway.read",
+      "meshrix.agent.workspace.read",
+      "meshrix.agent.workspace",
+      "meshrix.agent.workspace.maintain",
+      "meshrix.storage.read",
+      "meshrix.storage.write",
+      "meshrix.runtime.maintain",
+      "meshrix.authorization.admin",
+      "meshrix.console.read"
+    ];
+    const response: any = await issueVerifierMcpApiKey({
+      server,
+      access: {
+        targets: ["codex"],
+        connectorVersion: "verify-operation-permission-tag-governed-e2e",
+        agentProfileId: OPERATION_PERMISSION_TAG_GOVERNED_E2E.agentProfileId,
+        grantMode: "maintain",
+        maxRisk: "repair_write",
+        dynamicCapabilities: [upstreamOperationCapabilityId(
+          { serviceId: OPERATION_PERMISSION_TAG_GOVERNED_E2E.serviceId },
+          { operationKey: canned1 }
+        )],
+        allowedServiceIds: [OPERATION_PERMISSION_TAG_GOVERNED_E2E.serviceId],
+        scopeIds: ["gateway:read", "gateway:write", "gateway:maintain"],
+        toolsets: requestedToolsets,
+        label: verifierAccess.label,
+        ...input
+      }
+    });
+    const token: any = response.apiKey;
+    const keyId: any = response.record.keyId;
+    assert.ok(token, "API Key issuance did not return plaintext to the direct verifier caller");
+    assert.ok(keyId, "API Key issuance did not return a bounded record identifier");
+    trackSecret(token, keyId);
+    bindVerifierApiKey({
+      identityByToken: mcpIdentityByToken,
+      token,
+      record: response.record
+    });
+    createdGrantIds.push(keyId);
+    return { token, keyId, record: response.record, toolsets: requestedToolsets };
+  }
+
+  function mcpPayload(jsonRpcPayload: Record<string, any> = {}) : any {
+    return jsonRpcPayload?.result?.structuredContent?.payload ||
+      jsonRpcPayload?.result?.structuredContent ||
+      jsonRpcPayload?.result ||
+      {};
+  }
+
+  function operationNames(capabilities: Record<string, any> = {}) : any {
+    return new Set<any>((capabilities.operations || []).map((operation?: any) : any => String(operation.name || "")));
+  }
+
+  async function openMcpSse(token?: any) : Promise<any> {
+    const controller: any = new AbortController();
+    const events: any[] = [];
+    let buffer: any = "";
+    const url: any = `${server.url}/mcp`;
+    const wire: any = mcpModernHttpRequest({
+      jsonrpc: "2.0",
+      id: "tag-governed-e2e-subscription",
+      method: "subscriptions/listen",
+      params: { notifications: { toolsListChanged: true } }
+    }, { Accept: "text/event-stream" });
+    const stream: any = fetch(url, {
+      method: "POST",
+      headers: mcpHeaders(token, {
+        method: "POST",
+        body: wire.body,
+        url,
+        extraHeaders: wire.headers
+      }),
+      body: wire.body,
+      signal: controller.signal
+    }).then(async (response?: any) : Promise<any> => {
+      assert.equal(response.status, 200, "MCP SSE stream did not open");
+      const reader: any = response.body.getReader();
+      const decoder: any = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        let boundary: any = buffer.indexOf("\n\n");
+        while (boundary >= 0) {
+          const block: any = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          const parsed: any = parseSseBlock(block);
+          if (parsed) {
+            events.push(parsed);
+          }
+          boundary = buffer.indexOf("\n\n");
+        }
+      }
+    }).catch((error?: any) : any => {
+      if (error?.name !== "AbortError") {
+        throw error;
+      }
+    });
+
+    async function waitForReasonCode(reasonCode?: any, timeoutMs: any = 5000) : Promise<any> {
+      const deadline: any = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const found: any = events.find((event?: any) : any =>
+          event?.method === "notifications/tools/list_changed" &&
+            String(event?.params?.change?.reasonCode || "") === reasonCode
+        );
+        if (found) {
+          return found;
+        }
+        await new Promise((resolve?: any) : any => setTimeout(resolve, 50));
+      }
+      throw new Error(`Timed out waiting for MCP list_changed reason ${reasonCode}`);
+    }
+
+    await new Promise((resolve?: any) : any => setTimeout(resolve, 150));
+    return {
+      events,
+      waitForReasonCode,
+      close: async () : Promise<any> => {
+        controller.abort();
+        await stream;
+      }
+    };
+  }
+
+  async function callMcpWithToolName(token?: any, toolName?: any, operation?: any, input: Record<string, any> = {}, id: any = 1, expectedStatuses: any = [200]) : Promise<any> {
+    const wire: any = mcpModernHttpRequest({
+      jsonrpc: "2.0",
+      id,
+      method: "tools/call",
+      params: {
+        name: toolName,
+        arguments: {
+          apiVersion: OPERATION_PERMISSION_TAG_GOVERNED_E2E.mcpInterfaceVersion,
+          operation,
+          input,
+          clientVersion: "verify-operation-permission-tag-governed-e2e"
+        }
+      }
+    });
+    const response: any = await fetchJson("/mcp", {
+      method: "POST",
+      headers: mcpHeaders(token, { body: wire.body, extraHeaders: wire.headers }),
+      body: wire.body,
+      expectedStatuses
+    });
+    return response.payload;
+  }
+
+  async function callMcp(operation?: any, input: Record<string, any> = {}, id: any = 1, expectedStatuses: any = [200]) : Promise<any> {
+    const toolName: any = operationOutletByName.get(operation) || "meshrix.discovery";
+    return callMcpWithToolName(mcpToken, toolName, operation, input, id, expectedStatuses);
+  }
+
+  async function capabilitiesForToken(token?: any, id: any = 1) : Promise<any> {
+    const payload: any = await callMcpWithToolName(token, "meshrix.discovery", "meshrix.capabilities.list", {}, id);
+    assertMcpOk(payload, "capabilities");
+    return mcpPayload(payload);
+  }
+
+  /**
+   * A tool-level refusal travels in-band as `result.isError === true`; a top-level
+   * JSON-RPC `error` is reserved for protocol faults (see `mcpRefusal`). A positive
+   * step therefore has to reject both carriers: asserting only `payload.error`
+   * would accept an in-band refusal — an authorization, tag-policy or outlet
+   * denial — as a successful call.
+   */
+  function assertMcpOk(payload?: any, label?: any) : any {
+    assert.equal(payload.error, undefined, `${label} returned MCP error: ${JSON.stringify(safeEvidence(payload.error || {}))}`);
+    assert.notEqual(
+      payload?.result?.isError,
+      true,
+      `${label} was refused in-band: ${JSON.stringify(safeEvidence(mcpPayload(payload)))}`
+    );
+  }
+
+  /**
+   * A tool-level refusal travels in-band: `result.isError === true` with the
+   * operation payload under `result.structuredContent`. A top-level JSON-RPC
+   * `error` is reserved for protocol faults. This is the MCP tool-result
+   * convention for an operation that failed at the tool level, and the platform
+   * sinks already answer that way; do not re-tighten this to `payload.error`
+   * alone, and do not relax the reason check that follows it. A positive step
+   * must still reject the in-band carrier — see `assertMcpOk`.
+   */
+  function mcpRefusal(payload?: any) : any {
+    if (payload?.error) return payload.error;
+    return payload?.result?.isError === true ? mcpPayload(payload) : null;
+  }
+
+  function assertMcpDenied(payload?: any, label?: any, expectedReason?: any) : any {
+    const denial: any = mcpRefusal(payload);
+    assert.ok(denial, `${label} unexpectedly succeeded`);
+    const text: any = JSON.stringify(denial || {}).toLowerCase();
+    // An array names the acceptable refusal reasons; a destructive operation may
+    // be stopped by the approval gate before the tag policy is consulted, so the
+    // caller states which refusals prove the step, and the no-effect assertion
+    // that follows the call remains the proof that nothing executed.
+    const expected: any[] = expectedReason === undefined
+      ? []
+      : (Array.isArray(expectedReason) ? expectedReason : [expectedReason]).map((reason?: any) : any => String(reason).toLowerCase());
+    assert.equal(
+      expected.length > 0
+        ? expected.some((reason?: any) : any => text.includes(reason))
+        : text.includes("tag_policy_denied") ||
+            text.includes("policy_denied") ||
+            text.includes("denied") ||
+            text.includes("unknown") ||
+            text.includes("not_found") ||
+            text.includes("not found") ||
+            text.includes("outlet") ||
+            text.includes("missing") ||
+            text.includes("permission") ||
+            text.includes("forbidden") ||
+            text.includes("权限不足"),
+      true,
+      `${label} did not expose a denial reason${expected.length > 0 ? ` (${expected.join("|")})` : ""}: ${JSON.stringify(denial || {})}`
+    );
+  }
+
+  function denialSummary(payload: Record<string, any> = {}) : any {
+    const text: any = JSON.stringify(payload.error || {});
+    const reasonCode: any =
+      payload.error?.code ||
+      payload.error?.data?.payload?.error?.code ||
+      payload.error?.data?.error?.code ||
+      (text.includes("tag_policy_denied") ? "tag_policy_denied" : "denied");
+    return {
+      reasonCode: String(reasonCode || "denied"),
+      matchedDenyTags: [OPERATION_PERMISSION_TAG_GOVERNED_E2E.denyTag]
+    };
+  }
+
+  function tagPolicy(entityRef?: any) : any {
+    return {
+      entityRefs: [{ entityType: entityRef.entityType, entityId: entityRef.entityId }],
+      allowTags: [OPERATION_PERMISSION_TAG_GOVERNED_E2E.allowTag],
+      denyTags: [OPERATION_PERMISSION_TAG_GOVERNED_E2E.denyTag]
+    };
+  }
+
+  function tagProjections() : any {
+    return (Object.values(TAG_GOVERNED_ENTITY_REFS) as any[]).map((entity?: any) : any => ({
+      entityType: entity.entityType,
+      entityId: entity.entityId,
+      payload: {
+        capability: entity.capability
+      }
+    }));
+  }
+
+  async function upsertTag(tagId?: any, label?: any, projections: any = []) : Promise<any> {
+    const response: any = await api("POST", "/api/tag-management/v1/tags", {
+      tagId,
+      kind: "custom",
+      label,
+      scopePrerequisites: ["auth:admin"],
+      metadata: projections.length ? { projections } : {}
+    }, { expectedStatuses: [200, 201] });
+    return response.payload.tag;
+  }
+
+  async function rebuildTagProjections() : Promise<any> {
+    const response: any = await api("POST", "/api/tag-management/v1/projections/rebuild", {}, { expectedStatuses: [200] });
+    return response.payload.rebuild || {};
+  }
+
+  async function registerGatewayFixture() : Promise<any> {
+    const response: any = await api("GET", "/api/gateway/v1/external-services", undefined, { expectedStatuses: [200] });
+    const service: any = (response.payload.items || []).find((item?: any) : any =>
+      item.serviceId === OPERATION_PERMISSION_TAG_GOVERNED_E2E.serviceId
+    );
+    assert.ok(service, "configured gateway service missing");
+    const rejected: any = await api("POST", "/api/gateway/v1/external-services", {
+      serviceId: "tag-governed-remote-registration-forbidden",
+      baseUrl: fixtureUrl
+    }, { expectedStatuses: [400, 403, 404, 405] });
+    assert.equal(rejected.status >= 400, true);
+    return {
+      serviceId: OPERATION_PERMISSION_TAG_GOVERNED_E2E.serviceId,
+      loadedFromPublishedManifest: true
+    };
+  }
+
+  async function refreshCapabilities() : Promise<any> {
+    const payload: any = await callMcp("meshrix.capabilities.list", {}, 10, [200, 400, 401, 403]);
+    const capabilities: any = mcpPayload(payload);
+    if (payload?.error || !capabilities.operations) {
+      throw Object.assign(new Error(`MCP capability discovery failed: ${JSON.stringify(safeEvidence(payload?.error || payload || {}))}`), {
+        code: "mcp_capability_discovery_failed"
+      });
+    }
+    operationOutletByName = new Map<any, any>((capabilities.operations || []).map((operation?: any) : any => [
+      String(operation.name || ""),
+      String(operation?._meta?.mcpOutlet || "meshrix.discovery")
+    ]));
+    const missing: any = OPERATION_PERMISSION_TAG_GOVERNED_E2E.requiredPublicOperations
+      .filter((operation?: any) : any => !operationOutletByName.has(operation));
+    assert.deepEqual(
+      missing,
+      [],
+      `Missing required MCP operations: ${missing.join(", ")}`
+    );
+    return { operationCount: capabilities.operations?.length || 0 };
+  }
+
+  async function cleanup({ restoreCapabilityKernelEnv = null }: Record<string, any> = {}) : Promise<any> {
+    if (server?.close) {
+      await server.close();
+    }
+    await closeServer(fixture);
+    await fs.rm(userDataPath, { recursive: true, force: true }).catch(() : any => {});
+    if (typeof restoreCapabilityKernelEnv === "function") {
+      restoreCapabilityKernelEnv();
+    }
+  }
+
+  async function latestHttpFailureDiagnostic() : Promise<any> {
+    const logDirectory = path.join(userDataPath, "logs", "runtime");
+    await new Promise((resolve?: any) : any => setTimeout(resolve, 100));
+    const files = await fs.readdir(logDirectory).catch(() : any => []);
+    for (const file of [...files].sort().reverse()) {
+      if (!file.endsWith(".jsonl")) continue;
+      const lines = (await fs.readFile(path.join(logDirectory, file), "utf8"))
+        .split(/\r?\n/u)
+        .filter(Boolean)
+        .reverse();
+      for (const line of lines) {
+        const record = JSON.parse(line);
+        if (record?.event !== "http.request.failed") continue;
+        const reasonCode = String(record?.details?.error?.reasonCode || record?.error?.reasonCode || "");
+        return Object.freeze({
+          route: record?.details?.route === "/mcp" || record?.route === "/mcp" ? "/mcp" : "other",
+          statusCode: record?.details?.statusCode || record?.statusCode || 0,
+          error: {
+            reasonCode: /^[a-z0-9][a-z0-9._:-]*$/u.test(reasonCode) ? reasonCode : "runtime_error",
+            status: record?.details?.error?.status || record?.error?.status || 0
+          }
+        });
+      }
+    }
+    return null;
+  }
+
+  return {
+    userDataPath,
+    fixtureState,
+    createdGrantIds,
+    trackSecret,
+    redactText,
+    safeEvidence,
+    writeReport,
+    test,
+    destructiveTest,
+    startFixture,
+    writeUpstreamGatewayConfig,
+    setServer(target?: any) : any {
+      server = target;
+      if (server?.url) {
+        trackSecret(server.url, new URL(server.url).host);
+      }
+    },
+    setPrimaryGrant(grant: Record<string, any> = {}) : any {
+      mcpToken = String(grant.token || "");
+      mcpGrantId = String(grant.grantId || "");
+    },
+    getMcpGrantId() : any {
+      return mcpGrantId;
+    },
+    getMcpToken() : any {
+      return mcpToken;
+    },
+    api,
+    assertMcpDenied,
+    assertMcpOk,
+    callMcp,
+    callMcpWithToolName,
+    capabilitiesForToken,
+    createVerifierApiKey,
+    denialSummary,
+    mcpPayload,
+    openMcpSse,
+    operationNames,
+    rebuildTagProjections,
+    registerGatewayFixture,
+    refreshCapabilities,
+    tagPolicy,
+    tagProjections,
+    upsertTag,
+    latestHttpFailureDiagnostic,
+    cleanup
+  };
+}

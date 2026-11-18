@@ -1,0 +1,20 @@
+{
+  "serverUrl": "http://127.0.0.1:7228",
+  "waitServer": true,
+  "defaults": {
+    "timeoutMs": 900000,
+    "dryRun": false
+  },
+  "targets": [
+    "jre",
+    "python",
+    "node"
+  ],
+  "downloads": [
+    {
+      "targetId": "caddy",
+      "sha256": "replace-with-caddy-runtime-artifact-sha256",
+      "timeoutMs": 600000
+    }
+  ]
+}

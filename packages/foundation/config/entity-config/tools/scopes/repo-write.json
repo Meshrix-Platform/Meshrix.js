@@ -1,0 +1,5 @@
+{
+  "id": "repo:write",
+  "label": "Write governed repository resources",
+  "description": "Create or update repository content through a governed provider operation."
+}

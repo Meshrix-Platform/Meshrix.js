@@ -1,0 +1,20 @@
+{
+  "$schema": "./schema/runtime-capacity-profile.schema.json",
+  "version": "v0.0.1:registry:runtime-capacity-profile-1",
+  "schemaVersion": "v0.0.1:runtime:capacity-profile-gate-1",
+  "profileId": "",
+  "authorized": false,
+  "capacityCertified": false,
+  "nonCertificationReason": "owner_profile_not_authorized",
+  "requiredModes": [
+    "closed-loop",
+    "open-loop",
+    "fault",
+    "soak"
+  ],
+  "privacy": {
+    "allowRuntimePayloads": false,
+    "allowServiceAddresses": false,
+    "allowMachinePaths": false
+  }
+}

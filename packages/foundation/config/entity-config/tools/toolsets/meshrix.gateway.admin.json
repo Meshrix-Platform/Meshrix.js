@@ -1,0 +1,13 @@
+{
+  "id": "meshrix.gateway.admin",
+  "label": "Gateway admin",
+  "requiredScopes": [
+    "gateway:read",
+    "gateway:write",
+    "gateway:maintain",
+    "gateway:admin"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

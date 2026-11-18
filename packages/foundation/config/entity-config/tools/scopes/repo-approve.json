@@ -1,0 +1,5 @@
+{
+  "id": "repo:approve",
+  "label": "Approve governed repository changes",
+  "description": "Approve a governed repository proposal within its current policy binding."
+}

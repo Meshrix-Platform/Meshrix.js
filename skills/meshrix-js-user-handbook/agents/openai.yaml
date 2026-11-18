@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js User Handbook"
+  short_description: "Operate Meshrix.js and connect through one origin"
+  default_prompt: "Use $meshrix-js-user-handbook to operate this instance and connect external services or agents through its single public origin. Do not change the product or release artifact from this package."

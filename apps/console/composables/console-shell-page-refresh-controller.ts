@@ -1,0 +1,182 @@
+import { computed, ref, type ComputedRef } from "vue";
+import { collectPageRefreshTasks } from "@meshrix/ui-console/page-refresh";
+
+type MaybePromise<T> = T | Promise<T>;
+
+type RefreshStateOptions = {
+  forceDrafts?: boolean;
+  silent?: boolean;
+};
+
+type SilentRefreshOptions = {
+  silent?: boolean;
+};
+
+type PageRefreshMessages = {
+  actions: {
+    refreshing: string;
+    refreshPage: string;
+  };
+};
+
+type ConsoleShellPageRefreshControllerOptions = {
+  activeRouteAdminView: ComputedRef<string>;
+  activeRouteDebugTab: ComputedRef<string>;
+  activeRouteView: ComputedRef<string>;
+  isAnyBusy: ComputedRef<boolean>;
+  msg: ComputedRef<PageRefreshMessages>;
+  refreshAuthAdmin: () => MaybePromise<unknown>;
+  refreshAuthState: () => MaybePromise<unknown>;
+  refreshBackgroundProcesses: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
+  refreshDashboardAlertsSnapshot: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
+  refreshMonitorAlerts: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
+  refreshOperationPermissionPendingOperations: () => MaybePromise<unknown>;
+  refreshState: (options?: RefreshStateOptions) => MaybePromise<unknown>;
+  refreshOperationPermission: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
+  reloadModules: () => MaybePromise<unknown>;
+  routeFullPath: ComputedRef<string>;
+};
+
+async function waitForPageRefreshTasks(tasks: Promise<unknown>[]) : Promise<any> {
+  const results: any = await Promise.allSettled(tasks);
+  const failed: any = results.find((result?: any): result is PromiseRejectedResult => result.status === "rejected");
+  if (failed) {
+    throw failed.reason;
+  }
+}
+
+export function createConsoleShellPageRefreshController(options: ConsoleShellPageRefreshControllerOptions) : any {
+  const pageRefreshPendingCount: any = ref(0);
+  const pageRefreshActionBusy: any = computed(() : any => pageRefreshPendingCount.value > 0);
+  const pageRefreshMessages: any = computed(() : any => options.msg?.value || {
+    actions: {
+      refreshing: "刷新中",
+      refreshPage: "刷新",
+    },
+  });
+  const pageRefreshBusy: any = computed(() : any =>
+    pageRefreshActionBusy.value || options.isAnyBusy.value,
+  );
+  const pageRefreshTitle: any = computed(() : any =>
+    pageRefreshBusy.value ? `${pageRefreshMessages.value.actions.refreshing}...` : pageRefreshMessages.value.actions.refreshPage,
+  );
+  const pageRefreshAriaLabel: any = computed(() : any =>
+    pageRefreshBusy.value ? pageRefreshMessages.value.actions.refreshing : pageRefreshMessages.value.actions.refreshPage,
+  );
+
+  async function trackPageRefreshTask<T>(task: MaybePromise<T>): Promise<T> {
+    pageRefreshPendingCount.value += 1;
+    try {
+      return await task;
+    } finally {
+      pageRefreshPendingCount.value = Math.max(0, pageRefreshPendingCount.value - 1);
+    }
+  }
+
+  async function refreshAdminRoute() : Promise<any> {
+    switch (options.activeRouteAdminView.value) {
+      case "storage":
+        await Promise.all([
+          options.refreshAuthAdmin(),
+          options.reloadModules(),
+          options.refreshState({ silent: true, forceDrafts: false }),
+        ]);
+        return;
+      case "jobs":
+        await Promise.all([
+          options.refreshState({ silent: true, forceDrafts: true }),
+          options.refreshMonitorAlerts({ silent: true }),
+        ]);
+        return;
+      case "logs":
+        await Promise.all([
+          options.refreshState({ silent: true }),
+          options.refreshOperationPermission({ silent: true }),
+          options.refreshBackgroundProcesses({ silent: true }),
+          options.refreshMonitorAlerts({ silent: true }),
+          options.refreshAuthAdmin(),
+        ]);
+        return;
+      case "opsMonitor":
+        await Promise.all([
+          options.refreshBackgroundProcesses({ silent: true }),
+          options.refreshMonitorAlerts({ silent: true }),
+        ]);
+        return;
+      case "productionHealth":
+        return;
+      case "strategyManagement":
+        return;
+      case "versionRelease":
+        return;
+      case "versionAssembly":
+        return;
+      case "tools":
+      case "toolList":
+      case "toolGovernance":
+      case "toolStats":
+        await options.refreshOperationPermission();
+        return;
+      case "modules":
+        await options.reloadModules();
+        return;
+      case "operationPermission":
+        await Promise.all([
+          options.refreshAuthAdmin(),
+          options.refreshOperationPermission(),
+        ]);
+        return;
+      default:
+        await options.refreshState({ silent: true });
+    }
+  }
+
+  async function refreshCurrentRouteDefaults() : Promise<any> {
+    switch (options.activeRouteView.value) {
+      case "dashboard":
+        await options.refreshDashboardAlertsSnapshot({ silent: false });
+        return;
+      case "approval":
+        await options.refreshOperationPermissionPendingOperations();
+        return;
+      case "workspaces":
+        await options.refreshAuthState();
+        return;
+      case "debug":
+        await options.refreshState({ silent: true });
+        return;
+      case "admin":
+        await refreshAdminRoute();
+        return;
+      default:
+        await options.refreshState({ silent: true });
+    }
+  }
+
+  async function refreshCurrentPage() : Promise<any> {
+    if (pageRefreshBusy.value) {
+      return;
+    }
+    await trackPageRefreshTask((async () : Promise<any> => {
+      const pageTasks: any = collectPageRefreshTasks({
+        viewId: options.activeRouteView.value,
+        adminView: options.activeRouteAdminView.value,
+        gatewayTab: "",
+        debugTab: options.activeRouteDebugTab.value,
+        routePath: options.routeFullPath.value,
+      });
+      await waitForPageRefreshTasks([
+        Promise.resolve(refreshCurrentRouteDefaults()),
+        ...pageTasks,
+      ]);
+    })());
+  }
+
+  return {
+    pageRefreshAriaLabel,
+    pageRefreshBusy,
+    pageRefreshTitle,
+    refreshCurrentPage,
+    trackPageRefreshTask,
+  };
+}

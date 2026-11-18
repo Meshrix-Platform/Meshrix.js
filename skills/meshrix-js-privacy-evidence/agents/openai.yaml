@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Privacy Evidence"
+  short_description: "Scan and report minimum redacted evidence"
+  default_prompt: "Use $meshrix-js-privacy-evidence to handle this Meshrix.js task through its canonical owner and validation path."

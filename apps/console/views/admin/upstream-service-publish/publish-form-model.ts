@@ -1,0 +1,47 @@
+import type {
+  TypedServiceReference,
+  UpstreamServiceDescriptor
+} from "../../../lib/upstream-service-publish-client";
+
+export type PublishDescriptorForm = Omit<UpstreamServiceDescriptor, "serviceProtocol" | "mcp"> & {
+  serviceKey: string;
+  serviceProtocol?: UpstreamServiceDescriptor["serviceProtocol"] | "";
+  mcp?: Record<string, unknown>;
+  operationKey?: string;
+  method?: string;
+  path?: string;
+  risk?: string;
+  requestRepresentationMode?: "structured_json" | "opaque_stream" | "artifact_body" | "artifact_multipart" | "";
+  responseRepresentationMode?: "structured_json" | "opaque_stream" | "artifact" | "";
+  requestMaxBytes?: number | "";
+  responseMaxBytes?: number | "";
+  requestMediaTypes?: string;
+  responseMediaTypes?: string;
+  mcpTransport?: string;
+  mcpUrl?: string;
+  mcpProtocolVersion?: string;
+  credentialMode?: "none" | "saved" | "";
+  credentialSelection?: string;
+  savedCredentialOptions?: TypedServiceReference[];
+};
+
+export type DescriptorObjectField =
+  | "interfaceSchemas"
+  | "permissions"
+  | "approvalPolicy"
+  | "trafficPolicy"
+  | "audience"
+  | "tagPolicy"
+  | "circuitBreaker"
+  | "mcp";
+
+export const descriptorObjectFields: readonly DescriptorObjectField[] = [
+  "interfaceSchemas",
+  "permissions",
+  "approvalPolicy",
+  "trafficPolicy",
+  "audience",
+  "tagPolicy",
+  "circuitBreaker",
+  "mcp"
+];

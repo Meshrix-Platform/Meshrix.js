@@ -1,0 +1,252 @@
+import { createMemoryHistory, createRouter } from "vue-router";
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  canAccessPluginConsoleEntry,
+  hasPluginConsoleRoute,
+  isAdminPluginConsoleEntry,
+  resolveAccessiblePluginConsoleComponent,
+  resolvePluginConsoleComponent,
+  syncPluginConsoleRoutes,
+  type PluginConsoleEntry,
+} from "../../../apps/console/router/plugin-console-routes";
+import { routeAccessPolicyAllowsSubject } from "../../../apps/console/router/route-access-policy.ts";
+import {
+  configureRuntimeRouteGuard,
+  installRuntimeRouteGuard,
+} from "../../../apps/console/router/runtime-route-guard";
+const canned1 = "sampleView";
+const canned2 = "sampleA";
+const canned3 = "sampleB";
+const canned4 = "sampleC";
+const canned5 = "workspacePanel";
+
+
+
+
+const View: Record<string, any> = { template: "<div />" };
+
+function createTestRouter() : any {
+  const router: any = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/", component: View, meta: { accessPolicy: { routePath: "/", requiredScopes: [], requiredFeatureIds: [] } } },
+      { path: "/welcome", component: View, meta: { public: true } },
+      { path: "/:pathMatch(.*)*", component: View },
+    ],
+  });
+  installRuntimeRouteGuard(router);
+  return router;
+}
+
+function entry(patch: Partial<PluginConsoleEntry> = {}): PluginConsoleEntry {
+  const result: PluginConsoleEntry = {
+    id: "admin.sample-plugin",
+    pluginId: "sample-plugin",
+    featureId: "sample-feature",
+    viewKey: canned1,
+    routePath: "/admin/sample-plugin",
+    componentId: "sample-plugin/AdminView",
+    sandboxUrl: "",
+    bridgeVersion: "v0.0.1:plugin:console-bridge-1",
+    artifactDigest: `sha256:${"a".repeat(64)}`,
+    artifactGeneration: 1,
+    label: "Sample plugin",
+    requiredScopes: ["console:read"],
+    toolIds: [],
+    ...patch,
+  };
+  if (!result.sandboxUrl) {
+    const digest: any = result.artifactDigest.replace(/^sha256:/u, "");
+    result.sandboxUrl = `/api/plugins/v1/console-sandboxes/${result.pluginId}/${result.artifactGeneration}/${digest}/ZW50cnk.html`;
+  }
+  return result;
+}
+
+function createHost() : any {
+  return {
+    invokeTool: vi.fn(async () : Promise<any> => ({})),
+  };
+}
+
+describe("plugin console runtime routes", () : any => {
+  it("registers only enabled exact plugin components and removes the active route safely", async () : Promise<any> => {
+    const router: any = createTestRouter();
+    const host: any = createHost();
+    syncPluginConsoleRoutes(router, [entry()], { host });
+    configureRuntimeRouteGuard(router, {
+      ready: true,
+      authenticated: true,
+      scopes: ["console:read"],
+      activeFeatureIds: ["sample-feature"],
+    });
+    await router.push("/admin/sample-plugin");
+    expect(router.currentRoute.value.path).toBe("/admin/sample-plugin");
+    expect(router.currentRoute.value.meta.pluginId).toBe("sample-plugin");
+    expect(router.currentRoute.value.meta.title).toBe("Sample plugin");
+    expect(host.invokeTool).not.toHaveBeenCalled();
+
+    syncPluginConsoleRoutes(router, []);
+    await new Promise((resolve?: any) : any => setTimeout(resolve, 0));
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(router.getRoutes().some((route?: any) : any => route.path === "/admin/sample-plugin")).toBe(false);
+  });
+
+  it("resolves and registers multiple views from one plugin artifact", async () : Promise<any> => {
+    const host: any = createHost();
+    const sampleEntries: any[] = [
+      entry({
+        id: "admin.sample-a",
+        featureId: "sample-feature-a",
+        viewKey: canned2,
+        routePath: "/admin/sample-a",
+        componentId: "sample-plugin/SampleAView",
+      }),
+      entry({
+        id: "admin.sample-b",
+        featureId: "sample-feature-b",
+        viewKey: canned3,
+        routePath: "/admin/sample-b",
+        componentId: "sample-plugin/SampleBView",
+      }),
+      entry({
+        id: "admin.sample-c",
+        featureId: "sample-feature-c",
+        viewKey: canned4,
+        routePath: "/admin/sample-c",
+        componentId: "sample-plugin/SampleCView",
+      }),
+    ];
+
+    for (const sampleEntry of sampleEntries) {
+      const loadComponent: any = resolvePluginConsoleComponent(sampleEntry, host);
+      expect(loadComponent).toBeTypeOf("function");
+      await expect(loadComponent?.()).resolves.toMatchObject({ name: expect.stringMatching(/^PluginConsole_/u) });
+    }
+    expect(host.invokeTool).not.toHaveBeenCalled();
+
+    const router: any = createTestRouter();
+    expect(() : any => syncPluginConsoleRoutes(router, sampleEntries, { host })).not.toThrow();
+    expect(router.getRoutes().filter((route?: any) : any => route.meta.pluginId === "sample-plugin"))
+      .toHaveLength(sampleEntries.length);
+  });
+
+  it("re-registers a route when its artifact or authorization signature changes", async () : Promise<any> => {
+    const router: any = createTestRouter();
+    const host: any = createHost();
+    syncPluginConsoleRoutes(router, [entry()], { host });
+    const name: any = "plugin-console:sample-plugin:admin.sample-plugin";
+    const before: any = router.getRoutes().find((route?: any) : any => route.name === name);
+    expect(before?.meta.accessPolicy.requiredScopes).toEqual(["console:read"]);
+
+    syncPluginConsoleRoutes(router, [entry({
+      artifactGeneration: 2,
+      artifactDigest: `sha256:${"b".repeat(64)}`,
+      requiredScopes: ["console:read", "console:admin"],
+    })], { host });
+
+    const registered: any = router.getRoutes().filter((route?: any) : any => route.name === name);
+    expect(registered).toHaveLength(1);
+    expect(registered[0].meta.accessPolicy.requiredScopes).toEqual(["console:read", "console:admin"]);
+    expect(registered[0].components?.default).not.toBe(before?.components?.default);
+
+    configureRuntimeRouteGuard(router, {
+      ready: true,
+      authenticated: true,
+      scopes: ["console:read"],
+      activeFeatureIds: ["sample-feature"],
+    });
+    await router.push("/admin/sample-plugin");
+    expect(router.currentRoute.value.path).not.toBe("/admin/sample-plugin");
+  });
+
+  it("denies a non-public route that carries no access policy", async () : Promise<any> => {
+    const router: any = createTestRouter();
+    configureRuntimeRouteGuard(router, {
+      ready: true,
+      authenticated: true,
+      scopes: ["console:read"],
+      activeFeatureIds: ["sample-feature"],
+    });
+    expect(routeAccessPolicyAllowsSubject(null, { scopes: ["console:read"] }, [])).toBe(false);
+    router.addRoute({ path: "/unprotected", component: View });
+    await router.push("/unprotected");
+    expect(router.currentRoute.value.path).not.toBe("/unprotected");
+  });
+
+  it("denies direct navigation before authorization and with missing scopes", async () : Promise<any> => {
+    const router: any = createTestRouter();
+    const host: any = createHost();
+    syncPluginConsoleRoutes(router, [entry()], { host });
+    await router.push("/admin/sample-plugin");
+    expect(router.currentRoute.value.path).toBe("/welcome");
+    expect(host.invokeTool).not.toHaveBeenCalled();
+
+    configureRuntimeRouteGuard(router, {
+      ready: true,
+      authenticated: true,
+      scopes: [],
+      activeFeatureIds: ["sample-feature"],
+    });
+    await router.push("/admin/sample-plugin");
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(host.invokeTool).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for missing assets and core route conflicts", () : any => {
+    const router: any = createTestRouter();
+    expect(() : any => syncPluginConsoleRoutes(router, [entry({
+      sandboxUrl: "https://invalid.example/plugin.html",
+    })])).toThrow(/component is unavailable/u);
+    expect(() : any => syncPluginConsoleRoutes(router, [entry({ routePath: "/" })])).toThrow(/route conflicts/u);
+  });
+
+  it("rejects legacy asset fields and invalid sandbox contracts", () : any => {
+    expect(resolvePluginConsoleComponent(entry({ assetExport: "mountPluginConsole" } as any))).toBeUndefined();
+    expect(resolvePluginConsoleComponent(entry({ assetUrl: "/legacy.ts" } as any))).toBeUndefined();
+    expect(resolvePluginConsoleComponent(entry({ sandboxUrl: "/api/plugins/v1/console-assets/x/1/aa/entry.ts" }))).toBeUndefined();
+    expect(resolvePluginConsoleComponent(entry({ bridgeVersion: "legacy.same-origin" }))).toBeUndefined();
+  });
+
+  it("hides slot entries and avoids resolving their component before policy authorization", () : any => {
+    const host: any = createHost();
+    const slotEntry: any = entry({
+      id: "workspace.local-directory",
+      pluginId: "sample-plugin",
+      featureId: "sample-feature",
+      viewKey: canned5,
+      routePath: undefined,
+      slotId: "workspace.local-directory",
+      componentId: "sample-plugin/WorkspacePanel",
+      requiredScopes: ["workspace:read"],
+    });
+    const check: any = (scopes: string[], features: string[]) : any => (meta?: any) : any =>
+      routeAccessPolicyAllowsSubject(meta.accessPolicy, { scopes }, features);
+
+    expect(canAccessPluginConsoleEntry(slotEntry, check([], ["sample-feature"]))).toBe(false);
+    expect(canAccessPluginConsoleEntry(slotEntry, check(["workspace:read"], []))).toBe(false);
+    expect(resolveAccessiblePluginConsoleComponent(
+      slotEntry,
+      check([], ["sample-feature"]),
+      host,
+    )).toBeUndefined();
+    expect(resolveAccessiblePluginConsoleComponent(
+      slotEntry,
+      check(["workspace:read"], []),
+      host,
+    )).toBeUndefined();
+    expect(canAccessPluginConsoleEntry(slotEntry, check(["workspace:read"], ["sample-feature"]))).toBe(true);
+    expect(resolveAccessiblePluginConsoleComponent(
+      slotEntry,
+      check(["workspace:read"], ["sample-feature"]),
+      host,
+    )).toBeTypeOf("function");
+    expect(host.invokeTool).not.toHaveBeenCalled();
+    expect(hasPluginConsoleRoute(slotEntry)).toBe(false);
+    expect(isAdminPluginConsoleEntry(slotEntry)).toBe(false);
+
+    const router: any = createTestRouter();
+    expect(() : any => syncPluginConsoleRoutes(router, [slotEntry], { host })).not.toThrow();
+    expect(router.getRoutes().some((route?: any) : any => route.meta.pluginId === "sample-plugin")).toBe(false);
+  });
+});

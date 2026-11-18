@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target OpenClaw"
+  short_description: "OpenClaw configuration and MCP ownership"
+  default_prompt: "Use $meshrix-js-agent-target-openclaw to locate OpenClaw configuration facts and the current Meshrix.js MCP integration owner."

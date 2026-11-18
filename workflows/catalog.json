@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "changed": ["meshrix-js.typecheck", "meshrix-js.test"],
+    "reassembly": ["meshrix-js.typecheck", "meshrix-js.build", "meshrix-js.test"],
+    "release-promotion": ["meshrix-js.promote-release"],
+    "stable-promotion": ["meshrix-js.promote-stable"]
+  },
+  "tasks": [
+    {
+      "id": "meshrix-js.typecheck",
+      "command": "npm",
+      "args": ["run", "typecheck"]
+    },
+    {
+      "id": "meshrix-js.build",
+      "command": "npm",
+      "args": ["run", "build"]
+    },
+    {
+      "id": "meshrix-js.test",
+      "command": "npm",
+      "args": ["test"]
+    },
+    {
+      "id": "meshrix-js.verify-release-deployment",
+      "command": "npm",
+      "args": ["run", "server:verify:release-deployment"]
+    },
+    {
+      "id": "meshrix-js.promote-stable",
+      "command": "npm",
+      "args": ["run", "release:promote-branches", "--", "--target", "stable"]
+    },
+    {
+      "id": "meshrix-js.promote-release",
+      "command": "npm",
+      "args": ["run", "release:promote-branches", "--", "--target", "release"]
+    }
+  ]
+}

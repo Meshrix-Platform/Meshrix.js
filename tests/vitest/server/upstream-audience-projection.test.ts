@@ -1,0 +1,596 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  compileAudienceProjection,
+  createAudiencePublicationEvent,
+  evaluateAudienceDecision,
+  evaluateAudienceParity,
+  opaqueAudiencePartitionKey,
+  compileUpstreamOperationProjection,
+  createUpstreamGatewayRegistry
+} from "../../../packages/agents/src/upstream-gateway/index.ts";
+import { createToolSkillManagementProvider } from "../../../packages/capabilities/src/skills/tool-skill-management-provider.ts";
+import { apiKeyAuthorizationEvaluationInput } from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution.ts";
+import { installUpstreamRuntimeServices, structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
+import { createGatewaySchemaPort } from "@meshrix/server-runtime/composition/gateway-schema-port";
+const canned1 = "read";
+const canned2 = "catalog";
+const canned3 = "scoped_api_key";
+const canned4 = "opaque-key-id";
+const canned5 = "policy-fingerprint";
+const canned6 = "tools/call";
+const canned7 = "catalog-a";
+const canned8 = "catalog-4";
+const canned9 = "catalog-5";
+const canned10 = "authorization-fixture";
+
+
+
+
+function serviceEntry({
+  serviceId = "svc_audience_a",
+  tagPolicy = null,
+  operations = [{
+    operationKey: canned1,
+    method: "GET",
+    path: "/read",
+    risk: "read_only",
+    requiredScopes: ["gateway:read"],
+    payloadTransport: structuredJsonPayloadTransport()
+  }]
+}: Record<string, any> = {}) : any {
+  return Object.freeze([
+    serviceId,
+    Object.freeze({
+      serviceId,
+      serviceRevision: 1,
+      manifestDigest: "a".repeat(64),
+      disabled: false,
+      label: "Audience fixture",
+      serviceProtocol: "http",
+      baseUrl: "https://audience.invalid:443",
+      credentialRefs: Object.freeze(["credential://vault/audience"]),
+      tagPolicy: tagPolicy ? Object.freeze(tagPolicy) : undefined,
+      operations: Object.freeze(operations.map((operation?: any) : any => Object.freeze({
+        ...operation,
+        payloadTransport: operation.payloadTransport || structuredJsonPayloadTransport()
+      })))
+    })
+  ]);
+}
+
+function snapshot(setRevision?: any, entries?: any) : any {
+  return Object.freeze({
+    setRevision,
+    setDigest: String(setRevision).padStart(64, "0"),
+    serviceEntries: Object.freeze(entries),
+    serviceCount: entries.length
+  });
+}
+
+function grant({
+  id,
+  scopes = ["gateway:read"],
+  toolsets = ["meshrix.gateway.read"],
+  dynamicCapabilities = null,
+  allowedServiceIds = null,
+  allowedSecretBindings = null,
+  organizationId = "",
+  teamId = "",
+  roleId = "",
+  maxRisk = "read_only"
+}: Record<string, any> = {}) : any {
+  return {
+    id,
+    scopes,
+    toolsets,
+    maxRisk,
+    organizationId,
+    teamId,
+    roleId,
+    ...(dynamicCapabilities ? { dynamicCapabilities } : {}),
+    ...(allowedServiceIds ? { allowedServiceIds } : {}),
+    ...(allowedSecretBindings ? { allowedSecretBindings } : {})
+  };
+}
+
+describe("upstream audience projection", () : any => {
+  it("keeps discovery and execution decisions identical across two subjects", () : any => {
+    const candidate: any = snapshot(1, [serviceEntry()]);
+    const projection: any = compileUpstreamOperationProjection(candidate);
+    const operation: any = projection.operations[0];
+    const service: any = candidate.serviceEntries[0][1];
+    const capabilityId: any = operation._meta.dynamicCapability.capabilityId;
+
+    const allowedGrant: any = grant({
+      id: "grant-org-a",
+      organizationId: "org-a",
+      teamId: "team-a",
+      roleId: "reader",
+      dynamicCapabilities: [capabilityId],
+      allowedServiceIds: [service.serviceId],
+      allowedSecretBindings: operation._meta.dynamicCapability.credentialBindingIds
+    });
+    const deniedGrant: any = grant({
+      id: "grant-org-b",
+      organizationId: "org-b",
+      teamId: "team-b",
+      roleId: "reader",
+      dynamicCapabilities: [],
+      allowedServiceIds: [service.serviceId]
+    });
+
+    const allowedParity: any = evaluateAudienceParity({
+      grant: allowedGrant,
+      operation,
+      service
+    });
+    const deniedParity: any = evaluateAudienceParity({
+      grant: deniedGrant,
+      operation,
+      service
+    });
+    expect(allowedParity.identical).toBe(true);
+    expect(allowedParity.discovery.allowed).toBe(true);
+    expect(deniedParity.identical).toBe(true);
+    expect(deniedParity.discovery.allowed).toBe(false);
+    expect(deniedParity.discovery.visibleMetadata).toBe(false);
+    expect(JSON.stringify(deniedParity)).not.toContain("credential://vault");
+  });
+
+  it("evaluates native scoped API Key restrictions without a Grant projection", () : any => {
+    const candidate: any = snapshot(1, [serviceEntry()]);
+    const operation: any = compileUpstreamOperationProjection(candidate).operations[0];
+    const service: any = candidate.serviceEntries[0][1];
+    const capabilityId: any = operation._meta.dynamicCapability.capabilityId;
+    const basePolicy: any = {
+      protocol: "mcp",
+      serviceIds: [service.serviceId],
+      capabilityIds: [capabilityId],
+      toolsetIds: operation.toolsets,
+      allowedTools: [operation.toolId],
+      deniedTools: [],
+      scopeIds: operation.requiredScopes,
+      maximumRisk: "low",
+      audience: { serverAudience: "meshrix.test", targetIds: ["server"], connectorPackageIds: [] },
+      resources: {
+        mode: "restricted",
+        workspaceIds: [], dataClassifications: [], egressClasses: [], semanticFamilies: [],
+        capabilityDomains: [], capabilityVerbs: [], resourceKinds: [], effectKinds: [],
+        secretBindingIds: operation._meta.dynamicCapability.credentialBindingIds,
+        allowedOrigins: [], allowedCidrs: []
+      },
+      processIdentity: { mode: "optional" },
+      limits: { maxUses: 10, requestsPerWindow: 10, windowSeconds: 60, maxConcurrentEffects: 2 },
+      catalogFingerprint: canned2
+    };
+    const evaluation: any = apiKeyAuthorizationEvaluationInput({
+      credentialKind: canned3,
+      keyId: canned4,
+      workloadPrincipalId: "workload-principal",
+      organizationNodeId: "organization-node",
+      policyFingerprint: canned5,
+      policy: basePolicy
+    });
+    expect(evaluateAudienceDecision({
+      ...evaluation,
+      operation,
+      service,
+      purpose: "discovery"
+    })).toMatchObject({ allowed: true, reasonCode: "audience_allowed" });
+    expect(evaluateAudienceDecision({
+      ...apiKeyAuthorizationEvaluationInput({
+        credentialKind: canned3,
+        keyId: canned4,
+        workloadPrincipalId: "workload-principal",
+        organizationNodeId: "organization-node",
+        policyFingerprint: canned5,
+        policy: { ...basePolicy, serviceIds: ["different-service"] }
+      }),
+      operation,
+      service,
+      purpose: "execution"
+    })).toMatchObject({ allowed: false, reasonCode: "audience_service_not_granted" });
+  });
+
+  it("keeps exact discovered MCP capability grants identical for discovery and execution", async () : Promise<any> => {
+    const registry: any = createUpstreamGatewayRegistry({ schemaPort: createGatewaySchemaPort(),
+      mcpSessionManager: {
+        listTools: async () => ({ tools: [{ name: "read_selected" }, { name: "read_sibling" }] }),
+        retireScope: async () => ({ retired: 0 }),
+        close: async () => {}
+      }
+    });
+    try {
+      await installUpstreamRuntimeServices(registry, [{
+        serviceId: "svc_mcp_audience",
+        serviceProtocol: "mcp",
+        label: "MCP audience fixture",
+        allowLocalNetwork: true,
+        operations: [{ operationKey: canned6, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+        mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18" }
+      }]);
+      const { items } = await registry.listMcpTools({ serviceId: "svc_mcp_audience" });
+      const selected: any = items.find((tool: Record<string, any>) => tool._meta?.upstreamToolName === "read_selected");
+      const sibling: any = items.find((tool: Record<string, any>) => tool._meta?.upstreamToolName === "read_sibling");
+      expect(selected && sibling).toBeTruthy();
+
+      const selectedGrant: any = grant({
+        id: "grant-selected-mcp-tool",
+        scopes: ["gateway:read"],
+        toolsets: ["meshrix.gateway.read"],
+        dynamicCapabilities: [selected._meta.dynamicCapability.capabilityId],
+        allowedServiceIds: ["svc_mcp_audience"],
+        allowedSecretBindings: selected._meta.dynamicCapability.credentialBindingIds,
+        maxRisk: "read_only"
+      });
+      for (const purpose of ["discovery", "execution"]) {
+        expect(registry.evaluateDiscoveredMcpToolAudience({
+          grant: selectedGrant,
+          tool: selected,
+          purpose
+        })).toMatchObject({ allowed: true, reasonCode: "audience_allowed", purpose, visibleMetadata: true });
+        expect(registry.evaluateDiscoveredMcpToolAudience({
+          grant: selectedGrant,
+          tool: sibling,
+          purpose
+        })).toMatchObject({
+          allowed: false,
+          reasonCode: "audience_capability_missing",
+          purpose,
+          visibleMetadata: false
+        });
+      }
+    } finally {
+      await registry.close();
+    }
+  });
+
+  it("applies deny-tag precedence and fails closed for missing metadata", () : any => {
+    const candidate: any = snapshot(2, [serviceEntry({
+      tagPolicy: {
+        allowTags: ["upstream-allowed"],
+        denyTags: ["upstream-denied"],
+        entityRefs: [{ entityType: "external_services.service", entityId: "svc_audience_a" }]
+      }
+    })]);
+    const projection: any = compileUpstreamOperationProjection(candidate);
+    const operation: any = projection.operations[0];
+    const service: any = candidate.serviceEntries[0][1];
+    const capabilityId: any = operation._meta.dynamicCapability.capabilityId;
+    const baseGrant: any = grant({
+      id: "grant-tagged",
+      dynamicCapabilities: [capabilityId],
+      allowedServiceIds: [service.serviceId],
+      allowedSecretBindings: operation._meta.dynamicCapability.credentialBindingIds
+    });
+    const denyStore: Record<string, any> = {
+      listEntityTags() : any {
+        return [{ tagId: "upstream-denied" }];
+      }
+    };
+    const denied: any = evaluateAudienceDecision({
+      grant: baseGrant,
+      operation,
+      service,
+      tagStore: denyStore,
+      purpose: "discovery"
+    });
+    expect(denied).toMatchObject({
+      allowed: false,
+      visibleMetadata: false
+    });
+    expect(denied.reasonCode).toMatch(/tag|denied|audience/u);
+  });
+
+  it("fails closed when a credential-bound capability has no granted binding", () : any => {
+    const candidate: any = snapshot(2, [serviceEntry()]);
+    const projection: any = compileUpstreamOperationProjection(candidate);
+    const operation: any = projection.operations[0];
+    const service: any = candidate.serviceEntries[0][1];
+    const decision: any = evaluateAudienceDecision({
+      grant: grant({
+        id: "grant-binding-missing",
+        dynamicCapabilities: [operation._meta.dynamicCapability.capabilityId],
+        allowedServiceIds: [service.serviceId],
+        allowedSecretBindings: []
+      }),
+      operation,
+      service,
+      purpose: "discovery"
+    });
+    expect(decision).toMatchObject({
+      allowed: false,
+      reasonCode: "audience_credential_binding_missing",
+      visibleMetadata: false
+    });
+  });
+
+  it("uses the same audience authority for catalog discovery and execution", async () : Promise<any> => {
+    const runtimeExecute: any = vi.fn(async () : Promise<any> => ({ ok: true, status: 200, payload: {} }));
+    const tool: Record<string, any> = {
+      id: "upstream.service.read",
+      status: "active",
+      upstreamProjectedOperation: true,
+      requiredScopes: [],
+      toolsets: [],
+      risk: "read_only",
+      dynamicCapability: { capabilityId: "capability-read", credentialBindingIds: [] }
+    };
+    const audience: any = vi.fn(({ purpose }: Record<string, any>) : any => ({
+      allowed: purpose === "discovery",
+      reasonCode: purpose === "discovery" ? "audience_allowed" : "audience_denied"
+    }));
+    const provider: any = createToolSkillManagementProvider({
+      operationPermissionPlatform: {
+        catalog: () : any => ({ tools: [tool] }),
+        registry: { getTool: () : any => tool },
+        runtime: { executeTool: runtimeExecute }
+      },
+      evaluateToolAudience: audience
+    });
+    const authorization: Record<string, any> = {
+      grant: {
+        id: "grant-audience",
+        scopes: [],
+        toolsets: [],
+        maxRisk: "read_only",
+        dynamicCapabilities: ["capability-read"]
+      }
+    };
+
+    expect(provider.listVisibleTools({ authorization })).toEqual([tool]);
+    await expect(provider.executeTool({
+      toolId: tool.id,
+      authorization
+    })).resolves.toMatchObject({
+      ok: false,
+      status: 403,
+      payload: { error: { code: "upstream_audience_denied" } }
+    });
+    expect(audience.mock.calls.map(([input]: any[]) : any => input.purpose)).toEqual(["discovery", "execution"]);
+    expect(runtimeExecute).not.toHaveBeenCalled();
+  });
+
+  it("advances audience revision and diffs only affected opaque partitions", () : any => {
+    const candidate: any = snapshot(3, [serviceEntry()]);
+    const projection: any = compileUpstreamOperationProjection(candidate);
+    const capabilityId: any = projection.operations[0]._meta.dynamicCapability.capabilityId;
+    const bindingIds: any = projection.operations[0]._meta.dynamicCapability.credentialBindingIds;
+    const first: any = compileAudienceProjection({
+      sourceRevision: 3,
+      sourceDigest: candidate.setDigest,
+      catalogFingerprint: canned7,
+      snapshot: candidate,
+      projectedOperations: projection.operations,
+      grants: [
+        grant({
+          id: "grant-1",
+          dynamicCapabilities: [capabilityId],
+          allowedServiceIds: ["svc_audience_a"],
+          allowedSecretBindings: bindingIds
+        }),
+        grant({
+          id: "grant-2",
+          dynamicCapabilities: [],
+          allowedServiceIds: ["svc_audience_a"]
+        })
+      ]
+    });
+    expect(first.ready).toBe(true);
+    expect(first.audienceRevision).toBe(1);
+    expect(first.partitionCount).toBe(2);
+    expect(first.affectedPartitions.length).toBe(2);
+    for (const key of first.affectedPartitions) {
+      expect(key).not.toContain("grant-");
+      expect(key).not.toContain("svc_");
+    }
+
+    const second: any = compileAudienceProjection({
+      sourceRevision: 3,
+      sourceDigest: candidate.setDigest,
+      catalogFingerprint: canned7,
+      snapshot: candidate,
+      projectedOperations: projection.operations,
+      previousProjection: first,
+      grants: [
+        grant({
+          id: "grant-1",
+          dynamicCapabilities: [capabilityId],
+          allowedServiceIds: ["svc_audience_a"],
+          allowedSecretBindings: bindingIds
+        }),
+        grant({
+          id: "grant-2",
+          dynamicCapabilities: [capabilityId],
+          allowedServiceIds: ["svc_audience_a"],
+          allowedSecretBindings: bindingIds
+        })
+      ]
+    });
+    expect(second.audienceRevision).toBe(2);
+    expect(second.replayed).toBe(false);
+    expect(second.affectedPartitions.length).toBeGreaterThan(0);
+    expect(second.affectedPartitions.length).toBeLessThanOrEqual(2);
+
+    const replay: any = compileAudienceProjection({
+      sourceRevision: 3,
+      sourceDigest: candidate.setDigest,
+      catalogFingerprint: canned7,
+      snapshot: candidate,
+      projectedOperations: projection.operations,
+      previousProjection: second,
+      grants: [
+        grant({
+          id: "grant-1",
+          dynamicCapabilities: [capabilityId],
+          allowedServiceIds: ["svc_audience_a"],
+          allowedSecretBindings: bindingIds
+        }),
+        grant({
+          id: "grant-2",
+          dynamicCapabilities: [capabilityId],
+          allowedServiceIds: ["svc_audience_a"],
+          allowedSecretBindings: bindingIds
+        })
+      ]
+    });
+    expect(replay.replayed).toBe(true);
+    expect(replay.audienceRevision).toBe(second.audienceRevision);
+    expect(replay.affectedPartitions).toEqual([]);
+
+    const event: any = createAudiencePublicationEvent(second);
+    expect(event.type).toBe("upstream.audiences_published");
+    expect(JSON.stringify(event)).not.toContain("gateway:read");
+    expect(JSON.stringify(event)).not.toContain("org-");
+    expect(event.affectedPartitions).toEqual(second.affectedPartitions);
+  });
+
+  it("invalidates visible partitions when an operation descriptor changes without changing its id", () : any => {
+    const firstSnapshot: any = snapshot(4, [serviceEntry()]);
+    const firstOperations: any = compileUpstreamOperationProjection(firstSnapshot).operations;
+    const capability: any = firstOperations[0]._meta.dynamicCapability;
+    const audienceGrant: any = grant({
+      id: "grant-descriptor",
+      dynamicCapabilities: [capability.capabilityId],
+      allowedServiceIds: ["svc_audience_a"],
+      allowedSecretBindings: capability.credentialBindingIds
+    });
+    const first: any = compileAudienceProjection({
+      sourceRevision: 4,
+      sourceDigest: firstSnapshot.setDigest,
+      catalogFingerprint: canned8,
+      snapshot: firstSnapshot,
+      projectedOperations: firstOperations,
+      grants: [audienceGrant]
+    });
+    const secondSnapshot: any = snapshot(5, [serviceEntry({
+      operations: [{
+        operationKey: canned1,
+        method: "GET",
+        path: "/read",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"],
+        requestSchema: { type: "object", properties: { query: { type: "string" } } }
+      }]
+    })]);
+    const secondOperations: any = compileUpstreamOperationProjection(secondSnapshot).operations;
+    expect(secondOperations[0].id).toBe(firstOperations[0].id);
+    const second: any = compileAudienceProjection({
+      sourceRevision: 5,
+      sourceDigest: secondSnapshot.setDigest,
+      catalogFingerprint: canned9,
+      snapshot: secondSnapshot,
+      projectedOperations: secondOperations,
+      grants: [audienceGrant],
+      previousProjection: first
+    });
+    expect(second.partitionSnapshot[0][0]).toBe(first.partitionSnapshot[0][0]);
+    expect(second.affectedPartitions).toEqual([second.partitionSnapshot[0][0]]);
+  });
+
+  it("builds opaque partition keys without embedding subjects or tags", () : any => {
+    const key: any = opaqueAudiencePartitionKey({
+      grantId: "grant-secret-subject",
+      serverIdentity: "meshrix",
+      audienceDigest: "digest-1"
+    });
+    expect(key).not.toContain("grant-secret-subject");
+    expect(key).not.toContain("digest-1");
+  });
+
+  it("filters plugin and console MCP lists and calls to explicitly granted tools", async () : Promise<any> => {
+    const invoked: string[] = [];
+    const registry: any = createUpstreamGatewayRegistry({
+      schemaPort: createGatewaySchemaPort(),
+      claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ ok: true }),
+      mcpSessionManager: {
+        listTools: async () : Promise<any> => ({
+          tools: [
+            { name: "read_selected", inputSchema: { type: "object" } },
+            { name: "read_sibling", inputSchema: { type: "object" } }
+          ]
+        }),
+        invokeGateway: async (_config: any, request: any, options: any) : Promise<any> => {
+          await options?.beforeSend?.();
+          invoked.push(String(request?.params?.name || ""));
+          return { result: { content: [{ type: "text", text: "selected" }] } };
+        },
+        retireScope: async () : Promise<any> => ({ retired: 0 }),
+        close: async () : Promise<any> => {}
+      }
+    });
+    try {
+      await installUpstreamRuntimeServices(registry, [{
+        serviceId: "svc_plugin_mcp",
+        serviceProtocol: "mcp",
+        label: "Plugin MCP fixture",
+        allowLocalNetwork: true,
+        trafficPolicy: { perMinute: 20, burst: 20 },
+        operations: [{ operationKey: canned6, protocol: "mcp", risk: "read_only", requiredScopes: ["gateway:read"] }],
+        mcp: { transport: "http", url: "http://127.0.0.1:9/mcp", protocolVersion: "2025-06-18", toolsCacheTtlMs: 60_000 }
+      }]);
+      const catalog: any = await registry.listMcpTools({ serviceId: "svc_plugin_mcp" });
+      const selected: any = catalog.items.find((tool: any) : any => tool._meta?.upstreamToolName === "read_selected");
+      const selectedId: string = selected._meta.dynamicCapability.capabilityId;
+      const requestBase: Record<string, any> = {
+        pluginId: "demo",
+        operationId: "tools/call",
+        serviceRef: "svc_plugin_mcp",
+        operationRef: "tools/call",
+        governance: {
+          authorizationContextDigest: canned10,
+          riskDecisionRef: "risk-fixture",
+          policyRevision: "policy-fixture"
+        }
+      };
+      const subjectFor = (type: string, capabilityIds: string[]) : Record<string, any> => ({
+        type,
+        subjectId: "caller",
+        scopes: ["gateway:read"],
+        dynamicCapabilities: capabilityIds,
+        capabilities: capabilityIds
+      });
+      const listNames = async (subject: Record<string, any>) : Promise<string[]> => {
+        const listed: any = await registry.requestPluginExternalService({
+          ...requestBase,
+          input: { protocolMethod: "tools/list" }
+        }, { subject });
+        return listed.data.items.map((item: any) : string => item._meta.upstreamToolName);
+      };
+      const callTool = (subject: Record<string, any>, toolName: string) : Promise<any> => registry.requestPluginExternalService({
+        ...requestBase,
+        input: { protocolMethod: "tools/call", toolName, arguments: {} }
+      }, { subject });
+
+      for (const type of ["plugin-operation", "console-user"]) {
+        await expect(listNames(subjectFor(type, []))).resolves.toEqual([]);
+        await expect(callTool(subjectFor(type, []), "read_selected")).rejects.toMatchObject({
+          status: 403,
+          reasonCode: "missing_dynamic_upstream_capability"
+        });
+        await expect(listNames(subjectFor(type, [selectedId]))).resolves.toEqual(["read_selected"]);
+        await expect(callTool(subjectFor(type, [selectedId]), "read_selected")).resolves.toMatchObject({ ok: true });
+        await expect(callTool(subjectFor(type, [selectedId]), "read_sibling")).rejects.toMatchObject({
+          status: 403,
+          reasonCode: "missing_dynamic_upstream_capability"
+        });
+      }
+
+      const apiKeySubject: Record<string, any> = {
+        type: "scoped-api-key",
+        subjectId: "workload",
+        scopes: ["gateway:read"],
+        capabilities: ["cap:upstream:svc_plugin_mcp:tools-call", selectedId]
+      };
+      await expect(listNames(apiKeySubject)).resolves.toEqual(["read_selected"]);
+      await expect(callTool(apiKeySubject, "read_selected")).resolves.toMatchObject({ ok: true });
+      await expect(callTool(apiKeySubject, "read_sibling")).rejects.toMatchObject({
+        status: 403,
+        reasonCode: "missing_dynamic_upstream_capability"
+      });
+      expect(invoked).toEqual(["read_selected", "read_selected", "read_selected"]);
+    } finally {
+      await registry.close();
+    }
+  });
+});

@@ -1,0 +1,10 @@
+{
+  "id": "meshrix.endpoints.read",
+  "label": "Managed endpoints read",
+  "requiredScopes": [
+    "endpoints:read"
+  ],
+  "maxRisk": "read_only",
+  "grantable": true,
+  "defaultForAgents": false
+}

@@ -1,0 +1,122 @@
+/*
+ * Operator-injected upstream policy gate.
+ *
+ * This is the governed seam for external policy engines (OPA, Cedar, in-house
+ * decision services). It is deliberately NOT a plugin capability: the plugin
+ * confinement contract forbids plugin-held policy/authorization authority, so
+ * the gate is wired by whoever constructs the registry — the embedder/operator,
+ * not content.
+ *
+ * Contract:
+ *  - invoked once per admission, after authorization/approval and before any
+ *    traffic-slot or protected-sink permit is consumed;
+ *  - may inspect the caller's structured input plus bounded subject/service
+ *    metadata and returns an allow/deny decision;
+ *  - bounded by `timeoutMs`; a timeout, throw, or malformed decision fails
+ *    closed (the call is denied, never silently passed);
+ *  - the gate cannot modify the request or consume upstream resources.
+ */
+
+const DEFAULT_GATE_TIMEOUT_MS = 2_000;
+const MAX_GATE_TIMEOUT_MS = 10_000;
+const MAX_DECISION_TEXT = 160;
+
+export interface UpstreamPolicyGateContext {
+  readonly serviceId: string;
+  readonly operationKey: string;
+  readonly protocol: string;
+  readonly method: string;
+  readonly risk: string;
+  readonly requiresApproval: boolean;
+  readonly subject: {
+    readonly type: string;
+    readonly subjectId: string;
+    readonly grantId: string;
+    readonly scopes: readonly string[];
+  };
+  readonly input: Readonly<Record<string, unknown>>;
+}
+
+export interface UpstreamPolicyGateDecision {
+  readonly allowed?: unknown;
+  readonly reason?: unknown;
+  readonly detail?: unknown;
+}
+
+export type UpstreamPolicyGate =
+  (context: UpstreamPolicyGateContext, options: { signal?: AbortSignal | null }) =>
+    Promise<UpstreamPolicyGateDecision | null | undefined | void>;
+
+export type UpstreamPolicyGateOutcome =
+  | { kind: "allowed" }
+  | { kind: "denied"; reason: string; detail: string }
+  | { kind: "error"; detail: string };
+
+function boundedText(value: unknown, fallback = ""): string {
+  if (typeof value !== "string") return fallback;
+  const cleaned = value.replace(/[\u0000-\u001f\u007f]/gu, "").trim();
+  return cleaned.slice(0, MAX_DECISION_TEXT);
+}
+
+export function normalizePolicyGateTimeoutMs(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_GATE_TIMEOUT_MS;
+  return Math.min(Math.floor(numeric), MAX_GATE_TIMEOUT_MS);
+}
+
+function timedOutError(): Error {
+  return Object.assign(new Error("Upstream policy gate timed out."), {
+    code: "upstream_policy_gate_timeout"
+  });
+}
+
+/**
+ * Evaluates the injected gate under a bounded deadline. Never throws a gate
+ * decision upward as a raw exception: gate failures normalize to a fail-closed
+ * `error` outcome so the admission path stays deterministic. Caller-cancellation
+ * (the caller's signal aborting) still propagates as AbortError.
+ */
+export async function evaluateUpstreamPolicyGate(
+  gate: UpstreamPolicyGate | null | undefined,
+  context: UpstreamPolicyGateContext,
+  options: { signal?: AbortSignal | null; timeoutMs?: unknown } = {}
+): Promise<UpstreamPolicyGateOutcome> {
+  if (typeof gate !== "function") return { kind: "allowed" };
+  const callerSignal = options.signal && typeof options.signal === "object" ? options.signal : null;
+  if (callerSignal?.aborted) throw callerSignal.reason instanceof Error ? callerSignal.reason : timedOutError();
+  const timeoutMs = normalizePolicyGateTimeoutMs(options.timeoutMs);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  try {
+    const decision = await Promise.race([
+      Promise.resolve().then(() => gate(context, { signal: callerSignal })),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(timedOutError()), timeoutMs);
+        if (callerSignal) {
+          onAbort = () => reject(callerSignal.reason instanceof Error ? callerSignal.reason : timedOutError());
+          callerSignal.addEventListener("abort", onAbort, { once: true });
+        }
+      })
+    ]);
+    if (decision === undefined || decision === null) return { kind: "allowed" };
+    if (typeof decision !== "object") return { kind: "error", detail: "gate returned a non-object decision" };
+    if (decision.allowed === true) return { kind: "allowed" };
+    if (decision.allowed === false) {
+      return {
+        kind: "denied",
+        reason: boundedText(decision.reason, "policy_denied") || "policy_denied",
+        detail: boundedText(decision.detail)
+      };
+    }
+    return { kind: "error", detail: "gate decision omitted `allowed`" };
+  } catch (error) {
+    if ((error as Error)?.name === "AbortError") throw error;
+    const detail = (error as { code?: unknown })?.code === "upstream_policy_gate_timeout"
+      ? "gate timed out"
+      : boundedText((error as Error)?.message, "gate threw") || "gate threw";
+    return { kind: "error", detail };
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (callerSignal && onAbort) callerSignal.removeEventListener("abort", onAbort);
+  }
+}

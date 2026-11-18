@@ -1,0 +1,26 @@
+FROM docker.io/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203
+
+LABEL org.opencontainers.image.source="https://github.com/Meshrix-Platform/Meshrix.js" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+RUN groupadd --gid 10001 skillhub \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin skillhub \
+    && mkdir -p /app /var/lib/skill-hub \
+    && chown -R skillhub:skillhub /app /var/lib/skill-hub
+
+WORKDIR /app
+COPY --chown=skillhub:skillhub package.json ./
+COPY --chown=skillhub:skillhub src ./src
+COPY --chown=skillhub:skillhub internal ./internal
+COPY --chown=skillhub:skillhub state-machines ./state-machines
+
+ENV HOST=0.0.0.0 \
+    SKILL_HUB_ALLOW_PUBLIC_BIND=1 \
+    PORT=8080 \
+    SKILL_HUB_DATA_ROOT=/var/lib/skill-hub \
+    MAX_REQUEST_BYTES=2097152
+
+USER 10001:10001
+EXPOSE 8080
+VOLUME ["/var/lib/skill-hub"]
+ENTRYPOINT ["node", "src/main.mjs"]
