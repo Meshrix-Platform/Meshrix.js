@@ -143,6 +143,7 @@ const store: any = await createOperationPermissionWorkerOwner({
 const apiKeyProvider: any = createApiKeyDistributionWorkerOwner({
   store,
   registry,
+  capabilitySelection: "exact",
   securityPermissions,
   verifierKeyProvider: apiKeyVerifierKeyProvider,
   ...(workerData.hasApiKeyClock

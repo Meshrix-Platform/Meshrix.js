@@ -20,6 +20,7 @@ import { authenticateMcpApiKey, authenticateMcpApiKeyAdmission } from "./mcp-api
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import {
   apiKeyAuthorizationEvaluationInput,
+  apiKeyCanonicalOperation,
   apiKeyResourcePolicyAllowsOperation
 } from "../operation-permission-core/api-key-distribution.ts";
 
@@ -401,8 +402,13 @@ export function createToolSkillManagementProvider({
       return { ok: false, status: 503, reasonCode: "api_key_authority_unavailable" };
     }
     try {
+      const catalogTool: any = (current.catalog?.()?.tools || [])
+        .find((tool?: any) : any => tool?.id === String(operation?.toolId || operation?.id || ""));
       const next: any = await Promise.resolve(
-        current.apiKeyDistributionProvider.authorizeOperation({ authorization, operation })
+        current.apiKeyDistributionProvider.authorizeOperation({
+          authorization,
+          operation: catalogTool ? apiKeyCanonicalOperation(catalogTool) : operation
+        })
       );
       return { ok: true, apiKeyAuthorization: next };
     } catch (error: any) {

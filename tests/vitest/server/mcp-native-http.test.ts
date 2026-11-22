@@ -93,11 +93,12 @@ async function fixture() {
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Synthetic server did not listen.");
   const url = `http://127.0.0.1:${address.port}/mcp`;
+  const catalogTool = operationPermission.catalog().tools.find((tool: any) => tool.id === toolName);
   async function issue(extra: Record<string, any> = {}) {
     return operationPermission.apiKeyDistributionProvider.create({
       subjectId: "admin", workloadDisplayName: "Synthetic native MCP client", organizationNodeId: "issuer", expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
       policy: {
-        protocol: "mcp", serviceIds: [], capabilityIds: [], toolsetIds: operationPermission.catalog().tools.find((tool: any) => tool.id === toolName).toolsets, allowedTools: [toolName], deniedTools: [], scopeIds: ["gateway:read"], maximumRisk: "low",
+        protocol: "mcp", serviceIds: [], capabilityIds: [catalogTool.capabilityId], toolsetIds: catalogTool.toolsets, allowedTools: [toolName], deniedTools: [], scopeIds: ["gateway:read"], maximumRisk: "low",
         audience: { serverAudience: "meshrix.test", targetIds: [], connectorPackageIds: [] },
         resources: { mode: "unrestricted", workspaceIds: [], dataClassifications: [], egressClasses: [], semanticFamilies: [], capabilityDomains: [], capabilityVerbs: [], resourceKinds: [], effectKinds: [], secretBindingIds: [], allowedOrigins: [], allowedCidrs: [] }, processIdentity: { mode: "optional" },
         limits: { maxUses: 100, requestsPerWindow: 100, windowSeconds: 60, maxConcurrentEffects: 10 }, catalogFingerprint: operationPermission.catalog().fingerprint, ...extra

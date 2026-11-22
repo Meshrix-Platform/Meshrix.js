@@ -1,4 +1,5 @@
 import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
+import { toolExecuteCapabilityId } from "@meshrix/foundation/security/authorization/authorization-engine";
 import crypto from "node:crypto";
 import { operationFeatureId } from "@meshrix/contracts/operations/operation-feature-resolution";
 import {
@@ -374,6 +375,7 @@ export function createToolCatalog({ operations = [], activeFeatureIds = null, pr
       method: String(operation._meta?.method || ""),
       payloadTransport: operation._meta?.payloadTransport || null,
       dynamicCapability: operation._meta?.dynamicCapability || null,
+      capabilityId: operation._meta?.dynamicCapability?.capabilityId || toolExecuteCapabilityId(toolId),
       operationId: operation.id,
       trafficModel: operation.trafficModel,
       handlerId: operation.target?.method || "",

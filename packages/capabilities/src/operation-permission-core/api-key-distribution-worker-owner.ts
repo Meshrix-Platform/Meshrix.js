@@ -169,7 +169,72 @@ function verifierDigest(key: Buffer, keyId: string, secret: string): Buffer {
     .digest();
 }
 
-function normalizePolicy(input: any, registry: any): any {
+type CapabilitySelection = "catalog" | "exact";
+
+function capabilitySegment(value: string): string {
+  return value.replace(/[^A-Za-z0-9_-]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 80);
+}
+
+function requireExactCatalog(catalog: any, fingerprint: string): void {
+  if (!catalog?.fingerprint || catalog.fingerprint !== fingerprint || !Array.isArray(catalog.tools) ||
+      !Array.isArray(catalog.scopes) || !Array.isArray(catalog.toolsets)) {
+    fail("api_key_authority_unavailable", "Current Operation Permission catalog is unavailable.", 503);
+  }
+}
+
+function exactCatalogBinding(tool: any) {
+  if (typeof tool?.id !== "string" || !tool.id || /[\s*?]/u.test(tool.id) || tool.status !== "active" ||
+      !Array.isArray(tool.toolsets) || !tool.toolsets.length || !Array.isArray(tool.requiredScopes) ||
+      !["read_only", "safe_write", "repair_write", "destructive"].includes(tool.risk)) return null;
+  const cap = tool.dynamicCapability;
+  if (cap == null) {
+    return tool.upstreamProjectedOperation || tool.serviceId ? null :
+      { id: toolExecuteCapabilityId(tool.id), serviceId: "", nativeParent: false };
+  }
+  if (!object(cap) || typeof cap.capabilityId !== "string" || !cap.capabilityId || /[\s*?]/u.test(cap.capabilityId) ||
+      typeof cap.serviceId !== "string" || !cap.serviceId || (tool.serviceId && tool.serviceId !== cap.serviceId) ||
+      !(tool.protocol || cap.protocol) || !(tool.operationKey || cap.operationKey) ||
+      (cap.risk !== undefined && tool.risk !== cap.risk) || (tool.protocol && cap.protocol && tool.protocol !== cap.protocol) ||
+      (tool.operationKey && cap.operationKey && tool.operationKey !== cap.operationKey)) return null;
+
+  const prefix = `cap:upstream:${capabilitySegment(cap.serviceId)}:`;
+  if (cap.capabilityId.startsWith("cap:upstream:") && !cap.capabilityId.startsWith(prefix)) return null;
+  const nativeParent = (tool.protocol || cap.protocol) === "mcp" &&
+    (tool.operationKey || cap.operationKey) === "tools/call" && !cap.upstreamToolName &&
+    cap.capabilityId === `${prefix}tools-call`;
+  return { id: cap.capabilityId, serviceId: cap.serviceId, nativeParent };
+}
+
+type ExactCatalogBinding = NonNullable<ReturnType<typeof exactCatalogBinding>>;
+
+function matchesExactCapability(binding: ExactCatalogBinding, id: string): boolean {
+  if (id === binding.id) return true;
+  if (!binding.nativeParent || !id.startsWith(`${binding.id}-`)) return false;
+  const segment = id.slice(binding.id.length + 1);
+  // A truncated native segment can end in '-' only at the 80-character boundary.
+  return /^[A-Za-z0-9_][A-Za-z0-9_-]{0,79}$/u.test(segment) && (segment.length === 80 || !segment.endsWith("-"));
+}
+
+function requireExactSelection(policy: any, selectedTools: any[]): void {
+  const matched = new Set<string>();
+  const services = new Set<string>();
+  const invalid = () => fail("api_key_input_invalid", "API Key capability selection does not match the selected catalog tools.");
+  if (!selectedTools.length) invalid();
+  for (const tool of selectedTools) {
+    const binding = exactCatalogBinding(tool);
+    if (!binding) return invalid();
+    if (binding.serviceId) services.add(binding.serviceId);
+    const ids: string[] = policy.capabilityIds.filter((id: string) => matchesExactCapability(binding, id));
+    if (!ids.length || (ids.length > 1 && ids.includes(binding.id))) invalid();
+    for (const id of ids) {
+      if (matched.has(id)) invalid();
+      matched.add(id);
+    }
+  }
+  if (matched.size !== policy.capabilityIds.length || policy.serviceIds.some((id: string) => !services.has(id))) invalid();
+}
+
+function normalizePolicy(input: any, registry: any, capabilitySelection: CapabilitySelection): any {
   exactKeys(input, [
     "protocol", "serviceIds", "capabilityIds", "toolsetIds", "allowedTools", "deniedTools",
     "scopeIds", "maximumRisk", "audience", "resources", "processIdentity", "limits", "catalogFingerprint"
@@ -245,6 +310,7 @@ function normalizePolicy(input: any, registry: any): any {
   // when that header is present. An omitted header is not a restriction, even
   // when the stored list is non-empty. A presented value must still be in the list.
   const catalog: any = registry?.getCatalog?.() || null;
+  if (capabilitySelection === "exact") requireExactCatalog(catalog, normalized.catalogFingerprint);
   if (catalog?.fingerprint && normalized.catalogFingerprint !== catalog.fingerprint) {
     fail("api_key_authority_unavailable", "Operation Permission catalog changed.", 503);
   }
@@ -263,11 +329,11 @@ function normalizePolicy(input: any, registry: any): any {
     const selectedTools: any[] = (catalog.tools || []).filter((tool?: any) : any =>
       normalized.allowedTools.includes(String(tool?.id || ""))
     );
+    if (capabilitySelection === "exact") requireExactSelection(normalized, selectedTools);
     const dynamicTools: any[] = selectedTools.filter((tool?: any) : any =>
       tool?.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
     );
     if (dynamicTools.length > 0) {
-      const requestedDynamicCapabilities: any[] = [...normalized.capabilityIds];
       const derived: any = (field?: any) : any => [...new Set<any>(dynamicTools
         .flatMap((tool?: any) : any => {
           const capability: any = tool.dynamicCapability || {};
@@ -283,19 +349,16 @@ function normalizePolicy(input: any, registry: any): any {
         ...normalized.serviceIds,
         ...derivedServiceIds
       ])].sort();
-      const selectedServicePrefixes: any[] = normalized.serviceIds.map((serviceId?: any) : any =>
-        `cap:upstream:${String(serviceId).replace(/[^A-Za-z0-9_-]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 80) || "service"}:`
-      );
-      const explicitlyBoundCapabilities: any[] = requestedDynamicCapabilities.filter((capabilityId?: any) : any =>
-        selectedServicePrefixes.some((prefix?: any) : any => capabilityId.startsWith(prefix))
-      );
-      normalized.capabilityIds = [...new Set<any>([
-        ...explicitlyBoundCapabilities,
-        ...derived((_tool?: any, capability?: any) : any => [capability.capabilityId]),
-        ...selectedTools
-          .filter((tool?: any) : any => !tool?.dynamicCapability)
-          .map((tool?: any) : any => toolExecuteCapabilityId(tool.id))
-      ])].sort();
+      if (capabilitySelection === "catalog") {
+        const selectedServicePrefixes: string[] = normalized.serviceIds.map((id: string) =>
+          `cap:upstream:${capabilitySegment(id) || "service"}:`
+        );
+        normalized.capabilityIds = [...new Set([
+          ...normalized.capabilityIds.filter((id: string) => selectedServicePrefixes.some((prefix) => id.startsWith(prefix))),
+          ...derived((_tool?: any, capability?: any) : any => [capability.capabilityId]),
+          ...selectedTools.filter((tool) => !tool?.dynamicCapability).map((tool) => toolExecuteCapabilityId(tool.id))
+        ])].sort();
+      }
       normalized.toolsetIds = [...new Set<any>([
         ...derived((tool?: any, capability?: any) : any => [
         ...(tool.toolsets || []),
@@ -332,7 +395,7 @@ function normalizePolicy(input: any, registry: any): any {
       normalized.resources.mode = normalized.resources.mode === "unrestricted"
         ? "unrestricted"
         : "restricted";
-    } else if (selectedTools.length > 0) {
+    } else if (capabilitySelection === "catalog" && selectedTools.length > 0) {
       normalized.capabilityIds = [...new Set<any>([
         ...normalized.capabilityIds,
         ...selectedTools.map((tool?: any) : any => toolExecuteCapabilityId(tool.id))
@@ -492,31 +555,48 @@ function apiKeyResourceFacts(sources: any[], factKeys: readonly string[]): strin
 }
 
 export function apiKeyResourcePolicyAllowsOperation(policy: any, operation: any): boolean {
+  return resourcePolicyAllowsOperation(policy, operation, null);
+}
+
+function resourcePolicyAllowsOperation(policy: any, operation: any, catalogTool: any): boolean {
   const resources: any = object(policy?.resources) ? policy.resources : {};
-  if (resources.mode !== "restricted") return true;
-  const configured: any = API_KEY_RESOURCE_DIMENSIONS.some((dimension?: any) : any =>
-    Array.isArray(resources[dimension.policyKey]) && resources[dimension.policyKey].length > 0
-  );
-  if (!configured) return false;
+  const restricted = resources.mode === "restricted";
+  if (!restricted && !catalogTool) return true;
+  if (restricted && !API_KEY_RESOURCE_DIMENSIONS.some(({ policyKey }) =>
+    Array.isArray(resources[policyKey]) && resources[policyKey].length > 0)) return false;
 
   const descriptor: any = object(operation?.dynamicCapability) ? operation.dynamicCapability : null;
-  const dynamicCapability: any = operation?.dynamicCapability === true || Boolean(descriptor) || Boolean(operation?.capabilityId);
+  const dynamicCapability = catalogTool ? Boolean(catalogTool.dynamicCapability) :
+    operation?.dynamicCapability === true || Boolean(descriptor) || Boolean(operation?.capabilityId);
   const sources: any[] = apiKeyResourceFactSources(operation);
-  let matchedFacts: any = 0;
+  const registered = catalogTool ? apiKeyResourceFactSources(catalogTool) : null;
+  if (registered && apiKeyResourceFacts([...registered, ...sources], ["serviceId", "serviceIds"])
+    .some((id) => id !== catalogTool.dynamicCapability?.serviceId)) return false;
+  let matchedFacts = 0;
+  let registeredFacts = 0;
   for (const dimension of API_KEY_RESOURCE_DIMENSIONS) {
-    const allowed: any = new Set<any>((Array.isArray(resources[dimension.policyKey])
-      ? resources[dimension.policyKey]
-      : []).map((value?: any) : any => String(value || "").trim()).filter(Boolean));
-    const facts: any[] = apiKeyResourceFacts(sources, dimension.factKeys);
-    const declared: any = sources.some((source?: any) : any =>
-      dimension.factKeys.some((key?: any) : any => Object.hasOwn(source, key))
+    const facts = apiKeyResourceFacts(sources, dimension.factKeys);
+    const declares = (entries: any[]) => entries.some((source) =>
+      dimension.factKeys.some((key: string) => Object.hasOwn(source, key))
     );
-    if (dynamicCapability && dimension.dynamicRequired === true && facts.length === 0) return false;
-    if (dynamicCapability && dimension.dynamicDeclarationRequired === true && !declared) return false;
-    if (facts.length > 0 && (allowed.size === 0 || facts.some((fact?: any) : any => !allowed.has(fact)))) return false;
+    if (registered) {
+      const canonical = apiKeyResourceFacts(registered, dimension.factKeys);
+      const declared = declares(registered);
+      if ((dynamicCapability && dimension.dynamicRequired && !canonical.length) ||
+          (dynamicCapability && dimension.dynamicDeclarationRequired && !declared) ||
+          (declared && !sameStringSet(facts, canonical))) return false;
+      registeredFacts += canonical.length;
+    }
+    if (dynamicCapability && dimension.dynamicRequired && !facts.length) return false;
+    if (dynamicCapability && dimension.dynamicDeclarationRequired && !declares(sources)) return false;
+    if (restricted && facts.length) {
+      const allowed = new Set((Array.isArray(resources[dimension.policyKey]) ? resources[dimension.policyKey] : [])
+        .map((value: any) => String(value || "").trim()).filter(Boolean));
+      if (facts.some((fact) => !allowed.has(fact))) return false;
+    }
     matchedFacts += facts.length;
   }
-  return dynamicCapability || matchedFacts > 0;
+  return !restricted || dynamicCapability || (matchedFacts > 0 && (!registered || registeredFacts > 0));
 }
 
 export function apiKeyAuthorizationEvaluationInput(authorization: any): any {
@@ -580,21 +660,89 @@ export function apiKeyAuthorizationEvaluationInput(authorization: any): any {
   return Object.freeze({ restriction, subject });
 }
 
-function requireAllowedOperation(policy: any, operation: any): void {
+/** Canonical API Key operation facts derived from the catalog tool, never the request. */
+export function apiKeyCanonicalOperation(tool: any = null): any {
+  const dynamicCapability: any = object(tool?.dynamicCapability) ? tool.dynamicCapability : null;
+  return {
+    id: String(tool?.id || ""),
+    toolId: String(tool?.id || ""),
+    serviceId: String(tool?.serviceId || ""),
+    capabilityId: String(dynamicCapability?.capabilityId || (tool?.id ? toolExecuteCapabilityId(tool.id) : "")),
+    dynamicCapability: dynamicCapability || false,
+    toolsetIds: tool?.toolsets || [],
+    scopeIds: tool?.requiredScopes || [],
+    risk: String(tool?.risk || ""),
+    resourceContext: object(tool?.resourceContext) ? tool.resourceContext : {},
+    requiredCapabilities: dynamicCapability ? [] : undefined
+  };
+}
+
+function sameStringSet(actual: unknown, expected: unknown): boolean {
+  if (!Array.isArray(actual) || !Array.isArray(expected) || actual.length !== expected.length) return false;
+  const remaining = new Set(expected);
+  return actual.every((id) => typeof id === "string" && remaining.delete(id)) && !remaining.size;
+}
+
+/** The operation supplies concrete facts, not a substitute catalog entry. */
+function requireExactOperation(policy: any, operation: any, registry: any, toolId: string, capabilityId: string): Record<string, any> {
+  const deny = () => fail("api_key_policy_denied", "API Key policy denied the operation.", 403);
+  if (!toolId || !capabilityId || operation?.capabilityId !== capabilityId ||
+      !policy.allowedTools.includes(toolId) || policy.deniedTools.includes(toolId)) return deny();
+  const catalog = registry?.getCatalog?.();
+  requireExactCatalog(catalog, policy.catalogFingerprint);
+  const tool = catalog.tools.find((item: any) => item.id === toolId);
+  const cap = object(tool?.dynamicCapability) ? tool.dynamicCapability : null;
+  const binding = exactCatalogBinding(tool);
+  // A tool's capability descriptor — not its governance-facing toolset
+  // attachment — carries the canonical operation facts for a dynamic tool; the
+  // descriptor's toolsets legitimately exceed the published catalog subset.
+  const canonical: any = cap || tool || {};
+  if (!binding || !matchesExactCapability(binding, capabilityId) ||
+      (operation.toolId !== undefined && operation.toolId !== toolId) || (operation.id !== undefined && operation.id !== toolId) ||
+      (operation.operationId !== undefined && operation.operationId !== tool.operationId) ||
+      operation.risk !== canonical.risk ||
+      !sameStringSet(operation.scopeIds, canonical.requiredScopes) || !sameStringSet(operation.toolsetIds, canonical.toolsets)) return deny();
+
+  const descriptor = object(operation.dynamicCapability) ? operation.dynamicCapability : null;
+  if ((operation.serviceId ?? "") !== binding.serviceId ||
+      (binding.serviceId && !policy.serviceIds.includes(binding.serviceId)) ||
+      (cap ? (!descriptor && operation.dynamicCapability !== true) : Boolean(operation.dynamicCapability))) return deny();
+  const protocol = tool.protocol || cap?.protocol;
+  const operationKey = tool.operationKey || cap?.operationKey;
+  if ((operation.protocol !== undefined && operation.protocol !== protocol) ||
+      (operation.operationKey !== undefined && operation.operationKey !== operationKey) ||
+      (descriptor && (descriptor.capabilityId !== capabilityId || descriptor.serviceId !== binding.serviceId ||
+        descriptor.operationKey !== cap.operationKey || descriptor.protocol !== cap.protocol || descriptor.risk !== cap.risk ||
+        !sameStringSet(descriptor.requiredScopes, cap.requiredScopes) || !sameStringSet(descriptor.toolsets, cap.toolsets)))) return deny();
+
+  const name = descriptor?.upstreamToolName ?? operation.upstreamToolName;
+  if (operation.upstreamToolName !== undefined && name !== operation.upstreamToolName) return deny();
+  if (capabilityId !== binding.id) {
+    if (typeof name !== "string" || /[*?]/u.test(name) || `${binding.id}-${capabilitySegment(name)}` !== capabilityId ||
+        policy.capabilityIds.includes(binding.id)) return deny();
+  } else if ((name || "") !== (cap?.upstreamToolName || "") || (binding.nativeParent &&
+      policy.capabilityIds.some((id: string) => id !== binding.id && matchesExactCapability(binding, id)))) return deny();
+
+  return tool;
+}
+
+function requireAllowedOperation(policy: any, operation: any, registry: any, capabilitySelection: CapabilitySelection): void {
   const toolId: any = String(operation?.toolId || operation?.id || "");
   const serviceId: any = String(operation?.serviceId || "");
   const capabilityId: any = String(operation?.capabilityId || "");
-  const dynamicCapability: any = operation?.dynamicCapability === true || Boolean(capabilityId);
-  if (!dynamicCapability && toolId && policy.deniedTools.includes(toolId)) {
-    fail("api_key_policy_denied", "API Key policy denied the operation.", 403);
-  }
-  const expandedCapabilityIds: any[] = [...new Set<any>([
+  const expandedCapabilityIds: any[] = capabilitySelection === "exact" ? policy.capabilityIds : [...new Set<any>([
     ...(policy.capabilityIds || []),
     ...(policy.capabilityIds || [])
       .filter((value?: any) : any => String(value || "").startsWith("cap:upstream:") && String(value || "").includes(":tools-call-"))
       .map((value?: any) : any => `${String(value).slice(0, String(value).indexOf(":tools-call-"))}:tools-call`)
   ])];
-  if (dynamicCapability && (!capabilityId || !serviceId || !expandedCapabilityIds.includes(capabilityId))) {
+  const needsCapability = capabilitySelection === "exact" || operation?.dynamicCapability === true || Boolean(capabilityId);
+  if (needsCapability && (!capabilityId || !expandedCapabilityIds.includes(capabilityId))) {
+    fail("api_key_policy_denied", "API Key policy denied the operation.", 403);
+  }
+  const exactTool = capabilitySelection === "exact" ? requireExactOperation(policy, operation, registry, toolId, capabilityId) : null;
+  const dynamicCapability = exactTool ? Boolean(exactTool.dynamicCapability) : needsCapability;
+  if ((dynamicCapability && !serviceId) || (!dynamicCapability && toolId && policy.deniedTools.includes(toolId))) {
     fail("api_key_policy_denied", "API Key policy denied the operation.", 403);
   }
   if (serviceId && policy.serviceIds.length > 0 && !policy.serviceIds.includes(serviceId)) {
@@ -619,19 +767,24 @@ function requireAllowedOperation(policy: any, operation: any): void {
     suppliedToolsets.some((value?: any) : any => policy.toolsetIds.includes(value)) ||
     suppliedScopes.some((value?: any) : any => policy.scopeIds.includes(value));
   if (!positiveAuthority) fail("api_key_policy_denied", "API Key policy denied the operation.", 403);
-  if (!apiKeyResourcePolicyAllowsOperation(policy, operation)) {
+  if (!resourcePolicyAllowsOperation(policy, operation, exactTool)) {
     fail("api_key_policy_denied", "API Key resource policy denied the operation.", 403);
   }
 }
 
+/** Capability selection is fixed by the owner, never by an issuance or effect request. */
 export function createApiKeyDistributionWorkerOwner({
   store,
   registry = null,
+  capabilitySelection = "catalog",
   securityPermissions = null,
   verifierKeyProvider,
   now = () : any => Date.now(),
   randomBytes = (size: number) : any => crypto.randomBytes(size)
-}: Record<string, any> = {}): any {
+}: Record<string, any> & { capabilitySelection?: CapabilitySelection } = {}): any {
+  if (capabilitySelection !== "catalog" && capabilitySelection !== "exact") {
+    throw new TypeError("Invalid API Key capability selection mode.");
+  }
   if (!store?.db || !verifierKeyProvider?.getKey || !verifierKeyProvider?.currentGeneration) {
     throw new Error("API Key distribution dependencies are unavailable.");
   }
@@ -707,7 +860,7 @@ export function createApiKeyDistributionWorkerOwner({
     assertApiKeyIssuerTarget(scopes, organizationNodeId);
     const expiresAtMs: any = Date.parse(text(input.expiresAt, "expiresAt", 64));
     if (!Number.isFinite(expiresAtMs) || expiresAtMs <= now()) fail("api_key_input_invalid", "expiresAt must be in the future.");
-    const policy: any = normalizePolicy(input.policy, registry);
+    const policy: any = normalizePolicy(input.policy, registry, capabilitySelection);
     const { snapshot, nodesById } = currentNodes();
     const lineageDigest: any = organizationLineageDigest(organizationNodeId, nodesById);
     if (snapshot.revision !== scopes.revision.organizationRevision) {
@@ -1064,11 +1217,11 @@ export function createApiKeyDistributionWorkerOwner({
 
   async function reserveEffect(input: Record<string, any> = {}): Promise<any> {
     exactKeys(input, ["authorization", "operation"]);
-    requireAllowedOperation(input.authorization?.policy, input.operation);
     const timestamp: any = now();
     const leaseId: any = `akl_${crypto.randomUUID()}`;
     const result: any = db.transaction(() : any => {
       const { row, record } = assertAuthorizationCurrent(input.authorization);
+      requireAllowedOperation(record.policy, input.operation, registry, capabilitySelection);
       cleanupExpiredEphemeralState(timestamp);
       db.prepare("DELETE FROM api_key_usage_windows WHERE key_id = ? AND expires_at <= ?").run(row.key_id, timestamp);
       const windowMs: any = record.policy.limits.windowSeconds * 1000;
@@ -1109,7 +1262,7 @@ export function createApiKeyDistributionWorkerOwner({
   function authorizeOperation(input: Record<string, any> = {}): any {
     exactKeys(input, ["authorization", "operation"]);
     const authorization = revalidateAuthorization(input.authorization);
-    requireAllowedOperation(authorization.policy, input.operation);
+    requireAllowedOperation(authorization.policy, input.operation, registry, capabilitySelection);
     return authorization;
   }
 

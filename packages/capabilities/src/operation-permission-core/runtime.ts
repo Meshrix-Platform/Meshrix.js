@@ -37,7 +37,7 @@ import {
 } from "./runtime-transport.ts";
 import { toolActorFromAuthorization } from "./runtime-tool-actor.ts";
 import { denyUnknownToolExecution } from "./runtime-unknown-tool.ts";
-import { apiKeyAuthorizationEvaluationInput } from "./api-key-distribution.ts";
+import { apiKeyAuthorizationEvaluationInput, apiKeyCanonicalOperation } from "./api-key-distribution.ts";
 import { evaluateCurrentExecutionApproval } from "./execution-approval.ts";
 
 const RISK_RANK: Readonly<Record<string, any>> = Object.freeze({ read_only: 0, safe_write: 1, repair_write: 2, destructive: 3 });
@@ -207,24 +207,6 @@ function toolWithDynamicCapability(tool: any = null, context: Record<string, any
   };
 }
 
-function apiKeyOperationForTool(tool: any = null): any {
-  const dynamicCapability: any = tool?.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
-    ? tool.dynamicCapability
-    : null;
-  return {
-    id: tool?.id || "",
-    toolId: tool?.id || "",
-    serviceId: tool?.serviceId || "",
-    capabilityId: dynamicCapability?.capabilityId || "",
-    dynamicCapability: Boolean(dynamicCapability),
-    toolsetIds: tool?.toolsets || [],
-    scopeIds: tool?.requiredScopes || [],
-    risk: tool?.risk || "",
-    resourceContext: tool?.resourceContext || {},
-    requiredCapabilities: dynamicCapability ? [] : undefined
-  };
-}
-
 function dynamicPolicyRestriction(restriction: any = null, tool: any = null): any {
   if (!restriction || !tool?.dynamicCapability) return restriction;
   return Object.freeze({ ...restriction, toolAllow: Object.freeze([]), toolDeny: Object.freeze([]) });
@@ -326,7 +308,7 @@ export function createToolExecutionRuntime({
       throw Object.assign(new Error("Managed requester authority is required."), { code: "managed_authority_required", statusCode: 403 });
     }
     return apiKeyDistributionProvider.withEffectReservation({
-      authorization, operation: apiKeyOperationForTool(tool), signal: request?.signal,
+      authorization, operation: apiKeyCanonicalOperation(tool), signal: request?.signal,
       execute: async ({ revalidate }: Record<string, any>) => {
         const binding = await admittedTaskBinding({ current: await revalidate(), input, tool });
         persist(binding);
@@ -393,7 +375,7 @@ export function createToolExecutionRuntime({
     }
     return apiKeyDistributionProvider.withEffectReservation({
       authorization,
-      operation: apiKeyOperationForTool(tool),
+      operation: apiKeyCanonicalOperation(tool),
       signal,
       execute
     });
@@ -492,7 +474,7 @@ export function createToolExecutionRuntime({
       : null;
     const apiKeyRestriction: any = apiKeyEvaluation?.restriction || null;
     const policyRestriction: any = dynamicPolicyRestriction(apiKeyRestriction, tool);
-    const apiKeyOperation: any = apiKeyOperationForTool(tool);
+    const apiKeyOperation: any = apiKeyCanonicalOperation(tool);
     let apiKeyAdmissionDenial: any = null;
     if (apiKeyAuthorization && tool.dynamicCapability) {
       try {

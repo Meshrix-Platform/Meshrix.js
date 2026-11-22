@@ -417,7 +417,10 @@ async function createFixture() {
       policy: {
         protocol: "mcp",
         serviceIds: [],
-        capabilityIds: [selectedMcpTool._meta.dynamicCapability.capabilityId],
+        capabilityIds: [
+          selectedHttpOperation._meta.dynamicCapability.capabilityId,
+          selectedMcpTool._meta.dynamicCapability.capabilityId,
+        ],
         toolsetIds: [],
         allowedTools: [selectedHttpOperation.toolId, mcpBaseOperation.toolId],
         deniedTools: [],

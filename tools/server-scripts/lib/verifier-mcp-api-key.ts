@@ -195,7 +195,22 @@ export async function issueVerifierMcpApiKey({
     .map((value?: any) : any => String(value || "").trim())
     .filter(Boolean))];
   const derivedServiceIds: any[] = derivedValues((capability?: any) : any => [capability.serviceId]);
-  const derivedCapabilityIds: any[] = derivedValues((capability?: any) : any => [capability.capabilityId]);
+  // Exact capability selection: each selected tool must be covered by its own
+  // canonical capability id and nothing else — a static tool's execute id, a
+  // dynamic tool's selected named children, or its parent when no child was requested.
+  const requestedCapabilityIds: any[] = [...new Set<any>((access.dynamicCapabilities || [])
+    .map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
+  const exactCapabilityIds: any[] = [...new Set<any>(selectedTools
+    .flatMap((tool?: any) : any => {
+      const capability: any = tool?.dynamicCapability && typeof tool.dynamicCapability === "object" &&
+        !Array.isArray(tool.dynamicCapability)
+        ? tool.dynamicCapability
+        : null;
+      if (!capability) return [String(tool?.capabilityId || "")].filter(Boolean);
+      const parentId: any = String(capability.capabilityId || "");
+      const children: any[] = requestedCapabilityIds.filter((id?: any) : any => id.startsWith(`${parentId}-`));
+      return children.length ? children : [parentId].filter(Boolean);
+    }))];
   const derivedSecretBindingIds: any[] = derivedValues((capability?: any, resource?: any) : any => [
     ...(capability.credentialBindingIds || []),
     resource.secretBindingId,
@@ -217,8 +232,8 @@ export async function issueVerifierMcpApiKey({
       expiresAt: new Date(Date.now() + Math.min(Number(access.expiresInMs) || 15 * 60_000, 60 * 60_000)).toISOString(),
       policy: {
         protocol: "mcp",
-        serviceIds: [...new Set<any>([...(access.allowedServiceIds || []), ...derivedServiceIds])],
-        capabilityIds: [...new Set<any>([...(access.dynamicCapabilities || []), ...derivedCapabilityIds])],
+        serviceIds: [...new Set<any>(derivedServiceIds)].sort(),
+        capabilityIds: [...new Set<any>(exactCapabilityIds)].sort(),
         toolsetIds: [...new Set<any>(access.toolsets || [])],
         allowedTools,
         deniedTools: [],

@@ -108,7 +108,7 @@ function scopedApiKeyAuthorization(): any {
     policy: {
       protocol: "mcp",
       serviceIds: [],
-      capabilityIds: [],
+      capabilityIds: ["cap:tool:tool.alpha:execute"],
       toolsetIds: ["toolset-1"],
       allowedTools: ["tool.alpha"],
       deniedTools: [],
@@ -622,7 +622,7 @@ describe("operation-permission runtime (behavior)", () : any => {
     expect(authorizeOperation).toHaveBeenCalledWith(expect.objectContaining({
       authorization,
       operation: expect.objectContaining({
-        dynamicCapability: true,
+        dynamicCapability,
         serviceId: "opaque-service",
         capabilityId: dynamicCapability.capabilityId,
         resourceContext: dynamicCapability.resourceContext
@@ -635,7 +635,7 @@ describe("operation-permission runtime (behavior)", () : any => {
         toolId: fixture.tool.id,
         serviceId: "opaque-service",
         capabilityId: dynamicCapability.capabilityId,
-        dynamicCapability: true,
+        dynamicCapability,
         toolsetIds: dynamicCapability.toolsets,
         scopeIds: dynamicCapability.requiredScopes,
         risk: "read_only",

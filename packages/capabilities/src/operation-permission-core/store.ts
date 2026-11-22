@@ -252,10 +252,16 @@ export function createOperationPermissionStore({
     governanceRevision: normalizePolicyRevisionSnapshot(governancePolicyRevisionProvider?.()),
     resolvedCapabilities: []
   });
-  const execute: any = (kind?: any, args: any[] = []) : Promise<any> => lane.execute(kind, {
-    args: normalizeArguments(kind, args),
-    context: commandContext()
-  });
+  const execute: any = (kind?: any, args: any[] = []) : Promise<any> => {
+    const metricOnly: any = kind === "appendHttpRequestMetric" || kind === "appendHttpRequestMetricBatch";
+    return lane.execute(kind, {
+      args: normalizeArguments(kind, args),
+      // Request-metric appends never read the registry view the worker merges
+      // from command context; they ran on every request and paying the catalog
+      // snapshot serialization cost per metric is pure overhead.
+      context: metricOnly ? { resolvedCapabilities: [] } : commandContext()
+    });
+  };
   const rejectedMetrics = new Map<string, any>();
   let metricFlush: Promise<void> | null = null;
   let metricTimer: ReturnType<typeof setTimeout> | null = null;

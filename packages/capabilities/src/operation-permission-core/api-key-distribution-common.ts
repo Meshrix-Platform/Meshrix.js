@@ -5,6 +5,7 @@ export {
   ApiKeyDistributionError,
   parseApiKeyCredential,
   apiKeyAuthorizationEvaluationInput,
+  apiKeyCanonicalOperation,
   apiKeyResourcePolicyAllowsOperation,
   reconcileApiKeyOwnerRecoveryAssignments,
   registerApiKeyOwnerRecoveryAssignmentSync

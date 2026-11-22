@@ -94,6 +94,10 @@ export function publicUpstreamMcpTool({ service = {}, tool = {}, schemaPort = nu
   const dynamicCapability: any = compileUpstreamOperationCapability(service, {
     operationKey: "tools/call",
     protocol: "mcp",
+    // The configured operation's normalized transport method feeds the descriptor's
+    // requestedEgresses; discovered tools egress through the same transport as the
+    // governing tools/call operation, so the facts must match its compiled descriptor.
+    method: text(configuredOperation.method),
     requiredScopes: asArray(configuredOperation.requiredScopes || (risk === "read_only" ? ["gateway:read"] : ["gateway:write"])),
     risk,
     requiresApproval

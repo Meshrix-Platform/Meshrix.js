@@ -5,9 +5,9 @@
   "policy": {
     "protocol": "mcp",
     "serviceIds": [],
-    "capabilityIds": ["<selected-dynamic-capability-id>"],
+    "capabilityIds": ["<canonical-capability-id-per-selected-tool>"],
     "toolsetIds": [],
-    "allowedTools": [],
+    "allowedTools": ["<selected-catalog-tool-id>"],
     "deniedTools": [],
     "scopeIds": ["gateway:read"],
     "maximumRisk": "low",

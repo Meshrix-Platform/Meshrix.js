@@ -15,6 +15,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createMemoryApiKeyVerifierKeyProvider } from "../../../packages/foundation/src/security/authorization/api-key-verifier-key-provider.ts";
+import { createMemoryOpaqueCapabilityKeyProvider } from "../../../packages/foundation/src/security/authorization/opaque-capability-key.ts";
+import { compileUpstreamOperationCapability } from "../../../packages/agents/src/upstream-gateway/operation-capability.ts";
+import { compileUpstreamOperationProjection } from "../../../packages/agents/src/upstream-gateway/operation-projection.ts";
 import {
   API_KEY_MANAGEMENT_ACTION,
   evaluateApiKeyIssuerScopes
@@ -25,6 +28,8 @@ import {
   registerApiKeyOwnerRecoveryAssignmentSync
 } from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution.ts";
 import { createToolCatalog } from "../../../packages/capabilities/src/operation-permission-core/catalog.ts";
+import { createApiKeyDistributionWorkerOwner } from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution-worker-owner.ts";
+import { createOperationPermissionWorkerOwner } from "../../../packages/capabilities/src/operation-permission-core/store-worker-owner.ts";
 import { createOperationPermissionStore } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { STRATEGY_PERMISSION_OPERATION_DEFINITIONS } from "../../../packages/contracts/src/operations/strategy-permission-operation-definitions.ts";
@@ -101,11 +106,11 @@ function policy(catalogFingerprint = canned1, overrides: Record<string, any> = {
   return {
     protocol: "mcp",
     serviceIds: [],
-    capabilityIds: [],
-    toolsetIds: [],
+    capabilityIds: ["cap:tool:tools.echo:execute"],
+    toolsetIds: ["meshrix.runtime.read"],
     allowedTools: ["tools.echo"],
     deniedTools: [],
-    scopeIds: [],
+    scopeIds: ["runtime:read"],
     maximumRisk: "high",
     audience: {
       serverAudience: "https://meshrix.invalid",
@@ -138,6 +143,20 @@ function policy(catalogFingerprint = canned1, overrides: Record<string, any> = {
   };
 }
 
+function echoOperation(overrides: Record<string, any> = {}): any {
+  return {
+    toolId: "tools.echo",
+    serviceId: "",
+    capabilityId: "cap:tool:tools.echo:execute",
+    dynamicCapability: false,
+    toolsetIds: ["meshrix.runtime.read"],
+    scopeIds: ["runtime:read"],
+    risk: "read_only",
+    resourceContext: { workspaceId: "workspace-1" },
+    ...overrides
+  };
+}
+
 function harness(catalogOverrides: Record<string, any> = {}): any {
   const directory: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-api-key-"));
   temporaryDirectories.push(directory);
@@ -147,9 +166,16 @@ function harness(catalogOverrides: Record<string, any> = {}): any {
   const registry: any = {
     getCatalog: () : any => ({
       fingerprint: canned1,
-      tools: [{ id: "tools.echo" }],
-      toolsets: [],
-      scopes: [],
+      tools: [{
+        id: "tools.echo",
+        status: "active",
+        toolsets: ["meshrix.runtime.read"],
+        requiredScopes: ["runtime:read"],
+        risk: "read_only",
+        resourceContext: { workspaceId: "workspace-1" }
+      }],
+      toolsets: [{ id: "meshrix.runtime.read", requiredScopes: ["runtime:read"] }],
+      scopes: [{ id: "runtime:read" }],
       ...catalogOverrides
     })
   };
@@ -175,6 +201,54 @@ function harness(catalogOverrides: Record<string, any> = {}): any {
     advance(ms: number) : any { timestamp += ms; },
     now() : number { return timestamp; },
     close() : any { return store.close(); }
+  };
+}
+
+async function exactSelectionFixture() {
+  const service = (serviceId: string, protocol: string) => ({
+    serviceId, serviceProtocol: protocol, serviceRevision: 1,
+    operations: ["tools/call", "tools/list"].map((operationKey) => ({
+      operationKey, protocol, risk: "read_only", requiredScopes: ["gateway:read"]
+    }))
+  });
+  const source = service("records", "mcp");
+  const services = [source, service("records-peer", "mcp"), service("other", "http")];
+  const projection = compileUpstreamOperationProjection({
+    setRevision: 1, setDigest: "synthetic-revision", serviceEntries: services.map((entry) => [entry.serviceId, entry])
+  });
+  const catalog = createToolCatalog({ operations: [...projection.operations, {
+    id: "fixture.echo", toolId: "tools.echo", toolsets: ["meshrix.runtime.read"],
+    requiredScopes: ["runtime:read"], readOnly: true, resourceContext: { workspaceId: "workspace-1" }
+  }] });
+  let published = catalog;
+  const registry = { getCatalog: () => published };
+  const { securityPermissions } = governanceFixture();
+  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-exact-key-"));
+  temporaryDirectories.push(userDataPath);
+  const keyProvider = createMemoryOpaqueCapabilityKeyProvider();
+  const store = await createOperationPermissionWorkerOwner({
+    userDataPath, registry, securityPermissions, capabilityKeyProvider: keyProvider, capabilityBindingGuard: false
+  });
+  const ownerOptions = {
+    store, registry, securityPermissions, verifierKeyProvider: createMemoryApiKeyVerifierKeyProvider(),
+    now: () => Date.parse("2026-08-03T00:00:00.000Z"), capabilitySelection: "exact" as const
+  };
+  const owner = createApiKeyDistributionWorkerOwner(ownerOptions);
+  const catalogTool = (id: string) => catalog.tools.find((tool: any) => tool.id === id);
+  const tool = catalogTool("upstream.records.tools-call");
+  const named = (upstreamToolName?: string) => {
+    const descriptor = compileUpstreamOperationCapability(source, source.operations[0], { upstreamToolName });
+    return { toolId: tool.id, serviceId: tool.serviceId, capabilityId: descriptor.capabilityId, dynamicCapability: descriptor,
+      risk: descriptor.risk, scopeIds: descriptor.requiredScopes, toolsetIds: descriptor.toolsets };
+  };
+  return {
+    owner, ownerOptions, store, catalog, catalogTool, named, setPublished(value: any) { published = value; },
+    issue: (capabilityIds: string[], overrides: Record<string, any> = {}) => owner.create({
+      subjectId: "admin", workloadDisplayName: "Catalog reader", organizationNodeId: "child", expiresAt: "2026-08-04T00:00:00.000Z",
+      policy: policy(catalog.fingerprint, { allowedTools: [tool.id], capabilityIds, toolsetIds: [], scopeIds: [], maximumRisk: "low", ...overrides })
+    }),
+    authenticate: (credential: string) => owner.authenticateRuntime({ credential, serverAudience: policy().audience.serverAudience }),
+    async close() { try { await store.close(); } finally { await keyProvider.close(); } }
   };
 }
 
@@ -283,6 +357,7 @@ describe("scoped API Key distribution", () : any => {
       tools: [
         {
           id: "tools.echo",
+          status: "active",
           toolsets: ["meshrix.runtime.read"],
           requiredScopes: ["runtime:read"],
           risk: "repair_write",
@@ -290,6 +365,7 @@ describe("scoped API Key distribution", () : any => {
         },
         {
           id: "upstream.opaque-service.records-list",
+          status: "active",
           serviceId: "opaque-service",
           toolsets: ["meshrix.gateway.read"],
           requiredScopes: ["gateway:read"],
@@ -298,6 +374,8 @@ describe("scoped API Key distribution", () : any => {
           dynamicCapability: {
             capabilityId,
             serviceId: "opaque-service",
+            protocol: "mcp",
+            operationKey: "tools/call",
             risk: "read_only",
             requiredScopes: ["gateway:read"],
             toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
@@ -320,7 +398,7 @@ describe("scoped API Key distribution", () : any => {
         expiresAt: "2026-08-04T00:00:00.000Z",
         policy: policy("catalog-1", {
           serviceIds: [],
-          capabilityIds: [],
+          capabilityIds: ["cap:tool:tools.echo:execute", capabilityId],
           toolsetIds: ["meshrix.runtime.read", "meshrix.gateway.read"],
           allowedTools: ["tools.echo", "upstream.opaque-service.records-list"],
           scopeIds: ["runtime:read", "gateway:read"],
@@ -357,6 +435,9 @@ describe("scoped API Key distribution", () : any => {
       });
       const coreOperation: any = {
         toolId: "tools.echo",
+        serviceId: "",
+        capabilityId: "cap:tool:tools.echo:execute",
+        dynamicCapability: false,
         toolsetIds: ["meshrix.runtime.read"],
         scopeIds: ["runtime:read"],
         risk: "repair_write",
@@ -405,18 +486,22 @@ describe("scoped API Key distribution", () : any => {
     }
   });
 
-  it("preserves explicitly selected upstream tool capabilities beside the gateway operation capability", async () : Promise<any> => {
+  it("preserves exactly the selected upstream tool capability without deriving sibling authority", async () : Promise<any> => {
     const gatewayCapabilityId: any = "cap:upstream:opaque-service:tools-call";
     const selectedToolCapabilityId: any = `${gatewayCapabilityId}-records-list`;
     const current: any = harness({
       tools: [{
         id: "upstream.opaque-service.tools-call",
+        status: "active",
+        serviceId: "opaque-service",
         toolsets: ["meshrix.gateway.read"],
         requiredScopes: ["gateway:read"],
         risk: "read_only",
         dynamicCapability: {
           capabilityId: gatewayCapabilityId,
           serviceId: "opaque-service",
+          protocol: "mcp",
+          operationKey: "tools/call",
           risk: "read_only",
           requiredScopes: ["gateway:read"],
           toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
@@ -459,21 +544,146 @@ describe("scoped API Key distribution", () : any => {
         })
       });
 
-      expect(created.record.policy.capabilityIds).toEqual([
-        gatewayCapabilityId,
-        selectedToolCapabilityId
-      ]);
+      expect(created.record.policy.capabilityIds).toEqual([selectedToolCapabilityId]);
     } finally {
       await current.close();
     }
   });
 
-  it("revalidates dynamic MCP effects by exact capability while accepting their non-catalog toolset identity", async () : Promise<any> => {
+  it("issues only an explicitly selected native capability and confirms effects against the stored selection", async () => {
+    const f = await exactSelectionFixture();
+    try {
+      const selected = f.named("records.list");
+      const parent = f.named();
+      const sibling = f.named("records.write");
+      const foreign = f.catalogTool("upstream.records-peer.tools-call");
+      const unknown = "cap:upstream:records:unknown";
+      const badInput = { code: "api_key_input_invalid" };
+      for (const ids of [[], [unknown], [selected.capabilityId, unknown], [parent.capabilityId, selected.capabilityId],
+        [foreign.dynamicCapability.capabilityId + "-records-list"], [parent.capabilityId + "-"], [parent.capabilityId + "-*"],
+        [parent.capabilityId + "-records.list"]]) {
+        await expect(f.issue(ids)).rejects.toMatchObject(badInput);
+      }
+      await expect(f.issue([selected.capabilityId], { allowedTools: [selected.toolId, foreign.id] })).rejects.toMatchObject(badInput);
+      await expect(f.issue([foreign.dynamicCapability.capabilityId], { serviceIds: [foreign.serviceId] })).rejects.toMatchObject(badInput);
+      await expect(f.issue([selected.capabilityId], { capabilitySelection: "catalog" })).rejects.toMatchObject(badInput);
+      expect(f.store.db.prepare("SELECT count(*) AS n FROM api_key_records").get()).toEqual({ n: 0 });
+
+      const { apiKey, record } = await f.issue([selected.capabilityId]);
+      expect(record.policy).toMatchObject({ capabilityIds: [selected.capabilityId], allowedTools: [selected.toolId],
+        serviceIds: [selected.serviceId], scopeIds: selected.scopeIds, toolsetIds: ["meshrix.gateway.read"],
+        maximumRisk: "low", resources: { egressClasses: ["mcp"], capabilityVerbs: ["tools/call"] } });
+      const authorization = await f.authenticate(apiKey);
+      expect(f.owner.authorizeOperation({ authorization, operation: selected }).keyId).toBe(record.keyId);
+      // Confirmation reloads the live credential; it must not broaden the selection.
+      const { keyId, lifecycleRevision, policyFingerprint, workloadPrincipalId, organizationNodeId, organizationLineageDigest } = record;
+      const confirmed = f.owner.revalidateDeferredAuthorization({
+        keyId, lifecycleRevision, policyFingerprint, workloadPrincipalId, organizationNodeId, organizationLineageDigest
+      });
+      const denied = { code: "api_key_policy_denied" };
+      const changes = () => f.store.db.prepare("SELECT total_changes() AS n").get().n;
+      const before = changes();
+      for (const operation of [parent, sibling, { ...selected, capabilityId: unknown }, { ...selected, toolId: foreign.id },
+        { ...selected, serviceId: foreign.serviceId }, { ...selected, toolId: "" }, { ...selected, scopeIds: [] },
+        { ...selected, risk: "safe_write" }, { ...selected, operationKey: "tools/list" },
+        { ...selected, dynamicCapability: { ...selected.dynamicCapability, upstreamToolName: "records.write" } },
+        { ...selected, resourceContext: { serviceId: foreign.serviceId } },
+        { ...selected, resourceContext: { credentialBindingIds: ["other-binding"] } }]) {
+        // For the parent or a sibling this copy is valid in isolation; only the stored policy decides.
+        const substituted = { ...confirmed, policy: { ...confirmed.policy, capabilityIds: [operation.capabilityId] } };
+        expect(() => f.owner.authorizeOperation({ authorization: substituted, operation })).toThrowError(expect.objectContaining(denied));
+        await expect(f.owner.reserveEffect({ authorization: substituted, operation })).rejects.toMatchObject(denied);
+      }
+      expect(changes()).toBe(before);
+      const lease = await f.owner.reserveEffect({ authorization: confirmed, operation: selected });
+      try { expect((await f.owner.revalidateEffect(lease)).policy.capabilityIds).toEqual([selected.capabilityId]); }
+      finally { await f.owner.releaseEffect(lease); }
+      expect((await f.owner.list({ subjectId: "admin" })).items[0].useCount).toBe(1);
+
+      const deniedKey = await f.issue([selected.capabilityId], { deniedTools: [selected.toolId] });
+      const deniedAuth = await f.authenticate(deniedKey.apiKey);
+      await expect(f.owner.reserveEffect({ authorization: deniedAuth, operation: selected })).rejects.toMatchObject(denied);
+      f.setPublished(null);
+      await expect(f.issue([selected.capabilityId])).rejects.toMatchObject({ code: "api_key_authority_unavailable" });
+      await expect(f.owner.reserveEffect({ authorization: confirmed, operation: selected })).rejects.toMatchObject({ code: "api_key_authority_unavailable" });
+    } finally { await f.close(); }
+  });
+
+  it("checks explicit static execute IDs and permits native children only under a canonical MCP tools/call parent", async () => {
+    const f = await exactSelectionFixture();
+    try {
+      expect(() => createApiKeyDistributionWorkerOwner({ ...f.ownerOptions, capabilitySelection: "other" as any })).toThrow(TypeError);
+      const denied = { code: "api_key_input_invalid" };
+      const staticTool = f.catalogTool("tools.echo");
+      const capabilityId = "cap:tool:tools.echo:execute";
+      const fields = { allowedTools: [staticTool.id], toolsetIds: staticTool.toolsets, scopeIds: staticTool.requiredScopes };
+      await expect(f.issue([], fields)).rejects.toMatchObject(denied);
+      await expect(f.issue(["cap:tool:tools.other:execute"], fields)).rejects.toMatchObject(denied);
+      for (const toolId of ["upstream.records.tools-list", "upstream.other.tools-call"]) {
+        const tool = f.catalogTool(toolId);
+        await expect(f.issue([`${tool.dynamicCapability.capabilityId}-records-list`], { allowedTools: [toolId] })).rejects.toMatchObject(denied);
+        const direct = await f.issue([tool.dynamicCapability.capabilityId], { allowedTools: [toolId] });
+        const authorization = await f.authenticate(direct.apiKey);
+        expect(f.owner.authorizeOperation({ authorization, operation: { toolId, serviceId: tool.serviceId,
+          capabilityId: tool.dynamicCapability.capabilityId, dynamicCapability: tool.dynamicCapability,
+          risk: tool.dynamicCapability.risk, scopeIds: tool.dynamicCapability.requiredScopes,
+          toolsetIds: tool.dynamicCapability.toolsets } }).keyId).toBe(direct.record.keyId);
+      }
+      const created = await f.issue([capabilityId], fields);
+      const authorization = await f.authenticate(created.apiKey);
+      const operation = { toolId: staticTool.id, capabilityId, risk: staticTool.risk, scopeIds: staticTool.requiredScopes,
+        toolsetIds: staticTool.toolsets, resourceContext: staticTool.resourceContext };
+      expect(f.owner.authorizeOperation({ authorization, operation }).policy.capabilityIds).toEqual([capabilityId]);
+      for (const override of [{ capabilityId: "" }, { capabilityId: undefined }, { toolId: "tools.other" },
+        { resourceContext: {} }, { risk: undefined }, { toolsetIds: [] }]) {
+        await expect(f.owner.reserveEffect({ authorization, operation: { ...operation, ...override } })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      }
+      const lease = await f.owner.reserveEffect({ authorization, operation });
+      await f.owner.releaseEffect(lease);
+      const parent = f.catalogTool("upstream.records.tools-call");
+      f.setPublished({ ...f.catalog, tools: [{ ...parent, dynamicCapability: {
+        ...parent.dynamicCapability, capabilityId: "cap:upstream:records:other"
+      } }] });
+      await expect(f.issue(["cap:upstream:records:other-records-list"])).rejects.toMatchObject(denied);
+    } finally { await f.close(); }
+  });
+
+  it("revalidates dynamic MCP effects by exact capability and canonical tool facts", async () : Promise<any> => {
+    const capabilityId: any = "cap:upstream:opaque-service:tools-call-records-list";
+    const upstreamResource: any = {
+      serviceId: "opaque-service",
+      serviceIds: ["opaque-service"],
+      requestedEgress: "mcp",
+      requestedEgresses: ["mcp"],
+      secretBindingId: canned6,
+      secretBindingIds: ["secret-binding-opaque"],
+      capabilityDomain: "upstream-gateway",
+      capabilityVerb: "tools/call",
+      resourceKind: "upstream-service-operation"
+    };
     const current: any = harness({
+      tools: [{
+        id: "upstream.opaque-service.tools-call",
+        status: "active",
+        serviceId: "opaque-service",
+        toolsets: ["meshrix.gateway.read"],
+        requiredScopes: ["gateway:read"],
+        risk: "read_only",
+        dynamicCapability: {
+          capabilityId: "cap:upstream:opaque-service:tools-call",
+          serviceId: "opaque-service",
+          protocol: "mcp",
+          operationKey: "tools/call",
+          risk: "read_only",
+          requiredScopes: ["gateway:read"],
+          toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
+          credentialBindingIds: ["secret-binding-opaque"],
+          resourceContext: upstreamResource
+        }
+      }],
       toolsets: [{ id: "meshrix.gateway.read" }],
       scopes: [{ id: "gateway:read" }]
     });
-    const capabilityId: any = "cap:upstream:opaque-service:tools-call-records-list";
     try {
       const created: any = await current.provider.create({
         subjectId: "admin",
@@ -484,7 +694,8 @@ describe("scoped API Key distribution", () : any => {
           serviceIds: ["opaque-service"],
           capabilityIds: [capabilityId],
           toolsetIds: ["meshrix.gateway.read"],
-          deniedTools: ["tools.echo"],
+          allowedTools: ["upstream.opaque-service.tools-call"],
+          deniedTools: [],
           scopeIds: ["gateway:read"],
           maximumRisk: "low",
           resources: {
@@ -506,21 +717,15 @@ describe("scoped API Key distribution", () : any => {
         processIdentityEvidence: null
       });
       const operation: any = {
-        toolId: "tools.echo",
+        toolId: "upstream.opaque-service.tools-call",
         serviceId: "opaque-service",
         capabilityId,
+        dynamicCapability: true,
+        upstreamToolName: "records-list",
         toolsetIds: ["meshrix.gateway.read", "upstream:opaque-service"],
         scopeIds: ["gateway:read"],
         risk: "read_only",
-        resourceContext: {
-          requestedEgress: "mcp",
-          requestedEgresses: ["mcp"],
-          secretBindingId: canned6,
-          secretBindingIds: ["secret-binding-opaque"],
-          capabilityDomain: "upstream-gateway",
-          capabilityVerb: "tools/call",
-          resourceKind: "upstream-service-operation"
-        }
+        resourceContext: upstreamResource
       };
       const lease: any = await current.provider.reserveEffect({ authorization, operation });
       await current.provider.releaseEffect(lease);
@@ -755,11 +960,11 @@ describe("scoped API Key distribution", () : any => {
       });
       const lease: any = await current.provider.reserveEffect({
         authorization,
-        operation: { toolId: "tools.echo", risk: "low", resourceContext: { workspaceId: "workspace-1" } }
+        operation: echoOperation()
       });
       await expect(current.provider.reserveEffect({
         authorization,
-        operation: { toolId: "tools.echo", risk: "low", resourceContext: { workspaceId: "workspace-1" } }
+        operation: echoOperation()
       })).rejects.toMatchObject({ code: "api_key_concurrency_limit_reached" });
       await current.provider.releaseEffect(lease);
       const rotated: any = await current.provider.rotate({
@@ -787,7 +992,7 @@ describe("scoped API Key distribution", () : any => {
       current.governance.moveChildToPeer();
       await expect(current.provider.reserveEffect({
         authorization: rotatedAuthorization,
-        operation: { toolId: "tools.echo", risk: "low", resourceContext: { workspaceId: "workspace-1" } }
+        operation: echoOperation()
       })).rejects.toMatchObject({ code: "api_key_inactive" });
     } finally {
       await current.close();
@@ -816,25 +1021,25 @@ describe("scoped API Key distribution", () : any => {
       });
       await expect(current.provider.reserveEffect({
         authorization,
-        operation: { toolId: "tools.echo", risk: "read_only", resourceContext: {} }
+        operation: echoOperation({ resourceContext: {} })
       })).rejects.toMatchObject({ code: "api_key_policy_denied" });
       await expect(current.provider.reserveEffect({
         authorization,
-        operation: { toolId: "tools.echo", risk: "safe_write", resourceContext: { workspaceId: "workspace-1" } }
+        operation: echoOperation({ risk: "safe_write" })
       })).rejects.toMatchObject({ code: "api_key_policy_denied" });
       const first: any = await current.provider.reserveEffect({
         authorization,
-        operation: { toolId: "tools.echo", risk: "read_only", resourceContext: { workspaceId: "workspace-1" } }
+        operation: echoOperation()
       });
       await expect(current.provider.reserveEffect({
         authorization,
-        operation: { toolId: "tools.echo", risk: "read_only", resourceContext: { workspaceId: "workspace-1" } }
+        operation: echoOperation()
       })).rejects.toMatchObject({ code: "api_key_rate_limited" });
       await current.provider.releaseEffect(first);
       current.advance(60_000);
       const second: any = await current.provider.reserveEffect({
         authorization,
-        operation: { toolId: "tools.echo", risk: "read_only", resourceContext: { workspaceId: "workspace-1" } }
+        operation: echoOperation()
       });
       await current.provider.revalidateEffect(second);
       await current.provider.releaseEffect(second);
@@ -895,11 +1100,7 @@ describe("scoped API Key distribution", () : any => {
     const entered = deferred<void>();
     const finish = deferred<void>();
     let revalidate: (() => Promise<any>) | null = null;
-    const operation = {
-      toolId: "tools.echo",
-      risk: "low",
-      resourceContext: { workspaceId: "workspace-1" }
-    };
+    const operation = echoOperation();
     try {
       const created: any = await current.provider.create({
         subjectId: "admin",
@@ -957,11 +1158,7 @@ describe("scoped API Key distribution", () : any => {
     const entered = deferred<void>();
     const finish = deferred<void>();
     let revalidate: (() => Promise<any>) | null = null;
-    const operation = {
-      toolId: "tools.echo",
-      risk: "low",
-      resourceContext: { workspaceId: "workspace-1" }
-    };
+    const operation = echoOperation();
     try {
       const created: any = await current.provider.create({
         subjectId: "admin",
@@ -1013,11 +1210,7 @@ describe("scoped API Key distribution", () : any => {
   it("cancels and drains an owned invocation before closing and reopening its SQLite owner", async () : Promise<any> => {
     const current: any = harness();
     const entered = deferred<void>();
-    const operation = {
-      toolId: "tools.echo",
-      risk: "low",
-      resourceContext: { workspaceId: "workspace-1" }
-    };
+    const operation = echoOperation();
     try {
       const created: any = await current.provider.create({
         subjectId: "admin",

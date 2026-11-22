@@ -178,7 +178,7 @@ async function withFixture(action: (fixture: any) => Promise<void>, { approvalRe
         subjectId: "fixture-admin", workloadDisplayName: "Synthetic managed caller", organizationNodeId: "issuer",
         expiresAt: new Date(Date.now() + 3600000).toISOString(),
         policy: {
-          protocol: "mcp", serviceIds: [], capabilityIds: [],
+          protocol: "mcp", serviceIds: [], capabilityIds: tools.map((tool: any) => tool.capabilityId),
           toolsetIds: [...new Set(tools.flatMap((tool: any) => tool.toolsets))],
           allowedTools: tools.map((tool: any) => tool.id), deniedTools: [],
           scopeIds: ["endpoints:execute", "endpoints:read", "endpoints:manage", "endpoints:approve"], maximumRisk: "high",

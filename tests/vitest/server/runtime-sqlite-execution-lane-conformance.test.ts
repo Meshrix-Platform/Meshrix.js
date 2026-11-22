@@ -348,11 +348,16 @@ describe("typed SQLite execution lane", () : any => {
     roots.push(root);
     const fixedNow = Date.parse("2026-08-03T00:00:00.000Z");
     const resourceContext = { workspaceId: "workspace-1" };
-    const operation = { toolId: "tools.echo", risk: "read_only", resourceContext };
+    const operation = {
+      toolId: "tools.echo", capabilityId: "cap:tool:tools.echo:execute",
+      toolsetIds: ["meshrix.runtime.read"], scopeIds: ["runtime:read"], risk: "read_only", resourceContext
+    };
     const catalog = {
       fingerprint: canned2,
       tools: [{
         id: "tools.echo",
+        status: "active",
+        capabilityId: "cap:tool:tools.echo:execute",
         toolsets: ["meshrix.runtime.read"],
         requiredScopes: ["runtime:read"],
         risk: "read_only",
@@ -390,7 +395,7 @@ describe("typed SQLite execution lane", () : any => {
           organizationNodeId: "child",
           expiresAt: "2026-08-04T00:00:00.000Z",
           policy: {
-            protocol: "mcp", serviceIds: [], capabilityIds: [], toolsetIds: ["meshrix.runtime.read"],
+            protocol: "mcp", serviceIds: [], capabilityIds: ["cap:tool:tools.echo:execute"], toolsetIds: ["meshrix.runtime.read"],
             allowedTools: ["tools.echo"], deniedTools: [], scopeIds: ["runtime:read"], maximumRisk: "low",
             audience: { serverAudience: "https://meshrix.invalid", targetIds: ["server"], connectorPackageIds: [] },
             resources: {
