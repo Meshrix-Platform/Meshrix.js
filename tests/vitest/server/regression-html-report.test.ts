@@ -148,6 +148,7 @@ describe("tracked interactive regression report", () => {
     expect(html).toContain('<script type="application/json" id="regression-data">');
     expect(html).toContain("Search suite, lane, or command");
     expect(html).toContain("Execution phases");
+    expect(html).not.toMatch(/\bcanned(?:Pass|Fail|ClsPass|ClsFail)\b/);
     expect(html).not.toContain("https://");
     expect(() => assertNoLeak(html, "tracked regression HTML fixture")).not.toThrow();
   });

@@ -1,12 +1,3 @@
-const canned1 = 'status-pass';
-const canned2 = 'Passed';
-const canned3 = "Failed";
-
-
-const cannedClsPass = canned1;
-const cannedClsFail = 'status-fail';
-const cannedPass = canned2;
-const cannedFail = 'Failed';
 export const TRACKED_REGRESSION_REPORT_PATH = "docs/verification/regression.html";
 
 function asRecord(value: unknown): Record<string, any> {
@@ -241,7 +232,7 @@ export function createRegressionHtmlReport(
 ): string {
   const snapshot = createRegressionReportSnapshot(report, options);
   const data = serializedForHtml(snapshot);
-  const titleStatus = snapshot.releaseReady ? "Passed": canned3;
+  const titleStatus = snapshot.releaseReady ? "Passed" : "Failed";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -300,7 +291,7 @@ export function createRegressionHtmlReport(
       meta.append(element('div', '', 'Version ' + data.productVersion + ' · ' + data.profile));
       meta.append(element('div', '', data.revision + ' · ' + new Date(data.generatedAt).toLocaleString()));
       const metrics = [
-        ['Result', data.releaseReady ? cannedPass : cannedFail, data.releaseReady ? cannedClsPass : cannedClsFail],
+        ['Result', data.releaseReady ? 'Passed' : 'Failed', data.releaseReady ? 'status-pass' : 'status-fail'],
         ['Pass rate', data.summary.passRate + '%', ''],
         ['Passed', String(data.summary.passed), 'status-pass'],
         ['Failed', String(data.summary.failed), data.summary.failed ? 'status-fail' : ''],
