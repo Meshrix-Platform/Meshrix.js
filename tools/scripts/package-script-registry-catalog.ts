@@ -49,7 +49,9 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     inputs: [
       "tools/scripts/local-ci.ts",
       "tests/run.ts",
+      "tools/scripts/lib/node-runtime-support.ts",
       "tools/scripts/lib/unified-test-runner-execution.ts",
+      "tools/server-scripts/lib/npm-cli-invocation.ts",
       "tools/registry/tests.registry.json",
       "tools/registry/schema/test-suite.schema.json",
       "tools/server-scripts/lib/local-execution-environment.ts",

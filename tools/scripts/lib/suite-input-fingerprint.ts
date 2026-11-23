@@ -58,6 +58,7 @@ const SHARED_INPUT_PATHS: readonly string[] = Object.freeze([
   "tools/registry/modules.registry.json",
   "tools/registry/tests.registry.json",
   "tools/scripts/lib/node-runtime-support.ts",
+  "tools/server-scripts/lib/npm-cli-invocation.ts",
   "tools/scripts/lib/suite-input-fingerprint.ts",
   "tools/scripts/lib/repository-source-files.ts",
   "tools/scripts/lib/unified-test-runner-execution.ts",

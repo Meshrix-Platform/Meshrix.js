@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { assertNoLeak } from "../server-scripts/lib/report-evidence-safety.ts";
-import { sanitizeVerificationLog } from "../server-scripts/localize-verify-failure.ts";
-import { sanitizeSensitiveReport } from "../server-scripts/lib/sensitive-report-scan.ts";
+import { npmCliArgs, resolveNpmCliInvocation } from "../server-scripts/lib/npm-cli-invocation.ts";
 import {
   runSuiteProcess,
   sourceNodeEnvironment,
@@ -15,7 +14,8 @@ import {
 } from "./lib/unified-test-runner-execution.ts";
 import {
   describeUnsupportedNodeRuntime,
-  resolveNodeRuntimeSupport
+  resolveNodeRuntimeSupport,
+  satisfiesNodeEngine
 } from "./lib/node-runtime-support.ts";
 export { sourceNodeEnvironment } from "./lib/unified-test-runner-execution.ts";
 
@@ -28,6 +28,43 @@ function isLocalCiScope(value: string): value is LocalCiOptions["scope"] {
   return LOCAL_CI_SCOPES.includes(value);
 }
 const NODE_SOURCE_CONDITION = "--conditions=source";
+
+function supportedNodeRuntimeOnPath(engine: string): string | null {
+  if (process.env.MESHRIX_LOCAL_CI_REEXEC) return null;
+  const current = path.resolve(process.execPath);
+  const seen = new Set<string>([current]);
+  for (const directory of String(process.env.PATH || "").split(path.delimiter)) {
+    if (!directory) continue;
+    for (const name of process.platform === "win32" ? ["node.exe", "node"] : ["node"]) {
+      const candidate = path.join(directory, name);
+      if (!existsSync(candidate)) continue;
+      let resolved = candidate;
+      try { resolved = realpathSync(candidate); } catch { continue; }
+      if (seen.has(path.resolve(resolved))) continue;
+      seen.add(path.resolve(resolved));
+      const probe = spawnSync(candidate, ["--version"], { encoding: "utf8" });
+      if (probe.status === 0 && satisfiesNodeEngine(String(probe.stdout || "").trim(), engine)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+const reportSafety: Record<string, any> = {};
+async function loadReportSafety(): Promise<void> {
+  if (reportSafety.assertNoLeak) return;
+  const [evidence, localization, scan] = await Promise.all([
+    import("../server-scripts/lib/report-evidence-safety.ts"),
+    import("../server-scripts/localize-verify-failure.ts"),
+    import("../server-scripts/lib/sensitive-report-scan.ts")
+  ]);
+  Object.assign(reportSafety, {
+    assertNoLeak: evidence.assertNoLeak,
+    sanitizeVerificationLog: localization.sanitizeVerificationLog,
+    sanitizeSensitiveReport: scan.sanitizeSensitiveReport
+  });
+}
 
 export interface LocalCiOptions {
   scope: "engineering" | "changed";
@@ -289,7 +326,7 @@ async function saveSanitizedLog(rawLogPath: string, destination: string): Promis
     if (error.code === "ENOENT") return "";
     throw error;
   });
-  await fs.writeFile(destination, sanitizeVerificationLog(raw, repoRoot), { mode: 0o600 });
+  await fs.writeFile(destination, reportSafety.sanitizeVerificationLog(raw, repoRoot), { mode: 0o600 });
   await fs.rm(rawLogPath, { force: true });
 }
 
@@ -343,7 +380,7 @@ async function runTestProfile(profile: string, rawReportPath: string, rawLogPath
     return { execution, flows: [], summary: null };
   }
   const runnerReportArtifact = path.join(path.dirname(rawLogPath), "test-runner-report.json");
-  await writeJsonAtomic(runnerReportArtifact, sanitizeSensitiveReport(runnerReport));
+  await writeJsonAtomic(runnerReportArtifact, reportSafety.sanitizeSensitiveReport(runnerReport));
   const flows = suiteFlowResults(runnerReport, displayPath(runnerReportArtifact));
   const summary = evaluateEngineeringOutcomes(flows, execution.exitCode, execution);
   await fs.rm(rawReportPath, { force: true });
@@ -394,10 +431,35 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
     modules: process.versions.modules
   });
   if (!runtimeSupport.supported) {
+    const alternative = supportedNodeRuntimeOnPath(runtimeSupport.engine);
+    if (alternative) {
+      process.stdout.write(`[local-ci] node ${runtimeSupport.version} unsupported; re-executing under ${alternative}\n`);
+      const rerun = spawnSync(alternative,
+        ["--conditions=source", fileURLToPath(import.meta.url), ...argv],
+        {
+          cwd: repoRoot,
+          env: {
+            ...process.env,
+            PATH: `${path.dirname(alternative)}${path.delimiter}${process.env.PATH || ""}`,
+            MESHRIX_LOCAL_CI_REEXEC: "1"
+          },
+          stdio: "inherit"
+        });
+      process.exitCode = rerun.status ?? 1;
+      return;
+    }
     process.stderr.write(`${describeUnsupportedNodeRuntime(runtimeSupport)}\n`);
     process.exitCode = 1;
     return;
   }
+
+  if (!existsSync(path.join(repoRoot, "node_modules"))) {
+    process.stdout.write("[local-ci] node_modules missing; running npm ci\n");
+    const npmInvocation = resolveNpmCliInvocation();
+    const install = spawnSync(npmInvocation.command, npmCliArgs(npmInvocation, ["ci"]), { cwd: repoRoot, stdio: "inherit" });
+    if (install.status !== 0) throw new Error("local_ci_dependency_install_failed");
+  }
+  await loadReportSafety();
 
   const runId = runIdentifier();
   const runDirectory = path.join(repoRoot, "build/local-ci", runId);
@@ -539,7 +601,7 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
     logs: [displayPath(sanitizedLogPath)],
     ...(setupReasonCode ? { setupReasonCode } : {})
   };
-  assertNoLeak(report, "local ci report");
+  reportSafety.assertNoLeak(report, "local ci report");
   await writeJsonAtomic(reportPath, report);
   process.stdout.write(`[local-ci] ${finalSummary.status}; ${displayPath(reportPath)}\n`);
   process.exitCode = finalSummary.status === "passed" ? 0
