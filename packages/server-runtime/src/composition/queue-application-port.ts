@@ -169,11 +169,13 @@ export async function createQueueApplicationPort({
   const globalCredit: any = resolveQueueMaxInFlight(maxGlobalInFlight, { fallback: 8192 });
   const isSharedRemoteStore: boolean = (queueStore.kind || "sqlite") === "postgres";
   const configuredSharedReconcileMs: number = Number(process.env.MESHRIX_WORK_QUEUE_SHARED_RECONCILE_MS || 0);
-  const crossProcessReconcileMs: number =
+  const explicitSharedReconcileMs: number =
     isSharedRemoteStore && Number.isFinite(configuredSharedReconcileMs) && configuredSharedReconcileMs > 0
       ? Math.max(1_000, Math.trunc(configuredSharedReconcileMs))
       : 0;
-  void dispatchIntervalMs;
+  const fallbackSharedReconcileMs: number = isSharedRemoteStore
+    ? Math.max(1_000, asPositiveInt(dispatchIntervalMs, 5_000))
+    : 0;
   let started: boolean = false;
   let reconcileTimer: ReturnType<typeof setInterval> | null = null;
   let unsubscribeWake: (() => void) | null = null;
@@ -183,6 +185,18 @@ export async function createQueueApplicationPort({
   let dispatchCursor: any = 0;
   let globalReserved: any = 0;
   const MAX_TIMEOUT_MS = 2_147_483_647;
+  const EXPIRY_CONTENTION_BACKOFF_MS = 1_000;
+
+  function setReconcileInterval(intervalMs: number): void {
+    if (reconcileTimer) {
+      clearInterval(reconcileTimer);
+      reconcileTimer = null;
+    }
+    if (started && !stopped && intervalMs > 0) {
+      reconcileTimer = setInterval(() => void requestDispatch(), intervalMs);
+      reconcileTimer.unref?.();
+    }
+  }
 
   function clearRegistrationWake(registration?: any): void {
     if (!registration) return;
@@ -236,6 +250,7 @@ export async function createQueueApplicationPort({
   async function runExpirySweep(registration: any): Promise<void> {
     if (!started || stopped || !registration || registration.closed || !registration.consumerEnabled) return;
     if (typeof queueStore.expireDue !== "function") return;
+    let sweepFailed = false;
     try {
       while (started && !stopped && !registration.closed) {
         const out: any = await queueStore.expireDue({
@@ -249,14 +264,17 @@ export async function createQueueApplicationPort({
             await registration.onTerminal({ workItem, source: "expiry" });
           }
         }
-        if (!out?.hasMore) break;
+        if (!out?.hasMore || expiredItems.length === 0) break;
       }
     } catch {
-      // Best-effort independent expiry maintenance.
+      sweepFailed = true;
     }
-    if (started && !stopped && !registration.closed) {
-      void refreshNextDueWake(registration);
+    if (!started || stopped || registration.closed) return;
+    if (sweepFailed) {
+      scheduleRegistrationExpiryAt(registration, Date.now() + EXPIRY_CONTENTION_BACKOFF_MS);
+      return;
     }
+    void refreshNextDueWake(registration, true);
   }
 
   function scheduleRegistrationExpiryAt(registration: any, targetMs: number): void {
@@ -276,13 +294,12 @@ export async function createQueueApplicationPort({
         scheduleRegistrationExpiryAt(registration, targetMs);
         return;
       }
-      registration.lastFiredExpiryMs = Math.max(registration.lastFiredExpiryMs || 0, Math.trunc(targetMs));
       void runExpirySweep(registration);
     }, delay);
     registration.expiryTimer.unref?.();
   }
 
-  async function refreshNextDueWake(registration?: any): Promise<void> {
+  async function refreshNextDueWake(registration?: any, afterExpirySweep = false): Promise<void> {
     if (!started || stopped || !registration || registration.closed || !registration.consumerEnabled) return;
     if (typeof queueStore.nextWakeAtMs !== "function") return;
     try {
@@ -293,8 +310,7 @@ export async function createQueueApplicationPort({
         queueDefinitionId: registration.definition.queueDefinitionId,
         scope: registration.scope,
         canClaimReady,
-        afterMs: Number(registration.lastFiredWakeMs || 0),
-        afterExpiryMs: Number(registration.lastFiredExpiryMs || 0)
+        afterMs: Number(registration.lastFiredWakeMs || 0)
       });
       const candidate = Number(wakeInfo?.nextWakeAtMs ?? 0);
       if (canClaimReady && Number.isFinite(candidate) && candidate > 0) {
@@ -304,12 +320,20 @@ export async function createQueueApplicationPort({
       }
       const expiryCandidate = Number(wakeInfo?.nextExpiryAtMs ?? 0);
       if (Number.isFinite(expiryCandidate) && expiryCandidate > 0) {
-        scheduleRegistrationExpiryAt(registration, expiryCandidate);
+        const now = Date.now();
+        // If an overdue item remained locked during `expireDue` (`SKIP LOCKED`),
+        // back off rather than spinning at 5 ms while the lock holder finishes.
+        const effectiveExpiry = afterExpirySweep && expiryCandidate <= now
+          ? now + EXPIRY_CONTENTION_BACKOFF_MS
+          : expiryCandidate;
+        scheduleRegistrationExpiryAt(registration, effectiveExpiry);
       } else {
         clearRegistrationExpiryWake(registration);
       }
     } catch {
-      // Best-effort wakeup hint; explicit enqueue/settle/resume signals remain active.
+      if (afterExpirySweep && started && !stopped && !registration.closed) {
+        scheduleRegistrationExpiryAt(registration, Date.now() + EXPIRY_CONTENTION_BACKOFF_MS);
+      }
     }
   }
 
@@ -502,7 +526,6 @@ export async function createQueueApplicationPort({
       lastFiredWakeMs: 0,
       expiryTimer: null,
       expiryDeadlineMs: Infinity,
-      lastFiredExpiryMs: 0,
       closed: false
     };
     registrations.set(definition.queueDefinitionId, registration);
@@ -814,19 +837,34 @@ export async function createQueueApplicationPort({
     if (started || stopped) return { started: false, reason: stopped ? "stopped" : "already_started" };
     started = true;
     if (typeof queueStore.subscribeNotifications === "function") {
+      // Keep fallback polling active until LISTEN confirms connection, and
+      // restore it automatically if the notification channel disconnects.
+      setReconcileInterval(fallbackSharedReconcileMs);
       const sub = queueStore.subscribeNotifications({
-        onWake: () => {
-          if (started && !stopped) void requestDispatch();
+        onWake: (notifiedQueueId?: string) => {
+          if (!started || stopped) return;
+          const id = toText(notifiedQueueId);
+          if (id && registrations.has(id)) {
+            const reg = registrations.get(id);
+            reg.lastFiredWakeMs = 0;
+            void triggerRegistration(reg);
+          } else {
+            void requestDispatch();
+          }
         },
         onConnected: () => {
-          if (started && !stopped) void requestDispatch();
+          if (!started || stopped) return;
+          setReconcileInterval(explicitSharedReconcileMs);
+          void requestDispatch();
+        },
+        onDisconnected: () => {
+          if (!started || stopped) return;
+          setReconcileInterval(fallbackSharedReconcileMs);
         }
       });
       unsubscribeWake = typeof sub === "function" ? sub : () => sub?.close?.();
-    }
-    if (crossProcessReconcileMs > 0) {
-      reconcileTimer = setInterval(() => void requestDispatch(), crossProcessReconcileMs);
-      reconcileTimer.unref?.();
+    } else if (fallbackSharedReconcileMs > 0) {
+      setReconcileInterval(fallbackSharedReconcileMs);
     }
     void requestDispatch();
     return { started: true };

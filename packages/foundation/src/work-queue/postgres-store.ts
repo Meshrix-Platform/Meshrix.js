@@ -824,6 +824,7 @@ export async function createPostgresWorkQueueStore({
           decision: { projectionRow: row }
         });
         const inserted = await queryOne<WorkItemProjectionRow>(client, "SELECT * FROM work_items WHERE work_item_id = $1", [row.work_item_id]);
+        await client.query("SELECT pg_notify('meshrix_work_queue', $1)", [queueDefinitionId]);
         return { accepted: true, deduped: false, transitionSeq: seq, workItem: rowToWorkItem(inserted) };
       });
     },
@@ -1350,6 +1351,7 @@ export async function createPostgresWorkQueueStore({
           actor: input.actor,
           reason: input.reason || "recover"
         });
+        await client.query("SELECT pg_notify('meshrix_work_queue', $1)", [row.queue_definition_id]);
         return { recovered: true, workItem: rowToWorkItem(updated) };
       });
     },
@@ -1787,6 +1789,9 @@ export async function createPostgresWorkQueueStore({
           actor_json = EXCLUDED.actor_json,
           updated_at_ms = EXCLUDED.updated_at_ms
       `, [queueDefinitionId, scopeKey, mode, toText(input.reason), JSON.stringify(input.actor || {}), nowMs]);
+      if (mode === "active") {
+        await database.query("SELECT pg_notify('meshrix_work_queue', $1)", [queueDefinitionId]);
+      }
       return { queueDefinitionId, scopeKey, mode, reason: toText(input.reason), updatedAtMs: nowMs };
     },
     pause(input: QueueCommandInput = {}) {
@@ -1823,42 +1828,138 @@ export async function createPostgresWorkQueueStore({
       const queueDefinitionId = toText(input.queueDefinitionId || input.queueDefinition?.queueDefinitionId);
       if (!queueDefinitionId) throw new Error("queueDefinitionId is required.");
       const scopeKey = input.scopeKey || (input.scope ? scopeKeyFromScope(input.scope) : "");
-      const controlRow = await queryOne<{ mode: string }>(database, `
-        SELECT mode FROM work_queue_controls WHERE queue_definition_id = $1 AND scope_key = $2
-      `, [queueDefinitionId, scopeKey]);
-      const mode = controlRow?.mode || "active";
-      const afterExpiryMs = Math.max(0, asInt(input.afterExpiryMs, 0));
-      const expRow = await queryOne<{ next_expiry_ms: string | number | null }>(database, `
-        SELECT expires_at_ms AS next_expiry_ms FROM work_items
-         WHERE queue_definition_id = $1 AND scope_key = $2
-           AND state IN ('queued', 'recovered', 'retry_wait', 'running')
-           AND expires_at_ms > $3
-         ORDER BY expires_at_ms ASC LIMIT 1
-      `, [queueDefinitionId, scopeKey, afterExpiryMs]);
-      const expVal = Number(expRow?.next_expiry_ms ?? 0);
-      const nextExpiryAtMs = Number.isFinite(expVal) && expVal > 0 ? expVal : null;
-
-      if (mode !== "active" || input.canClaimReady === false) {
-        return { mode, nextWakeAtMs: null, nextExpiryAtMs };
-      }
+      const canClaim = input.canClaimReady !== false;
       const afterMs = Math.max(0, asInt(input.afterMs, 0));
-      const wakeRow = await queryOne<{ next_wake_ms: string | number | null }>(database, `
-        SELECT LEAST(
-          (SELECT available_at_ms FROM work_items
+      const summary = await queryOne<{
+        mode: string | null;
+        next_expiry_ms: string | number | null;
+        next_wake_ms: string | number | null;
+      }>(database, `
+        WITH ctl AS (
+          SELECT COALESCE(
+            (SELECT mode FROM work_queue_controls WHERE queue_definition_id = $1 AND scope_key = $2),
+            'active'
+          ) AS mode
+        )
+        SELECT
+          ctl.mode AS mode,
+          (SELECT expires_at_ms FROM work_items
             WHERE queue_definition_id = $1 AND scope_key = $2
-              AND state IN ('queued', 'recovered', 'retry_wait') AND available_at_ms > $3
-            ORDER BY available_at_ms ASC LIMIT 1),
-          (SELECT lease_expires_at_ms FROM work_items
-            WHERE queue_definition_id = $1 AND scope_key = $2
-              AND state = 'running' AND lease_expires_at_ms > $3
-            ORDER BY lease_expires_at_ms ASC LIMIT 1)
-        ) AS next_wake_ms
-      `, [queueDefinitionId, scopeKey, afterMs]);
-      const val = Number(wakeRow?.next_wake_ms ?? 0);
+              AND state IN ('queued', 'recovered', 'retry_wait', 'running')
+              AND expires_at_ms > 0
+            ORDER BY expires_at_ms ASC LIMIT 1) AS next_expiry_ms,
+          CASE WHEN ctl.mode = 'active' AND $3::boolean THEN LEAST(
+            (SELECT available_at_ms FROM work_items
+              WHERE queue_definition_id = $1 AND scope_key = $2
+                AND state IN ('queued', 'recovered', 'retry_wait') AND available_at_ms > $4
+              ORDER BY available_at_ms ASC LIMIT 1),
+            (SELECT lease_expires_at_ms FROM work_items
+              WHERE queue_definition_id = $1 AND scope_key = $2
+                AND state = 'running' AND lease_expires_at_ms > $4
+              ORDER BY lease_expires_at_ms ASC LIMIT 1)
+          ) ELSE NULL END AS next_wake_ms
+        FROM ctl
+      `, [queueDefinitionId, scopeKey, canClaim, afterMs]);
+      const mode = summary?.mode || "active";
+      const expVal = Number(summary?.next_expiry_ms ?? 0);
+      const wakeVal = Number(summary?.next_wake_ms ?? 0);
       return {
         mode,
-        nextWakeAtMs: Number.isFinite(val) && val > 0 ? val : null,
-        nextExpiryAtMs
+        nextWakeAtMs: Number.isFinite(wakeVal) && wakeVal > 0 ? wakeVal : null,
+        nextExpiryAtMs: Number.isFinite(expVal) && expVal > 0 ? expVal : null
+      };
+    },
+    subscribeNotifications({
+      onWake,
+      onConnected,
+      onDisconnected
+    }: {
+      onWake?: (queueDefinitionId: string) => void;
+      onConnected?: () => void;
+      onDisconnected?: () => void;
+    } = {}) {
+      if (typeof database.connect !== "function") {
+        onDisconnected?.();
+        return () => undefined;
+      }
+      let active = true;
+      let client: PoolClient | null = null;
+      let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+      let attempt = 0;
+
+      const releaseClient = (destroy = false): void => {
+        if (!client) return;
+        const current = client;
+        client = null;
+        current.removeAllListeners?.("notification");
+        current.removeAllListeners?.("error");
+        current.removeAllListeners?.("end");
+        try {
+          current.release(destroy);
+        } catch {
+          // Pool may already be closing.
+        }
+      };
+
+      const scheduleReconnect = (): void => {
+        if (!active || reconnectTimer) return;
+        const backoffMs = Math.min(30_000, 1_000 * (2 ** Math.min(attempt, 5)));
+        attempt += 1;
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          void connectLoop();
+        }, backoffMs);
+        reconnectTimer.unref?.();
+      };
+
+      const connectLoop = async (): Promise<void> => {
+        if (!active || closed) return;
+        try {
+          const acquired = await database.connect();
+          if (!active || closed) {
+            acquired.release();
+            return;
+          }
+          client = acquired;
+          acquired.on("notification", (msg: { channel?: string; payload?: string }) => {
+            if (active && msg?.channel === "meshrix_work_queue") {
+              onWake?.(toText(msg.payload));
+            }
+          });
+          const handleDisconnect = (): void => {
+            releaseClient(true);
+            if (active && !closed) {
+              onDisconnected?.();
+              scheduleReconnect();
+            }
+          };
+          acquired.on("error", handleDisconnect);
+          acquired.on("end", handleDisconnect);
+          await acquired.query("LISTEN meshrix_work_queue");
+          attempt = 0;
+          if (active && !closed) {
+            onConnected?.();
+          }
+        } catch {
+          releaseClient(true);
+          if (active && !closed) {
+            onDisconnected?.();
+            scheduleReconnect();
+          }
+        }
+      };
+
+      void connectLoop();
+
+      return () => {
+        active = false;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+        if (client) {
+          void client.query("UNLISTEN meshrix_work_queue").catch(() => undefined).finally(() => releaseClient(false));
+        }
       };
     },
     async expireDue(input: QueueCommandInput = {}) {

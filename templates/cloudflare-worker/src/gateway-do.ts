@@ -2043,26 +2043,31 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     const { response } = posted;
     const sessionId = readUpstreamSessionId(response);
 
+    // Cancel body immediately on deterministic non-400 HTTP failures so DO
+    // wall-clock time and byte budget are never spent reading error pages.
+    if (!response.ok && response.status !== 400) {
+      await response.body?.cancel().catch(() => undefined);
+      return {
+        ok: false,
+        code: "upstream_handshake_failed",
+        message: `Upstream MCP initialize failed with HTTP ${response.status}.`,
+      };
+    }
+
     const decoded = await readUpstreamJsonRpcMessage(response, initId, MAX_BODY_BYTES);
     if (!decoded.ok) {
       return { ok: false, code: "upstream_handshake_failed", message: "Upstream MCP initialize response exceeded byte budget." };
     }
     const { parsed } = decoded;
 
+    const isValidStatelessMethodNotFound = (frame: Record<string, unknown> | null): boolean => {
+      if (!frame || frame.jsonrpc !== "2.0" || frame.id !== initId || "result" in frame) return false;
+      const err = frame.error;
+      return isPlainRecord(err) && err.code === -32601 && typeof err.message === "string";
+    };
+
     if (!response.ok) {
-      // HTTP authentication, authorization, rate-limit, not-found, and 5xx
-      // errors take strict precedence and never cache stateless capability.
-      // Stateless fallback applies ONLY to HTTP 400 carrying a valid JSON-RPC
-      // 2.0 -32601 (Method not found) response correlated to `initId`.
-      const errObj =
-        response.status === 400 &&
-        parsed &&
-        parsed.jsonrpc === "2.0" &&
-        parsed.id === initId &&
-        isPlainRecord(parsed.error)
-          ? parsed.error
-          : null;
-      if (errObj && errObj.code === -32601) {
+      if (isValidStatelessMethodNotFound(parsed)) {
         return { ok: true, mode: "stateless", session: null };
       }
       return {
@@ -2072,11 +2077,11 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       };
     }
     if (!parsed || isPlainRecord(parsed.error)) {
-      const errorRecord = parsed && isPlainRecord(parsed.error) ? parsed.error : null;
-      const upstreamCode = errorRecord && typeof errorRecord.code === "number" ? errorRecord.code : undefined;
-      if (parsed?.jsonrpc === "2.0" && parsed.id === initId && upstreamCode === -32601) {
+      if (isValidStatelessMethodNotFound(parsed)) {
         return { ok: true, mode: "stateless", session: null };
       }
+      const errorRecord = parsed && isPlainRecord(parsed.error) ? parsed.error : null;
+      const upstreamCode = errorRecord && typeof errorRecord.code === "number" ? errorRecord.code : undefined;
       return {
         ok: false,
         code: "upstream_handshake_failed",

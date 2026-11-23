@@ -1497,7 +1497,7 @@ function createSqliteWorkQueueStoreFromDatabase({
     SELECT MIN(expires_at_ms) AS next_expiry_ms FROM work_items
      WHERE queue_definition_id = @queue_definition_id AND scope_key = @scope_key
        AND state IN ('queued', 'recovered', 'retry_wait', 'running')
-       AND expires_at_ms > @after_expiry_ms
+       AND expires_at_ms > 0
   `);
 
   const dueExpiredStmt = database.prepare(`
@@ -1540,11 +1540,9 @@ function createSqliteWorkQueueStoreFromDatabase({
       scope_key: scopeKey
     });
     const mode = control?.mode || "active";
-    const afterExpiryMs = Math.max(0, asInt(input.afterExpiryMs, 0));
     const expRow = nextExpiryStmt.get({
       queue_definition_id: queueDefinitionId,
-      scope_key: scopeKey,
-      after_expiry_ms: afterExpiryMs
+      scope_key: scopeKey
     }) as { next_expiry_ms?: number | null } | undefined;
     const expVal = Number(expRow?.next_expiry_ms ?? 0);
     const nextExpiryAtMs = Number.isFinite(expVal) && expVal > 0 ? expVal : null;
