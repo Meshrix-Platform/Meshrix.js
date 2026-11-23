@@ -546,7 +546,8 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
 
     const fetchStub = vi.fn(async (_url: unknown, init?: RequestInit) => {
       expect(init?.redirect).toBe("manual");
-      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown };
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
+      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
       return new Response(
         JSON.stringify({
           jsonrpc: "2.0",
@@ -569,7 +570,7 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       });
       expect(callRes.status).toBe(200);
       expect((await callRes.json() as any).result.structuredContent).toEqual({ id: "C-42", status: "active" });
-      expect(fetchStub).toHaveBeenCalledTimes(1);
+      expect(fetchStub).toHaveBeenCalledTimes(2);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -627,7 +628,8 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     let capturedHeaders: Headers | null = null;
     vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
       capturedHeaders = new Headers(init?.headers);
-      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown };
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
+      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
       return new Response(
         JSON.stringify({
           jsonrpc: "2.0",
@@ -762,9 +764,11 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     // Refused redirect: the HTTP POST already reached the upstream server before
     // it answered 302, so the permit stays consumed and delivery is unknown.
     const redirectApproval = await approveCall();
-    vi.stubGlobal("fetch", vi.fn(async () =>
-      new Response(null, { status: 302, headers: { Location: "https://mcp.example.com/moved" } }),
-    ));
+    vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
+      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
+      return new Response(null, { status: 302, headers: { Location: "https://mcp.example.com/moved" } });
+    }));
     try {
       const refused = await callWithApproval(redirectApproval);
       const refusedBody = (await refused.json()) as any;
@@ -964,12 +968,14 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     });
     const { token } = (await keyRes.json()) as { token: string };
 
-    const fetchStub = vi.fn(async () =>
-      new Response("redirected secret", {
+    const fetchStub = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
+      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
+      return new Response("redirected secret", {
         status: 302,
         headers: { Location: "https://mcp.example.com/moved" },
-      }),
-    );
+      });
+    });
     vi.stubGlobal("fetch", fetchStub);
     try {
       const callRes = await h.mcp(token, {
@@ -983,7 +989,7 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       expect(payload.result).toBeUndefined();
       expect(payload.error?.data?.code).toBe("upstream_redirect_refused");
       expect(JSON.stringify(payload)).not.toContain("redirected secret");
-      expect(fetchStub).toHaveBeenCalledTimes(1);
+      expect(fetchStub).toHaveBeenCalledTimes(2);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -1061,6 +1067,7 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     h: ReturnType<typeof createHarness>,
     adminHeaders: Record<string, string>,
     name = "crm.get_contact",
+    idempotent = true,
   ) {
     const regRes = await h.request("/admin/tools", {
       method: "POST",
@@ -1068,6 +1075,7 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       body: JSON.stringify({
         name,
         upstreamUrl: "https://mcp.example.com:8443/mcp",
+        idempotent,
         inputSchema: {
           $schema: "https://json-schema.org/draft/2020-12/schema",
           type: "object",
@@ -1087,7 +1095,7 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     return { token };
   }
 
-  it("handshakes on demand with stateful upstreams, carries the session id, and reuses it", async () => {
+  it("establishes a stateful upstream session ahead of tools/call, carries the session id, and reuses it", async () => {
     const adminToken = "self-hosted-operator-secret";
     const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
     const adminHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` };
@@ -1105,16 +1113,14 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       expect(firstRes.status).toBe(200);
       expect((await firstRes.json() as any).result.structuredContent).toEqual({ id: "C-42", status: "active" });
 
-      // Stateless probe, initialize handshake, initialized notification, retried call.
+      // Pre-dispatch initialize handshake, initialized notification, then tools/call.
       expect(upstream.calls.map((c) => c.method)).toEqual([
-        "tools/call",
         "initialize",
         "notifications/initialized",
         "tools/call",
       ]);
-      expect(upstream.calls[0]!.sessionId).toBeNull();
-      expect(upstream.calls[3]!.sessionId).toBe("sess-1");
-      expect(upstream.calls[3]!.protocolVersion).toBe("2025-06-18");
+      expect(upstream.calls[2]!.sessionId).toBe("sess-1");
+      expect(upstream.calls[2]!.protocolVersion).toBe("2025-06-18");
 
       // Second call reuses the established session without another handshake.
       const secondRes = await h.mcp(token, {
@@ -1125,18 +1131,19 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       });
       expect(secondRes.status).toBe(200);
       expect((await secondRes.json() as any).result.structuredContent.id).toBe("C-42");
-      expect(upstream.calls).toHaveLength(5);
-      expect(upstream.calls[4]).toMatchObject({ method: "tools/call", sessionId: "sess-1" });
+      expect(upstream.calls).toHaveLength(4);
+      expect(upstream.calls[3]).toMatchObject({ method: "tools/call", sessionId: "sess-1" });
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it("re-handshakes exactly once after the upstream invalidates the session", async () => {
+  it("re-handshakes once on 404 for idempotent tools and never replays non-idempotent tools", async () => {
     const adminToken = "self-hosted-operator-secret";
     const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
     const adminHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` };
-    const { token } = await registerUpstreamTool(h, adminHeaders);
+    const { token } = await registerUpstreamTool(h, adminHeaders, "crm.get_contact", true);
+    const { token: mutatingToken } = await registerUpstreamTool(h, adminHeaders, "crm.mutate_contact", false);
 
     const upstream = createStatefulUpstreamStub();
     vi.stubGlobal("fetch", upstream.fetchStub);
@@ -1148,7 +1155,7 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
         params: { name: "crm.get_contact", arguments: { id: "C-42" } },
       });
       expect(firstRes.status).toBe(200);
-      expect(upstream.calls).toHaveLength(4);
+      expect(upstream.calls).toHaveLength(3);
 
       // Upstream forgets every known session (e.g., process restart).
       upstream.sessions.clear();
@@ -1162,7 +1169,6 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       expect(secondRes.status).toBe(200);
       expect((await secondRes.json() as any).result.structuredContent.id).toBe("C-42");
       expect(upstream.calls.map((c) => c.method)).toEqual([
-        "tools/call",
         "initialize",
         "notifications/initialized",
         "tools/call",
@@ -1171,13 +1177,34 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
         "notifications/initialized",
         "tools/call",
       ]);
-      expect(upstream.calls[7]!.sessionId).toBe("sess-2");
+      expect(upstream.calls[6]!.sessionId).toBe("sess-2");
+
+      // Non-idempotent tool establishes session, then on 404 NEVER replays tools/call.
+      const mutFirst = await h.mcp(mutatingToken, {
+        jsonrpc: "2.0",
+        id: 42,
+        method: "tools/call",
+        params: { name: "crm.mutate_contact", arguments: { id: "C-42" } },
+      });
+      expect(mutFirst.status).toBe(200);
+      upstream.sessions.clear();
+      const beforeMutExpired = upstream.calls.length;
+      const mutExpired = await h.mcp(mutatingToken, {
+        jsonrpc: "2.0",
+        id: 43,
+        method: "tools/call",
+        params: { name: "crm.mutate_contact", arguments: { id: "C-42" } },
+      });
+      const mutBody = (await mutExpired.json()) as any;
+      expect(mutBody.error?.data?.code).toBe("upstream_session_expired");
+      expect(mutBody.error?.data?.resultUnknown).toBe(true);
+      expect(upstream.calls.slice(beforeMutExpired).map((c) => c.method)).toEqual(["tools/call"]);
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it("returns upstream_handshake_failed when the stateful upstream rejects initialize", async () => {
+  it("returns upstream_handshake_failed before dispatching tools/call when initialize fails", async () => {
     const adminToken = "self-hosted-operator-secret";
     const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
     const adminHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` };
@@ -1190,11 +1217,7 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       if (payload.method === "initialize") {
         return json(500, { jsonrpc: "2.0", error: { code: -32603, message: "boom" }, id: null });
       }
-      return json(400, {
-        jsonrpc: "2.0",
-        error: { code: -32000, message: "Bad Request: Server not initialized" },
-        id: null,
-      });
+      return json(200, { jsonrpc: "2.0", id: 1, result: {} });
     });
     vi.stubGlobal("fetch", fetchStub);
     try {
@@ -1209,7 +1232,6 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       expect(payload.result).toBeUndefined();
       expect(payload.error?.data?.code).toBe("upstream_handshake_failed");
       expect(fetchStub.mock.calls.map((c) => (JSON.parse(String(c[1]?.body)) as { method?: string }).method)).toEqual([
-        "tools/call",
         "initialize",
       ]);
     } finally {
@@ -1237,6 +1259,8 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       expect(payload.result).toBeUndefined();
       expect(payload.error?.data?.code).toBe("upstream_session_expired");
       expect(upstream.calls.map((c) => c.method)).toEqual([
+        "initialize",
+        "notifications/initialized",
         "tools/call",
         "initialize",
         "notifications/initialized",

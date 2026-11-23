@@ -1827,27 +1827,22 @@ export async function createPostgresWorkQueueStore({
         SELECT mode FROM work_queue_controls WHERE queue_definition_id = $1 AND scope_key = $2
       `, [queueDefinitionId, scopeKey]);
       const mode = controlRow?.mode || "active";
-      const allowClaim = mode === "active" && input.canClaimReady !== false;
-      const allowMature = mode === "active";
+      if (mode !== "active" || input.canClaimReady === false) {
+        return { mode, nextWakeAtMs: null };
+      }
+      const afterMs = Math.max(0, asInt(input.afterMs, 0));
       const wakeRow = await queryOne<{ next_wake_ms: string | number | null }>(database, `
-        SELECT MIN(candidate_ms) AS next_wake_ms FROM (
-          SELECT available_at_ms AS candidate_ms FROM work_items
-           WHERE queue_definition_id = $1 AND scope_key = $2
-             AND state IN ('queued', 'recovered') AND $3::boolean
-          UNION ALL
-          SELECT available_at_ms AS candidate_ms FROM work_items
-           WHERE queue_definition_id = $1 AND scope_key = $2
-             AND state = 'retry_wait' AND $4::boolean
-          UNION ALL
-          SELECT lease_expires_at_ms AS candidate_ms FROM work_items
-           WHERE queue_definition_id = $1 AND scope_key = $2
-             AND state = 'running' AND lease_expires_at_ms > 0
-          UNION ALL
-          SELECT expires_at_ms AS candidate_ms FROM work_items
-           WHERE queue_definition_id = $1 AND scope_key = $2
-             AND state IN ('queued', 'recovered', 'retry_wait') AND expires_at_ms > 0
-        ) candidates WHERE candidate_ms > 0
-      `, [queueDefinitionId, scopeKey, allowClaim, allowMature]);
+        SELECT LEAST(
+          (SELECT available_at_ms FROM work_items
+            WHERE queue_definition_id = $1 AND scope_key = $2
+              AND state IN ('queued', 'recovered', 'retry_wait') AND available_at_ms > $3
+            ORDER BY available_at_ms ASC LIMIT 1),
+          (SELECT lease_expires_at_ms FROM work_items
+            WHERE queue_definition_id = $1 AND scope_key = $2
+              AND state = 'running' AND lease_expires_at_ms > $3
+            ORDER BY lease_expires_at_ms ASC LIMIT 1)
+        ) AS next_wake_ms
+      `, [queueDefinitionId, scopeKey, afterMs]);
       const val = Number(wakeRow?.next_wake_ms ?? 0);
       return {
         mode,

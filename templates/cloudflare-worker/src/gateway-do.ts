@@ -75,6 +75,7 @@ interface ToolRow {
   readonly upstream_headers_json: string | null;
   readonly input_schema_json: string;
   readonly requires_approval: number;
+  readonly idempotent_call: number;
   readonly created_at: number;
 }
 
@@ -381,7 +382,8 @@ interface UpstreamSession {
 interface ScopedUpstreamSession {
   readonly keyId: string;
   readonly toolName: string;
-  readonly session: UpstreamSession;
+  readonly mode: "stateful" | "stateless";
+  readonly session: UpstreamSession | null;
 }
 
 type UpstreamCallFailure = {
@@ -389,7 +391,7 @@ type UpstreamCallFailure = {
   readonly code: string;
   readonly message: string;
   readonly upstreamCode?: number;
-  readonly preExecutionSessionRejected?: boolean;
+  readonly sessionExpired?: boolean;
   readonly evictCachedSession?: boolean;
   readonly notSent?: boolean;
   readonly resultUnknown?: boolean;
@@ -400,7 +402,8 @@ type UpstreamCallOutcome =
   | UpstreamCallFailure;
 
 type UpstreamHandshakeOutcome =
-  | { readonly ok: true; readonly session: UpstreamSession }
+  | { readonly ok: true; readonly mode: "stateful"; readonly session: UpstreamSession }
+  | { readonly ok: true; readonly mode: "stateless"; readonly session: null }
   | UpstreamCallFailure;
 
 function readUpstreamSessionId(response: Response): string | null {
@@ -585,6 +588,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
         upstream_headers_json TEXT,
         input_schema_json TEXT NOT NULL,
         requires_approval INTEGER NOT NULL DEFAULT 0,
+        idempotent_call INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       );
 
@@ -656,6 +660,9 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     );
     if (!toolColumns.has("upstream_headers_json")) {
       this.#sql.exec("ALTER TABLE tools ADD COLUMN upstream_headers_json TEXT");
+    }
+    if (!toolColumns.has("idempotent_call")) {
+      this.#sql.exec("ALTER TABLE tools ADD COLUMN idempotent_call INTEGER NOT NULL DEFAULT 0");
     }
 
     if (this.#isDemoMode()) {
@@ -894,6 +901,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       upstreamHeaderNames: this.#upstreamHeaderNames(row),
       inputSchema: JSON.parse(row.input_schema_json) as unknown,
       requiresApproval: row.requires_approval === 1,
+      idempotent: row.idempotent_call === 1,
       createdAt: row.created_at,
     };
   }
@@ -1239,6 +1247,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
 
     const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
     const requiresApproval = body.requiresApproval === true;
+    const idempotentCall = body.idempotent === true && !requiresApproval;
     const inputSchema = body.inputSchema === undefined
       ? { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", additionalProperties: true }
       : body.inputSchema;
@@ -1268,8 +1277,8 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
 
     const now = Date.now();
     this.#sql.exec(
-      `INSERT INTO tools (name, description, kind, upstream_url, upstream_tool_name, upstream_headers_json, input_schema_json, requires_approval, created_at)
-       VALUES (?, ?, 'upstream_http_mcp', ?, ?, ?, ?, ?, ?)
+      `INSERT INTO tools (name, description, kind, upstream_url, upstream_tool_name, upstream_headers_json, input_schema_json, requires_approval, idempotent_call, created_at)
+       VALUES (?, ?, 'upstream_http_mcp', ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(name) DO UPDATE SET
          description = excluded.description,
          kind = excluded.kind,
@@ -1277,7 +1286,8 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
          upstream_tool_name = excluded.upstream_tool_name,
          upstream_headers_json = excluded.upstream_headers_json,
          input_schema_json = excluded.input_schema_json,
-         requires_approval = excluded.requires_approval`,
+         requires_approval = excluded.requires_approval,
+         idempotent_call = excluded.idempotent_call`,
       name,
       description,
       validatedUrl.toString(),
@@ -1285,6 +1295,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       upstreamHeadersJson,
       JSON.stringify(inputSchema),
       requiresApproval ? 1 : 0,
+      idempotentCall ? 1 : 0,
       now,
     );
     this.#schemaCache.delete(name);
@@ -1913,7 +1924,8 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
           ok: false,
           code: "upstream_session_invalid",
           message: "Upstream MCP server does not recognize the current session.",
-          preExecutionSessionRejected: true,
+          sessionExpired: true,
+          evictCachedSession: true,
         };
       }
       return {
@@ -1935,21 +1947,11 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     const { parsed } = decoded;
 
     if (!response.ok) {
-      if (response.status === 400 && parsed && isPlainRecord(parsed.error)) {
-        const errorMessage = typeof parsed.error.message === "string" ? parsed.error.message : "";
-        if (UPSTREAM_SESSION_HINT_PATTERN.test(errorMessage)) {
-          return {
-            ok: false,
-            code: "upstream_session_required",
-            message: "Upstream MCP server requires an initialize handshake before serving requests.",
-            preExecutionSessionRejected: true,
-          };
-        }
-      }
       return {
         ok: false,
         code: "upstream_http_error",
         message: `Upstream MCP server responded with HTTP ${response.status}.`,
+        resultUnknown: true,
       };
     }
 
@@ -2048,6 +2050,14 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     const { parsed } = decoded;
 
     if (!response.ok) {
+      // Deterministic stateless MCP servers reject `initialize` with 404/405/501
+      // or JSON-RPC -32601 (Method not found). Transient 5xx/429/401/403 errors
+      // must NOT be cached as stateless capability.
+      const errObj = parsed && isPlainRecord(parsed.error) ? parsed.error : null;
+      const errCode = errObj && typeof errObj.code === "number" ? errObj.code : null;
+      if (response.status === 405 || response.status === 501 || errCode === -32601) {
+        return { ok: true, mode: "stateless", session: null };
+      }
       return {
         ok: false,
         code: "upstream_handshake_failed",
@@ -2057,6 +2067,9 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     if (!parsed || isPlainRecord(parsed.error)) {
       const errorRecord = parsed && isPlainRecord(parsed.error) ? parsed.error : null;
       const upstreamCode = errorRecord && typeof errorRecord.code === "number" ? errorRecord.code : undefined;
+      if (upstreamCode === -32601) {
+        return { ok: true, mode: "stateless", session: null };
+      }
       return {
         ok: false,
         code: "upstream_handshake_failed",
@@ -2098,35 +2111,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     }
     await notified.response.body?.cancel().catch(() => undefined);
 
-    return { ok: true, session };
-  }
-
-  async #probeSessionLiveness(
-    url: string,
-    extraHeaders: Record<string, string>,
-    session: UpstreamSession,
-  ): Promise<"alive" | "invalid" | "unknown"> {
-    const pingId = randomId("ping");
-    const posted = await this.#postUpstream(
-      url,
-      { jsonrpc: "2.0", id: pingId, method: "ping" },
-      extraHeaders,
-      session,
-    );
-    if (!posted.ok) return "unknown";
-    const { response } = posted;
-    if (response.status === 404) {
-      await response.body?.cancel().catch(() => undefined);
-      return "invalid";
-    }
-    const decoded = await readUpstreamJsonRpcMessage(response, pingId, MAX_BODY_BYTES);
-    if (!response.ok) {
-      const msg = decoded.ok && decoded.parsed && isPlainRecord(decoded.parsed.error) && typeof decoded.parsed.error.message === "string"
-        ? decoded.parsed.error.message
-        : "";
-      return response.status === 400 && UPSTREAM_SESSION_HINT_PATTERN.test(msg) ? "invalid" : "alive";
-    }
-    return "alive";
+    return { ok: true, mode: "stateful", session };
   }
 
   async #executeUpstreamTool(
@@ -2139,7 +2124,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     }
     const url = tool.upstream_url;
     const extraHeaders = this.#upstreamHeaders(tool);
-    const approvalGated = tool.requires_approval === 1;
+    const replaySafeIdempotent = tool.idempotent_call === 1 && tool.requires_approval === 0;
     const cacheKey = await sha256Hex(
       canonicalJson({
         keyId: callerKeyId,
@@ -2148,6 +2133,24 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
         headers: extraHeaders,
       }),
     );
+
+    // Establish or reuse the upstream session BEFORE sending tools/call so
+    // non-idempotent / approval-gated tools never dispatch tools/call twice.
+    let cached = this.#upstreamSessions.get(cacheKey) ?? null;
+    if (!cached) {
+      const handshake = await this.#handshakeUpstream(cacheKey, callerKeyId, tool.name, url, extraHeaders);
+      if (!handshake.ok) {
+        return handshake;
+      }
+      cached = {
+        keyId: callerKeyId,
+        toolName: tool.name,
+        mode: handshake.mode,
+        session: handshake.session,
+      };
+      this.#rememberUpstreamSession(cacheKey, cached);
+    }
+
     const callId = randomId("call");
     const callPayload = {
       jsonrpc: "2.0",
@@ -2159,76 +2162,42 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       },
     };
 
-    let session = this.#upstreamSessions.get(cacheKey)?.session ?? null;
-
-    if (approvalGated) {
-      // Never dispatch a single-use approval-gated tool call twice: verify or
-      // establish any upstream session BEFORE sending tools/call, then send
-      // tools/call at most once.
-      if (session?.sessionId) {
-        const liveness = await this.#probeSessionLiveness(url, extraHeaders, session);
-        if (liveness === "invalid") {
-          this.#upstreamSessions.delete(cacheKey);
-          session = null;
-        }
-      }
-      if (!session) {
-        const preflight = await this.#handshakeUpstream(cacheKey, callerKeyId, tool.name, url, extraHeaders);
-        if (preflight.ok) {
-          session = preflight.session;
-          this.#rememberUpstreamSession(cacheKey, { keyId: callerKeyId, toolName: tool.name, session });
-        } else if (preflight.notSent) {
-          return preflight;
-        }
-        // If initialize is unsupported by a stateless upstream, proceed with
-        // session = null: initialize performs no tool side effect.
-      }
-
-      const singleOutcome = await this.#sendUpstreamCall(url, callId, callPayload, extraHeaders, session);
-      if (!singleOutcome.ok) {
-        if (singleOutcome.evictCachedSession || singleOutcome.preExecutionSessionRejected) {
-          this.#upstreamSessions.delete(cacheKey);
-        }
-        if (singleOutcome.notSent) return singleOutcome;
-        return {
-          ...singleOutcome,
-          resultUnknown: true,
-        };
-      }
-      if (singleOutcome.returnedSessionId && singleOutcome.returnedSessionId !== session?.sessionId) {
-        this.#rememberUpstreamSession(cacheKey, {
-          keyId: callerKeyId,
-          toolName: tool.name,
-          session: {
-            sessionId: singleOutcome.returnedSessionId,
-            protocolVersion: session?.protocolVersion ?? SUPPORTED_MCP_VERSIONS[0],
-          },
-        });
-      }
-      return singleOutcome;
-    }
-
+    let session = cached.session;
     let outcome = await this.#sendUpstreamCall(url, callId, callPayload, extraHeaders, session);
 
     if (!outcome.ok && outcome.evictCachedSession) {
       this.#upstreamSessions.delete(cacheKey);
-      return outcome;
     }
 
-    if (!outcome.ok && outcome.preExecutionSessionRejected) {
-      this.#upstreamSessions.delete(cacheKey);
+    // Re-handshake and retry ONLY when the tool explicitly declares replay-safe
+    // idempotency (never on approval-gated or default side-effecting tools) AND
+    // a session-bearing call received MCP's HTTP 404 session-expired status.
+    if (!outcome.ok && outcome.sessionExpired && replaySafeIdempotent) {
       const handshake = await this.#handshakeUpstream(cacheKey, callerKeyId, tool.name, url, extraHeaders);
       if (!handshake.ok) {
-        this.#upstreamSessions.delete(cacheKey);
         return handshake;
       }
-      session = handshake.session;
-      this.#rememberUpstreamSession(cacheKey, { keyId: callerKeyId, toolName: tool.name, session });
-      outcome = await this.#sendUpstreamCall(url, callId, callPayload, extraHeaders, session);
-
-      if (!outcome.ok && (outcome.preExecutionSessionRejected || outcome.evictCachedSession)) {
-        this.#upstreamSessions.delete(cacheKey);
-        if (outcome.preExecutionSessionRejected) {
+      cached = {
+        keyId: callerKeyId,
+        toolName: tool.name,
+        mode: handshake.mode,
+        session: handshake.session,
+      };
+      this.#rememberUpstreamSession(cacheKey, cached);
+      session = cached.session;
+      const retryId = randomId("call");
+      outcome = await this.#sendUpstreamCall(
+        url,
+        retryId,
+        { ...callPayload, id: retryId },
+        extraHeaders,
+        session,
+      );
+      if (!outcome.ok) {
+        if (outcome.evictCachedSession || outcome.sessionExpired) {
+          this.#upstreamSessions.delete(cacheKey);
+        }
+        if (outcome.sessionExpired) {
           return {
             ok: false,
             code: "upstream_session_expired",
@@ -2237,12 +2206,20 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
         }
         return outcome;
       }
+    } else if (!outcome.ok && outcome.sessionExpired) {
+      return {
+        ok: false,
+        code: "upstream_session_expired",
+        message: "Upstream MCP session expired; side-effecting call was not replayed.",
+        resultUnknown: true,
+      };
     }
 
     if (outcome.ok && outcome.returnedSessionId && outcome.returnedSessionId !== session?.sessionId) {
       this.#rememberUpstreamSession(cacheKey, {
         keyId: callerKeyId,
         toolName: tool.name,
+        mode: "stateful",
         session: {
           sessionId: outcome.returnedSessionId,
           protocolVersion: session?.protocolVersion ?? SUPPORTED_MCP_VERSIONS[0],

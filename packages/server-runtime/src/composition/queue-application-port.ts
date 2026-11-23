@@ -167,15 +167,10 @@ export async function createQueueApplicationPort({
   const registrations: any = new Map<any, any>();
   const globalCredit: any = resolveQueueMaxInFlight(maxGlobalInFlight, { fallback: 8192 });
   const isSharedRemoteStore: boolean = (queueStore.kind || "sqlite") === "postgres";
-  const configuredCrossProcessMs: number = Number(process.env.MESHRIX_WORK_QUEUE_CROSS_PROCESS_RECONCILE_MS || 0);
-  const crossProcessReconcileMs: number =
-    isSharedRemoteStore && Number.isFinite(configuredCrossProcessMs) && configuredCrossProcessMs > 0
-      ? Math.max(5_000, Math.trunc(configuredCrossProcessMs))
-      : 0;
-  void dispatchIntervalMs;
+  const crossProcessReconcileMs: number = isSharedRemoteStore
+    ? Math.max(1_000, asPositiveInt(dispatchIntervalMs, 5_000))
+    : 0;
   let started: boolean = false;
-  let wakeTimer: ReturnType<typeof setTimeout> | null = null;
-  let wakeDeadlineMs: number = Infinity;
   let reconcileTimer: ReturnType<typeof setInterval> | null = null;
   let stopped: any = false;
   let stopPromise: Promise<unknown> | undefined;
@@ -183,27 +178,38 @@ export async function createQueueApplicationPort({
   let dispatchCursor: any = 0;
   let globalReserved: any = 0;
 
-  function clearWakeTimer(): void {
-    if (wakeTimer) {
-      clearTimeout(wakeTimer);
-      wakeTimer = null;
+  function clearRegistrationWake(registration?: any): void {
+    if (!registration) return;
+    if (registration.wakeTimer) {
+      clearTimeout(registration.wakeTimer);
+      registration.wakeTimer = null;
     }
-    wakeDeadlineMs = Infinity;
+    registration.wakeDeadlineMs = Infinity;
   }
 
-  function scheduleWakeAt(targetMs: number): void {
-    if (!started || stopped || !Number.isFinite(targetMs)) return;
+  function clearAllWakeTimers(): void {
+    for (const registration of registrations.values()) {
+      clearRegistrationWake(registration);
+    }
+  }
+
+  function scheduleRegistrationWakeAt(registration: any, targetMs: number): void {
+    if (!started || stopped || !registration || registration.closed || !registration.consumerEnabled) return;
+    if (!Number.isFinite(targetMs)) return;
     const now = Date.now();
     const clampedTarget = Math.max(now + 5, Math.trunc(targetMs));
-    if (clampedTarget >= wakeDeadlineMs && wakeTimer !== null) return;
-    clearWakeTimer();
-    wakeDeadlineMs = clampedTarget;
-    wakeTimer = setTimeout(() => {
-      wakeTimer = null;
-      wakeDeadlineMs = Infinity;
-      if (started && !stopped) void requestDispatch();
+    if (clampedTarget >= registration.wakeDeadlineMs && registration.wakeTimer !== null) return;
+    clearRegistrationWake(registration);
+    registration.wakeDeadlineMs = clampedTarget;
+    registration.wakeTimer = setTimeout(() => {
+      registration.wakeTimer = null;
+      registration.wakeDeadlineMs = Infinity;
+      registration.lastFiredWakeMs = Math.max(registration.lastFiredWakeMs || 0, Math.trunc(targetMs));
+      if (started && !stopped && !registration.closed) {
+        void triggerRegistration(registration);
+      }
     }, Math.min(2_147_483_647, clampedTarget - now));
-    wakeTimer.unref?.();
+    registration.wakeTimer.unref?.();
   }
 
   async function refreshNextDueWake(registration?: any): Promise<void> {
@@ -213,14 +219,21 @@ export async function createQueueApplicationPort({
       const canClaimReady =
         globalCredit.limit - globalReserved - globalInFlight() > 0 &&
         Number(registration.dispatcher?.status().availableCredit || 0) > 0;
+      if (!canClaimReady) {
+        clearRegistrationWake(registration);
+        return;
+      }
       const wakeInfo: any = await queueStore.nextWakeAtMs({
         queueDefinitionId: registration.definition.queueDefinitionId,
         scope: registration.scope,
-        canClaimReady
+        canClaimReady,
+        afterMs: Number(registration.lastFiredWakeMs || 0)
       });
       const candidate = Number(wakeInfo?.nextWakeAtMs ?? 0);
       if (Number.isFinite(candidate) && candidate > 0) {
-        scheduleWakeAt(candidate);
+        scheduleRegistrationWakeAt(registration, candidate);
+      } else {
+        clearRegistrationWake(registration);
       }
     } catch {
       // Best-effort wakeup hint; explicit enqueue/settle/resume signals remain active.
@@ -395,6 +408,9 @@ export async function createQueueApplicationPort({
       dispatching: false,
       triggerPending: false,
       dispatchPromise: null,
+      wakeTimer: null,
+      wakeDeadlineMs: Infinity,
+      lastFiredWakeMs: 0,
       closed: false
     };
     registrations.set(definition.queueDefinitionId, registration);
@@ -462,8 +478,9 @@ export async function createQueueApplicationPort({
           if (started && !stopped && registration.consumerEnabled && !registration.closed) {
             const availableAt = Number(enqueued?.workItem?.availableAtMs || 0);
             if (availableAt > Date.now()) {
-              scheduleWakeAt(availableAt);
+              scheduleRegistrationWakeAt(registration, availableAt);
             } else {
+              registration.lastFiredWakeMs = 0;
               void triggerRegistration(registration);
             }
           }
@@ -519,7 +536,10 @@ export async function createQueueApplicationPort({
           ...input,
           queueDefinitionId: definition.queueDefinitionId,
           scope: registration.scope
-        })).then(projectControlResult);
+        })).then((res: any) => {
+          clearRegistrationWake(registration);
+          return projectControlResult(res);
+        });
       },
       resume(input: Record<string, any> = {}) : any {
         return Promise.resolve().then(() : any => queueStore.resume({
@@ -527,6 +547,7 @@ export async function createQueueApplicationPort({
           queueDefinitionId: definition.queueDefinitionId,
           scope: registration.scope
         })).then((res: any) => {
+          registration.lastFiredWakeMs = 0;
           if (started && !stopped && registration.consumerEnabled && !registration.closed) {
             void triggerRegistration(registration);
           }
@@ -667,6 +688,7 @@ export async function createQueueApplicationPort({
       close({ timeoutMs }: { timeoutMs?: number } = {}) {
         if (registration.closePromise) return registration.closePromise;
         registration.closed = true;
+        clearRegistrationWake(registration);
         // Retain the registration until all work settles so owner stop/close
         // can still drain it, including after an explicitly bounded attempt.
         registration.closePromise = (async () => {
@@ -705,7 +727,7 @@ export async function createQueueApplicationPort({
     if (!stopPromise) {
       stopped = true;
       started = false;
-      clearWakeTimer();
+      clearAllWakeTimers();
       if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
       stopPromise = (async () => {
         for (const registration of registrations.values()) {
