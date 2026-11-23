@@ -167,7 +167,12 @@ export async function createQueueApplicationPort({
   const registrations: any = new Map<any, any>();
   const globalCredit: any = resolveQueueMaxInFlight(maxGlobalInFlight, { fallback: 8192 });
   const isSharedRemoteStore: boolean = (queueStore.kind || "sqlite") === "postgres";
-  const crossProcessReconcileMs: number = Math.max(5_000, asPositiveInt(dispatchIntervalMs, 30_000));
+  const configuredCrossProcessMs: number = Number(process.env.MESHRIX_WORK_QUEUE_CROSS_PROCESS_RECONCILE_MS || 0);
+  const crossProcessReconcileMs: number =
+    isSharedRemoteStore && Number.isFinite(configuredCrossProcessMs) && configuredCrossProcessMs > 0
+      ? Math.max(5_000, Math.trunc(configuredCrossProcessMs))
+      : 0;
+  void dispatchIntervalMs;
   let started: boolean = false;
   let wakeTimer: ReturnType<typeof setTimeout> | null = null;
   let wakeDeadlineMs: number = Infinity;
@@ -203,37 +208,22 @@ export async function createQueueApplicationPort({
 
   async function refreshNextDueWake(registration?: any): Promise<void> {
     if (!started || stopped || !registration || registration.closed || !registration.consumerEnabled) return;
-    if (typeof queueStore.inspect !== "function") return;
+    if (typeof queueStore.nextWakeAtMs !== "function") return;
     try {
-      const snapshot: any = await queueStore.inspect({
+      const canClaimReady =
+        globalCredit.limit - globalReserved - globalInFlight() > 0 &&
+        Number(registration.dispatcher?.status().availableCredit || 0) > 0;
+      const wakeInfo: any = await queueStore.nextWakeAtMs({
         queueDefinitionId: registration.definition.queueDefinitionId,
         scope: registration.scope,
-        states: ["queued", "recovered", "retry_wait", "running"],
-        limit: 64,
-        includeStateCounts: false
+        canClaimReady
       });
-      const items: any[] = Array.isArray(snapshot?.items) ? snapshot.items : [];
-      const now = Date.now();
-      let earliest = Infinity;
-      for (const item of items) {
-        const state = toText(item?.state);
-        const availableAt = Number(item?.availableAtMs || 0);
-        const expiresAt = Number(item?.expiresAtMs || 0);
-        const leaseExpiresAt = Number(item?.lease?.expiresAtMs || 0);
-        if ((state === "queued" || state === "recovered") && availableAt <= now) {
-          if (globalCredit.limit - globalReserved - globalInFlight() > 0 &&
-              Number(registration.dispatcher?.status().availableCredit || 0) > 0) {
-            earliest = Math.min(earliest, now + 5);
-          }
-        } else if (availableAt > 0) {
-          earliest = Math.min(earliest, availableAt);
-        }
-        if (leaseExpiresAt > 0) earliest = Math.min(earliest, leaseExpiresAt);
-        if (expiresAt > 0) earliest = Math.min(earliest, expiresAt);
+      const candidate = Number(wakeInfo?.nextWakeAtMs ?? 0);
+      if (Number.isFinite(candidate) && candidate > 0) {
+        scheduleWakeAt(candidate);
       }
-      if (Number.isFinite(earliest)) scheduleWakeAt(earliest);
     } catch {
-      // Best-effort wakeup hint; explicit enqueue/settle signals remain active.
+      // Best-effort wakeup hint; explicit enqueue/settle/resume signals remain active.
     }
   }
 
@@ -703,7 +693,7 @@ export async function createQueueApplicationPort({
   function start() : any {
     if (started || stopped) return { started: false, reason: stopped ? "stopped" : "already_started" };
     started = true;
-    if (isSharedRemoteStore) {
+    if (crossProcessReconcileMs > 0) {
       reconcileTimer = setInterval(() => void requestDispatch(), crossProcessReconcileMs);
       reconcileTimer.unref?.();
     }

@@ -1481,6 +1481,50 @@ function createSqliteWorkQueueStoreFromDatabase({
     };
   });
 
+  const nextWakeStmt = database.prepare(`
+    SELECT MIN(candidate_ms) AS next_wake_ms FROM (
+      SELECT available_at_ms AS candidate_ms FROM work_items
+       WHERE queue_definition_id = @queue_definition_id AND scope_key = @scope_key
+         AND state IN ('queued', 'recovered') AND @allow_claim = 1
+      UNION ALL
+      SELECT available_at_ms AS candidate_ms FROM work_items
+       WHERE queue_definition_id = @queue_definition_id AND scope_key = @scope_key
+         AND state = 'retry_wait' AND @allow_mature = 1
+      UNION ALL
+      SELECT lease_expires_at_ms AS candidate_ms FROM work_items
+       WHERE queue_definition_id = @queue_definition_id AND scope_key = @scope_key
+         AND state = 'running' AND lease_expires_at_ms > 0
+      UNION ALL
+      SELECT expires_at_ms AS candidate_ms FROM work_items
+       WHERE queue_definition_id = @queue_definition_id AND scope_key = @scope_key
+         AND state IN ('queued', 'recovered', 'retry_wait') AND expires_at_ms > 0
+    ) WHERE candidate_ms > 0
+  `);
+
+  function nextWakeAtMs(input: WorkQueueCommandInput = {}): { mode: string; nextWakeAtMs: number | null } {
+    const queueDefinitionId = toText(input.queueDefinitionId || input.queueDefinition?.queueDefinitionId);
+    if (!queueDefinitionId) throw new Error("queueDefinitionId is required.");
+    const scopeKey = toText(input.scopeKey || (input.scope ? scopeKeyFromScope(input.scope) : ""));
+    const control = statements.getQueueControl.get({
+      queue_definition_id: queueDefinitionId,
+      scope_key: scopeKey
+    });
+    const mode = control?.mode || "active";
+    const allowClaim = mode === "active" && input.canClaimReady !== false ? 1 : 0;
+    const allowMature = mode === "active" ? 1 : 0;
+    const row = nextWakeStmt.get({
+      queue_definition_id: queueDefinitionId,
+      scope_key: scopeKey,
+      allow_claim: allowClaim,
+      allow_mature: allowMature
+    }) as { next_wake_ms?: number | null } | undefined;
+    const val = Number(row?.next_wake_ms ?? 0);
+    return {
+      mode,
+      nextWakeAtMs: Number.isFinite(val) && val > 0 ? val : null
+    };
+  }
+
   function getQueueControl(input: WorkQueueCommandInput = {}): unknown {
     const queueDefinitionId = toText(input.queueDefinitionId || input.queueDefinition?.queueDefinitionId);
     if (!queueDefinitionId) {
@@ -1566,6 +1610,7 @@ function createSqliteWorkQueueStoreFromDatabase({
       });
     },
     getQueueControl,
+    nextWakeAtMs,
     recordBackgroundWrite,
     writeSnapshotState(input: WorkQueueCommandInput = {}) {
       return recordBackgroundWrite("snapshot", input);

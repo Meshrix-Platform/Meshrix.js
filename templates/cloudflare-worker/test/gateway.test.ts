@@ -297,7 +297,21 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     const okCallBody = (await okCallRes.json()) as any;
     expect(okCallBody.result.structuredContent.echoed).toBe(secretPayload);
 
-    const stateRes = await h.request("/admin/state");
+    // Anonymous /admin/state in DEMO_MODE hides per-caller keys/approvals/receipts
+    const anonStateRes = await h.request("/admin/state");
+    const anonStateBody = (await anonStateRes.json()) as {
+      keys: unknown[];
+      approvals: unknown[];
+      auditEvents: unknown[];
+    };
+    expect(anonStateBody.keys).toEqual([]);
+    expect(anonStateBody.approvals).toEqual([]);
+    expect(anonStateBody.auditEvents).toEqual([]);
+
+    // Authenticated demo caller sees only its own receipts, without raw payloads
+    const stateRes = await h.request("/admin/state", {
+      headers: { Authorization: `Bearer ${minted.token}` },
+    });
     const stateBody = (await stateRes.json()) as { auditEvents: Array<Record<string, unknown>> };
     const latestAudit = stateBody.auditEvents[0]!;
     expect(latestAudit.toolName).toBe("demo.echo");
@@ -305,8 +319,13 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     expect(latestAudit.argsSha256).toMatch(/^[0-9a-f]{64}$/u);
     expect(JSON.stringify(stateBody.auditEvents)).not.toContain(secretPayload);
 
-    // Revoke key -> subsequent MCP call fails 401
-    const revokeRes = await h.request(`/admin/keys/${encodeURIComponent(minted.key.id)}`, { method: "DELETE" });
+    // Anonymous demo revocation is rejected; owner Bearer token revokes -> subsequent MCP call fails 401
+    const anonRevokeRes = await h.request(`/admin/keys/${encodeURIComponent(minted.key.id)}`, { method: "DELETE" });
+    expect(anonRevokeRes.status).toBe(401);
+    const revokeRes = await h.request(`/admin/keys/${encodeURIComponent(minted.key.id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${minted.token}` },
+    });
     expect(revokeRes.status).toBe(200);
     const revokedMcpRes = await h.mcp(minted.token, { jsonrpc: "2.0", id: 7, method: "ping" });
     expect(revokedMcpRes.status).toBe(401);
@@ -527,10 +546,11 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
 
     const fetchStub = vi.fn(async (_url: unknown, init?: RequestInit) => {
       expect(init?.redirect).toBe("manual");
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown };
       return new Response(
         JSON.stringify({
           jsonrpc: "2.0",
-          id: 1,
+          id: reqPayload.id ?? 1,
           result: {
             content: [{ type: "text", text: "Contact C-42" }],
             structuredContent: { id: "C-42", status: "active" },
@@ -607,10 +627,11 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     let capturedHeaders: Headers | null = null;
     vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
       capturedHeaders = new Headers(init?.headers);
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown };
       return new Response(
         JSON.stringify({
           jsonrpc: "2.0",
-          id: 1,
+          id: reqPayload.id ?? 1,
           result: { content: [{ type: "text", text: "ok" }], structuredContent: { ok: true } },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -774,12 +795,19 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       vi.unstubAllGlobals();
     }
 
-    vi.stubGlobal("fetch", vi.fn(async () =>
-      new Response(
-        JSON.stringify({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "ok" }], structuredContent: { deployed: true } } }),
+    vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
+      if (reqPayload.method === "initialize") {
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: reqPayload.id ?? null, error: { code: -32601, message: "stateless" } }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({ jsonrpc: "2.0", id: reqPayload.id ?? 1, result: { content: [{ type: "text", text: "ok" }], structuredContent: { deployed: true } } }),
         { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    ));
+      );
+    }));
     try {
       const reused = await callWithApproval(notSentApproval);
       const reusedBody = (await reused.json()) as any;
@@ -866,7 +894,9 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     // Transport failure: the request may have reached upstream, so the permit
     // stays consumed and the receipt marks the upstream result as unknown.
     const transportApproval = await approveCall();
-    vi.stubGlobal("fetch", vi.fn(async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
+      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
       throw new TypeError("fetch failed");
     }));
     try {
@@ -883,15 +913,18 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       vi.unstubAllGlobals();
     }
 
-    // An upstream HTTP error proves arrival: the permit stays consumed without
-    // an unknown-result marker.
+    // An upstream HTTP error keeps the permit consumed and marks resultUnknown on approval-gated tools.
     const httpErrorApproval = await approveCall();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })));
+    vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
+      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
+      return new Response("boom", { status: 500 });
+    }));
     try {
       const httpError = await callWithApproval(httpErrorApproval);
       const httpErrorBody = (await httpError.json()) as any;
       expect(httpErrorBody.error.data.code).toBe("upstream_http_error");
-      expect(httpErrorBody.error.data.resultUnknown).toBeUndefined();
+      expect(httpErrorBody.error.data.resultUnknown).toBe(true);
       expect(approvalRow(httpErrorApproval).status).toBe("consumed");
       const replay = await callWithApproval(httpErrorApproval);
       expect((await replay.json() as any).error.data.code).toBe("approval_replay_or_mismatch");

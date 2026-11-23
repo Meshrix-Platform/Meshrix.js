@@ -40,6 +40,7 @@ const COMMANDS: readonly string[] = Object.freeze([
   "resume",
   "drain",
   "getQueueControl",
+  "nextWakeAtMs",
   "recordBackgroundWrite",
   "writeSnapshotState",
   "writeCompactionState",

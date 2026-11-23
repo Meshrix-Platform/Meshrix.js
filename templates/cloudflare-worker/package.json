@@ -3,11 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "login": "wrangler login",
+    "secret:admin": "wrangler secret put ADMIN_TOKEN --config wrangler.jsonc",
     "dev": "wrangler dev --config wrangler.jsonc",
+    "dry-run": "wrangler deploy --dry-run --config wrangler.jsonc",
     "deploy": "wrangler deploy --config wrangler.jsonc",
     "deploy:demo": "wrangler deploy --config wrangler.demo.jsonc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify": "tsc --noEmit && vitest run && wrangler deploy --dry-run --config wrangler.jsonc"
   },
   "devDependencies": {
     "@types/node": "24.12.2",

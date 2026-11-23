@@ -274,10 +274,17 @@ function createFakeRelay(): { relay: FakeRelay; fetchStub: ReturnType<typeof vi.
       return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
     }
     if (url === UPSTREAM_URL) {
+      const reqBody = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
+      if (reqBody.method === "initialize") {
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: reqBody.id ?? null, error: { code: -32601, message: "stateless" } }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
       return new Response(
         JSON.stringify({
           jsonrpc: "2.0",
-          id: 1,
+          id: reqBody.id ?? 1,
           result: {
             content: [{ type: "text", text: "deployed" }],
             structuredContent: { deployed: true },

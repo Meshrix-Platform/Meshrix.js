@@ -47,6 +47,7 @@ const allowed = new Set<string>([
   "resume",
   "drain",
   "getQueueControl",
+  "nextWakeAtMs",
   "recordBackgroundWrite",
   "writeSnapshotState",
   "writeCompactionState",

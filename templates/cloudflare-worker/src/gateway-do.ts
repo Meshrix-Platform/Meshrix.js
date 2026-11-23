@@ -465,6 +465,7 @@ async function readUpstreamJsonRpcMessage(
   const decoder = new TextDecoder("utf-8", { fatal: false });
   let total = 0;
   let lineBuffer = "";
+  let pendingCr = false;
   let dataLines: string[] = [];
   let fallbackParsed: Record<string, unknown> | null = null;
 
@@ -476,8 +477,7 @@ async function readUpstreamJsonRpcMessage(
     return matchesExpectedJsonRpcFrame(parsed, expectedId) ? parsed : null;
   };
 
-  const processLine = (rawLine: string): Record<string, unknown> | null => {
-    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+  const processLine = (line: string): Record<string, unknown> | null => {
     if (line === "") {
       return consumeEvent();
     }
@@ -485,6 +485,26 @@ async function readUpstreamJsonRpcMessage(
     if (line.startsWith("data:")) {
       const after = line.slice(5);
       dataLines.push(after.startsWith(" ") ? after.slice(1) : after);
+    }
+    return null;
+  };
+
+  const feedText = (chunkText: string): Record<string, unknown> | null => {
+    for (let i = 0; i < chunkText.length; i += 1) {
+      const ch = chunkText[i]!;
+      if (pendingCr) {
+        pendingCr = false;
+        if (ch === "\n") continue;
+      }
+      if (ch === "\r" || ch === "\n") {
+        const currentLine = lineBuffer;
+        lineBuffer = "";
+        if (ch === "\r") pendingCr = true;
+        const matched = processLine(currentLine);
+        if (matched) return matched;
+      } else {
+        lineBuffer += ch;
+      }
     }
     return null;
   };
@@ -498,22 +518,20 @@ async function readUpstreamJsonRpcMessage(
         await reader.cancel("Response exceeded byte budget").catch(() => undefined);
         return { ok: false, tooLarge: true };
       }
-      lineBuffer += decoder.decode(value, { stream: true });
-      let newlineIdx = lineBuffer.indexOf("\n");
-      while (newlineIdx !== -1) {
-        const rawLine = lineBuffer.slice(0, newlineIdx);
-        lineBuffer = lineBuffer.slice(newlineIdx + 1);
-        const matched = processLine(rawLine);
-        if (matched) {
-          await reader.cancel().catch(() => undefined);
-          return { ok: true, parsed: matched };
-        }
-        newlineIdx = lineBuffer.indexOf("\n");
+      const matched = feedText(decoder.decode(value, { stream: true }));
+      if (matched) {
+        await reader.cancel().catch(() => undefined);
+        return { ok: true, parsed: matched };
       }
     }
-    lineBuffer += decoder.decode();
+    const trailing = decoder.decode();
+    if (trailing.length > 0) {
+      const matched = feedText(trailing);
+      if (matched) return { ok: true, parsed: matched };
+    }
     if (lineBuffer.length > 0) {
       const matched = processLine(lineBuffer);
+      lineBuffer = "";
       if (matched) return { ok: true, parsed: matched };
     }
     const tailMatched = consumeEvent();
@@ -974,24 +992,25 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     }
 
     const tools = this.#allRows<ToolRow>("SELECT * FROM tools ORDER BY name ASC").map((r) => this.#serializeTool(r));
-    const keys = (
-      demoMode && demoCallerKeyId
-        ? this.#allRows<ApiKeyRow>("SELECT * FROM api_keys WHERE id = ? LIMIT 1", demoCallerKeyId)
-        : this.#allRows<ApiKeyRow>("SELECT * FROM api_keys ORDER BY created_at DESC LIMIT 100")
-    ).map((r) => {
-      const serialized = this.#serializeKey(r, now);
-      return demoMode && !demoCallerKeyId ? { ...serialized, name: "demo-key" } : serialized;
-    });
-    const approvals = (
-      demoMode
-        ? demoCallerKeyId
-          ? this.#allRows<ApprovalRow>(
-              "SELECT * FROM approvals WHERE key_id = ? ORDER BY created_at DESC LIMIT 50",
-              demoCallerKeyId,
-            )
-          : []
-        : this.#allRows<ApprovalRow>("SELECT * FROM approvals ORDER BY created_at DESC LIMIT 50")
-    ).map((r) => this.#serializeApproval(r, now));
+    const keys = demoMode
+      ? demoCallerKeyId
+        ? this.#allRows<ApiKeyRow>("SELECT * FROM api_keys WHERE id = ? LIMIT 1", demoCallerKeyId).map((r) =>
+            this.#serializeKey(r, now),
+          )
+        : []
+      : this.#allRows<ApiKeyRow>("SELECT * FROM api_keys ORDER BY created_at DESC LIMIT 100").map((r) =>
+          this.#serializeKey(r, now),
+        );
+    const approvals = demoMode
+      ? demoCallerKeyId
+        ? this.#allRows<ApprovalRow>(
+            "SELECT * FROM approvals WHERE key_id = ? ORDER BY created_at DESC LIMIT 50",
+            demoCallerKeyId,
+          ).map((r) => this.#serializeApproval(r, now))
+        : []
+      : this.#allRows<ApprovalRow>("SELECT * FROM approvals ORDER BY created_at DESC LIMIT 50").map((r) =>
+          this.#serializeApproval(r, now),
+        );
     const entioPairings = demoMode
       ? []
       : this.#allRows<EntioPairingRow>("SELECT * FROM entio_pairings ORDER BY label ASC").map((r) =>
@@ -1002,14 +1021,16 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       : this.#allRows<EntioRequestRow>(
           "SELECT * FROM entio_requests ORDER BY created_at DESC LIMIT 50",
         ).map((r) => this.#serializeEntioRequest(r));
-    const auditEvents = (
-      demoMode && demoCallerKeyId
+    const auditEvents = demoMode
+      ? demoCallerKeyId
         ? this.#allRows<AuditEventRow>(
             "SELECT * FROM audit_events WHERE key_id = ? ORDER BY id DESC LIMIT 100",
             demoCallerKeyId,
-          )
-        : this.#allRows<AuditEventRow>("SELECT * FROM audit_events ORDER BY id DESC LIMIT 100")
-    ).map((r) => this.#serializeAudit(r));
+          ).map((r) => this.#serializeAudit(r))
+        : []
+      : this.#allRows<AuditEventRow>("SELECT * FROM audit_events ORDER BY id DESC LIMIT 100").map((r) =>
+          this.#serializeAudit(r),
+        );
 
     return jsonResponse(200, {
       mode: demoMode ? "demo" : "self-hosted",
@@ -1144,7 +1165,13 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     });
   }
 
-  #handleRevokeKey(keyId: string): Response {
+  async #handleRevokeKey(request: Request, keyId: string): Promise<Response> {
+    if (this.#isDemoMode()) {
+      const callerAuth = await this.#authenticateApiKey(request);
+      if (!callerAuth.ok || callerAuth.key.id !== keyId) {
+        return jsonError(401, "unauthorized", "Present the matching demo API key Bearer token to revoke it.");
+      }
+    }
     const now = Date.now();
     const res = this.#sql.exec(
       "UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL RETURNING id",
@@ -1881,11 +1908,18 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
 
     if (response.status === 404) {
       await response.body?.cancel().catch(() => undefined);
+      if (session?.sessionId) {
+        return {
+          ok: false,
+          code: "upstream_session_invalid",
+          message: "Upstream MCP server does not recognize the current session.",
+          preExecutionSessionRejected: true,
+        };
+      }
       return {
         ok: false,
-        code: "upstream_session_invalid",
-        message: "Upstream MCP server does not recognize the current session.",
-        preExecutionSessionRejected: true,
+        code: "upstream_http_error",
+        message: "Upstream MCP server responded with HTTP 404.",
       };
     }
 
@@ -1996,6 +2030,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
 
     const posted = await this.#postUpstream(url, initPayload, extraHeaders, null);
     if (!posted.ok) {
+      if (posted.notSent) return posted;
       return {
         ok: false,
         code: posted.code === "upstream_transport_failed" ? "upstream_handshake_failed" : posted.code,
@@ -2066,6 +2101,34 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     return { ok: true, session };
   }
 
+  async #probeSessionLiveness(
+    url: string,
+    extraHeaders: Record<string, string>,
+    session: UpstreamSession,
+  ): Promise<"alive" | "invalid" | "unknown"> {
+    const pingId = randomId("ping");
+    const posted = await this.#postUpstream(
+      url,
+      { jsonrpc: "2.0", id: pingId, method: "ping" },
+      extraHeaders,
+      session,
+    );
+    if (!posted.ok) return "unknown";
+    const { response } = posted;
+    if (response.status === 404) {
+      await response.body?.cancel().catch(() => undefined);
+      return "invalid";
+    }
+    const decoded = await readUpstreamJsonRpcMessage(response, pingId, MAX_BODY_BYTES);
+    if (!response.ok) {
+      const msg = decoded.ok && decoded.parsed && isPlainRecord(decoded.parsed.error) && typeof decoded.parsed.error.message === "string"
+        ? decoded.parsed.error.message
+        : "";
+      return response.status === 400 && UPSTREAM_SESSION_HINT_PATTERN.test(msg) ? "invalid" : "alive";
+    }
+    return "alive";
+  }
+
   async #executeUpstreamTool(
     tool: ToolRow,
     args: Record<string, unknown>,
@@ -2076,6 +2139,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     }
     const url = tool.upstream_url;
     const extraHeaders = this.#upstreamHeaders(tool);
+    const approvalGated = tool.requires_approval === 1;
     const cacheKey = await sha256Hex(
       canonicalJson({
         keyId: callerKeyId,
@@ -2084,7 +2148,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
         headers: extraHeaders,
       }),
     );
-    const callId = 1;
+    const callId = randomId("call");
     const callPayload = {
       jsonrpc: "2.0",
       id: callId,
@@ -2096,6 +2160,54 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     };
 
     let session = this.#upstreamSessions.get(cacheKey)?.session ?? null;
+
+    if (approvalGated) {
+      // Never dispatch a single-use approval-gated tool call twice: verify or
+      // establish any upstream session BEFORE sending tools/call, then send
+      // tools/call at most once.
+      if (session?.sessionId) {
+        const liveness = await this.#probeSessionLiveness(url, extraHeaders, session);
+        if (liveness === "invalid") {
+          this.#upstreamSessions.delete(cacheKey);
+          session = null;
+        }
+      }
+      if (!session) {
+        const preflight = await this.#handshakeUpstream(cacheKey, callerKeyId, tool.name, url, extraHeaders);
+        if (preflight.ok) {
+          session = preflight.session;
+          this.#rememberUpstreamSession(cacheKey, { keyId: callerKeyId, toolName: tool.name, session });
+        } else if (preflight.notSent) {
+          return preflight;
+        }
+        // If initialize is unsupported by a stateless upstream, proceed with
+        // session = null: initialize performs no tool side effect.
+      }
+
+      const singleOutcome = await this.#sendUpstreamCall(url, callId, callPayload, extraHeaders, session);
+      if (!singleOutcome.ok) {
+        if (singleOutcome.evictCachedSession || singleOutcome.preExecutionSessionRejected) {
+          this.#upstreamSessions.delete(cacheKey);
+        }
+        if (singleOutcome.notSent) return singleOutcome;
+        return {
+          ...singleOutcome,
+          resultUnknown: true,
+        };
+      }
+      if (singleOutcome.returnedSessionId && singleOutcome.returnedSessionId !== session?.sessionId) {
+        this.#rememberUpstreamSession(cacheKey, {
+          keyId: callerKeyId,
+          toolName: tool.name,
+          session: {
+            sessionId: singleOutcome.returnedSessionId,
+            protocolVersion: session?.protocolVersion ?? SUPPORTED_MCP_VERSIONS[0],
+          },
+        });
+      }
+      return singleOutcome;
+    }
+
     let outcome = await this.#sendUpstreamCall(url, callId, callPayload, extraHeaders, session);
 
     if (!outcome.ok && outcome.evictCachedSession) {
@@ -2104,8 +2216,6 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     }
 
     if (!outcome.ok && outcome.preExecutionSessionRejected) {
-      // Only an explicit pre-execution session rejection may trigger a fresh
-      // handshake and one retry of the unexecuted call.
       this.#upstreamSessions.delete(cacheKey);
       const handshake = await this.#handshakeUpstream(cacheKey, callerKeyId, tool.name, url, extraHeaders);
       if (!handshake.ok) {
@@ -2540,7 +2650,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       if (request.method === "DELETE" && path.startsWith("/admin/keys/")) {
         const keyId = decodeURIComponent(path.slice("/admin/keys/".length));
         if (!keyId || keyId.includes("/")) return jsonError(400, "invalid_key_id", "Invalid key id.");
-        return this.#handleRevokeKey(keyId);
+        return this.#handleRevokeKey(request, keyId);
       }
       if (request.method === "POST" && path === "/admin/tools") {
         return this.#handleRegisterTool(request);

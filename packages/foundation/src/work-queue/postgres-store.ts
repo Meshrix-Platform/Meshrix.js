@@ -1819,6 +1819,41 @@ export async function createPostgresWorkQueueStore({
         updatedAtMs: Number(row.updated_at_ms || 0)
       };
     },
+    async nextWakeAtMs(input: QueueCommandInput = {}) {
+      const queueDefinitionId = toText(input.queueDefinitionId || input.queueDefinition?.queueDefinitionId);
+      if (!queueDefinitionId) throw new Error("queueDefinitionId is required.");
+      const scopeKey = input.scopeKey || (input.scope ? scopeKeyFromScope(input.scope) : "");
+      const controlRow = await queryOne<{ mode: string }>(database, `
+        SELECT mode FROM work_queue_controls WHERE queue_definition_id = $1 AND scope_key = $2
+      `, [queueDefinitionId, scopeKey]);
+      const mode = controlRow?.mode || "active";
+      const allowClaim = mode === "active" && input.canClaimReady !== false;
+      const allowMature = mode === "active";
+      const wakeRow = await queryOne<{ next_wake_ms: string | number | null }>(database, `
+        SELECT MIN(candidate_ms) AS next_wake_ms FROM (
+          SELECT available_at_ms AS candidate_ms FROM work_items
+           WHERE queue_definition_id = $1 AND scope_key = $2
+             AND state IN ('queued', 'recovered') AND $3::boolean
+          UNION ALL
+          SELECT available_at_ms AS candidate_ms FROM work_items
+           WHERE queue_definition_id = $1 AND scope_key = $2
+             AND state = 'retry_wait' AND $4::boolean
+          UNION ALL
+          SELECT lease_expires_at_ms AS candidate_ms FROM work_items
+           WHERE queue_definition_id = $1 AND scope_key = $2
+             AND state = 'running' AND lease_expires_at_ms > 0
+          UNION ALL
+          SELECT expires_at_ms AS candidate_ms FROM work_items
+           WHERE queue_definition_id = $1 AND scope_key = $2
+             AND state IN ('queued', 'recovered', 'retry_wait') AND expires_at_ms > 0
+        ) candidates WHERE candidate_ms > 0
+      `, [queueDefinitionId, scopeKey, allowClaim, allowMature]);
+      const val = Number(wakeRow?.next_wake_ms ?? 0);
+      return {
+        mode,
+        nextWakeAtMs: Number.isFinite(val) && val > 0 ? val : null
+      };
+    },
     async recordBackgroundWrite(aspectType?: unknown, input: QueueCommandInput = {}) {
       return withTransaction(database, (client) => recordBackgroundWriteInternal(client, aspectType, input));
     },

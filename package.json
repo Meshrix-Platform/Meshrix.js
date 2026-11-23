@@ -601,7 +601,7 @@
     "typecheck:test": "tsc -p tsconfig.tests.json --noEmit",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.json",
     "typecheck:template:cloudflare-worker": "tsc -p templates/cloudflare-worker/tsconfig.json --noEmit",
-    "test:template:cloudflare-worker": "node --conditions=source ./node_modules/vitest/vitest.mjs run --root templates/cloudflare-worker",
+    "test:template:cloudflare-worker": "npm run typecheck:template:cloudflare-worker && node --conditions=source ./node_modules/vitest/vitest.mjs run --root templates/cloudflare-worker",
     "verify:runtime-capacity-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-capacity-convergence.ts"
   },
   "dependencies": {

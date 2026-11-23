@@ -18,17 +18,18 @@ git clone https://github.com/Meshrix-Platform/Meshrix.js.git
 cd Meshrix.js/templates/cloudflare-worker
 
 # 0. Prerequisites: Node.js + npm, and a Cloudflare account
-npm install                    # installs the pinned wrangler toolchain
-npx wrangler login             # one-time browser login (or export CLOUDFLARE_API_TOKEN)
+npm ci                         # installs the exact lockfile-pinned wrangler toolchain
+npm run verify                 # runs local typecheck, tests, and wrangler dry-run build
+npm run login                  # one-time browser login via the local wrangler binary
 
 # 1. Configure a strong admin secret (required for self-hosted /admin/* APIs)
-npx wrangler secret put ADMIN_TOKEN
+npm run secret:admin
 #    On a fresh worker name, wrangler asks to create the Worker first — confirm it.
 
-# 2. Deploy to Cloudflare Workers Free Tier
-npx wrangler deploy --config wrangler.jsonc
+# 2. Deploy to Cloudflare Workers Free Tier using the same pinned local binary
+npm run deploy
 #    The default worker name is "meshrix-mcp-gateway". To use your own name,
-#    pass --name <your-worker-name> (also on `secret put`) or edit wrangler.jsonc.
+#    pass `-- --name <your-worker-name>` (also on `secret:admin`) or edit wrangler.jsonc.
 ```
 
 Open your deployed `*.workers.dev` URL in a browser, enter `ADMIN_TOKEN` to unlock the Web Console, register your HTTPS MCP upstream tools, mint scoped API keys, and test live calls and approvals.
