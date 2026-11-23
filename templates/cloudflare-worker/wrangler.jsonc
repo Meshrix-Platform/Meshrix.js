@@ -19,6 +19,11 @@
     }
   ],
   "vars": {
-    "DEMO_MODE": "false"
+    "DEMO_MODE": "false",
+    // Keep "true" to allow admin-token approvals via /admin/approvals/:id/decide;
+    // set "false" so only Entio-signed conclusions can release a permit.
+    "ADMIN_DECIDE_ENABLED": "true",
+    // Deployment label embedded in Entio approval requests shown on the phone.
+    "ENTIO_INSTANCE": "meshrix-mcp-gateway"
   }
 }

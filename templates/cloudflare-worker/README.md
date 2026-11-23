@@ -80,6 +80,8 @@ Per-call baseline (after key minting):
 - **Public Demo Mode (`DEMO_MODE=true`):** Pre-seeds `demo.echo`, `demo.format_note`, and `demo.sensitive_deploy` (`requiresApproval: true`), rejects `POST /admin/tools` with `403 demo_mode_upstream_disabled`, caps active demo keys at `50` (24h TTL, oldest evicted), and caps `audit_events` at `200` latest rows.
 - **SSRF Defense:** Upstream URLs must use `https://` on port `443` or `8443`, cannot include URL credentials, and reject private/loopback/link-local/CGNAT/unspecified/metadata IPv4/IPv6 ranges, `::ffff:` mapped IPv6 addresses, `localhost`, `*.localhost`, `*.local`, `*.internal`, `*.home.arpa`, and `metadata.google.internal`. Outbound `fetch` always sets `redirect: "error"`.
 - **Single-Use Approval Binding:** Approval permits are consumed atomically via SQL `UPDATE ... WHERE id = ? AND status = 'approved' AND key_id = ? AND tool_name = ? AND args_sha256 = ? AND consumed_at IS NULL AND expires_at > ?`, blocking replay, argument tampering, and cross-key reuse.
+- **Entio-Signed Approvals (self-hosted only):** Register an Entio device pairing (`POST /admin/entio/pairings`) and every pending approval is dispatched to the paired phone through the Entio relay as a content-bound v2 request (key, tool name, argument digest, validity window). Phone-signed conclusions are verified in the DO against the pinned approver P-256 key — JCS digests, `entio:v2\0` domain separation, DER ECDSA — before the permit is released. See [docs/entio-approvals.md](docs/entio-approvals.md).
+- **Configurable Admin Fallback:** `POST /admin/approvals/:id/decide` remains available while `ADMIN_DECIDE_ENABLED` is unset/`"true"`; set `ADMIN_DECIDE_ENABLED="false"` to make Entio-signed conclusions the only approval path (`403 admin_decide_disabled`).
 
 ---
 
@@ -88,9 +90,12 @@ Per-call baseline (after key minting):
 - `GET /health` — Edge liveness check
 - `GET /` — Embedded Web Console
 - `POST /mcp` — MCP Streamable HTTP (`initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`)
-- `GET /admin/state` — Tools, keys (prefixes only), approvals, and audit receipts
+- `GET /admin/state` — Tools, keys (prefixes only), approvals, Entio pairings/requests, and audit receipts
 - `POST /admin/keys` — Mint a scoped Bearer API key
 - `DELETE /admin/keys/:id` — Revoke an API key
 - `POST /admin/tools` — Register a validated HTTPS upstream MCP tool (self-hosted mode only)
 - `DELETE /admin/tools/:name` — Delete a tool (self-hosted mode only)
-- `POST /admin/approvals/:id/decide` — Approve or deny a pending execution request (`{ "decision": "approve" | "deny" }`)
+- `POST /admin/approvals/:id/decide` — Approve or deny a pending execution request (`{ "decision": "approve" | "deny" }`, disabled when `ADMIN_DECIDE_ENABLED="false"`)
+- `POST /admin/entio/pairings` — Register/rotate an Entio approver pairing: `{ label, pubkey, pair, secret, relay }` or a `pairCode` (self-hosted mode only)
+- `DELETE /admin/entio/pairings/:label` — Remove an Entio approver pairing (self-hosted mode only)
+- `POST /admin/approvals/:id/entio-refresh` — Poll the Entio relay now and evaluate any arrived conclusion (self-hosted mode only)
