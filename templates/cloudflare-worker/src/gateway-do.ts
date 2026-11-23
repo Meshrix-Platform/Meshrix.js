@@ -1047,9 +1047,16 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
   async #executeUpstreamTool(
     tool: ToolRow,
     args: Record<string, unknown>,
-  ): Promise<{ readonly ok: true; readonly result: Record<string, unknown> } | { readonly ok: false; readonly code: string; readonly message: string; readonly upstreamCode?: number }> {
+  ): Promise<{ readonly ok: true; readonly result: Record<string, unknown> } | {
+    readonly ok: false;
+    readonly code: string;
+    readonly message: string;
+    readonly upstreamCode?: number;
+    readonly notSent?: boolean;
+    readonly resultUnknown?: boolean;
+  }> {
     if (!tool.upstream_url) {
-      return { ok: false, code: "upstream_unconfigured", message: "Upstream URL is missing." };
+      return { ok: false, code: "upstream_unconfigured", message: "Upstream URL is missing.", notSent: true };
     }
 
     let response: Response;
@@ -1072,9 +1079,13 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       });
     } catch (error) {
       if (error instanceof UpstreamUrlError) {
-        return { ok: false, code: error.code, message: error.message };
+        // SSRF refusals, pre-dispatch failures, and refused redirects are all
+        // provably not delivered to the upstream tool endpoint.
+        return { ok: false, code: error.code, message: error.message, notSent: true };
       }
-      return { ok: false, code: "upstream_transport_failed", message: "Upstream MCP request failed." };
+      // A rejected fetch cannot prove the request never arrived: it may have
+      // reached the upstream before the transport failed.
+      return { ok: false, code: "upstream_transport_failed", message: "Upstream MCP request failed.", resultUnknown: true };
     }
 
     if (!response.ok) {
@@ -1273,6 +1284,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       }
 
       let consumedApprovalId: string | null = null;
+      let consumedApprovalAt: number | null = null;
       if (tool.requires_approval === 1) {
         const meta = isPlainRecord(params._meta) ? params._meta : {};
         const rawApprovalId =
@@ -1324,6 +1336,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
             );
           }
           consumedApprovalId = rawApprovalId;
+          consumedApprovalAt = checkNow;
         } else {
           const matchingApproved = this.#firstRow<{ readonly id: string }>(
             `SELECT id FROM approvals
@@ -1357,6 +1370,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
             );
             if (consumeCursor.toArray().length === 1 && consumeCursor.rowsWritten >= 1) {
               consumedApprovalId = matchingApproved.id;
+              consumedApprovalAt = checkNow;
             }
           }
 
@@ -1424,6 +1438,23 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
 
       const upstream = await this.#executeUpstreamTool(tool, args);
       if (!upstream.ok) {
+        // The permit is consumed before dispatch to block replay, but a failure
+        // provably raised before the request reached the upstream endpoint
+        // restores it to approved so it can be redeemed once more. A failure
+        // that may already have arrived keeps the permit consumed and the
+        // receipt marks the upstream result as unknown.
+        const approvalRestored =
+          upstream.notSent === true &&
+          consumedApprovalId !== null &&
+          consumedApprovalAt !== null &&
+          this.#sql.exec(
+            `UPDATE approvals
+             SET status = 'approved', consumed_at = NULL
+             WHERE id = ? AND status = 'consumed' AND consumed_at = ?
+             RETURNING id`,
+            consumedApprovalId,
+            consumedApprovalAt,
+          ).toArray().length === 1;
         this.#recordAudit({
           eventType: "mcp.tool_call",
           keyId: auth.key.id,
@@ -1434,8 +1465,23 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
           approvalId: consumedApprovalId,
           latencyMs: Date.now() - startedAt,
         });
+        if (approvalRestored) {
+          this.#recordAudit({
+            eventType: "approval.restored",
+            keyId: auth.key.id,
+            toolName: tool.name,
+            argsSha256,
+            decision: "approved",
+            detailCode: upstream.code,
+            approvalId: consumedApprovalId,
+            latencyMs: Date.now() - startedAt,
+          });
+        }
         return mcpError(200, id, upstream.upstreamCode ?? -32002, upstream.message, {
           code: upstream.code,
+          ...(consumedApprovalId !== null ? { approvalId: consumedApprovalId } : {}),
+          ...(approvalRestored ? { approvalRestored: true } : {}),
+          ...(upstream.resultUnknown === true ? { resultUnknown: true } : {}),
         });
       }
 

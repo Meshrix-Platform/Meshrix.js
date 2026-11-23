@@ -555,6 +555,234 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     }
   });
 
+  it("restores a consumed permit when the upstream request provably never left the gateway", async () => {
+    const adminToken = "self-hosted-operator-secret";
+    const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
+    const adminHeaders = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    };
+
+    const regRes = await h.request("/admin/tools", {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        name: "crm.deploy",
+        upstreamUrl: "https://mcp.example.com:8443/mcp",
+        requiresApproval: true,
+        inputSchema: {
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          properties: { service: { type: "string", minLength: 1 } },
+          required: ["service"],
+          additionalProperties: false,
+        },
+      }),
+    });
+    expect(regRes.status).toBe(201);
+
+    const keyRes = await h.request("/admin/keys", {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ name: "crm-agent", allowedTools: ["crm.deploy"] }),
+    });
+    const { token } = (await keyRes.json()) as { token: string };
+
+    const deployArgs = { service: "billing" };
+    let callId = 100;
+    const approveCall = async () => {
+      const res = await h.mcp(token, {
+        jsonrpc: "2.0",
+        id: callId++,
+        method: "tools/call",
+        params: { name: "crm.deploy", arguments: deployArgs },
+      });
+      const body = (await res.json()) as any;
+      expect(body.error.data.code).toBe("approval_required");
+      const approvalId = body.error.data.approvalId as string;
+      const decideRes = await h.request(`/admin/approvals/${encodeURIComponent(approvalId)}/decide`, {
+        method: "POST",
+        headers: adminHeaders,
+        body: JSON.stringify({ decision: "approve" }),
+      });
+      expect(decideRes.status).toBe(200);
+      return approvalId;
+    };
+    const callWithApproval = (approvalId: string) =>
+      h.mcp(token, {
+        jsonrpc: "2.0",
+        id: callId++,
+        method: "tools/call",
+        params: { name: "crm.deploy", arguments: deployArgs, _meta: { approvalId } },
+      });
+    const approvalRow = (approvalId: string) =>
+      h.sql.exec<{ status: string; consumed_at: number | null }>(
+        "SELECT status, consumed_at FROM approvals WHERE id = ?",
+        approvalId,
+      ).toArray()[0]!;
+
+    // Refused redirect: the upstream tool endpoint never ran the call, so the
+    // permit is restored to approved and can be redeemed once more.
+    const redirectApproval = await approveCall();
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(null, { status: 302, headers: { Location: "https://mcp.example.com/moved" } }),
+    ));
+    try {
+      const refused = await callWithApproval(redirectApproval);
+      const refusedBody = (await refused.json()) as any;
+      expect(refusedBody.error.data.code).toBe("upstream_redirect_refused");
+      expect(refusedBody.error.data.approvalId).toBe(redirectApproval);
+      expect(refusedBody.error.data.approvalRestored).toBe(true);
+      expect(refusedBody.error.data.resultUnknown).toBeUndefined();
+      expect(approvalRow(redirectApproval)).toMatchObject({ status: "approved", consumed_at: null });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(
+        JSON.stringify({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "ok" }], structuredContent: { deployed: true } } }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    ));
+    try {
+      const reused = await callWithApproval(redirectApproval);
+      const reusedBody = (await reused.json()) as any;
+      expect(reusedBody.result.structuredContent).toEqual({ deployed: true });
+      expect(approvalRow(redirectApproval).status).toBe("consumed");
+      const replay = await callWithApproval(redirectApproval);
+      expect((await replay.json() as any).error.data.code).toBe("approval_replay_or_mismatch");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // Synchronous dispatch failure: the request never left the gateway.
+    const notSentApproval = await approveCall();
+    vi.stubGlobal("fetch", vi.fn(() => {
+      throw new TypeError("request construction failed");
+    }));
+    try {
+      const notSent = await callWithApproval(notSentApproval);
+      const notSentBody = (await notSent.json()) as any;
+      expect(notSentBody.error.data.code).toBe("upstream_request_not_sent");
+      expect(notSentBody.error.data.approvalRestored).toBe(true);
+      expect(approvalRow(notSentApproval)).toMatchObject({ status: "approved", consumed_at: null });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // Retire the restored permit so the next bare call opens a fresh approval.
+    h.sql.exec("UPDATE approvals SET status = 'denied' WHERE id = ?", notSentApproval);
+
+    // SSRF refusal at dispatch time (upstream_url rewritten to bypass admin validation).
+    const ssrfApproval = await approveCall();
+    h.sql.exec("UPDATE tools SET upstream_url = ? WHERE name = ?", "http://169.254.169.254/mcp", "crm.deploy");
+    const ssrf = await callWithApproval(ssrfApproval);
+    const ssrfBody = (await ssrf.json()) as any;
+    expect(ssrfBody.error.data.code).toBe("ssrf_https_required");
+    expect(ssrfBody.error.data.approvalRestored).toBe(true);
+    expect(approvalRow(ssrfApproval)).toMatchObject({ status: "approved", consumed_at: null });
+  });
+
+  it("keeps a consumed permit and marks the result unknown when the request may have reached upstream", async () => {
+    const adminToken = "self-hosted-operator-secret";
+    const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
+    const adminHeaders = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    };
+
+    await h.request("/admin/tools", {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        name: "crm.deploy",
+        upstreamUrl: "https://mcp.example.com:8443/mcp",
+        requiresApproval: true,
+        inputSchema: {
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          properties: { service: { type: "string", minLength: 1 } },
+          required: ["service"],
+          additionalProperties: false,
+        },
+      }),
+    });
+
+    const keyRes = await h.request("/admin/keys", {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ name: "crm-agent", allowedTools: ["crm.deploy"] }),
+    });
+    const { token } = (await keyRes.json()) as { token: string };
+
+    const deployArgs = { service: "billing" };
+    let callId = 200;
+    const approveCall = async () => {
+      const res = await h.mcp(token, {
+        jsonrpc: "2.0",
+        id: callId++,
+        method: "tools/call",
+        params: { name: "crm.deploy", arguments: deployArgs },
+      });
+      const approvalId = ((await res.json()) as any).error.data.approvalId as string;
+      await h.request(`/admin/approvals/${encodeURIComponent(approvalId)}/decide`, {
+        method: "POST",
+        headers: adminHeaders,
+        body: JSON.stringify({ decision: "approve" }),
+      });
+      return approvalId;
+    };
+    const callWithApproval = (approvalId: string) =>
+      h.mcp(token, {
+        jsonrpc: "2.0",
+        id: callId++,
+        method: "tools/call",
+        params: { name: "crm.deploy", arguments: deployArgs, _meta: { approvalId } },
+      });
+    const approvalRow = (approvalId: string) =>
+      h.sql.exec<{ status: string; consumed_at: number | null }>(
+        "SELECT status, consumed_at FROM approvals WHERE id = ?",
+        approvalId,
+      ).toArray()[0]!;
+
+    // Transport failure: the request may have reached upstream, so the permit
+    // stays consumed and the receipt marks the upstream result as unknown.
+    const transportApproval = await approveCall();
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("fetch failed");
+    }));
+    try {
+      const failed = await callWithApproval(transportApproval);
+      const failedBody = (await failed.json()) as any;
+      expect(failedBody.error.data.code).toBe("upstream_transport_failed");
+      expect(failedBody.error.data.approvalId).toBe(transportApproval);
+      expect(failedBody.error.data.resultUnknown).toBe(true);
+      expect(failedBody.error.data.approvalRestored).toBeUndefined();
+      expect(approvalRow(transportApproval).status).toBe("consumed");
+      const replay = await callWithApproval(transportApproval);
+      expect((await replay.json() as any).error.data.code).toBe("approval_replay_or_mismatch");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // An upstream HTTP error proves arrival: the permit stays consumed without
+    // an unknown-result marker.
+    const httpErrorApproval = await approveCall();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })));
+    try {
+      const httpError = await callWithApproval(httpErrorApproval);
+      const httpErrorBody = (await httpError.json()) as any;
+      expect(httpErrorBody.error.data.code).toBe("upstream_http_error");
+      expect(httpErrorBody.error.data.resultUnknown).toBeUndefined();
+      expect(approvalRow(httpErrorApproval).status).toBe("consumed");
+      const replay = await callWithApproval(httpErrorApproval);
+      expect((await replay.json() as any).error.data.code).toBe("approval_replay_or_mismatch");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("returns upstream_redirect_refused to the client when the upstream answers 302", async () => {
     const adminToken = "self-hosted-operator-secret";
     const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });

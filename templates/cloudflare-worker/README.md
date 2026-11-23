@@ -78,8 +78,9 @@ Per-call baseline (after key minting):
 
 - **Self-Hosted Fail-Closed Admin Auth:** When `DEMO_MODE !== "true"`, all `/admin/*` endpoints return `503` if `ADMIN_TOKEN` is unset and `401` if the Bearer token fails constant-time SHA-256 verification.
 - **Public Demo Mode (`DEMO_MODE=true`):** Pre-seeds `demo.echo`, `demo.format_note`, and `demo.sensitive_deploy` (`requiresApproval: true`), rejects `POST /admin/tools` with `403 demo_mode_upstream_disabled`, caps active demo keys at `50` (24h TTL, oldest evicted), and caps `audit_events` at `200` latest rows.
-- **SSRF Defense:** Upstream URLs must use `https://` on port `443` or `8443`, cannot include URL credentials, and reject private/loopback/link-local/CGNAT/unspecified/metadata IPv4/IPv6 ranges, `::ffff:` mapped IPv6 addresses, `localhost`, `*.localhost`, `*.local`, `*.internal`, `*.home.arpa`, and `metadata.google.internal`. Outbound `fetch` always sets `redirect: "error"`.
+- **SSRF Defense:** Upstream URLs must use `https://` on port `443` or `8443`, cannot include URL credentials, and reject private/loopback/link-local/CGNAT/unspecified/metadata IPv4/IPv6 ranges, `::ffff:` mapped IPv6 addresses, `localhost`, `*.localhost`, `*.local`, `*.internal`, `*.home.arpa`, and `metadata.google.internal`. Outbound `fetch` always sets `redirect: "manual"` and refuses redirect responses.
 - **Single-Use Approval Binding:** Approval permits are consumed atomically via SQL `UPDATE ... WHERE id = ? AND status = 'approved' AND key_id = ? AND tool_name = ? AND args_sha256 = ? AND consumed_at IS NULL AND expires_at > ?`, blocking replay, argument tampering, and cross-key reuse.
+- **Not-Sent Failure Refund:** An upstream failure provably raised before the request left the gateway (SSRF address refusal, pre-dispatch error, or refused redirect) restores the consumed permit to `approved` and the receipt carries `approvalRestored: true`, so the same approval can be redeemed once more. A transport failure that may already have reached upstream keeps the permit consumed and the receipt carries `resultUnknown: true`.
 
 ---
 

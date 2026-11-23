@@ -251,10 +251,21 @@ export async function safeUpstreamFetch(
   fetchImpl: typeof fetch = fetch,
 ): Promise<Response> {
   const validated = validateUpstreamUrl(rawUrl);
-  const response = await fetchImpl(validated.toString(), {
-    ...init,
-    redirect: "manual",
-  });
+  let pending: Promise<Response>;
+  try {
+    pending = fetchImpl(validated.toString(), {
+      ...init,
+      redirect: "manual",
+    });
+  } catch {
+    // A synchronous throw means the request never left the gateway, so the
+    // caller can treat this the same as an address validation refusal.
+    throw new UpstreamUrlError(
+      "upstream_request_not_sent",
+      "Upstream request could not be dispatched.",
+    );
+  }
+  const response = await pending;
   if (
     response.type === "opaqueredirect" ||
     (response.status >= 300 && response.status < 400)
