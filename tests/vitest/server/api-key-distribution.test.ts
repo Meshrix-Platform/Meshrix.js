@@ -204,7 +204,7 @@ function harness(catalogOverrides: Record<string, any> = {}): any {
   };
 }
 
-async function exactSelectionFixture() {
+async function exactSelectionFixture(extraOperations: any[] = []) {
   const service = (serviceId: string, protocol: string) => ({
     serviceId, serviceProtocol: protocol, serviceRevision: 1,
     operations: ["tools/call", "tools/list"].map((operationKey) => ({
@@ -219,7 +219,7 @@ async function exactSelectionFixture() {
   const catalog = createToolCatalog({ operations: [...projection.operations, {
     id: "fixture.echo", toolId: "tools.echo", toolsets: ["meshrix.runtime.read"],
     requiredScopes: ["runtime:read"], readOnly: true, resourceContext: { workspaceId: "workspace-1" }
-  }] });
+  }, ...extraOperations] });
   let published = catalog;
   const registry = { getCatalog: () => published };
   const { securityPermissions } = governanceFixture();
@@ -606,6 +606,66 @@ describe("scoped API Key distribution", () : any => {
       f.setPublished(null);
       await expect(f.issue([selected.capabilityId])).rejects.toMatchObject({ code: "api_key_authority_unavailable" });
       await expect(f.owner.reserveEffect({ authorization: confirmed, operation: selected })).rejects.toMatchObject({ code: "api_key_authority_unavailable" });
+    } finally { await f.close(); }
+  });
+
+  it("revalidates an issued grant against live catalog entries instead of the whole-catalog fingerprint", async () => {
+    const f = await exactSelectionFixture();
+    try {
+      const selected = f.named("records.list");
+      const { apiKey, record } = await f.issue([selected.capabilityId]);
+      const authorization = await f.authenticate(apiKey);
+      // Unrelated catalog drift renews the fingerprint; the stored grant still
+      // revalidates its selected operation against the live tool entry.
+      f.setPublished({
+        ...f.catalog,
+        fingerprint: "sha256:unrelated-drift",
+        tools: [...f.catalog.tools, { ...f.catalogTool("tools.echo"), id: "tools.unrelated" }]
+      });
+      expect(f.owner.authorizeOperation({ authorization, operation: selected }).keyId).toBe(record.keyId);
+      const lease = await f.owner.reserveEffect({ authorization, operation: selected });
+      await f.owner.releaseEffect(lease);
+      // Issuance still requires the caller to declare the live fingerprint.
+      await expect(f.issue([selected.capabilityId])).rejects.toMatchObject({ code: "api_key_authority_unavailable" });
+      // Drift inside the selected tool's own binding is still denied.
+      const parent = f.catalogTool("upstream.records.tools-call");
+      f.setPublished({
+        ...f.catalog, fingerprint: "sha256:binding-drift",
+        tools: f.catalog.tools.map((tool: any) => tool.id === parent.id
+          ? { ...tool, dynamicCapability: { ...tool.dynamicCapability, capabilityId: "cap:upstream:records:renamed" } }
+          : tool)
+      });
+      await expect(f.owner.reserveEffect({ authorization, operation: selected }))
+        .rejects.toMatchObject({ code: "api_key_policy_denied" });
+      f.setPublished(null);
+      await expect(f.owner.reserveEffect({ authorization, operation: selected }))
+        .rejects.toMatchObject({ code: "api_key_authority_unavailable" });
+    } finally { await f.close(); }
+  });
+
+  it("issues and authorizes a catalog alias through its own execute capability id", async () => {
+    const operation: any = SERVER_API_OPERATIONS.find((entry: any) => entry.id === "agent_workspaces.files.list");
+    const f = await exactSelectionFixture([operation]);
+    try {
+      const alias = f.catalogTool("meshrix.workspace.files.list");
+      expect(alias).toBeTruthy();
+      expect(alias.capabilityId).toBe("cap:tool:meshrix.workspace.files.list:execute");
+      const { apiKey, record } = await f.issue([alias.capabilityId], {
+        allowedTools: [alias.id], toolsetIds: alias.toolsets, scopeIds: alias.requiredScopes,
+        resources: { ...policy().resources, mode: "unrestricted", workspaceIds: [] }
+      });
+      const authorization = await f.authenticate(apiKey);
+      const effect = { toolId: alias.id, capabilityId: alias.capabilityId, risk: alias.risk,
+        scopeIds: alias.requiredScopes, toolsetIds: alias.toolsets, resourceContext: alias.resourceContext };
+      expect(f.owner.authorizeOperation({ authorization, operation: effect }).keyId).toBe(record.keyId);
+      const lease = await f.owner.reserveEffect({ authorization, operation: effect });
+      await f.owner.releaseEffect(lease);
+      // The primary tool's execute id does not substitute for the alias's own.
+      const primary = f.catalogTool("meshrix.agentWorkspace.files.list");
+      await expect(f.issue([primary.capabilityId], {
+        allowedTools: [alias.id], toolsetIds: alias.toolsets, scopeIds: alias.requiredScopes,
+        resources: { ...policy().resources, mode: "unrestricted", workspaceIds: [] }
+      })).rejects.toMatchObject({ code: "api_key_input_invalid" });
     } finally { await f.close(); }
   });
 

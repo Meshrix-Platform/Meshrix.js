@@ -175,9 +175,16 @@ function capabilitySegment(value: string): string {
   return value.replace(/[^A-Za-z0-9_-]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 80);
 }
 
-function requireExactCatalog(catalog: any, fingerprint: string): void {
-  if (!catalog?.fingerprint || catalog.fingerprint !== fingerprint || !Array.isArray(catalog.tools) ||
+function requireLiveCatalog(catalog: any): void {
+  if (!catalog?.fingerprint || !Array.isArray(catalog.tools) ||
       !Array.isArray(catalog.scopes) || !Array.isArray(catalog.toolsets)) {
+    fail("api_key_authority_unavailable", "Current Operation Permission catalog is unavailable.", 503);
+  }
+}
+
+function requireExactCatalog(catalog: any, fingerprint: string): void {
+  requireLiveCatalog(catalog);
+  if (catalog.fingerprint !== fingerprint) {
     fail("api_key_authority_unavailable", "Current Operation Permission catalog is unavailable.", 503);
   }
 }
@@ -689,7 +696,11 @@ function requireExactOperation(policy: any, operation: any, registry: any, toolI
   if (!toolId || !capabilityId || operation?.capabilityId !== capabilityId ||
       !policy.allowedTools.includes(toolId) || policy.deniedTools.includes(toolId)) return deny();
   const catalog = registry?.getCatalog?.();
-  requireExactCatalog(catalog, policy.catalogFingerprint);
+  // Effect authorization revalidates the selected operation against the live
+  // catalog rather than a whole-catalog fingerprint: unrelated catalog changes
+  // must not fence an issued grant, and a policy record predating a catalog
+  // change is still confined to its stored grants either way.
+  requireLiveCatalog(catalog);
   const tool = catalog.tools.find((item: any) => item.id === toolId);
   const cap = object(tool?.dynamicCapability) ? tool.dynamicCapability : null;
   const binding = exactCatalogBinding(tool);
@@ -730,7 +741,7 @@ function requireAllowedOperation(policy: any, operation: any, registry: any, cap
   const toolId: any = String(operation?.toolId || operation?.id || "");
   const serviceId: any = String(operation?.serviceId || "");
   const capabilityId: any = String(operation?.capabilityId || "");
-  const expandedCapabilityIds: any[] = capabilitySelection === "exact" ? policy.capabilityIds : [...new Set<any>([
+  const expandedCapabilityIds: any[] = capabilitySelection === "exact" ? (policy.capabilityIds || []) : [...new Set<any>([
     ...(policy.capabilityIds || []),
     ...(policy.capabilityIds || [])
       .filter((value?: any) : any => String(value || "").startsWith("cap:upstream:") && String(value || "").includes(":tools-call-"))

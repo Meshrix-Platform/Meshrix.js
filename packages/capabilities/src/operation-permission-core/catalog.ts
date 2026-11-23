@@ -443,6 +443,9 @@ export function createToolCatalog({ operations = [], activeFeatureIds = null, pr
         ...tool,
         id: aliasId,
         label: `${tool.label} (${aliasId})`,
+        // Exact issuance derives the required capability from the alias tool
+        // itself, so the entry advertises the alias's own execute id.
+        capabilityId: tool.dynamicCapability?.capabilityId || toolExecuteCapabilityId(aliasId),
         tags: uniqueStrings([...tool.tags, "alias"])
       });
     }

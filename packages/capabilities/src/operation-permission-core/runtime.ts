@@ -238,6 +238,28 @@ export function createToolExecutionRuntime({
     return { ok: true, operationCount: operationsById.size };
   }
 
+  // Deferred bindings digest the submit tool's catalog definition. This
+  // release added two fields to that definition — the advertised `capabilityId`
+  // and the optional task `signature` input property — so bindings captured
+  // beforehand no longer match the full definition. Replaying the definition
+  // without those additive fields reproduces an admitted definition exactly;
+  // any other drift still fails the digest.
+  function deferredToolDigests(tool: any): Set<string> {
+    const digests = new Set<string>();
+    if (!tool || typeof tool !== "object" || Array.isArray(tool)) return digests;
+    digests.add(canonicalHash(tool));
+    const { capabilityId: _capabilityId, ...withoutCapabilityId } = tool;
+    const inputSchema = tool.inputSchema;
+    const properties = inputSchema?.properties;
+    if (properties && typeof properties === "object" && !Array.isArray(properties) &&
+        Object.hasOwn(properties, "signature")) {
+      const { signature: _signature, ...rest } = properties;
+      withoutCapabilityId.inputSchema = { ...inputSchema, properties: rest };
+    }
+    digests.add(canonicalHash(withoutCapabilityId));
+    return digests;
+  }
+
   async function evaluateDeferredTaskAuthority(binding: any, input: Record<string, unknown>, admittedAuthorization?: any): Promise<any> {
     if (!binding || binding.operationId !== "endpoints.tasks.submit" ||
         binding.requestDigest !== canonicalHash(input)) {
@@ -247,7 +269,7 @@ export function createToolExecutionRuntime({
       await apiKeyDistributionProvider.revalidateDeferredAuthorization(binding.authorization);
     const tool = registry.getToolByOperationId(binding.operationId);
     const profile = binding.profileId ? registry.listProfiles().find((entry: any) => entry.id === binding.profileId) : null;
-    if (!tool || canonicalHash(tool) !== binding.toolDigest ||
+    if (!tool || !deferredToolDigests(tool).has(binding.toolDigest) ||
         canonicalHash(profile) !== binding.profileDigest || (binding.profileId && !profile)) {
       return { allowed: false, reasonCode: "managed_authority_changed" };
     }

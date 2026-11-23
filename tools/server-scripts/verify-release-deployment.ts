@@ -441,6 +441,8 @@ async function configureRuntime(
   if (selectedTools.length !== toolNames.length) fail("release_deployment_projected_tools_missing");
   const scopeIds = [...new Set(selectedTools.flatMap((tool: any) => tool.requiredScopes || tool.scopes || []))];
   const toolsetIds = [...new Set(selectedTools.flatMap((tool: any) => tool.toolsets || []))];
+  const capabilityIds = [...new Set(selectedTools.map((tool: any) => String(tool.capabilityId || "")).filter(Boolean))].sort();
+  if (capabilityIds.length !== selectedTools.length) fail("release_deployment_projected_tools_missing");
   const issued = await session.request("/api/operation-permission/v1/api-keys", {
     method: "POST",
     safety: true,
@@ -451,7 +453,7 @@ async function configureRuntime(
       policy: {
         protocol: "mcp",
         serviceIds: [serviceId],
-        capabilityIds: [],
+        capabilityIds,
         toolsetIds,
         allowedTools: toolNames,
         deniedTools: [],

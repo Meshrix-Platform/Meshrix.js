@@ -507,6 +507,8 @@ const selectedTools = (catalog.tools || [])
   .filter((tool) => (tool.toolsets || []).some((toolset) => selectedToolsets.has(toolset)));
 const allowedTools = selectedTools.map((tool) => tool.id);
 const scopeIds = [...new Set(selectedTools.flatMap((tool) => tool.requiredScopes || tool.scopes || []))];
+const capabilityIds = [...new Set(selectedTools.map((tool) => String(tool.capabilityId || "")).filter(Boolean))].sort();
+if (capabilityIds.length !== selectedTools.length) throw new Error("api_key_capability_selection_incomplete");
 const response = await fetch("http://127.0.0.1:7228/api/operation-permission/v1/api-keys", {
   method: "POST",
   headers: {
@@ -522,7 +524,7 @@ const response = await fetch("http://127.0.0.1:7228/api/operation-permission/v1/
     policy: {
       protocol: "mcp",
       serviceIds: [],
-      capabilityIds: [],
+      capabilityIds,
       toolsetIds: [...selectedToolsets],
       allowedTools,
       deniedTools: [],

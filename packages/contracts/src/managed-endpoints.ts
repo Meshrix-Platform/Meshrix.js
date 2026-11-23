@@ -149,14 +149,14 @@ function boundedText(
   value: unknown,
   field: string,
   code: string,
-  { max = 160, pattern = null as RegExp | null, optional = false } = {}
+  { max = 160, pattern = null as RegExp | null, optional = false, trim = true } = {}
 ): string {
   if (value === undefined || value === null) {
     if (optional) return "";
     failure(code, `Field ${field} is required.`);
   }
   if (typeof value !== "string") failure(code, `Field ${field} must be a string.`);
-  const text = value.trim();
+  const text = trim ? value.trim() : value;
   if (!text || text.length > max || (pattern && !pattern.test(text))) {
     failure(code, `Field ${field} is invalid.`);
   }
@@ -380,10 +380,15 @@ export function assertManagedSignature(value: unknown): ManagedSignature {
   const code = "managed_signature_invalid";
   if (!isRecord(value)) failure(code, "Managed signature must be an object.");
   exactKeys(value, ["algorithm", "keyId", "payload", "signature"], code);
-  boundedText(value.algorithm, "algorithm", code, { pattern: MANAGED_SIGNATURE_ALGORITHM_PATTERN });
-  boundedText(value.keyId, "keyId", code, { pattern: MANAGED_SIGNATURE_KEY_ID_PATTERN });
+  // The envelope is relayed byte-for-byte, so the submitted strings themselves
+  // must satisfy the declared patterns and bounds — a padded value that would
+  // only pass after trimming is rejected rather than silently preserved.
+  boundedText(value.algorithm, "algorithm", code, { pattern: MANAGED_SIGNATURE_ALGORITHM_PATTERN, trim: false });
+  boundedText(value.keyId, "keyId", code, { pattern: MANAGED_SIGNATURE_KEY_ID_PATTERN, trim: false });
   assertManagedJson(value.payload, "payload", code, MANAGED_SIGNATURE_PAYLOAD_MAX_BYTES);
-  boundedText(value.signature, "signature", code, { pattern: MANAGED_SIGNATURE_VALUE_PATTERN });
+  boundedText(value.signature, "signature", code, {
+    max: 2048, pattern: MANAGED_SIGNATURE_VALUE_PATTERN, trim: false
+  });
   // Content is relayed exactly as submitted — the server never interprets,
   // re-encodes or verifies the envelope it carries to the device.
   return Object.freeze({

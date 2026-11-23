@@ -19,6 +19,7 @@ import { dispatchOperation, dispatchRpcOperation, dispatchRegisteredHttpOperatio
 import { createOperationRouteIndex } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
 import { executeConsoleAuthOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/console-auth-executor.ts";
 import { createCapturedResponse, parseCapturedResult } from "../../../packages/server-runtime/src/composition/dispatch-operation-captured-response.ts";
+import { canonicalHash } from "../../../packages/foundation/src/serialization/canonical-json.ts";
 import { createOperationPermissionPlatform } from "../../../packages/capabilities/src/operation-permission-core/index.ts";
 import { createToolSkillManagementProvider } from "../../../packages/capabilities/src/skills/tool-skill-management-provider.ts";
 import { createPlatformMcpGateway } from "../../../packages/server-runtime/src/composition/gateway-composition.ts";
@@ -555,6 +556,45 @@ describe("managed endpoint durable authority and canonical dispatch", () => {
       const records = await f.platform.apiKeyDistributionProvider.list({ subjectId: "fixture-admin", limit: 10 });
       expect(records.items[0].useCount).toBe(1);
       expect(JSON.stringify(f.store.getTask(assignment.taskId))).not.toContain(key.apiKey);
+    });
+  });
+
+  it("revalidates a deferred binding captured before the additive signature schema fields", async () => {
+    await withFixture(async (f) => {
+      const key = await f.issue(1);
+      const authorization = await f.platform.apiKeyDistributionProvider.authenticateRuntime({
+        credential: key.apiKey, serverAudience: "managed.invalid", targetId: null,
+        connectorPackageId: null, processIdentityEvidence: null
+      });
+      const { input, device } = await f.enroll({
+        tenantId: "local", organizationId: "issuer", subjectId: authorization.workloadPrincipalId
+      });
+      const request: any = { method: "POST", url: "/mcp", headers: {}, socket: { remoteAddress: "127.0.0.1" } };
+      const result = await f.platform.runtime.executeTool({
+        toolId: "meshrix.endpoints.tasks.submit", input, request, apiKeyAuthorization: authorization
+      });
+      expect(result.ok, JSON.stringify({ payload: result.payload, errors: diagnosticErrors })).toBe(true);
+      const assignment = (await f.service.workerPoll(device, { batchSize: 1 })).assignments[0];
+      const task = f.store.getTask(assignment.taskId);
+      expect(task.authority.kind).toBe("api-key");
+      const submitTool: any = f.platform.catalog().tools
+        .find((tool: any) => tool.operationId === "endpoints.tasks.submit");
+      // Bindings captured before this release digested the submit tool without
+      // the advertised capabilityId field and the optional signature property.
+      const { capabilityId: _capabilityId, inputSchema, ...restTool } = submitTool;
+      const { signature: _signature, ...restProperties } = inputSchema.properties;
+      const preUpgradeBinding = {
+        ...task.authority.binding,
+        toolDigest: canonicalHash({ ...restTool, inputSchema: { ...inputSchema, properties: restProperties } })
+      };
+      const decision = await f.authorityPort.revalidate({ ...task.authority, binding: preUpgradeBinding }, input);
+      expect(decision.allowed, JSON.stringify(decision)).toBe(true);
+      const drifted = await f.authorityPort.revalidate({
+        ...task.authority,
+        binding: { ...task.authority.binding, toolDigest: canonicalHash({ drifted: true }) }
+      }, input);
+      expect(drifted).toMatchObject({ allowed: false, reasonCode: "managed_authority_changed" });
+      expect(await f.service.workerStart(device, lease(assignment))).toMatchObject({ authorized: true });
     });
   });
 

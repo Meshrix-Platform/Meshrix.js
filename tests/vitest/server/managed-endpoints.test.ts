@@ -609,11 +609,13 @@ describe("managed endpoints", () => {
       ...lease(unsignedPoll.assignments[0]), state: "succeeded", result: null
     });
 
+    // The wire contract allows up to 2,048 signature characters; a real
+    // envelope length must survive validation and relay byte-for-byte.
     const signature = {
       algorithm: "ed25519",
       keyId: "synthetic-key-1",
       payload: { claim: "synthetic-dispatch", issuedAtMs: 1700000000000 },
-      signature: "c3ludGhldGljLXNpZ25hdHVyZS1ieXRlcw"
+      signature: "A".repeat(2048)
     };
     const signed = await env.service.submitTask(actor(), {
       requestId: "req-signed-00001",
@@ -636,7 +638,10 @@ describe("managed endpoints", () => {
     ["missing a required field", { algorithm: "ed25519", keyId: "synthetic-key-1", payload: {} }],
     ["an extra field", { algorithm: "ed25519", keyId: "synthetic-key-1", payload: {}, signature: "YWJj", extra: 1 }],
     ["an invalid algorithm", { algorithm: "Ed25519!", keyId: "k", payload: {}, signature: "YWJj" }],
+    ["a space-padded algorithm", { algorithm: " ed25519", keyId: "k", payload: {}, signature: "YWJj" }],
+    ["a space-padded key id", { algorithm: "ed25519", keyId: "k ", payload: {}, signature: "YWJj" }],
     ["an invalid signature value", { algorithm: "ed25519", keyId: "k", payload: {}, signature: "not+base64url==" }],
+    ["a space-padded signature", { algorithm: "ed25519", keyId: "k", payload: {}, signature: " YWJj" }],
     ["an oversized payload", { algorithm: "ed25519", keyId: "k", payload: { blob: "x".repeat(9000) }, signature: "YWJj" }],
     ["an oversized signature", { algorithm: "ed25519", keyId: "k", payload: {}, signature: "A".repeat(3000) }]
   ])("rejects a task signature with %s", async (_name, signature) => {
