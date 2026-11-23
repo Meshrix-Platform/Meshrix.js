@@ -7,12 +7,24 @@ import {
 } from "../../../packages/kernel/src/schema/budget.ts";
 import { compileInterpretedSchema } from "../../../packages/kernel/src/schema/interpreted.ts";
 import { canonicalJson } from "../../../packages/kernel/src/utils.ts";
+import {
+  buildApprovalRequest,
+  evaluateConclusion,
+  isPairId,
+  parsePairCode,
+  pubkeyFingerprint,
+  requestDigest,
+  validateApproverPubkey,
+  validateRelayBaseUrl,
+} from "./entio.ts";
 import { safeUpstreamFetch, UpstreamUrlError, validateUpstreamUrl } from "./ssrf.ts";
 
 export interface GatewayEnv {
   readonly GATEWAY: DurableObjectNamespace<MeshrixGatewayDO>;
   readonly DEMO_MODE?: string;
   readonly ADMIN_TOKEN?: string;
+  readonly ADMIN_DECIDE_ENABLED?: string;
+  readonly ENTIO_INSTANCE?: string;
 }
 
 const MAX_BODY_BYTES = 1_048_576;
@@ -24,8 +36,11 @@ const APPROVAL_TTL_MS = 30 * 60 * 1000;
 const MAX_STORED_APPROVALS = 200;
 const KEY_LAST_USED_DEBOUNCE_MS = 60_000;
 const MAX_SCHEMA_CACHE_ENTRIES = 64;
+const MAX_ENTIO_PAIRINGS = 8;
+const MAX_STORED_ENTIO_REQUESTS = 200;
 
 const TOOL_NAME_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
+const ENTIO_LABEL_PATTERN = /^[A-Za-z0-9._-]{1,64}$/u;
 const SENSITIVE_KEY_PATTERN = /(?:secret|token|password|api[-_]?key|auth|credential)/iu;
 const SUPPORTED_MCP_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"] as const;
 const UPSTREAM_VISIBLE_TOKEN_PATTERN = /^[\x21-\x7e]{1,256}$/u;
@@ -76,6 +91,33 @@ interface ApprovalRow {
   readonly expires_at: number;
   readonly decided_at: number | null;
   readonly consumed_at: number | null;
+}
+
+interface EntioPairingRow {
+  readonly label: string;
+  readonly relay: string;
+  readonly pair: string;
+  readonly secret: string;
+  readonly pubkey: string;
+  readonly fingerprint: string;
+  readonly created_at: number;
+  readonly updated_at: number;
+}
+
+interface EntioRequestRow {
+  readonly id: string;
+  readonly approval_id: string;
+  readonly pairing_label: string;
+  readonly relay_rid: string | null;
+  readonly request_json: string;
+  readonly request_digest: string;
+  readonly status: string;
+  readonly detail: string | null;
+  readonly issued_at: number;
+  readonly expires_at: number;
+  readonly decided_at: number | null;
+  readonly decision: string | null;
+  readonly created_at: number;
 }
 
 interface AuditEventRow {
@@ -461,6 +503,35 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
         latency_ms INTEGER
       );
       CREATE INDEX IF NOT EXISTS idx_audit_events_ts ON audit_events(id DESC);
+
+      CREATE TABLE IF NOT EXISTS entio_pairings (
+        label TEXT PRIMARY KEY,
+        relay TEXT NOT NULL,
+        pair TEXT NOT NULL,
+        secret TEXT NOT NULL,
+        pubkey TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS entio_requests (
+        id TEXT PRIMARY KEY,
+        approval_id TEXT NOT NULL,
+        pairing_label TEXT NOT NULL,
+        relay_rid TEXT,
+        request_json TEXT NOT NULL,
+        request_digest TEXT NOT NULL,
+        status TEXT NOT NULL,
+        detail TEXT,
+        issued_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        decided_at INTEGER,
+        decision TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_entio_requests_approval ON entio_requests(approval_id, status);
+      CREATE INDEX IF NOT EXISTS idx_entio_requests_created ON entio_requests(created_at DESC);
     `);
 
     // Deployments created before declarative upstream headers lack the column.
@@ -718,6 +789,35 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     };
   }
 
+  #serializePairing(row: EntioPairingRow) {
+    return {
+      label: row.label,
+      relay: row.relay,
+      pair: row.pair,
+      pubkey: row.pubkey,
+      fingerprint: row.fingerprint,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  #serializeEntioRequest(row: EntioRequestRow) {
+    return {
+      id: row.id,
+      approvalId: row.approval_id,
+      pairing: row.pairing_label,
+      relayRid: row.relay_rid,
+      requestDigest: row.request_digest,
+      status: row.status,
+      detail: row.detail,
+      issuedAt: row.issued_at,
+      expiresAt: row.expires_at,
+      decidedAt: row.decided_at,
+      decision: row.decision,
+      createdAt: row.created_at,
+    };
+  }
+
   #serializeAudit(row: AuditEventRow) {
     return {
       id: row.event_id,
@@ -743,6 +843,12 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     const approvals = this.#allRows<ApprovalRow>("SELECT * FROM approvals ORDER BY created_at DESC LIMIT 50").map((r) =>
       this.#serializeApproval(r, now),
     );
+    const entioPairings = this.#allRows<EntioPairingRow>("SELECT * FROM entio_pairings ORDER BY label ASC").map((r) =>
+      this.#serializePairing(r),
+    );
+    const entioRequests = this.#allRows<EntioRequestRow>(
+      "SELECT * FROM entio_requests ORDER BY created_at DESC LIMIT 50",
+    ).map((r) => this.#serializeEntioRequest(r));
     const auditEvents = this.#allRows<AuditEventRow>("SELECT * FROM audit_events ORDER BY id DESC LIMIT 100").map((r) =>
       this.#serializeAudit(r),
     );
@@ -758,6 +864,11 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       tools,
       keys,
       approvals,
+      entio: {
+        enabled: !demoMode,
+        pairings: entioPairings,
+        requests: entioRequests,
+      },
       auditEvents,
     });
   }
@@ -1023,7 +1134,19 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     return jsonResponse(200, { ok: true, name: toolName });
   }
 
+  #adminDecideEnabled(): boolean {
+    return String(this.env.ADMIN_DECIDE_ENABLED ?? "true").trim().toLowerCase() !== "false";
+  }
+
+  #entioInstance(): string {
+    const value = typeof this.env.ENTIO_INSTANCE === "string" ? this.env.ENTIO_INSTANCE.trim() : "";
+    return value || "meshrix-mcp-gateway";
+  }
+
   async #handleDecideApproval(approvalId: string, request: Request): Promise<Response> {
+    if (!this.#adminDecideEnabled()) {
+      return jsonError(403, "admin_decide_disabled", "Admin-token approval decisions are disabled by configuration.");
+    }
     const bodyResult = await readBoundedText(request, MAX_BODY_BYTES);
     if (!bodyResult.ok) return jsonError(bodyResult.status, bodyResult.error, bodyResult.message);
 
@@ -1077,6 +1200,397 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     });
 
     return jsonResponse(200, { ok: true, approval: this.#serializeApproval(row, now) });
+  }
+
+  // --- Entio signed approvals (docs/entio-approvals.md) ---
+
+  #entioUnavailable(): Response | null {
+    if (!this.#isDemoMode()) return null;
+    return jsonError(403, "entio_unavailable", "Entio pairings are not supported on the public demo deployment.");
+  }
+
+  async #entioRelayJson(
+    pairing: EntioPairingRow,
+    method: string,
+    subpath: string,
+    body?: string,
+  ): Promise<{ status: number; json: Record<string, unknown> | null } | null> {
+    try {
+      const res = await fetch(`${pairing.relay}${subpath}`, {
+        method,
+        headers: {
+          "content-type": "application/json",
+          "x-entio-secret": pairing.secret,
+        },
+        body,
+        redirect: "manual",
+      });
+      if (res.status >= 300 && res.status < 400) return { status: res.status, json: null };
+      let json: Record<string, unknown> | null = null;
+      try {
+        const parsed = JSON.parse(await res.text());
+        if (isPlainRecord(parsed)) json = parsed;
+      } catch {
+        json = null;
+      }
+      return { status: res.status, json };
+    } catch {
+      return null;
+    }
+  }
+
+  #consumeApprovalPermit(approvalId: string, keyId: string, toolName: string, argsSha256: string, now: number): boolean {
+    const cursor = this.#sql.exec(
+      `UPDATE approvals
+       SET status = 'consumed', consumed_at = ?
+       WHERE id = ?
+         AND status = 'approved'
+         AND key_id = ?
+         AND tool_name = ?
+         AND args_sha256 = ?
+         AND consumed_at IS NULL
+         AND expires_at > ?
+       RETURNING id`,
+      now,
+      approvalId,
+      keyId,
+      toolName,
+      argsSha256,
+      now,
+    );
+    return cursor.toArray().length === 1 && cursor.rowsWritten >= 1;
+  }
+
+  #allLivePairings(): EntioPairingRow[] {
+    return this.#allRows<EntioPairingRow>("SELECT * FROM entio_pairings ORDER BY label ASC LIMIT ?", MAX_ENTIO_PAIRINGS);
+  }
+
+  async #dispatchEntio(approval: ApprovalRow): Promise<void> {
+    if (this.#isDemoMode()) return;
+    const pairings = this.#allLivePairings();
+    const now = Date.now();
+    for (const pairing of pairings) {
+      const requestJson = JSON.stringify(
+        buildApprovalRequest({
+          pair: pairing.pair,
+          instance: this.#entioInstance(),
+          approvalId: approval.id,
+          keyId: approval.key_id,
+          keyName: approval.key_name,
+          toolName: approval.tool_name,
+          argsSha256: approval.args_sha256,
+          issuedAt: approval.created_at,
+          expiresAt: approval.expires_at,
+          nonce: randomBase64Url(24),
+        }),
+      );
+      const digest = await requestDigest(JSON.parse(requestJson));
+      const requestId = randomId("enr");
+      let relayRid: string | null = null;
+      let status = "dispatch_failed";
+      let detail: string | null = null;
+      const res = await this.#entioRelayJson(pairing, "POST", `/pair/${pairing.pair}/requests`, requestJson);
+      if (res === null) {
+        detail = "relay_unreachable";
+      } else if (res.status === 200 && res.json && typeof res.json.request_id === "string" && res.json.request_id) {
+        relayRid = res.json.request_id;
+        status = "queued";
+      } else {
+        detail = `relay_http_${res.status}`;
+      }
+      this.#sql.exec(
+        `INSERT INTO entio_requests
+           (id, approval_id, pairing_label, relay_rid, request_json, request_digest, status, detail,
+            issued_at, expires_at, decided_at, decision, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
+        requestId,
+        approval.id,
+        pairing.label,
+        relayRid,
+        requestJson,
+        digest,
+        status,
+        detail,
+        approval.created_at,
+        approval.expires_at,
+        now,
+      );
+    }
+    this.#pruneEntioRequests();
+  }
+
+  #pruneEntioRequests(): void {
+    this.#sql.exec(
+      `DELETE FROM entio_requests
+       WHERE id NOT IN (SELECT id FROM entio_requests ORDER BY created_at DESC, rowid DESC LIMIT ?)`,
+      MAX_STORED_ENTIO_REQUESTS,
+    );
+  }
+
+  #markEntioRequest(id: string, status: string, detail: string | null, decision?: string | null): void {
+    this.#sql.exec(
+      `UPDATE entio_requests SET status = ?, detail = ?, decided_at = COALESCE(?, decided_at), decision = COALESCE(?, decision)
+       WHERE id = ?`,
+      status,
+      detail,
+      decision != null ? Date.now() : null,
+      decision ?? null,
+      id,
+    );
+  }
+
+  /** Poll the relay for live dispatches of one pending approval and evaluate conclusions. */
+  async #settleEntioApproval(approvalId: string): Promise<void> {
+    if (this.#isDemoMode()) return;
+    const approval = this.#firstRow<ApprovalRow>("SELECT * FROM approvals WHERE id = ?", approvalId);
+    if (!approval || approval.status !== "pending") return;
+    const now = Date.now();
+    const liveRows = this.#allRows<EntioRequestRow>(
+      `SELECT * FROM entio_requests
+       WHERE approval_id = ? AND status IN ('queued', 'dispatch_failed')
+       ORDER BY created_at ASC`,
+      approvalId,
+    );
+    if (liveRows.length === 0) return;
+    if (approval.expires_at <= now) {
+      for (const row of liveRows) this.#markEntioRequest(row.id, "expired", null);
+      return;
+    }
+    for (const row of liveRows) {
+      const pairing = this.#firstRow<EntioPairingRow>(
+        "SELECT * FROM entio_pairings WHERE label = ?",
+        row.pairing_label,
+      );
+      if (!pairing) {
+        this.#markEntioRequest(row.id, "orphaned", "pairing_removed");
+        continue;
+      }
+      let rid = row.relay_rid;
+      if (!rid) {
+        // A failed dispatch is retried once per settle pass with the same stored request.
+        const res = await this.#entioRelayJson(pairing, "POST", `/pair/${pairing.pair}/requests`, row.request_json);
+        if (res !== null && res.status === 200 && res.json && typeof res.json.request_id === "string" && res.json.request_id) {
+          rid = res.json.request_id;
+          this.#sql.exec(
+            "UPDATE entio_requests SET relay_rid = ?, status = 'queued', detail = NULL WHERE id = ?",
+            rid,
+            row.id,
+          );
+        } else {
+          this.#markEntioRequest(row.id, "dispatch_failed", res === null ? "relay_unreachable" : `relay_http_${res.status}`);
+          continue;
+        }
+      }
+      const encodedRid = encodeURIComponent(rid);
+      const res = await this.#entioRelayJson(pairing, "GET", `/pair/${pairing.pair}/result?request=${encodedRid}`);
+      if (res === null) continue; // transport failure — keep queued for the next poll
+      const state = typeof res.json?.state === "string" ? res.json.state : "";
+      if (state === "pending") continue;
+      if ((state === "approved" || state === "rejected") && res.json && isPlainRecord(res.json.conclusion)) {
+        let request: unknown;
+        try {
+          request = JSON.parse(row.request_json);
+        } catch {
+          this.#markEntioRequest(row.id, "invalid", "stored_request_corrupt");
+          continue;
+        }
+        const verdict = await evaluateConclusion(request, res.json.conclusion, now, pairing.pubkey);
+        if (verdict.kind === "approved") {
+          const settled = this.#sql.exec(
+            `UPDATE approvals SET status = 'approved', decided_at = ?, decision_reason = ?
+             WHERE id = ? AND status = 'pending' AND expires_at > ? RETURNING id`,
+            now,
+            `entio:${pairing.label}`,
+            approvalId,
+            now,
+          );
+          this.#markEntioRequest(row.id, "concluded", null, "approved");
+          if (settled.toArray().length === 1) {
+            this.#recordAudit({
+              eventType: "approval.approved",
+              keyId: approval.key_id,
+              toolName: approval.tool_name,
+              argsSha256: approval.args_sha256,
+              decision: "approved",
+              detailCode: "entio_signed",
+              approvalId,
+            });
+            await this.#cancelRemainingEntioRequests(approvalId, row.id);
+          }
+        } else if (verdict.kind === "rejected") {
+          const settled = this.#sql.exec(
+            `UPDATE approvals SET status = 'denied', decided_at = ?, decision_reason = ?
+             WHERE id = ? AND status = 'pending' RETURNING id`,
+            now,
+            `entio:${pairing.label}:rejected`,
+            approvalId,
+          );
+          this.#markEntioRequest(row.id, "concluded", null, "rejected");
+          if (settled.toArray().length === 1) {
+            this.#recordAudit({
+              eventType: "approval.denied",
+              keyId: approval.key_id,
+              toolName: approval.tool_name,
+              argsSha256: approval.args_sha256,
+              decision: "denied",
+              detailCode: "entio_signed",
+              approvalId,
+            });
+            await this.#cancelRemainingEntioRequests(approvalId, row.id);
+          }
+        } else {
+          this.#markEntioRequest(row.id, "invalid", verdict.reason);
+          this.#recordAudit({
+            eventType: "approval.entio_conclusion",
+            keyId: approval.key_id,
+            toolName: approval.tool_name,
+            argsSha256: approval.args_sha256,
+            decision: "denied",
+            detailCode: "entio_invalid",
+            approvalId,
+          });
+        }
+      } else if (state === "expired" || state === "cancelled" || state === "unknown") {
+        this.#markEntioRequest(row.id, state === "unknown" ? "lost" : state, null);
+      } else {
+        this.#markEntioRequest(row.id, "invalid", `relay_state:${state || `http_${res.status}`}`);
+      }
+    }
+  }
+
+  async #cancelRemainingEntioRequests(approvalId: string, keepId: string): Promise<void> {
+    const rows = this.#allRows<EntioRequestRow>(
+      `SELECT * FROM entio_requests WHERE approval_id = ? AND status = 'queued' AND relay_rid IS NOT NULL AND id != ?`,
+      approvalId,
+      keepId,
+    );
+    for (const row of rows) {
+      const pairing = this.#firstRow<EntioPairingRow>(
+        "SELECT * FROM entio_pairings WHERE label = ?",
+        row.pairing_label,
+      );
+      if (pairing && row.relay_rid) {
+        await this.#entioRelayJson(
+          pairing,
+          "POST",
+          `/pair/${pairing.pair}/cancel`,
+          JSON.stringify({ request_id: row.relay_rid }),
+        );
+      }
+      this.#markEntioRequest(row.id, "cancelled", null);
+    }
+  }
+
+  async #handleRegisterPairing(request: Request): Promise<Response> {
+    const unavailable = this.#entioUnavailable();
+    if (unavailable) return unavailable;
+    const bodyResult = await readBoundedText(request, MAX_BODY_BYTES);
+    if (!bodyResult.ok) return jsonError(bodyResult.status, bodyResult.error, bodyResult.message);
+
+    let body: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(bodyResult.text);
+      if (!isPlainRecord(parsed)) return jsonError(400, "invalid_request", "Request body must be a JSON object.");
+      body = parsed;
+    } catch {
+      return jsonError(400, "invalid_json", "Request body is not valid JSON.");
+    }
+
+    const label = typeof body.label === "string" ? body.label.trim() : "";
+    if (!ENTIO_LABEL_PATTERN.test(label)) {
+      return jsonError(400, "invalid_label", "label must match [A-Za-z0-9._-]{1,64}.");
+    }
+
+    let pair = typeof body.pair === "string" ? body.pair.trim() : "";
+    let secret = typeof body.secret === "string" ? body.secret : "";
+    let relay = typeof body.relay === "string" ? body.relay.trim() : "";
+    if (typeof body.pairCode === "string" && body.pairCode.trim()) {
+      const parsed = parsePairCode(body.pairCode);
+      if (!parsed) return jsonError(400, "invalid_pair_code", "pairCode must be entio://pair?i=<uuid>&s=<secret>[&r=<relay>].");
+      pair = parsed.pair;
+      secret = parsed.secret;
+      if (parsed.relay) relay = parsed.relay;
+    }
+    if (!isPairId(pair)) return jsonError(400, "invalid_pair", "pair must be the pairing UUID.");
+    if (!secret || secret.length > 256 || /[\x00-\x1f]/u.test(secret)) {
+      return jsonError(400, "invalid_secret", "secret is required and must be ≤256 printable chars.");
+    }
+    let relayBase: string;
+    try {
+      relayBase = validateRelayBaseUrl(relay);
+    } catch (error) {
+      if (error instanceof UpstreamUrlError) {
+        return jsonError(400, error.code, error.message);
+      }
+      throw error;
+    }
+    const pubkey = typeof body.pubkey === "string" ? body.pubkey.trim() : "";
+    if (!pubkey || !(await validateApproverPubkey(pubkey))) {
+      return jsonError(400, "invalid_pubkey", "pubkey must be the base64 x9.63 P-256 device key shown at pairing.");
+    }
+    const fingerprint = (await pubkeyFingerprint(pubkey)) ?? "";
+
+    const existing = this.#firstRow<EntioPairingRow>("SELECT * FROM entio_pairings WHERE label = ?", label);
+    if (!existing) {
+      const count = this.#firstRow<{ readonly n: number }>("SELECT COUNT(*) AS n FROM entio_pairings")!.n;
+      if (count >= MAX_ENTIO_PAIRINGS) {
+        return jsonError(409, "too_many_pairings", `At most ${MAX_ENTIO_PAIRINGS} Entio pairings can be registered.`);
+      }
+    }
+    const now = Date.now();
+    this.#sql.exec(
+      `INSERT INTO entio_pairings (label, relay, pair, secret, pubkey, fingerprint, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(label) DO UPDATE SET
+         relay = excluded.relay, pair = excluded.pair, secret = excluded.secret,
+         pubkey = excluded.pubkey, fingerprint = excluded.fingerprint, updated_at = excluded.updated_at`,
+      label,
+      relayBase,
+      pair,
+      secret,
+      pubkey,
+      fingerprint,
+      now,
+      now,
+    );
+    this.#recordAudit({
+      eventType: existing ? "entio.pairing_rotated" : "entio.pairing_registered",
+      decision: "allowed",
+      detailCode: "ok",
+    });
+    const saved = this.#firstRow<EntioPairingRow>("SELECT * FROM entio_pairings WHERE label = ?", label)!;
+    return jsonResponse(existing ? 200 : 201, { ok: true, pairing: this.#serializePairing(saved) });
+  }
+
+  #handleDeletePairing(labelRaw: string): Response {
+    const unavailable = this.#entioUnavailable();
+    if (unavailable) return unavailable;
+    const label = decodeURIComponent(labelRaw);
+    if (!label || label.includes("/")) return jsonError(400, "invalid_label", "Invalid pairing label.");
+    const cursor = this.#sql.exec("DELETE FROM entio_pairings WHERE label = ? RETURNING label", label);
+    if (cursor.toArray().length !== 1) {
+      return jsonError(404, "pairing_not_found", "Entio pairing not found.");
+    }
+    this.#recordAudit({ eventType: "entio.pairing_removed", decision: "allowed", detailCode: "ok" });
+    return jsonResponse(200, { ok: true, label });
+  }
+
+  async #handleEntioRefresh(approvalId: string): Promise<Response> {
+    const unavailable = this.#entioUnavailable();
+    if (unavailable) return unavailable;
+    if (!approvalId || approvalId.includes("/")) {
+      return jsonError(400, "invalid_approval_id", "Invalid approval id.");
+    }
+    const row = this.#firstRow<ApprovalRow>("SELECT * FROM approvals WHERE id = ?", approvalId);
+    if (!row) return jsonError(404, "approval_not_found", "Approval request not found.");
+    await this.#settleEntioApproval(approvalId);
+    const now = Date.now();
+    const fresh = this.#firstRow<ApprovalRow>("SELECT * FROM approvals WHERE id = ?", approvalId)!;
+    const requests = this.#allRows<EntioRequestRow>(
+      "SELECT * FROM entio_requests WHERE approval_id = ? ORDER BY created_at ASC",
+      approvalId,
+    ).map((r) => this.#serializeEntioRequest(r));
+    return jsonResponse(200, { ok: true, approval: this.#serializeApproval(fresh, now), entio: { requests } });
   }
 
   async #executeBuiltinTool(
@@ -1589,25 +2103,8 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
 
         const checkNow = Date.now();
         if (rawApprovalId) {
-          const consumeCursor = this.#sql.exec(
-            `UPDATE approvals
-             SET status = 'consumed', consumed_at = ?
-             WHERE id = ?
-               AND status = 'approved'
-               AND key_id = ?
-               AND tool_name = ?
-               AND args_sha256 = ?
-               AND consumed_at IS NULL
-               AND expires_at > ?
-             RETURNING id`,
-            checkNow,
-            rawApprovalId,
-            auth.key.id,
-            tool.name,
-            argsSha256,
-            checkNow,
-          );
-          if (consumeCursor.toArray().length !== 1 || consumeCursor.rowsWritten < 1) {
+          await this.#settleEntioApproval(rawApprovalId);
+          if (!this.#consumeApprovalPermit(rawApprovalId, auth.key.id, tool.name, argsSha256, checkNow)) {
             this.#recordAudit({
               eventType: "mcp.tool_call",
               keyId: auth.key.id,
@@ -1643,56 +2140,67 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
             checkNow,
           );
 
-          if (matchingApproved) {
-            const consumeCursor = this.#sql.exec(
-              `UPDATE approvals
-               SET status = 'consumed', consumed_at = ?
-               WHERE id = ?
-                 AND status = 'approved'
-                 AND key_id = ?
-                 AND tool_name = ?
-                 AND args_sha256 = ?
-                 AND consumed_at IS NULL
-                 AND expires_at > ?
-               RETURNING id`,
-              checkNow,
-              matchingApproved.id,
+          if (matchingApproved && this.#consumeApprovalPermit(matchingApproved.id, auth.key.id, tool.name, argsSha256, checkNow)) {
+            consumedApprovalId = matchingApproved.id;
+            consumedApprovalAt = checkNow;
+          }
+
+          let pendingApprovalId: string | null = null;
+          if (!consumedApprovalId) {
+            const pendingMatch = this.#firstRow<{ readonly id: string }>(
+              `SELECT id FROM approvals
+               WHERE key_id = ? AND tool_name = ? AND args_sha256 = ?
+                 AND status = 'pending' AND expires_at > ?
+               ORDER BY created_at DESC LIMIT 1`,
               auth.key.id,
               tool.name,
               argsSha256,
               checkNow,
             );
-            if (consumeCursor.toArray().length === 1 && consumeCursor.rowsWritten >= 1) {
-              consumedApprovalId = matchingApproved.id;
-              consumedApprovalAt = checkNow;
+            if (pendingMatch) {
+              // Lazily poll the relay: a phone-signed conclusion may have landed.
+              await this.#settleEntioApproval(pendingMatch.id);
+              if (this.#consumeApprovalPermit(pendingMatch.id, auth.key.id, tool.name, argsSha256, checkNow)) {
+                consumedApprovalId = pendingMatch.id;
+                consumedApprovalAt = checkNow;
+              } else {
+                pendingApprovalId = pendingMatch.id;
+              }
             }
           }
 
           if (!consumedApprovalId) {
-            const newApprovalId = randomId("apr");
-            this.#sql.exec(
-              `INSERT INTO approvals (id, key_id, key_name, tool_name, args_sha256, args_preview, status, decision_reason, created_at, expires_at, decided_at, consumed_at)
-               VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, NULL, NULL)`,
-              newApprovalId,
-              auth.key.id,
-              auth.key.name,
-              tool.name,
-              argsSha256,
-              redactArgsPreview(args),
-              checkNow,
-              checkNow + APPROVAL_TTL_MS,
-            );
-            this.#pruneApprovals();
-            this.#recordAudit({
-              eventType: "approval.requested",
-              keyId: auth.key.id,
-              toolName: tool.name,
-              argsSha256,
-              decision: "approval_required",
-              detailCode: "approval_required",
-              approvalId: newApprovalId,
-              latencyMs: Date.now() - startedAt,
-            });
+            let effectiveId = pendingApprovalId;
+            if (!effectiveId) {
+              const newApprovalId = randomId("apr");
+              this.#sql.exec(
+                `INSERT INTO approvals (id, key_id, key_name, tool_name, args_sha256, args_preview, status, decision_reason, created_at, expires_at, decided_at, consumed_at)
+                 VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?, ?, NULL, NULL)
+                 RETURNING *`,
+                newApprovalId,
+                auth.key.id,
+                auth.key.name,
+                tool.name,
+                argsSha256,
+                redactArgsPreview(args),
+                checkNow,
+                checkNow + APPROVAL_TTL_MS,
+              );
+              this.#pruneApprovals();
+              const newApproval = this.#firstRow<ApprovalRow>("SELECT * FROM approvals WHERE id = ?", newApprovalId)!;
+              await this.#dispatchEntio(newApproval);
+              effectiveId = newApprovalId;
+              this.#recordAudit({
+                eventType: "approval.requested",
+                keyId: auth.key.id,
+                toolName: tool.name,
+                argsSha256,
+                decision: "approval_required",
+                detailCode: "approval_required",
+                approvalId: newApprovalId,
+                latencyMs: Date.now() - startedAt,
+              });
+            }
             return mcpError(
               200,
               id,
@@ -1700,7 +2208,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
               `Human approval required before executing '${tool.name}'.`,
               {
                 code: "approval_required",
-                approvalId: newApprovalId,
+                approvalId: effectiveId,
                 toolName: tool.name,
                 argsSha256,
               },
@@ -1832,6 +2340,17 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
         const approvalId = decodeURIComponent(inner);
         if (!approvalId || approvalId.includes("/")) return jsonError(400, "invalid_approval_id", "Invalid approval id.");
         return this.#handleDecideApproval(approvalId, request);
+      }
+      if (request.method === "POST" && path.startsWith("/admin/approvals/") && path.endsWith("/entio-refresh")) {
+        const inner = path.slice("/admin/approvals/".length, -"/entio-refresh".length);
+        const approvalId = decodeURIComponent(inner);
+        return this.#handleEntioRefresh(approvalId);
+      }
+      if (request.method === "POST" && path === "/admin/entio/pairings") {
+        return this.#handleRegisterPairing(request);
+      }
+      if (request.method === "DELETE" && path.startsWith("/admin/entio/pairings/")) {
+        return this.#handleDeletePairing(path.slice("/admin/entio/pairings/".length));
       }
 
       return jsonError(404, "not_found", "Admin route not found.");

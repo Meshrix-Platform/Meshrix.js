@@ -121,6 +121,8 @@ Per-call baseline (after key minting):
 - **Single-Use Approval Binding:** Approval permits are consumed atomically via SQL `UPDATE ... WHERE id = ? AND status = 'approved' AND key_id = ? AND tool_name = ? AND args_sha256 = ? AND consumed_at IS NULL AND expires_at > ?`, blocking replay, argument tampering, and cross-key reuse.
 - **Not-Sent Failure Refund:** An upstream failure provably raised before the request left the gateway (SSRF address refusal, pre-dispatch error, or refused redirect) restores the consumed permit to `approved` and the receipt carries `approvalRestored: true`, so the same approval can be redeemed once more. A transport failure that may already have reached upstream keeps the permit consumed and the receipt carries `resultUnknown: true`.
 - **Stateful Upstream Sessions:** Upstream `tools/call` is attempted statelessly first; if the server requires a session (HTTP `400` "not initialized / no session" or `404`), the gateway performs an on-demand `initialize` + `notifications/initialized` handshake, carries `Mcp-Session-Id` and `MCP-Protocol-Version` on subsequent calls, and re-handshakes exactly once when the upstream invalidates the session (`404`). Stateless upstreams keep the single-request behavior. Failures surface as `upstream_handshake_failed` or `upstream_session_expired` in the JSON-RPC error `data.code` and audit receipts.
+- **Entio-Signed Approvals (self-hosted only):** Register an Entio device pairing (`POST /admin/entio/pairings`) and every pending approval is dispatched to the paired phone through the Entio relay as a content-bound v2 request (key, tool name, argument digest, validity window). Phone-signed conclusions are verified in the DO against the pinned approver P-256 key — JCS digests, `entio:v2\0` domain separation, DER ECDSA — before the permit is released. See [docs/entio-approvals.md](docs/entio-approvals.md).
+- **Configurable Admin Fallback:** `POST /admin/approvals/:id/decide` remains available while `ADMIN_DECIDE_ENABLED` is unset/`"true"`; set `ADMIN_DECIDE_ENABLED="false"` to make Entio-signed conclusions the only approval path (`403 admin_decide_disabled`).
 
 ---
 
@@ -129,9 +131,12 @@ Per-call baseline (after key minting):
 - `GET /health` — Edge liveness check
 - `GET /` — Embedded Web Console
 - `POST /mcp` — MCP Streamable HTTP (`initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`)
-- `GET /admin/state` — Tools, keys (prefixes only), approvals, and audit receipts
+- `GET /admin/state` — Tools, keys (prefixes only), approvals, Entio pairings/requests, and audit receipts
 - `POST /admin/keys` — Mint a scoped Bearer API key
 - `DELETE /admin/keys/:id` — Revoke an API key
 - `POST /admin/tools` — Register a validated HTTPS upstream MCP tool (self-hosted mode only); optional `headers` object declares request headers forwarded to the upstream
 - `DELETE /admin/tools/:name` — Delete a tool (self-hosted mode only)
-- `POST /admin/approvals/:id/decide` — Approve or deny a pending execution request (`{ "decision": "approve" | "deny" }`)
+- `POST /admin/approvals/:id/decide` — Approve or deny a pending execution request (`{ "decision": "approve" | "deny" }`, disabled when `ADMIN_DECIDE_ENABLED="false"`)
+- `POST /admin/entio/pairings` — Register/rotate an Entio approver pairing: `{ label, pubkey, pair, secret, relay }` or a `pairCode` (self-hosted mode only)
+- `DELETE /admin/entio/pairings/:label` — Remove an Entio approver pairing (self-hosted mode only)
+- `POST /admin/approvals/:id/entio-refresh` — Poll the Entio relay now and evaluate any arrived conclusion (self-hosted mode only)
