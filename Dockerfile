@@ -66,20 +66,12 @@ RUN npm prune --omit=dev
 
 FROM deps AS build-ui
 
-COPY skills ./skills
-
-COPY apps/server ./apps/server
-COPY apps/mcp-gateway-installer ./apps/mcp-gateway-installer
 COPY apps/console ./apps/console
 COPY packages ./packages
-COPY plugins/agents ./plugins/agents
-COPY services/model-gateway/contracts ./services/model-gateway/contracts
 COPY content ./content
 COPY tools ./tools
-COPY docs ./docs
 
-RUN npm run build && rm -f tools/server-scripts/benchmark-gateway.ts
-RUN npm prune --omit=dev
+RUN npm run build:web
 
 FROM docker.io/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203 AS runtime
 

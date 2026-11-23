@@ -9,6 +9,8 @@
 // ==============================================================================
 import { DEFAULT_SERVER_PORT, resolveVitePort } from "./packages/foundation/src/config/server-env.ts";
 
+import fs from "node:fs";
+import https from "node:https";
 import path from "node:path";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
@@ -18,27 +20,22 @@ const webRoot = path.resolve(__dirname, "apps", "console");
 const apiOrigin =
   process.env.VITE_API_ORIGIN || `http://127.0.0.1:${process.env.VITE_API_PORT || DEFAULT_SERVER_PORT}`;
 
-function parseProxyApiOrigin(value) {
+function createVerifiedHttpsAgent(originValue: string): https.Agent | undefined {
+  let parsed: URL;
   try {
-    return new URL(value);
+    parsed = new URL(originValue);
   } catch {
-    return null;
+    return undefined;
   }
+  if (parsed.protocol !== "https:") return undefined;
+  const caPath = String(process.env.VITE_API_TLS_CA_FILE || "").trim();
+  return new https.Agent({
+    rejectUnauthorized: true,
+    ...(caPath ? { ca: fs.readFileSync(caPath) } : {}),
+  });
 }
 
-const parsedApiOrigin = parseProxyApiOrigin(apiOrigin);
-const isLoopbackApiHost = parsedApiOrigin
-  ? ["localhost", "127.0.0.1", "::1", "[::1]"].includes(String(parsedApiOrigin.hostname).toLowerCase())
-  : false;
-
-// 远端 HTTPS 默认开启证书校验。
-// 仅在 loopback 目标并显式设置 VITE_API_PROXY_ALLOW_INSECURE_HTTPS=1 时，才允许跳过。
-const isExplicitLocalInsecureCertBypass =
-  String(process.env.VITE_API_PROXY_ALLOW_INSECURE_HTTPS || "").trim() === "1" && isLoopbackApiHost;
-const proxySecure =
-  !parsedApiOrigin ||
-  parsedApiOrigin.protocol !== "https:" ||
-  !isExplicitLocalInsecureCertBypass;
+const proxyAgent = createVerifiedHttpsAgent(apiOrigin);
 
 export default defineConfig({
   root: webRoot,
@@ -87,7 +84,8 @@ export default defineConfig({
       "/api": {
         target: apiOrigin,
         changeOrigin: true,
-        secure: proxySecure,
+        secure: true,
+        ...(proxyAgent ? { agent: proxyAgent } : {}),
         configure: (proxy) => {
           const targetOrigin = apiOrigin;
           proxy.on("proxyReq", (proxyReq) => {

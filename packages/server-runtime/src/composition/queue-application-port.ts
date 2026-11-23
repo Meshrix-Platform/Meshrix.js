@@ -166,12 +166,76 @@ export async function createQueueApplicationPort({
   });
   const registrations: any = new Map<any, any>();
   const globalCredit: any = resolveQueueMaxInFlight(maxGlobalInFlight, { fallback: 8192 });
-  let timer: any = null;
+  const isSharedRemoteStore: boolean = (queueStore.kind || "sqlite") === "postgres";
+  const crossProcessReconcileMs: number = Math.max(5_000, asPositiveInt(dispatchIntervalMs, 30_000));
+  let started: boolean = false;
+  let wakeTimer: ReturnType<typeof setTimeout> | null = null;
+  let wakeDeadlineMs: number = Infinity;
+  let reconcileTimer: ReturnType<typeof setInterval> | null = null;
   let stopped: any = false;
   let stopPromise: Promise<unknown> | undefined;
   let closePromise: Promise<void> | undefined;
   let dispatchCursor: any = 0;
   let globalReserved: any = 0;
+
+  function clearWakeTimer(): void {
+    if (wakeTimer) {
+      clearTimeout(wakeTimer);
+      wakeTimer = null;
+    }
+    wakeDeadlineMs = Infinity;
+  }
+
+  function scheduleWakeAt(targetMs: number): void {
+    if (!started || stopped || !Number.isFinite(targetMs)) return;
+    const now = Date.now();
+    const clampedTarget = Math.max(now + 5, Math.trunc(targetMs));
+    if (clampedTarget >= wakeDeadlineMs && wakeTimer !== null) return;
+    clearWakeTimer();
+    wakeDeadlineMs = clampedTarget;
+    wakeTimer = setTimeout(() => {
+      wakeTimer = null;
+      wakeDeadlineMs = Infinity;
+      if (started && !stopped) void requestDispatch();
+    }, Math.min(2_147_483_647, clampedTarget - now));
+    wakeTimer.unref?.();
+  }
+
+  async function refreshNextDueWake(registration?: any): Promise<void> {
+    if (!started || stopped || !registration || registration.closed || !registration.consumerEnabled) return;
+    if (typeof queueStore.inspect !== "function") return;
+    try {
+      const snapshot: any = await queueStore.inspect({
+        queueDefinitionId: registration.definition.queueDefinitionId,
+        scope: registration.scope,
+        states: ["queued", "recovered", "retry_wait", "running"],
+        limit: 64,
+        includeStateCounts: false
+      });
+      const items: any[] = Array.isArray(snapshot?.items) ? snapshot.items : [];
+      const now = Date.now();
+      let earliest = Infinity;
+      for (const item of items) {
+        const state = toText(item?.state);
+        const availableAt = Number(item?.availableAtMs || 0);
+        const expiresAt = Number(item?.expiresAtMs || 0);
+        const leaseExpiresAt = Number(item?.lease?.expiresAtMs || 0);
+        if ((state === "queued" || state === "recovered") && availableAt <= now) {
+          if (globalCredit.limit - globalReserved - globalInFlight() > 0 &&
+              Number(registration.dispatcher?.status().availableCredit || 0) > 0) {
+            earliest = Math.min(earliest, now + 5);
+          }
+        } else if (availableAt > 0) {
+          earliest = Math.min(earliest, availableAt);
+        }
+        if (leaseExpiresAt > 0) earliest = Math.min(earliest, leaseExpiresAt);
+        if (expiresAt > 0) earliest = Math.min(earliest, expiresAt);
+      }
+      if (Number.isFinite(earliest)) scheduleWakeAt(earliest);
+    } catch {
+      // Best-effort wakeup hint; explicit enqueue/settle signals remain active.
+    }
+  }
 
   function globalInFlight() : any {
     let total: any = 0;
@@ -234,13 +298,20 @@ export async function createQueueApplicationPort({
     registration.dispatching = true;
     const dispatchPromise: any = (async () : Promise<any> => {
       try {
-        return await dispatchRegistration(registration);
+        const result: any = await dispatchRegistration(registration);
+        if (result && Number(result.dispatched || 0) >= registration.batchSize &&
+            Number(registration.dispatcher?.status().availableCredit || 0) > 0) {
+          registration.triggerPending = true;
+        }
+        return result;
       } finally {
         registration.dispatching = false;
         registration.dispatchPromise = null;
         if (registration.triggerPending && !stopped && !registration.closed) {
           registration.triggerPending = false;
           registration.dispatchPromise = triggerRegistration(registration);
+        } else if (started && !stopped && !registration.closed) {
+          void refreshNextDueWake(registration);
         }
       }
     })();
@@ -318,6 +389,9 @@ export async function createQueueApplicationPort({
           workerId,
           maxInFlight: resolvedMaxInFlight.limit,
           onTerminal,
+          onSettled: () => {
+            if (started && !stopped) void requestDispatch();
+          },
           logger
         })
       : null;
@@ -394,7 +468,17 @@ export async function createQueueApplicationPort({
           scope: registration.scope,
           dedupeKey: input.dedupeKey
         });
-        return queueStore.enqueue({ ...input, ...resolved, scope: registration.scope });
+        return Promise.resolve(queueStore.enqueue({ ...input, ...resolved, scope: registration.scope })).then((enqueued: any) => {
+          if (started && !stopped && registration.consumerEnabled && !registration.closed) {
+            const availableAt = Number(enqueued?.workItem?.availableAtMs || 0);
+            if (availableAt > Date.now()) {
+              scheduleWakeAt(availableAt);
+            } else {
+              void triggerRegistration(registration);
+            }
+          }
+          return enqueued;
+        });
       },
       observe(input: Record<string, any> = {}) : any {
         return Promise.resolve().then(() : any => queueStore.inspect({
@@ -433,7 +517,12 @@ export async function createQueueApplicationPort({
           ...input,
           queueDefinitionId: definition.queueDefinitionId,
           scope: registration.scope
-        })).then(projectMutationResult);
+        })).then((res: any) => {
+          if (started && !stopped && registration.consumerEnabled && !registration.closed) {
+            void triggerRegistration(registration);
+          }
+          return projectMutationResult(res);
+        });
       },
       pause(input: Record<string, any> = {}) : any {
         return Promise.resolve().then(() : any => queueStore.pause({
@@ -447,7 +536,12 @@ export async function createQueueApplicationPort({
           ...input,
           queueDefinitionId: definition.queueDefinitionId,
           scope: registration.scope
-        })).then(projectControlResult);
+        })).then((res: any) => {
+          if (started && !stopped && registration.consumerEnabled && !registration.closed) {
+            void triggerRegistration(registration);
+          }
+          return projectControlResult(res);
+        });
       },
       drain(input: Record<string, any> = {}) : any {
         return Promise.resolve().then(() : any => queueStore.drain({
@@ -607,9 +701,12 @@ export async function createQueueApplicationPort({
   }
 
   function start() : any {
-    if (timer || stopped) return { started: false, reason: stopped ? "stopped" : "already_started" };
-    timer = setInterval(() : any => void requestDispatch(), Math.max(50, asPositiveInt(dispatchIntervalMs, 500)));
-    timer.unref?.();
+    if (started || stopped) return { started: false, reason: stopped ? "stopped" : "already_started" };
+    started = true;
+    if (isSharedRemoteStore) {
+      reconcileTimer = setInterval(() => void requestDispatch(), crossProcessReconcileMs);
+      reconcileTimer.unref?.();
+    }
     void requestDispatch();
     return { started: true };
   }
@@ -617,7 +714,9 @@ export async function createQueueApplicationPort({
   function stop(): Promise<unknown> {
     if (!stopPromise) {
       stopped = true;
-      if (timer) { clearInterval(timer); timer = null; }
+      started = false;
+      clearWakeTimer();
+      if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
       stopPromise = (async () => {
         for (const registration of registrations.values()) {
           while (registration.dispatchPromise) await registration.dispatchPromise;

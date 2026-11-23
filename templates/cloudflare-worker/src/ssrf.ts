@@ -1,10 +1,12 @@
 export class UpstreamUrlError extends Error {
   readonly code: string;
+  readonly notSent: boolean;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, notSent = true) {
     super(message);
     this.name = "UpstreamUrlError";
     this.code = code;
+    this.notSent = notSent;
   }
 }
 
@@ -271,9 +273,12 @@ export async function safeUpstreamFetch(
     (response.status >= 300 && response.status < 400)
   ) {
     void response.body?.cancel();
+    // The POST already reached the upstream server before it replied with 3xx:
+    // redirects are refused, and delivery is NOT marked notSent.
     throw new UpstreamUrlError(
       "upstream_redirect_refused",
       "Upstream responded with a redirect; redirects are not followed.",
+      false,
     );
   }
   return response;

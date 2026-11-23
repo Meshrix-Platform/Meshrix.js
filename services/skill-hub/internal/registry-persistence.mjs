@@ -1,5 +1,6 @@
 const REGISTRY_DATABASE_VERSION = 1;
 const IMPORT_COMPLETE_KEY = "json_import_complete";
+const AUDIT_COUNTS_COMPLETE_KEY = "audit_counts_complete";
 
 export function registryDatabaseResource(registryRelativePath) {
   if (!String(registryRelativePath || "").endsWith(".json")) {
@@ -100,7 +101,11 @@ export async function createSkillHubRegistryPersistence({ serviceData, registryR
         event_type TEXT NOT NULL,
         body TEXT NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS audit_events_by_type ON audit_events(event_type);
+      CREATE TABLE IF NOT EXISTS audit_event_counts (
+        event_type TEXT PRIMARY KEY NOT NULL,
+        event_count INTEGER NOT NULL
+      );
+      DROP INDEX IF EXISTS audit_events_by_type;
     `);
     const version = Number(database.prepare("PRAGMA user_version").get()?.user_version || 0);
     if (version > REGISTRY_DATABASE_VERSION) {
@@ -128,6 +133,9 @@ export async function createSkillHubRegistryPersistence({ serviceData, registryR
         "INSERT INTO contributions (contribution_id, body) VALUES (?, ?) ON CONFLICT(contribution_id) DO UPDATE SET body = excluded.body"
       );
       const insertAudit = database.prepare("INSERT INTO audit_events (event_type, body) VALUES (?, ?)");
+      const upsertAuditCount = database.prepare(
+        "INSERT INTO audit_event_counts (event_type, event_count) VALUES (?, ?) ON CONFLICT(event_type) DO UPDATE SET event_count = audit_event_counts.event_count + excluded.event_count"
+      );
       const setMetadata = database.prepare(
         "INSERT INTO registry_metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
       );
@@ -137,11 +145,43 @@ export async function createSkillHubRegistryPersistence({ serviceData, registryR
           for (const contribution of imported.contributions) {
             insertContribution.run(contribution.contributionId, JSON.stringify(contribution));
           }
+          const importedCounts = new Map();
           for (const event of imported.auditEvents) {
-            insertAudit.run(String(event?.eventType || "unknown"), JSON.stringify(event));
+            const eventType = String(event?.eventType || "unknown");
+            insertAudit.run(eventType, JSON.stringify(event));
+            importedCounts.set(eventType, (importedCounts.get(eventType) || 0) + 1);
+          }
+          for (const [eventType, delta] of importedCounts.entries()) {
+            upsertAuditCount.run(eventType, delta);
           }
           setMetadata.run(IMPORT_COMPLETE_KEY, "1");
+          setMetadata.run(AUDIT_COUNTS_COMPLETE_KEY, "1");
           setMetadata.run("updated_at", imported.updatedAt || new Date().toISOString());
+        }
+        database.exec("COMMIT;");
+      } catch (error) {
+        if (!database.isTransaction) throw error;
+        try {
+          database.exec("ROLLBACK;");
+        } catch (rollbackError) {
+          throw databaseError(error, rollbackError);
+        }
+        throw error;
+      }
+    }
+
+    if (importMarker.get(AUDIT_COUNTS_COMPLETE_KEY)?.value !== "1") {
+      database.exec("BEGIN IMMEDIATE;");
+      try {
+        if (importMarker.get(AUDIT_COUNTS_COMPLETE_KEY)?.value !== "1") {
+          database.exec(`
+            DELETE FROM audit_event_counts;
+            INSERT INTO audit_event_counts (event_type, event_count)
+            SELECT event_type, COUNT(*) FROM audit_events GROUP BY event_type;
+          `);
+          database.prepare(
+            "INSERT INTO registry_metadata (key, value) VALUES (?, '1') ON CONFLICT(key) DO UPDATE SET value = '1'"
+          ).run(AUDIT_COUNTS_COMPLETE_KEY);
         }
         database.exec("COMMIT;");
       } catch (error) {
@@ -169,6 +209,12 @@ export async function createSkillHubRegistryPersistence({ serviceData, registryR
       "INSERT INTO contributions (contribution_id, body) VALUES (?, ?) ON CONFLICT(contribution_id) DO UPDATE SET body = excluded.body"
     );
     const insertAudit = database.prepare("INSERT INTO audit_events (event_type, body) VALUES (?, ?)");
+    const upsertAuditCount = database.prepare(
+      "INSERT INTO audit_event_counts (event_type, event_count) VALUES (?, ?) ON CONFLICT(event_type) DO UPDATE SET event_count = audit_event_counts.event_count + excluded.event_count"
+    );
+    const selectAuditCounts = database.prepare(
+      "SELECT event_type, event_count FROM audit_event_counts ORDER BY event_type"
+    );
     const setMetadata = database.prepare(
       "INSERT INTO registry_metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     );
@@ -178,8 +224,14 @@ export async function createSkillHubRegistryPersistence({ serviceData, registryR
       database.exec("BEGIN IMMEDIATE;");
       try {
         if (contribution) insertContribution.run(contribution.contributionId, JSON.stringify(contribution));
+        const countsByType = new Map();
         for (const event of auditEvents) {
-          insertAudit.run(String(event?.eventType || "unknown"), JSON.stringify(event));
+          const eventType = String(event?.eventType || "unknown");
+          insertAudit.run(eventType, JSON.stringify(event));
+          countsByType.set(eventType, (countsByType.get(eventType) || 0) + 1);
+        }
+        for (const [eventType, delta] of countsByType.entries()) {
+          upsertAuditCount.run(eventType, delta);
         }
         setMetadata.run("updated_at", new Date().toISOString());
         database.exec("COMMIT;");
@@ -205,11 +257,10 @@ export async function createSkillHubRegistryPersistence({ serviceData, registryR
     function getAuditSummary() {
       const byType = Object.create(null);
       let count = 0;
-      for (const row of database.prepare(
-        "SELECT event_type, COUNT(*) AS event_count FROM audit_events GROUP BY event_type"
-      ).iterate()) {
+      for (const row of selectAuditCounts.iterate()) {
         const eventType = String(row.event_type || "unknown");
         const eventCount = Number(row.event_count || 0);
+        if (eventCount <= 0) continue;
         byType[eventType] = eventCount;
         count += eventCount;
       }

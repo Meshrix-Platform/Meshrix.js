@@ -738,8 +738,8 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
         approvalId,
       ).toArray()[0]!;
 
-    // Refused redirect: the upstream tool endpoint never ran the call, so the
-    // permit is restored to approved and can be redeemed once more.
+    // Refused redirect: the HTTP POST already reached the upstream server before
+    // it answered 302, so the permit stays consumed and delivery is unknown.
     const redirectApproval = await approveCall();
     vi.stubGlobal("fetch", vi.fn(async () =>
       new Response(null, { status: 302, headers: { Location: "https://mcp.example.com/moved" } }),
@@ -749,23 +749,8 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       const refusedBody = (await refused.json()) as any;
       expect(refusedBody.error.data.code).toBe("upstream_redirect_refused");
       expect(refusedBody.error.data.approvalId).toBe(redirectApproval);
-      expect(refusedBody.error.data.approvalRestored).toBe(true);
-      expect(refusedBody.error.data.resultUnknown).toBeUndefined();
-      expect(approvalRow(redirectApproval)).toMatchObject({ status: "approved", consumed_at: null });
-    } finally {
-      vi.unstubAllGlobals();
-    }
-
-    vi.stubGlobal("fetch", vi.fn(async () =>
-      new Response(
-        JSON.stringify({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "ok" }], structuredContent: { deployed: true } } }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    ));
-    try {
-      const reused = await callWithApproval(redirectApproval);
-      const reusedBody = (await reused.json()) as any;
-      expect(reusedBody.result.structuredContent).toEqual({ deployed: true });
+      expect(refusedBody.error.data.approvalRestored).toBeUndefined();
+      expect(refusedBody.error.data.resultUnknown).toBe(true);
       expect(approvalRow(redirectApproval).status).toBe("consumed");
       const replay = await callWithApproval(redirectApproval);
       expect((await replay.json() as any).error.data.code).toBe("approval_replay_or_mismatch");
@@ -773,7 +758,8 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       vi.unstubAllGlobals();
     }
 
-    // Synchronous dispatch failure: the request never left the gateway.
+    // Synchronous dispatch failure: the request never left the gateway, so the
+    // permit is restored and can be redeemed once more.
     const notSentApproval = await approveCall();
     vi.stubGlobal("fetch", vi.fn(() => {
       throw new TypeError("request construction failed");
@@ -788,8 +774,22 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       vi.unstubAllGlobals();
     }
 
-    // Retire the restored permit so the next bare call opens a fresh approval.
-    h.sql.exec("UPDATE approvals SET status = 'denied' WHERE id = ?", notSentApproval);
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(
+        JSON.stringify({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "ok" }], structuredContent: { deployed: true } } }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    ));
+    try {
+      const reused = await callWithApproval(notSentApproval);
+      const reusedBody = (await reused.json()) as any;
+      expect(reusedBody.result.structuredContent).toEqual({ deployed: true });
+      expect(approvalRow(notSentApproval).status).toBe("consumed");
+      const replay = await callWithApproval(notSentApproval);
+      expect((await replay.json() as any).error.data.code).toBe("approval_replay_or_mismatch");
+    } finally {
+      vi.unstubAllGlobals();
+    }
 
     // SSRF refusal at dispatch time (upstream_url rewritten to bypass admin validation).
     const ssrfApproval = await approveCall();
@@ -1204,9 +1204,6 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       expect(payload.result).toBeUndefined();
       expect(payload.error?.data?.code).toBe("upstream_session_expired");
       expect(upstream.calls.map((c) => c.method)).toEqual([
-        "tools/call",
-        "initialize",
-        "notifications/initialized",
         "tools/call",
         "initialize",
         "notifications/initialized",

@@ -52,11 +52,14 @@ export function createQueuePushDispatcher({
   maxInFlight = DEFAULT_QUEUE_POLICY.maxInFlight || 1000,
   peerSelector = null,
   onTerminal = null,
+  onSettled = null,
   logger = null
 }: {
   store?: QueueStore; workerRuntime?: WorkerRuntime; queueDefinitionId?: unknown; scope?: object; workerId?: unknown;
   maxInFlight?: unknown; peerSelector?: ((input: DispatchInput & { status: object; reason: string }) => Promise<PeerDispatcher | null>) | null;
-  onTerminal?: ((input: { workItem: QueueWorkItem; source: unknown }) => Promise<void> | void) | null; logger?: QueueLogger | null;
+  onTerminal?: ((input: { workItem: QueueWorkItem; source: unknown }) => Promise<void> | void) | null;
+  onSettled?: (() => void) | null;
+  logger?: QueueLogger | null;
 } = {}) {
   if (!store || typeof store.claim !== "function") {
     throw new Error("Queue Push Dispatcher requires a work queue store.");
@@ -205,6 +208,7 @@ export function createQueuePushDispatcher({
         .finally(() => {
           input.signal?.removeEventListener?.("abort", abortFromCaller);
           inFlight.delete(workItemId);
+          onSettled?.();
         });
       inFlight.set(workItemId, { promise, executionController });
       started.push({
