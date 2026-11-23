@@ -6,7 +6,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { npmCliArgs, resolveNpmCliInvocation } from "../server-scripts/lib/npm-cli-invocation.ts";
+import { npmCliArgs, npmInstallEnv, resolveNpmCliInvocation } from "../server-scripts/lib/npm-cli-invocation.ts";
 import {
   runSuiteProcess,
   sourceNodeEnvironment,
@@ -456,7 +456,7 @@ async function main(argv: readonly string[] = process.argv.slice(2)): Promise<vo
   if (!existsSync(path.join(repoRoot, "node_modules"))) {
     process.stdout.write("[local-ci] node_modules missing; running npm ci\n");
     const npmInvocation = resolveNpmCliInvocation();
-    const install = spawnSync(npmInvocation.command, npmCliArgs(npmInvocation, ["ci"]), { cwd: repoRoot, stdio: "inherit" });
+    const install = spawnSync(npmInvocation.command, npmCliArgs(npmInvocation, ["ci"]), { cwd: repoRoot, env: npmInstallEnv(), stdio: "inherit" });
     if (install.status !== 0) throw new Error("local_ci_dependency_install_failed");
   }
   await loadReportSafety();

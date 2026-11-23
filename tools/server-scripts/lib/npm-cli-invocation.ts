@@ -41,6 +41,19 @@ export function npmCliArgs(invocation?: any, args: any = []) : any {
   return [...invocation.prefixArgs, ...args];
 }
 
+// npm re-exports resolved user/global configuration to run-script
+// environments as npm_config_* variables. A user-level allow-scripts entry
+// then reaches a spawned project-scoped install as a forbidden env-layer
+// policy, and current npm rejects `npm ci` with EALLOWSCRIPTS before the
+// repository's package.json allowScripts field can apply. Project installs
+// rely on the checked-in package policy, so the synthesized CLI value is not
+// forwarded.
+export function npmInstallEnv({ env = process.env }: Record<string, any> = {}) : any {
+  const childEnv: any = { ...env };
+  delete childEnv.npm_config_allow_scripts;
+  return childEnv;
+}
+
 export function parseNpmPackJson(stdout?: any) : any[] {
   const parsed: any = JSON.parse(String(stdout || "[]"));
   if (Array.isArray(parsed)) return parsed;

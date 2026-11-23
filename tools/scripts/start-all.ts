@@ -5,7 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { resolveServerPort, resolveVitePort } from "@meshrix/foundation/config/server-env";
-import { npmCliArgs, resolveNpmCliInvocation } from "../server-scripts/lib/npm-cli-invocation.ts";
+import { npmCliArgs, npmInstallEnv, resolveNpmCliInvocation } from "../server-scripts/lib/npm-cli-invocation.ts";
 import { managedProcessIsAlive, stopManagedProcesses } from "./lib/process-lifecycle.ts";
 import { openPlatformBrowser, terminatePlatformProcessTree } from "./lib/startup-platform-adapter.ts";
 
@@ -90,7 +90,7 @@ function parseArgs(argv?: any) : any {
 function runSync(command?: any, args?: any, options: Record<string, any> = {}) : any {
   return spawnSync(command, args, {
     cwd: options.cwd || projectRoot,
-    env: { ...process.env, ...(options.env || {}) },
+    env: { ...npmInstallEnv(), ...(options.env || {}) },
     encoding: "utf8",
     stdio: options.inherit ? "inherit" : ["ignore", "pipe", "pipe"],
     windowsHide: true
