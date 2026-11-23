@@ -15,7 +15,7 @@ the feature. Skip it for understood, local, reversible changes.
 Copy `assets/reassembly-contract.template.json` into ignored process storage only when it
 will sharpen a decision. Use `stage: plan` for a working hypothesis and
 `stage: closure` for a retrospective closure assessment. Neither stage controls
-Better Plan state.
+task execution state.
 
 ## 2. Interpret the fields heuristically
 

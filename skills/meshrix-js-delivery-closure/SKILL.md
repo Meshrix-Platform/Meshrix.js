@@ -36,7 +36,7 @@ local implementation work.
 ## Diagnose before prescribing
 
 1. Reconcile the latest user request, current source, executable behavior, and
-   relevant Better Plan state. A completed label or historical receipt is a
+   relevant task state. A completed label or historical receipt is a
    clue, not truth.
 2. Inspect the working tree read-only. Preserve unrelated work and group current
    changes by user-visible outcome and canonical fact owner.
@@ -54,7 +54,7 @@ local implementation work.
 | Depth | Typical signals | Useful aids | Usual closure evidence |
 | --- | --- | --- | --- |
 | Light | Local, understood, reversible; one owner; no contract or visual-language change | Direct implementation, a short acceptance note, focused tests | Changed behavior and the smallest relevant verifier |
-| Standard | User-visible or cross-layer behavior; moderate ambiguity; several consumers | One bounded Better Plan Node, acceptance card, optional diagnostic contract, focused reviewer | Success path, material failures, focused regression, changed rendering when relevant |
+| Standard | User-visible or cross-layer behavior; moderate ambiguity; several consumers | One bounded task unit, acceptance card, optional diagnostic contract, focused reviewer | Success path, material failures, focused regression, changed rendering when relevant |
 | Deep | Security, protocol, data, ownership, package, irreversible migration, or a new visual direction | Explicit contract, alternatives, independent review, migration inventory, owner-specific workflow profile | End-to-end behavior, failure recovery, residue removal, independent audit, final owner reducer |
 
 These are starting points, not eligibility rules. For example, a large but
@@ -63,7 +63,7 @@ change can require deep treatment.
 
 ## Shape the closure
 
-- One capability, one Better Plan Node, and one active integration candidate is
+- One capability, one bounded task unit, and one active integration candidate is
   the normal coordination default. Combine tightly coupled work when separate
   closures would be untestable or leave a misleading intermediate state.
 - Keep a release spine from user entry to canonical execution, result or durable
@@ -71,7 +71,7 @@ change can require deep treatment.
   do not exist.
 - Freeze only unrelated scope. Admit discoveries that are necessary to make the
   selected outcome truthful; defer optional improvements explicitly.
-- Use Better Plan as lifecycle memory, not as a substitute for engineering
+- Use task records as lifecycle memory, not as a substitute for engineering
   judgment. Repair structural drift only when it affects the selected work.
 - Ask the user when alternatives change product scope, brand direction,
   compatibility promises, cost, or irreversible behavior. Resolve ordinary

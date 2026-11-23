@@ -42,7 +42,7 @@ longer agree with its authority. Do not require it for every feature or UI edit.
 5. Optionally run `node skills/meshrix-js-architecture-reassembly/scripts/reassembly-cli.mjs check
    <contract-file> --target .`. Interpret `errors` as an unreadable or unsafe diagnostic
    artifact and `advisories` as review prompts. The command never authorizes,
-   blocks, or completes a Better Plan lifecycle.
+   blocks, or completes a delivery lifecycle.
 
 The `reassembly` check is an optional deep diagnostic. It does not replace the
 repository-owned package scripts or acceptance reducer. See

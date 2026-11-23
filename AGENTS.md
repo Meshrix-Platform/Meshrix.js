@@ -4,49 +4,28 @@ This file is the repository-wide instruction authority for development agents.
 It applies to every task and directory in this repository. A more specific
 child `AGENTS.md` may strengthen these rules but must not weaken them.
 
-## Short-Term And Long-Term Planning
+## Delivery Scope, Single Entrypoint And Hygiene
 
-Use the current Better Plan skill for all repository delivery planning, from a
-small scoped change to the long-term product programme. The maintainer-designated
-private project workspace owns the sole active `docs/plans/Programme.json`, with
-`Requirements.json` beside it and referenced split Tree/Task/Node workspaces
-under that plan directory. In the combined development workspace, that source
-resides in the maintainer-designated sibling planning directory; this
-repository's ignored `docs/plans/` retains inactive predecessor evidence only.
-Keep private planning and execution details
-out of published source and artifacts. Preserve independently completed plans as
-historical assets. When the designated workspace is unavailable, report the
-missing context rather than creating a competing plan in this repository.
+Deliver bounded, independently verifiable closures through the repository's
+single verification authority (`npm run ci:local`). Keep private planning,
+temporary reports, and local execution artifacts (`docs/plans/`, `docs/reports/`,
+`build/`, `tmp/`) untracked and out of published source and tarballs. Product
+status remains in `docs/STATUS.md`; it describes verified product facts rather
+than dispatch instructions.
 
-- `Programme.json` owns delivery identities, milestone outlines and dependencies.
-  Future milestones remain outlines until investigation establishes executable work.
-- `Requirements.json` owns cross-delivery requirements. Trees and Tasks reference
-  those identities instead of maintaining duplicate requirement lists.
-- Each active delivery uses the current split layout: `Tree.json`,
-  `tasks/<id>.json` and `nodes/<id>.json`. A Task has an integration owner and maps
-  to one independently deliverable Draft PR; a Node owns one coherent change and
-  its commit. Record absent commit or PR references honestly.
-- Keep shared requirements at Tree or Task scope. Record real checks and evidence
-  at their owning scope. User-journey observations and final review are delivery
-  lifecycle work; create source Nodes only for concrete implementation,
-  documentation or configuration changes, not empty audit commits.
-- Use the current skill's tool for plan operations and exports. Archive supplied
-  conversation context and superseded plans through its history commands before
-  replacement. Preserve prior outcomes and evidence without relabeling them as
-  current verification. Do not maintain an older tool dialect as the active path.
-- Repository-plan readers project only the active Programme, requirement catalogue,
-  delivery outlines and referenced split Trees. They must not import that source
-  as another writable execution plan or treat reading it as authority to run work.
-  History, commands, private paths and raw check output are not presentation fields.
-- Markdown reports are navigation or generated views of Better Plan state, never
-  a second editable plan. Product status remains in `docs/STATUS.md`; it describes
-  verified product facts rather than dispatch instructions.
-
-Plan status never grants execution authority. Preserve the user's selected model,
-live-acceptance ownership, deployment and publication boundaries. A blocker pauses
-only dependent work. Ordinary authorized scoped repairs continue without another
-general approval request. Record Task and Tree delivery conclusions separately
-from Node progress; completed Nodes alone do not establish accepted delivery.
+- **Single verification entrypoint:** Every unit, integration, contract, UI,
+  template, and boundary check added to this repository must be registered and
+  reachable through `npm run ci:local` (and its owning package `test` script).
+  Never leave orphan `*.test.*` suites wired only in workflow YAML or prose, and
+  never pass bare directory paths to `node --test` (use explicit file globs).
+- **Workflow parity:** GitHub Actions workflows set up the locked toolchain and
+  invoke the same maintained repository commands (`npm run ci:local`,
+  `npm run release:prepare`, `publish-release-set.ts`) rather than maintaining a
+  second inline shell test list.
+- **Execution authority:** Task or plan records never grant execution authority.
+  Preserve the user's selected model, live-acceptance ownership, deployment and
+  publication boundaries. A blocker pauses only dependent work; ordinary
+  authorized scoped repairs continue without renewed approval.
 
 Long-running work leaves recoverable intermediate conclusions. A delivery that
 runs for many hours without an observable intermediate result cannot be reviewed,
@@ -212,7 +191,7 @@ integration owner, decide only consequential architecture or published-support
 changes, migrate producers/consumers/tests/documents together, run targeted
 evidence, integrate once, and maintain version, deprecation, and release facts.
 This file owns Agent execution authority, privacy, live/performance ordering,
-and Better Plan lifecycle. Specialist skills and handbooks route to
+and single-entrypoint verification hygiene. Specialist skills and handbooks route to
 `CONTRIBUTING.md` and the owning architecture or runbook source instead of
 restating that workflow.
 

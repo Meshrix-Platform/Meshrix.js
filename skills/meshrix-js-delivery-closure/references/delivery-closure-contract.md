@@ -1,8 +1,8 @@
 # Delivery Closure Heuristics
 
-Use this reference to reduce ambiguity inside the selected Better Plan
+Use this reference to reduce ambiguity inside the selected delivery
 lifecycle. It is a menu, not a form that must be completed. Keep any working
-artifact local and non-public; map durable facts into the Node's existing
+artifact local and non-public; map durable facts into the task's existing
 fields instead of creating a second product authority.
 
 ## 1. Select only useful detail
@@ -64,20 +64,20 @@ Consider:
 
 A screenshot may support a visual claim but never a functional claim.
 
-## 4. Better Plan mapping
+## 4. Task record mapping
 
-Use Better Plan as lifecycle memory:
+Use task records as lifecycle memory:
 
 - put the outcome, boundaries, canonical owners, meaningful constraints,
   non-goals, and migration obligations in `description`;
 - give each acceptance criterion one observable claim and a proportionate proof source;
-- put only focused proof in implementation-node regression commands;
+- put only focused proof in implementation-step regression commands;
 - keep owner-wide or repository-wide validation in the final integration lifecycle;
 - keep Evidence for redacted provenance and Architecture for durable ownership or interface decisions.
 
-One capability per Node is a good default. Combine inseparable work when separate
-Nodes would be untestable or would preserve a knowingly false intermediate
-state. Split a Node when outcomes can be accepted independently and doing so
+One capability per task unit is a good default. Combine inseparable work when separate
+units would be untestable or would preserve a knowingly false intermediate
+state. Split a task when outcomes can be accepted independently and doing so
 reduces integration risk.
 
 ## 5. Review and evidence depth

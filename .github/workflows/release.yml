@@ -31,7 +31,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
@@ -39,12 +39,12 @@ jobs:
       - name: Confirm the checkout is the tagged commit
         run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24.21.0"
           cache: npm
       - name: Provide the Go toolchain for service verification
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: services/file-parser/format-convert/go.mod
 
@@ -65,7 +65,7 @@ jobs:
         run: npm run ci:local -- --report build/ci-diagnostics/release-local-ci/results.json
 
       - name: Retain the qualified npm archives for the publish job
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: release-npm-set-${{ github.sha }}
           path: build/release/npm-set/
@@ -74,7 +74,7 @@ jobs:
 
       - name: Retain sanitized release diagnostics
         if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: release-diagnostics-${{ github.sha }}
           path: |
@@ -100,7 +100,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
@@ -108,7 +108,7 @@ jobs:
       - name: Confirm the checkout is the tagged commit
         run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: "24.21.0"
           registry-url: https://registry.npmjs.org
@@ -118,7 +118,7 @@ jobs:
         run: node tools/server-scripts/install-release-npm-cli.ts
 
       - name: Restore the qualified npm archives
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-npm-set-${{ github.sha }}
           path: build/release/npm-set/

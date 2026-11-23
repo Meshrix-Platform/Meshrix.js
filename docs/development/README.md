@@ -108,7 +108,7 @@ Dependency licensing, security, maintenance and operational suitability are gove
 
 ### Plans and current status
 
-Use the existing long-lived Better Plan workspace according to [AGENTS.md](../../AGENTS.md). Preserve delivery results and history; generated navigation does not become a second editable plan. Keep private execution state out of public source. Current product state belongs in [Status](../STATUS.md); executable acceptance, deployment, production-closure, and publication facts belong to their owning commands and reports.
+Keep local planning and temporary reports in ignored workspace storage according to [AGENTS.md](../../AGENTS.md); never publish execution state or unredacted process material in source. Current product state belongs in [Status](../STATUS.md); executable acceptance, deployment, production-closure, and publication facts belong to their owning commands and reports.
 
 ## Technical references
 

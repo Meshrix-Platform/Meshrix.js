@@ -7,7 +7,7 @@
 
 This document is the canonical Meshrix.js maintenance and Functional Release Gate policy
 for protected access, side effects, and their evidence. Every maintainer-facing
-document, Better Plan node, workflow, protocol projection, runtime path, and
+document, task, workflow, protocol projection, runtime path, and
 generated documentation projection under `docs/` inherits this policy. A more
 specific contract may strengthen it but must not weaken or bypass it.
 
@@ -128,7 +128,7 @@ that a production retention objective was configured.
 
 ## Delivery And Verification
 
-Non-converged implementation work remains in the ignored Better Plan workspace;
+Non-converged implementation work remains in ignored local planning storage;
 formal documentation does not publish that process state.
 Migrate one independently acceptable surface at a time and update ingress,
 dispatcher, sink, cancellation, evidence, tests, registry, and documentation
