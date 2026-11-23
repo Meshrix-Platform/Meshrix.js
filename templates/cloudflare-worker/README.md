@@ -1,6 +1,6 @@
 # Meshrix MCP Gateway — Cloudflare Workers Template
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Meshrix-Platform/Meshrix.js/tree/main/templates/cloudflare-worker)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Meshrix-Platform/Meshrix.js/tree/nightly/templates/cloudflare-worker)
 
 Run a governed **MCP Streamable HTTP gateway** with scoped API keys, JSON Schema 2020-12 parameter validation, single-use human approvals, and content-minimal audit receipts on **Cloudflare Workers + SQLite Durable Objects** — **Free Tier compatible**.
 
@@ -17,14 +17,52 @@ Click **Deploy to Cloudflare** above, or deploy from the CLI:
 git clone https://github.com/Meshrix-Platform/Meshrix.js.git
 cd Meshrix.js/templates/cloudflare-worker
 
+# 0. Prerequisites: Node.js + npm, and a Cloudflare account
+npm install                    # installs the pinned wrangler toolchain
+npx wrangler login             # one-time browser login (or export CLOUDFLARE_API_TOKEN)
+
 # 1. Configure a strong admin secret (required for self-hosted /admin/* APIs)
 npx wrangler secret put ADMIN_TOKEN
+#    On a fresh worker name, wrangler asks to create the Worker first — confirm it.
 
 # 2. Deploy to Cloudflare Workers Free Tier
 npx wrangler deploy --config wrangler.jsonc
+#    The default worker name is "meshrix-mcp-gateway". To use your own name,
+#    pass --name <your-worker-name> (also on `secret put`) or edit wrangler.jsonc.
 ```
 
 Open your deployed `*.workers.dev` URL in a browser, enter `ADMIN_TOKEN` to unlock the Web Console, register your HTTPS MCP upstream tools, mint scoped API keys, and test live calls and approvals.
+
+### First governed call (curl)
+
+Self-hosted mode only serves tools you register against a real upstream. The gateway forwards each call as a single `tools/call` JSON-RPC POST to `upstreamUrl` — HTTPS on port 443 or 8443, with no authorization headers and no `initialize` handshake — so pick an upstream that accepts that shape. Cloudflare's public documentation MCP works out of the box:
+
+```bash
+GW=https://<your-worker>.workers.dev
+# ADMIN = the ADMIN_TOKEN you set with `wrangler secret put` above
+
+# Register an upstream MCP tool (validated by JSON Schema 2020-12)
+curl -X POST "$GW/admin/tools" \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d '{
+    "name": "cfdocs.search",
+    "upstreamUrl": "https://docs.mcp.cloudflare.com/mcp",
+    "upstreamToolName": "search_cloudflare_documentation",
+    "inputSchema": {"type":"object","properties":{"query":{"type":"string","minLength":1}},"required":["query"],"additionalProperties":false}
+  }'
+
+# Mint a scoped API key (the token is returned once — save it)
+curl -X POST "$GW/admin/keys" \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d '{"name":"my-agent","allowedTools":["cfdocs.search"],"ttlSeconds":3600}'
+
+# Call through the gateway: key scope + schema validation + audit receipt
+curl -X POST "$GW/mcp" \
+  -H "Authorization: Bearer mx_live_..." -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"cfdocs.search","arguments":{"query":"durable objects"}}}'
+```
+
+Registering a tool with `"requiresApproval": true` makes its `tools/call` return an `approval_required` error carrying an `approvalId`. Approve it with `POST /admin/approvals/<approvalId>/decide` and body `{"decision":"approve"}` (or from the Console), then retry the same call with `"approvalId": "<approvalId>"` inside `params`. Each permit is single-use and bound to the key, tool, and exact arguments. `GET /admin/state` lists tools, key prefixes, approvals, and audit receipts.
 
 ### Local Development
 

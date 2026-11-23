@@ -47,7 +47,7 @@ node tools/start.mjs
 
 Open the web console at **http://127.0.0.1:7228**.
 
-[Local setup](docs/RUNBOOK.md#local-startup) · [Docker deployment](docs/RUNBOOK.md#container-startup) · [Connect an agent](docs/COMPATIBILITY.md)
+[Local setup](docs/RUNBOOK.md#local-startup) · [Docker deployment](docs/RUNBOOK.md#container-startup) · [Cloudflare Worker gateway](templates/cloudflare-worker/README.md) · [Connect an agent](docs/COMPATIBILITY.md)
 
 ## Embed the Gateway
 

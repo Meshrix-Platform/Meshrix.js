@@ -47,7 +47,7 @@ node tools/start.mjs
 
 打开 Web 控制台：**http://127.0.0.1:7228**。
 
-[本地配置](docs/RUNBOOK.md#local-startup) · [Docker 部署](docs/RUNBOOK.md#container-startup) · [接入智能体](docs/COMPATIBILITY.md)
+[本地配置](docs/RUNBOOK.md#local-startup) · [Docker 部署](docs/RUNBOOK.md#container-startup) · [Cloudflare Worker 网关](templates/cloudflare-worker/README.md) · [接入智能体](docs/COMPATIBILITY.md)
 
 ## 嵌入 Gateway
 
