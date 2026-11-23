@@ -66,7 +66,7 @@ describe("standard npm release workflow", () => {
     // time: the CLI comes from the integrity-pinned tarball installer only.
     expect(publishSection).toContain("node tools/server-scripts/install-release-npm-cli.ts");
     expect(publishSection).not.toContain('npm install --global "npm@');
-    expect(publishSection).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
+    expect(publishSection).toContain("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c");
     expect(publishSection).toContain("release-npm-set-${{ github.sha }}");
     // The remote tag must peel to this commit before npm publication —
     // unconditionally, whether or not a Release object already exists.
@@ -88,7 +88,7 @@ describe("standard npm release workflow", () => {
     expect(workflow).toContain('no longer points at ${{ github.sha }}');
     expect(workflow).toContain('refusing to update');
     expect(workflow).toContain("if: ${{ always() }}");
-    expect(uploadArtifactAction).toBe("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
+    expect(uploadArtifactAction).toBe("actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f");
     expect(workflow).toContain(`uses: ${uploadArtifactAction}`);
     expect(workflow).toContain("build/ci-diagnostics/release-local-ci/results.json");
     expect(workflow).toContain("build/local-ci/");

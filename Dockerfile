@@ -71,7 +71,7 @@ COPY packages ./packages
 COPY content ./content
 COPY tools ./tools
 
-RUN npm run build:web
+RUN npm run build:web && rm -f tools/server-scripts/benchmark-gateway.ts
 
 FROM docker.io/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203 AS runtime
 

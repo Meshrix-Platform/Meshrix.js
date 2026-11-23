@@ -17,6 +17,6 @@ describe("benchmark product boundary policy (not artifact evidence)", () => {
     expect(compiler.exclude).toContain("tools/server-scripts/benchmark-gateway.ts");
     const docker = await readFile(resolve(root, "Dockerfile"), "utf8");
     expect(docker).toMatch(/RUN npm run build:node && rm -f tools\/server-scripts\/benchmark-gateway\.ts/u);
-    expect(docker).toMatch(/RUN npm run build && rm -f tools\/server-scripts\/benchmark-gateway\.ts/u);
+    expect(docker).toMatch(/RUN npm run build:web && rm -f tools\/server-scripts\/benchmark-gateway\.ts/u);
   });
 });
