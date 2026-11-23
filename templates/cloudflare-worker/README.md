@@ -35,7 +35,7 @@ Open your deployed `*.workers.dev` URL in a browser, enter `ADMIN_TOKEN` to unlo
 
 ### First governed call (curl)
 
-Self-hosted mode only serves tools you register against a real upstream. The gateway forwards each call as a single `tools/call` JSON-RPC POST to `upstreamUrl` — HTTPS on port 443 or 8443, with no authorization headers and no `initialize` handshake — so pick an upstream that accepts that shape. Cloudflare's public documentation MCP works out of the box:
+Self-hosted mode only serves tools you register against a real upstream. The gateway forwards each call as a single `tools/call` JSON-RPC POST to `upstreamUrl` — HTTPS on port 443 or 8443, with no `initialize` handshake — so pick an upstream that accepts that shape. Upstreams that require authentication or request context can be registered with an optional `headers` object of declarative request headers (for example `{"Authorization":"Bearer <token>","x-project-id":"billing"}`), which the gateway attaches to every forwarded call. Header names and values are validated at registration: names must be valid HTTP field names, duplicates are rejected, transport/hop-by-hop names (`host`, `content-length`, `connection`, `accept`, `content-type`, `mcp-session-id`, and similar) are filtered out, values must be strings without control characters, and the map is bounded at 64 headers / 32 KiB. Header **values are write-only**: `GET /admin/state`, the Console, and audit receipts only ever expose the configured header names, never the values. Cloudflare's public documentation MCP works out of the box without any headers:
 
 ```bash
 GW=https://<your-worker>.workers.dev
@@ -117,6 +117,7 @@ Per-call baseline (after key minting):
 - **Self-Hosted Fail-Closed Admin Auth:** When `DEMO_MODE !== "true"`, all `/admin/*` endpoints return `503` if `ADMIN_TOKEN` is unset and `401` if the Bearer token fails constant-time SHA-256 verification.
 - **Public Demo Mode (`DEMO_MODE=true`):** Pre-seeds `demo.echo`, `demo.format_note`, and `demo.sensitive_deploy` (`requiresApproval: true`), rejects `POST /admin/tools` with `403 demo_mode_upstream_disabled`, caps active demo keys at `50` (24h TTL, oldest evicted), and caps `audit_events` at `200` latest rows.
 - **SSRF Defense:** Upstream URLs must use `https://` on port `443` or `8443`, cannot include URL credentials, and reject private/loopback/link-local/CGNAT/unspecified/metadata IPv4/IPv6 ranges, `::ffff:` mapped IPv6 addresses, `localhost`, `*.localhost`, `*.local`, `*.internal`, `*.home.arpa`, and `metadata.google.internal`. Outbound `fetch` always sets `redirect: "manual"` and refuses redirect responses.
+- **Declarative Upstream Headers:** Registered tools may carry an optional `headers` map (per ADR-0001 upstream custom fields) that is forwarded on every `tools/call`. Validation reuses the shared `normalizeUpstreamMcpHttpRequestHeaders` contract; stored values are never returned by `/admin/state`, the Console, or audit receipts — only the header names are listed.
 - **Single-Use Approval Binding:** Approval permits are consumed atomically via SQL `UPDATE ... WHERE id = ? AND status = 'approved' AND key_id = ? AND tool_name = ? AND args_sha256 = ? AND consumed_at IS NULL AND expires_at > ?`, blocking replay, argument tampering, and cross-key reuse.
 - **Not-Sent Failure Refund:** An upstream failure provably raised before the request left the gateway (SSRF address refusal, pre-dispatch error, or refused redirect) restores the consumed permit to `approved` and the receipt carries `approvalRestored: true`, so the same approval can be redeemed once more. A transport failure that may already have reached upstream keeps the permit consumed and the receipt carries `resultUnknown: true`.
 
@@ -130,6 +131,6 @@ Per-call baseline (after key minting):
 - `GET /admin/state` — Tools, keys (prefixes only), approvals, and audit receipts
 - `POST /admin/keys` — Mint a scoped Bearer API key
 - `DELETE /admin/keys/:id` — Revoke an API key
-- `POST /admin/tools` — Register a validated HTTPS upstream MCP tool (self-hosted mode only)
+- `POST /admin/tools` — Register a validated HTTPS upstream MCP tool (self-hosted mode only); optional `headers` object declares request headers forwarded to the upstream
 - `DELETE /admin/tools/:name` — Delete a tool (self-hosted mode only)
 - `POST /admin/approvals/:id/decide` — Approve or deny a pending execution request (`{ "decision": "approve" | "deny" }`)

@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { normalizeUpstreamMcpHttpRequestHeaders } from "../../../packages/contracts/src/upstream-service-publishing.ts";
 import {
   GatewaySchemaError,
   type CompiledExternalSchema,
@@ -49,6 +50,7 @@ interface ToolRow {
   readonly kind: string;
   readonly upstream_url: string | null;
   readonly upstream_tool_name: string | null;
+  readonly upstream_headers_json: string | null;
   readonly input_schema_json: string;
   readonly requires_approval: number;
   readonly created_at: number;
@@ -384,6 +386,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
         kind TEXT NOT NULL,
         upstream_url TEXT,
         upstream_tool_name TEXT,
+        upstream_headers_json TEXT,
         input_schema_json TEXT NOT NULL,
         requires_approval INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
@@ -421,6 +424,14 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       );
       CREATE INDEX IF NOT EXISTS idx_audit_events_ts ON audit_events(id DESC);
     `);
+
+    // Deployments created before declarative upstream headers lack the column.
+    const toolColumns = new Set(
+      this.#allRows<{ readonly name: string }>("PRAGMA table_info(tools)").map((r) => r.name),
+    );
+    if (!toolColumns.has("upstream_headers_json")) {
+      this.#sql.exec("ALTER TABLE tools ADD COLUMN upstream_headers_json TEXT");
+    }
 
     if (this.#isDemoMode()) {
       const now = Date.now();
@@ -594,6 +605,27 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     return { ok: true, key: row, allowedTools };
   }
 
+  /** Parse stored declarative request headers for upstream forwarding. */
+  #upstreamHeaders(row: ToolRow): Record<string, string> {
+    if (!row.upstream_headers_json) return {};
+    try {
+      const parsed: unknown = JSON.parse(row.upstream_headers_json);
+      if (!isPlainRecord(parsed)) return {};
+      const out: Record<string, string> = {};
+      for (const [name, value] of Object.entries(parsed)) {
+        if (typeof value === "string") out[name] = value;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  /** Header names are safe to expose in admin state; values never leave the DO. */
+  #upstreamHeaderNames(row: ToolRow): string[] {
+    return Object.keys(this.#upstreamHeaders(row)).sort();
+  }
+
   #serializeTool(row: ToolRow) {
     return {
       name: row.name,
@@ -601,6 +633,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       kind: row.kind,
       upstreamUrl: row.upstream_url,
       upstreamToolName: row.upstream_tool_name,
+      upstreamHeaderNames: this.#upstreamHeaderNames(row),
       inputSchema: JSON.parse(row.input_schema_json) as unknown,
       requiresApproval: row.requires_approval === 1,
       createdAt: row.created_at,
@@ -884,21 +917,37 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       return jsonError(400, "schema_invalid", "Tool inputSchema could not be compiled.");
     }
 
+    let upstreamHeadersJson: string | null = null;
+    if (body.headers !== undefined && body.headers !== null) {
+      try {
+        const normalized = normalizeUpstreamMcpHttpRequestHeaders(body.headers);
+        upstreamHeadersJson = Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
+      } catch {
+        return jsonError(
+          400,
+          "upstream_mcp_headers_invalid",
+          "headers must be a JSON object of declarative request headers: string values without control characters, no transport or hop-by-hop names, at most 64 headers and 32 KiB total.",
+        );
+      }
+    }
+
     const now = Date.now();
     this.#sql.exec(
-      `INSERT INTO tools (name, description, kind, upstream_url, upstream_tool_name, input_schema_json, requires_approval, created_at)
-       VALUES (?, ?, 'upstream_http_mcp', ?, ?, ?, ?, ?)
+      `INSERT INTO tools (name, description, kind, upstream_url, upstream_tool_name, upstream_headers_json, input_schema_json, requires_approval, created_at)
+       VALUES (?, ?, 'upstream_http_mcp', ?, ?, ?, ?, ?, ?)
        ON CONFLICT(name) DO UPDATE SET
          description = excluded.description,
          kind = excluded.kind,
          upstream_url = excluded.upstream_url,
          upstream_tool_name = excluded.upstream_tool_name,
+         upstream_headers_json = excluded.upstream_headers_json,
          input_schema_json = excluded.input_schema_json,
          requires_approval = excluded.requires_approval`,
       name,
       description,
       validatedUrl.toString(),
       upstreamToolName,
+      upstreamHeadersJson,
       JSON.stringify(inputSchema),
       requiresApproval ? 1 : 0,
       now,
@@ -1064,6 +1113,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       response = await safeUpstreamFetch(tool.upstream_url, {
         method: "POST",
         headers: {
+          ...this.#upstreamHeaders(tool),
           "Content-Type": "application/json",
           Accept: "application/json, text/event-stream",
         },

@@ -555,6 +555,123 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     }
   });
 
+  it("registers declarative upstream request headers, forwards them on tools/call, and never exposes values", async () => {
+    const adminToken = "self-hosted-operator-secret";
+    const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
+    const adminHeaders = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    };
+
+    const secretValue = "upstream-secret-token-value-9f8e";
+    const regRes = await h.request("/admin/tools", {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        name: "crm.secure_lookup",
+        upstreamUrl: "https://mcp.example.com:8443/mcp",
+        upstreamToolName: "secure_lookup",
+        headers: {
+          Authorization: `Bearer ${secretValue}`,
+          "X-Project-Id": "billing-prod",
+          Host: "evil.example.com",
+          Connection: "keep-alive",
+        },
+        inputSchema: {
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          properties: { id: { type: "string", minLength: 1 } },
+          required: ["id"],
+          additionalProperties: false,
+        },
+      }),
+    });
+    expect(regRes.status).toBe(201);
+    const regBody = (await regRes.json()) as { tool: { upstreamHeaderNames: string[] } };
+    // Reserved transport/hop-by-hop names are filtered out at registration.
+    expect(regBody.tool.upstreamHeaderNames).toEqual(["authorization", "x-project-id"]);
+
+    // Admin state and audit receipts expose header names only — never values.
+    const stateRes = await h.request("/admin/state", { headers: adminHeaders });
+    const stateText = await stateRes.text();
+    expect(stateText).not.toContain(secretValue);
+    expect(stateText).toContain("x-project-id");
+
+    const keyRes = await h.request("/admin/keys", {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ name: "crm-agent", allowedTools: ["crm.secure_lookup"] }),
+    });
+    const { token } = (await keyRes.json()) as { token: string };
+
+    let capturedHeaders: Headers | null = null;
+    vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
+      capturedHeaders = new Headers(init?.headers);
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result: { content: [{ type: "text", text: "ok" }], structuredContent: { ok: true } },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }));
+    try {
+      const callRes = await h.mcp(token, {
+        jsonrpc: "2.0",
+        id: 31,
+        method: "tools/call",
+        params: { name: "crm.secure_lookup", arguments: { id: "C-42" } },
+      });
+      expect(callRes.status).toBe(200);
+      const callBody = (await callRes.json()) as { result?: unknown };
+      expect(callBody.result).toBeDefined();
+      expect(capturedHeaders!.get("authorization")).toBe(`Bearer ${secretValue}`);
+      expect(capturedHeaders!.get("x-project-id")).toBe("billing-prod");
+      expect(capturedHeaders!.get("host")).toBeNull();
+      expect(capturedHeaders!.get("connection")).toBeNull();
+      expect(capturedHeaders!.get("content-type")).toBe("application/json");
+      expect(capturedHeaders!.get("accept")).toBe("application/json, text/event-stream");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    const postCallState = await h.request("/admin/state", { headers: adminHeaders });
+    expect(await postCallState.text()).not.toContain(secretValue);
+  });
+
+  it("rejects invalid upstream request headers at registration with upstream_mcp_headers_invalid", async () => {
+    const adminToken = "self-hosted-operator-secret";
+    const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
+    const adminHeaders = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${adminToken}`,
+    };
+
+    const invalidHeaderBodies: unknown[] = [
+      "not-an-object",
+      ["x-a", "b"],
+      { "bad name": "v" },
+      { "x-ok": 42 },
+      { "x-ctl": "line\nbreak" },
+      { "x-dup": "1", "X-Dup": "2" },
+      Object.fromEntries(Array.from({ length: 65 }, (_v, i) => [`x-h-${i}`, "v"])),
+    ];
+    for (const headers of invalidHeaderBodies) {
+      const res = await h.request("/admin/tools", {
+        method: "POST",
+        headers: adminHeaders,
+        body: JSON.stringify({
+          name: "bad.headers",
+          upstreamUrl: "https://mcp.example.com/mcp",
+          headers,
+        }),
+      });
+      expect(res.status, JSON.stringify(headers)).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe("upstream_mcp_headers_invalid");
+    }
+  });
+
   it("restores a consumed permit when the upstream request provably never left the gateway", async () => {
     const adminToken = "self-hosted-operator-secret";
     const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });

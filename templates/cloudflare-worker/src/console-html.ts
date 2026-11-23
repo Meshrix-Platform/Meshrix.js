@@ -250,6 +250,8 @@ export function renderConsoleHtml(options: ConsoleRenderOptions): string {
         </div>
         <label for="upDescInput">Description</label>
         <input id="upDescInput" type="text" placeholder="Read-only invoice lookup" />
+        <label for="upHeadersInput">Upstream Request Headers (JSON object, optional — sent on every tools/call; values are write-only and never shown again)</label>
+        <textarea id="upHeadersInput" placeholder='{"Authorization":"Bearer <token>","x-project-id":"billing"}'></textarea>
         <label for="upSchemaInput">Input Schema (JSON Schema 2020-12)</label>
         <textarea id="upSchemaInput">{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"invoiceId":{"type":"string","minLength":1}},"required":["invoiceId"],"additionalProperties":false}</textarea>
         <div class="row">
@@ -379,10 +381,14 @@ export function renderConsoleHtml(options: ConsoleRenderOptions): string {
         const cb = el("input", { type: "checkbox", value: tool.name, checked });
         const nameEl = el("strong", { className: "mono", textContent: tool.name });
         const meta = tool.requiresApproval ? el("span", { className: "pill pending", textContent: "approval required" }) : null;
+        const headerNames = Array.isArray(tool.upstreamHeaderNames) ? tool.upstreamHeaderNames : [];
+        const headersPill = headerNames.length > 0
+          ? el("span", { className: "pill consumed", title: "Declarative request headers forwarded to the upstream", textContent: "headers: " + headerNames.join(", ") })
+          : null;
         const desc = el("div", { className: "muted", textContent: tool.description || tool.upstreamUrl || "" });
         return el("label", { className: "check-item check-row" }, [
           cb,
-          el("div", {}, [el("div", { className: "check-head" }, [nameEl, meta]), desc]),
+          el("div", {}, [el("div", { className: "check-head" }, [nameEl, meta, headersPill]), desc]),
         ]);
       });
       scopesWrap.replaceChildren(...scopeNodes);
@@ -658,10 +664,20 @@ export function renderConsoleHtml(options: ConsoleRenderOptions): string {
         setMsg("upstreamStatus", "inputSchema must be valid JSON.", true);
         return;
       }
+      let headers;
+      const headersText = document.getElementById("upHeadersInput").value.trim();
+      if (headersText) {
+        try {
+          headers = JSON.parse(headersText);
+        } catch {
+          setMsg("upstreamStatus", "Upstream request headers must be a valid JSON object.", true);
+          return;
+        }
+      }
       const res = await fetch("/admin/tools", {
         method: "POST",
         headers: adminHeaders(),
-        body: JSON.stringify({ name, upstreamUrl, upstreamToolName, description, inputSchema, requiresApproval }),
+        body: JSON.stringify({ name, upstreamUrl, upstreamToolName, description, inputSchema, requiresApproval, headers }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
