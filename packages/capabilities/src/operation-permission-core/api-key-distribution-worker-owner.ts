@@ -729,8 +729,12 @@ function requireExactOperation(policy: any, operation: any, registry: any, toolI
   const name = descriptor?.upstreamToolName ?? operation.upstreamToolName;
   if (operation.upstreamToolName !== undefined && name !== operation.upstreamToolName) return deny();
   if (capabilityId !== binding.id) {
-    if (typeof name !== "string" || /[*?]/u.test(name) || `${binding.id}-${capabilitySegment(name)}` !== capabilityId ||
-        policy.capabilityIds.includes(binding.id)) return deny();
+    // Issuance keeps the parent and named capabilities mutually exclusive, but
+    // earlier issuance also recorded the auto-added gateway parent beside each
+    // explicitly selected named capability. The named id's own stored presence
+    // is the grant; that recorded parent still addresses only the gateway
+    // operation itself, which stays fenced below while named ids exist.
+    if (typeof name !== "string" || /[*?]/u.test(name) || `${binding.id}-${capabilitySegment(name)}` !== capabilityId) return deny();
   } else if ((name || "") !== (cap?.upstreamToolName || "") || (binding.nativeParent &&
       policy.capabilityIds.some((id: string) => id !== binding.id && matchesExactCapability(binding, id)))) return deny();
 

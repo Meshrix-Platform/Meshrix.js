@@ -609,6 +609,43 @@ describe("scoped API Key distribution", () : any => {
     } finally { await f.close(); }
   });
 
+  it("preserves legacy named MCP grants recorded beside the auto-added gateway parent", async () => {
+    const f = await exactSelectionFixture();
+    try {
+      const selected = f.named("records.list");
+      const sibling = f.named("records.write");
+      const parent = f.named();
+      // Earlier catalog issuance recorded the gateway parent beside each
+      // explicitly selected named capability.
+      const catalogOwner = createApiKeyDistributionWorkerOwner({ ...f.ownerOptions, capabilitySelection: "catalog" });
+      const { apiKey, record } = await catalogOwner.create({
+        subjectId: "admin",
+        workloadDisplayName: "Legacy named grant",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy(f.catalog.fingerprint, {
+          allowedTools: [selected.toolId],
+          capabilityIds: [selected.capabilityId],
+          toolsetIds: [],
+          scopeIds: [],
+          maximumRisk: "low"
+        })
+      });
+      expect(record.policy.capabilityIds).toEqual([parent.capabilityId, selected.capabilityId]);
+      const authorization = await f.authenticate(apiKey);
+      // The same stored policy allowed the named call under legacy authorization;
+      // the exact authorizer must preserve that explicitly stored grant.
+      expect(catalogOwner.authorizeOperation({ authorization, operation: selected }).keyId).toBe(record.keyId);
+      expect(f.owner.authorizeOperation({ authorization, operation: selected }).keyId).toBe(record.keyId);
+      const lease = await f.owner.reserveEffect({ authorization, operation: selected });
+      await f.owner.releaseEffect(lease);
+      // The recorded parent reaches neither unselected tools nor the gateway call itself.
+      const denied = { code: "api_key_policy_denied" };
+      await expect(f.owner.reserveEffect({ authorization, operation: sibling })).rejects.toMatchObject(denied);
+      await expect(f.owner.reserveEffect({ authorization, operation: parent })).rejects.toMatchObject(denied);
+    } finally { await f.close(); }
+  });
+
   it("revalidates an issued grant against live catalog entries instead of the whole-catalog fingerprint", async () => {
     const f = await exactSelectionFixture();
     try {
