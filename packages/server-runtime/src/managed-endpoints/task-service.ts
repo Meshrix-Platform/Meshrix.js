@@ -92,7 +92,8 @@ export function createManagedTaskService({
   function businessRequest(task: RecordValue) {
     return {
       requestId: task.requestId, ...(task.governance.requestedEndpointId ? { endpointId: task.governance.requestedEndpointId } : {}),
-      capabilityId: task.capabilityId, ...(task.workspaceId ? { workspaceId: task.workspaceId } : {}), input: task.input
+      capabilityId: task.capabilityId, ...(task.workspaceId ? { workspaceId: task.workspaceId } : {}), input: task.input,
+      ...(task.signature ? { signature: task.signature } : {})
     };
   }
 
@@ -115,7 +116,8 @@ export function createManagedTaskService({
       organizationId: task.organizationId, endpointId: task.endpointId,
       capabilityId: task.capabilityId, capabilityRevision: task.capabilityRevision,
       workspaceId: task.workspaceId,
-      input: task.input, requester: task.requester, workItemId: task.workItemId,
+      input: task.input, ...(task.signature ? { signature: task.signature } : {}),
+      requester: task.requester, workItemId: task.workItemId,
       state, cancelRequested: task.cancelRequested,
       result: task.result, errorCode: task.errorCode ||
         (workItem?.lastError?.type === "managed_policy_revoked" ? "managed_policy_revoked" : ""),
@@ -363,6 +365,7 @@ export function createManagedTaskService({
         organizationId: actor.organizationId, endpointId: endpoint.endpointId,
         capabilityId: request.capabilityId, capabilityRevision: capability.revision,
         workspaceId: request.workspaceId || "", input: request.input,
+        signature: request.signature || null,
         requester, queueDefinitionId: managedQueueDefinitionId(endpoint.endpointId), workItemId: taskId,
         governance: { requestedEndpointId: request.endpointId || "", confirmation: admissionContext.confirmation || {}, proofIntentId: proof?.pactium?.intentId || "" }
       };
@@ -438,7 +441,8 @@ export function createManagedTaskService({
       organizationId: task.organizationId, capabilityId: task.capabilityId,
       capabilityRevision: task.capabilityRevision,
       ...(task.workspaceId ? { workspaceId: task.workspaceId } : {}), input: task.input,
-      leaseId: workItem.lease.leaseId, leaseSeq: workItem.lease.leaseSeq
+      leaseId: workItem.lease.leaseId, leaseSeq: workItem.lease.leaseSeq,
+      ...(task.signature ? { signature: task.signature } : {})
     };
   }
 
@@ -730,9 +734,14 @@ export function createManagedTaskService({
     });
   }
 
+  function workerSignaturePolicy(device: RecordValue) {
+    const endpoint = currentDevice(device);
+    return { policy: store.getSignaturePolicy(endpoint.tenantId, endpoint.organizationId) };
+  }
+
   return {
     ready, wake, publicPermission, submitTask, getTask, taskEvents, cancelTask, resolvePermission,
-    workerPoll, workerStart, workerEvent, workerPermission, workerComplete,
+    workerPoll, workerStart, workerEvent, workerPermission, workerComplete, workerSignaturePolicy,
     async cancelEndpointTasks(actor: ManagedActor, endpointId: string) {
       await pages({ endpointId }, (task) => cancelTask(actor, task.taskId).then(() => {}));
     },

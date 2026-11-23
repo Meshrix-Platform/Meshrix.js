@@ -4,7 +4,7 @@ import {
   MANAGED_ENROLLMENT_TOKEN_PATTERN, MANAGED_ENDPOINT_MAX_COUNT,
   MANAGED_CAPABILITY_MAX_COUNT, assertManagedActor, assertManagedCapability,
   assertManagedCapabilityIds, assertManagedFields, assertManagedId,
-  assertManagedWorkspaceList,
+  assertManagedSignaturePolicy, assertManagedWorkspaceList,
   type ManagedActor, type ManagedCapability
 } from "@meshrix/contracts/managed-endpoints";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
@@ -247,6 +247,15 @@ export function createManagedEndpointService({
       // settles it as in_doubt rather than silently re-executing.
       await tasks.cancelEndpointTasks(actor, endpointId);
       return { endpoint: store.getEndpoint(endpointId) };
+    },
+    setSignaturePolicy(actor: ManagedActor, rawInput: Record<string, unknown>) {
+      const input = assertManagedFields(rawInput, ["policy"]);
+      const policy = assertManagedSignaturePolicy(input.policy);
+      store.setSignaturePolicy(actor.tenantId, actor.organizationId, policy, nowMs());
+      return { ok: true };
+    },
+    getSignaturePolicy(actor: ManagedActor) {
+      return { policy: store.getSignaturePolicy(actor.tenantId, actor.organizationId) };
     },
     // ---- worker/device surface ------------------------------------------
     verifyEnrollment(input: Record<string, unknown>) {

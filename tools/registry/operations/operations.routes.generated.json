@@ -2,7 +2,7 @@
   "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.ts",
   "version": "v1.0.0",
   "generatedAt": "2026-06-30T09:41:12.259Z",
-  "routeCount": 610,
+  "routeCount": 616,
   "routes": [
     {
       "method": "GET",
@@ -4742,6 +4742,22 @@
     },
     {
       "method": "POST",
+      "path": "/api/endpoints/worker/signature-policy",
+      "operationId": "endpoints.worker.signaturePolicy",
+      "feature": "endpoints",
+      "risk": "safe_write",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "endpoints.worker.signaturePolicy",
+      "operationId": "endpoints.worker.signaturePolicy",
+      "feature": "endpoints",
+      "risk": "safe_write",
+      "public": false
+    },
+    {
+      "method": "POST",
       "path": "/api/endpoints/tasks",
       "operationId": "endpoints.tasks.submit",
       "feature": "endpoints",
@@ -4882,6 +4898,38 @@
       "operationId": "endpoints.revoke",
       "feature": "endpoints",
       "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/endpoints/org/signature-policy",
+      "operationId": "endpoints.signaturePolicy.set",
+      "feature": "endpoints",
+      "risk": "safe_write",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "endpoints.signaturePolicy.set",
+      "operationId": "endpoints.signaturePolicy.set",
+      "feature": "endpoints",
+      "risk": "safe_write",
+      "public": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/endpoints/org/signature-policy",
+      "operationId": "endpoints.signaturePolicy.get",
+      "feature": "endpoints",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "endpoints.signaturePolicy.get",
+      "operationId": "endpoints.signaturePolicy.get",
+      "feature": "endpoints",
+      "risk": "read_only",
       "public": false
     }
   ]

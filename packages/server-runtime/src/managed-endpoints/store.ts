@@ -63,6 +63,7 @@ function taskFromRow(row: Record<string, unknown>): Record<string, unknown> {
     capabilityRevision: Number(row.capability_revision || 0),
     workspaceId: text(row.workspace_id),
     input: parseJson(row.input_json, null),
+    signature: parseJson(row.signature_json, null),
     requester: parseJson(row.requester_json, {}),
     queueDefinitionId: row.queue_definition_id,
     workItemId: row.work_item_id,
@@ -152,6 +153,7 @@ function initializeManagedEndpointStore(db: ReturnType<typeof openSqliteDatabase
       capability_revision INTEGER NOT NULL,
       workspace_id TEXT NOT NULL DEFAULT '',
       input_json TEXT NOT NULL,
+      signature_json TEXT,
       requester_json TEXT NOT NULL,
       queue_definition_id TEXT NOT NULL,
       work_item_id TEXT NOT NULL,
@@ -220,6 +222,14 @@ function initializeManagedEndpointStore(db: ReturnType<typeof openSqliteDatabase
       payload_json TEXT NOT NULL,
       PRIMARY KEY (task_id, seq)
     );
+
+    CREATE TABLE IF NOT EXISTS managed_signature_policies (
+      tenant_id TEXT NOT NULL,
+      organization_id TEXT NOT NULL,
+      policy_json TEXT NOT NULL,
+      updated_at_ms INTEGER NOT NULL,
+      PRIMARY KEY (tenant_id, organization_id)
+    );
   `);
 
   const ensureColumn = (table: string, column: string, definition: string) => {
@@ -230,6 +240,7 @@ function initializeManagedEndpointStore(db: ReturnType<typeof openSqliteDatabase
   };
   ensureColumn("managed_endpoints", "workspaces_json", "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn("managed_tasks", "workspace_id", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn("managed_tasks", "signature_json", "TEXT");
 
   const statements = {
     insertEndpoint: db.prepare(`
@@ -326,11 +337,11 @@ function initializeManagedEndpointStore(db: ReturnType<typeof openSqliteDatabase
     insertTask: db.prepare(`
       INSERT INTO managed_tasks (
         task_id, request_id, request_digest, tenant_id, organization_id, endpoint_id,
-        capability_id, capability_revision, workspace_id, input_json, requester_json,
+        capability_id, capability_revision, workspace_id, input_json, signature_json, requester_json,
         queue_definition_id, work_item_id, authority_json, governance_json, created_at_ms, updated_at_ms
       ) VALUES (
         @task_id, @request_id, @request_digest, @tenant_id, @organization_id, @endpoint_id,
-        @capability_id, @capability_revision, @workspace_id, @input_json, @requester_json,
+        @capability_id, @capability_revision, @workspace_id, @input_json, @signature_json, @requester_json,
         @queue_definition_id, @work_item_id, @authority_json, @governance_json, @created_at_ms, @updated_at_ms
       )
     `),
@@ -405,6 +416,15 @@ function initializeManagedEndpointStore(db: ReturnType<typeof openSqliteDatabase
     invalidateTaskPermissions: db.prepare(`
       UPDATE managed_permissions SET state = 'obsolete'
       WHERE task_id = ? AND state IN ('pending', 'resolved')
+    `),
+    upsertSignaturePolicy: db.prepare(`
+      INSERT INTO managed_signature_policies (tenant_id, organization_id, policy_json, updated_at_ms)
+      VALUES (@tenant_id, @organization_id, @policy_json, @updated_at_ms)
+      ON CONFLICT (tenant_id, organization_id)
+      DO UPDATE SET policy_json = @policy_json, updated_at_ms = @updated_at_ms
+    `),
+    getSignaturePolicy: db.prepare(`
+      SELECT * FROM managed_signature_policies WHERE tenant_id = ? AND organization_id = ?
     `)
   };
 
@@ -609,6 +629,7 @@ function initializeManagedEndpointStore(db: ReturnType<typeof openSqliteDatabase
         capability_revision: Number(task.capabilityRevision || 0),
         workspace_id: text(task.workspaceId),
         input_json: canonicalJson(task.input ?? null),
+        signature_json: task.signature ? JSON.stringify(task.signature) : null,
         requester_json: JSON.stringify(task.requester || {}),
         queue_definition_id: text(task.queueDefinitionId),
         work_item_id: text(task.workItemId),
@@ -734,6 +755,17 @@ function initializeManagedEndpointStore(db: ReturnType<typeof openSqliteDatabase
     },
     invalidateTaskPermissions(taskId: string): void {
       statements.invalidateTaskPermissions.run(taskId);
+    },
+    setSignaturePolicy(tenantId: string, organizationId: string, policy: unknown, nowMs: number): void {
+      statements.upsertSignaturePolicy.run({
+        tenant_id: text(tenantId), organization_id: text(organizationId),
+        policy_json: JSON.stringify(policy), updated_at_ms: nowMs
+      });
+    },
+    getSignaturePolicy(tenantId: string, organizationId: string): unknown {
+      const row = statements.getSignaturePolicy.get(text(tenantId), text(organizationId)) as
+        Record<string, unknown> | undefined;
+      return row ? parseJson(row.policy_json, null) : null;
     },
     close(): void {
       db.close();

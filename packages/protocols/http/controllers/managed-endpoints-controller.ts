@@ -27,6 +27,7 @@ function publicFailure(error: any) {
     managed_task_input_invalid: 400, managed_permission_invalid: 400,
     managed_event_invalid: 400, managed_event_batch_invalid: 400,
     managed_workspace_invalid: 400, managed_workspace_set_invalid: 400,
+    managed_signature_invalid: 400, managed_signature_policy_invalid: 400,
     managed_organization_required: 403, managed_tenant_required: 403, managed_subject_required: 403,
     managed_device_credential_invalid: 403, managed_enrollment_token_invalid: 403,
     managed_enrollment_token_expired: 403, managed_enrollment_rebind_rejected: 403,
@@ -256,6 +257,11 @@ export function createManagedEndpointsController({
       sendJson(response, 200, await managedEndpointService.workerComplete(device, input));
     }, args),
 
+    handleWorkerSignaturePolicy: (args: Record<string, any>) => handle(async ({ response, authSession }) => {
+      const device = await deviceFromAuth(authSession);
+      sendJson(response, 200, await managedEndpointService.workerSignaturePolicy(device));
+    }, args),
+
     handleListEndpoints: (args: Record<string, any>) => handle(async ({ response, authSession }) => {
       const actor = await actorFromSession(authSession);
       sendJson(response, 200, await managedEndpointService.listEndpoints(actor));
@@ -314,6 +320,16 @@ export function createManagedEndpointsController({
       const actor = await actorFromSession(authSession);
       const { taskId: selectedId, ...body } = memberInput(input).business;
       sendJson(response, 200, await managedEndpointService.resolvePermission(actor, selectedId ?? taskId, body));
+    }, args),
+
+    handleSetSignaturePolicy: (args: Record<string, any>) => handle(async ({ input, response, authSession }) => {
+      const actor = await actorFromSession(authSession);
+      sendJson(response, 200, await managedEndpointService.setSignaturePolicy(actor, memberInput(input).business));
+    }, args),
+
+    handleGetSignaturePolicy: (args: Record<string, any>) => handle(async ({ response, authSession }) => {
+      const actor = await actorFromSession(authSession);
+      sendJson(response, 200, await managedEndpointService.getSignaturePolicy(actor));
     }, args)
   };
 

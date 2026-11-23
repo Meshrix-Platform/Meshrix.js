@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:58081b3441cdf043
+ * Hash: sha256:f910dfe1aebd500c
  * Generated at: 2026-06-30T09:41:12.260Z
  *
  * To modify capabilities: edit source operation definitions or Operation Permission catalog mappings, then run the generator.
  */
-export const GENERATED_CAPABILITIES_HASH = "sha256:58081b3441cdf043";
+export const GENERATED_CAPABILITIES_HASH = "sha256:f910dfe1aebd500c";
 
 export const KERNEL_API_OPERATION_IDS = Object.freeze([
   "cap:api:readiness.baseline.status",
@@ -307,6 +307,7 @@ export const KERNEL_API_OPERATION_IDS = Object.freeze([
   "cap:api:endpoints.worker.event",
   "cap:api:endpoints.worker.permission",
   "cap:api:endpoints.worker.complete",
+  "cap:api:endpoints.worker.signaturePolicy",
   "cap:api:endpoints.tasks.submit",
   "cap:api:endpoints.tasks.get",
   "cap:api:endpoints.tasks.events",
@@ -316,6 +317,8 @@ export const KERNEL_API_OPERATION_IDS = Object.freeze([
   "cap:api:endpoints.create",
   "cap:api:endpoints.update",
   "cap:api:endpoints.revoke",
+  "cap:api:endpoints.signaturePolicy.set",
+  "cap:api:endpoints.signaturePolicy.get",
   "cap:api:mcp.request"
 ].map(id => id.replace("cap:api:", "")));
 
@@ -549,7 +552,9 @@ export const KERNEL_TOOL_IDS = Object.freeze([
   "cap:tool:meshrix.endpoints.list:execute",
   "cap:tool:meshrix.endpoints.create:execute",
   "cap:tool:meshrix.endpoints.update:execute",
-  "cap:tool:meshrix.endpoints.revoke:execute"
+  "cap:tool:meshrix.endpoints.revoke:execute",
+  "cap:tool:meshrix.endpoints.signaturePolicy.set:execute",
+  "cap:tool:meshrix.endpoints.signaturePolicy.get:execute"
 ].map(id => id.replace("cap:tool:", "").replace(":execute", "")));
 
 export const KERNEL_CAPABILITY_WILDCARDS = Object.freeze([
@@ -876,6 +881,7 @@ export const CAPABILITY_RISK_MAP = Object.freeze({
   "cap:api:endpoints.worker.event": "safe_write",
   "cap:api:endpoints.worker.permission": "safe_write",
   "cap:api:endpoints.worker.complete": "safe_write",
+  "cap:api:endpoints.worker.signaturePolicy": "safe_write",
   "cap:api:endpoints.tasks.submit": "safe_write",
   "cap:api:endpoints.tasks.get": "read_only",
   "cap:api:endpoints.tasks.events": "read_only",
@@ -885,6 +891,8 @@ export const CAPABILITY_RISK_MAP = Object.freeze({
   "cap:api:endpoints.create": "safe_write",
   "cap:api:endpoints.update": "safe_write",
   "cap:api:endpoints.revoke": "repair_write",
+  "cap:api:endpoints.signaturePolicy.set": "safe_write",
+  "cap:api:endpoints.signaturePolicy.get": "read_only",
   "cap:api:mcp.request": "read_only",
   "cap:tool:meshrix.readiness.baseline.status:execute": "read_only",
   "cap:tool:meshrix.authorization.subject.resolve:execute": "read_only",
@@ -1115,5 +1123,7 @@ export const CAPABILITY_RISK_MAP = Object.freeze({
   "cap:tool:meshrix.endpoints.list:execute": "read_only",
   "cap:tool:meshrix.endpoints.create:execute": "safe_write",
   "cap:tool:meshrix.endpoints.update:execute": "safe_write",
-  "cap:tool:meshrix.endpoints.revoke:execute": "repair_write"
+  "cap:tool:meshrix.endpoints.revoke:execute": "repair_write",
+  "cap:tool:meshrix.endpoints.signaturePolicy.set:execute": "safe_write",
+  "cap:tool:meshrix.endpoints.signaturePolicy.get:execute": "read_only"
 });

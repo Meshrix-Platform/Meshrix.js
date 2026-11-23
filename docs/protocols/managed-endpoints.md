@@ -123,7 +123,8 @@ submission; `leaseId`+`leaseSeq` fence every worker mutation.
 ```
 member:  endpoints.tasks.submit ──► queued (per-endpoint queue)
 worker:  endpoints.worker.poll ──► assignment{taskId, leaseId, leaseSeq,
-                                             capabilityId, capabilityRevision, input}
+                                             capabilityId, capabilityRevision,
+                                             input, signature?}
 worker:  endpoints.worker.start ──► {authorized, cancelRequested}
 worker:  endpoints.worker.event ──► structured timeline events (see Events)
 worker:  endpoints.worker.permission ──► member approval (endpoints:approve)
@@ -150,6 +151,58 @@ member:  endpoints.tasks.get / .events / .cancel / .permission
   approval records (`endpoints.tasks.permission`,
   `endpoints:approve` scope). Poll responses acknowledge processed
   permission ids so devices never see a stale prompt twice.
+
+## Detached task signatures
+
+`endpoints.tasks.submit` accepts an optional `signature` field — a
+detached attestation produced by a signing authority outside this
+protocol's custody. The envelope is relayed unchanged into the task's
+`ManagedTaskAssignment`.
+
+```
+ManagedSignature = {
+  algorithm: string   // pattern ^[a-z0-9][a-z0-9._-]{0,63}$
+  keyId: string       // pattern ^[A-Za-z0-9._:-]{1,160}$
+  payload: JSON       // closed JSON value, ≤8KiB serialized
+  signature: string   // pattern ^[A-Za-z0-9_-]{1,2048}$
+}
+```
+
+Normative properties:
+
+- **Opaque relay.** The server validates only the envelope's closed
+  structure, string patterns and serialized bounds, then relays the
+  submitted value byte-for-byte through persistence, the task record and
+  the assignment. It never interprets `payload` semantics, never verifies
+  `signature` and never holds key material. A malformed or oversized
+  envelope is rejected with `managed_signature_invalid`.
+- **Optional and additive.** The field is absent by default; requests and
+  workers that never carry it observe no behavior change. This is an
+  additive change within the current protocol revision under the
+  closed-object rule.
+- **Verification is the device's.** Which `keyId` values to trust,
+  whether a signature is required, and what `payload` claims are all
+  evaluated on the device — against the organization's signature policy
+  sheet — never by the server.
+
+## Signature policy sheet
+
+An organization may publish a signature policy sheet: a closed JSON
+document (≤32KiB) that tells devices how to evaluate detached
+signatures — trusted key ids, required algorithms, validity bounds. The
+document's vocabulary is owned by the policy itself, not by this
+protocol.
+
+- `endpoints.signaturePolicy.set` (`endpoints:manage`) installs or
+  replaces the organization's sheet.
+- `endpoints.signaturePolicy.get` (`endpoints:read`) returns the current
+  sheet as `{ "policy": ... }`, `null` when unset.
+- `endpoints.worker.signaturePolicy` returns the same sheet to an
+  authenticated device, scoped by its credential's organization.
+
+The server stores and serves the sheet verbatim. It enforces JSON
+structure and the size bound only — it does not interpret, merge or
+validate the sheet's semantics.
 
 ## Endpoint routing
 

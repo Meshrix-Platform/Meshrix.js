@@ -53,6 +53,7 @@ export interface ManagedTaskRequest {
   readonly capabilityId: string;
   readonly workspaceId?: string;
   readonly input: ManagedJson;
+  readonly signature?: ManagedSignature;
 }
 
 export interface ManagedTaskAssignment {
@@ -66,6 +67,7 @@ export interface ManagedTaskAssignment {
   readonly input: ManagedJson;
   readonly leaseId: string;
   readonly leaseSeq: number;
+  readonly signature?: ManagedSignature;
 }
 
 export interface ManagedTaskOutcome {
@@ -83,6 +85,27 @@ export interface ManagedTaskStartResponse {
   readonly leaseSeq: number;
   readonly authorized: boolean;
   readonly cancelRequested: boolean;
+}
+
+// --- Detached attestations (opaque to the server) ---
+// `signature` is an optional detached attestation produced by an authority
+// outside this protocol's custody — on a task request it attests the dispatch
+// tuple the requesting authority committed to, and the same envelope shape
+// carries an organization's signature policy sheet. The server validates only
+// the envelope's structure and bounds and relays it byte-for-byte; it never
+// interprets `payload`, verifies `signature` or holds key material.
+
+export const MANAGED_SIGNATURE_ALGORITHM_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/u;
+export const MANAGED_SIGNATURE_KEY_ID_PATTERN = /^[A-Za-z0-9._:-]{1,160}$/u;
+export const MANAGED_SIGNATURE_VALUE_PATTERN = /^[A-Za-z0-9_-]{1,2048}$/u;
+export const MANAGED_SIGNATURE_PAYLOAD_MAX_BYTES = 8 * 1024;
+export const MANAGED_SIGNATURE_POLICY_MAX_BYTES = 32 * 1024;
+
+export interface ManagedSignature {
+  readonly algorithm: string;
+  readonly keyId: string;
+  readonly payload: ManagedJson;
+  readonly signature: string;
 }
 
 export const MANAGED_ENDPOINT_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,127}$/u;
@@ -347,10 +370,34 @@ export function assertManagedWorkspaceList(value: unknown): readonly ManagedWork
   return Object.freeze(workspaces);
 }
 
+export function assertManagedSignaturePolicy(value: unknown): ManagedJson {
+  const code = "managed_signature_policy_invalid";
+  if (!isRecord(value)) failure(code, "Managed signature policy must be an object.");
+  return assertManagedJson(value, "policy", code, MANAGED_SIGNATURE_POLICY_MAX_BYTES);
+}
+
+export function assertManagedSignature(value: unknown): ManagedSignature {
+  const code = "managed_signature_invalid";
+  if (!isRecord(value)) failure(code, "Managed signature must be an object.");
+  exactKeys(value, ["algorithm", "keyId", "payload", "signature"], code);
+  boundedText(value.algorithm, "algorithm", code, { pattern: MANAGED_SIGNATURE_ALGORITHM_PATTERN });
+  boundedText(value.keyId, "keyId", code, { pattern: MANAGED_SIGNATURE_KEY_ID_PATTERN });
+  assertManagedJson(value.payload, "payload", code, MANAGED_SIGNATURE_PAYLOAD_MAX_BYTES);
+  boundedText(value.signature, "signature", code, { pattern: MANAGED_SIGNATURE_VALUE_PATTERN });
+  // Content is relayed exactly as submitted — the server never interprets,
+  // re-encodes or verifies the envelope it carries to the device.
+  return Object.freeze({
+    algorithm: value.algorithm as string,
+    keyId: value.keyId as string,
+    payload: value.payload as ManagedSignature["payload"],
+    signature: value.signature as string
+  });
+}
+
 export function assertManagedTaskRequest(value: unknown): ManagedTaskRequest {
   const code = "managed_task_request_invalid";
   if (!isRecord(value)) failure(code, "Managed task request must be an object.");
-  exactKeys(value, ["requestId", "endpointId", "capabilityId", "workspaceId", "input"], code);
+  exactKeys(value, ["requestId", "endpointId", "capabilityId", "workspaceId", "input", "signature"], code);
   const request: ManagedTaskRequest = Object.freeze({
     requestId: boundedText(value.requestId, "requestId", code, {
       pattern: MANAGED_REQUEST_ID_PATTERN
@@ -372,7 +419,8 @@ export function assertManagedTaskRequest(value: unknown): ManagedTaskRequest {
     })
       ? { workspaceId: boundedText(value.workspaceId, "workspaceId", code, { pattern: MANAGED_WORKSPACE_ID_PATTERN }) }
       : {}),
-    input: assertManagedJson(value.input, "input", code, MANAGED_TASK_INPUT_MAX_BYTES)
+    input: assertManagedJson(value.input, "input", code, MANAGED_TASK_INPUT_MAX_BYTES),
+    ...(value.signature === undefined ? {} : { signature: assertManagedSignature(value.signature) })
   });
   return request;
 }
@@ -382,7 +430,7 @@ export function assertManagedTaskAssignment(value: unknown): ManagedTaskAssignme
   if (!isRecord(value)) failure(code, "Managed task assignment must be an object.");
   exactKeys(value, [
     "protocol", "taskId", "endpointId", "organizationId", "capabilityId",
-    "capabilityRevision", "workspaceId", "input", "leaseId", "leaseSeq"
+    "capabilityRevision", "workspaceId", "input", "leaseId", "leaseSeq", "signature"
   ], code);
   if (value.protocol !== MANAGED_ENDPOINT_PROTOCOL) {
     failure(code, "Managed task assignment protocol is not current.");
@@ -407,7 +455,8 @@ export function assertManagedTaskAssignment(value: unknown): ManagedTaskAssignme
       : {}),
     input: assertManagedJson(value.input, "input", code, MANAGED_TASK_INPUT_MAX_BYTES),
     leaseId: boundedText(value.leaseId, "leaseId", code, { pattern: MANAGED_LEASE_ID_PATTERN }),
-    leaseSeq: boundedInteger(value.leaseSeq, "leaseSeq", code, { min: 1 })
+    leaseSeq: boundedInteger(value.leaseSeq, "leaseSeq", code, { min: 1 }),
+    ...(value.signature === undefined ? {} : { signature: assertManagedSignature(value.signature) })
   });
   return assignment;
 }

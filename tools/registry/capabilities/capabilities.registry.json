@@ -1783,6 +1783,12 @@
       "risk": "safe_write"
     },
     {
+      "id": "cap:api:endpoints.worker.signaturePolicy",
+      "operationId": "endpoints.worker.signaturePolicy",
+      "kind": "api",
+      "risk": "safe_write"
+    },
+    {
       "id": "cap:api:endpoints.tasks.submit",
       "operationId": "endpoints.tasks.submit",
       "kind": "api",
@@ -1835,6 +1841,18 @@
       "operationId": "endpoints.revoke",
       "kind": "api",
       "risk": "repair_write"
+    },
+    {
+      "id": "cap:api:endpoints.signaturePolicy.set",
+      "operationId": "endpoints.signaturePolicy.set",
+      "kind": "api",
+      "risk": "safe_write"
+    },
+    {
+      "id": "cap:api:endpoints.signaturePolicy.get",
+      "operationId": "endpoints.signaturePolicy.get",
+      "kind": "api",
+      "risk": "read_only"
     },
     {
       "id": "cap:api:mcp.request",
@@ -3223,6 +3241,18 @@
       "toolId": "meshrix.endpoints.revoke",
       "kind": "tool",
       "risk": "repair_write"
+    },
+    {
+      "id": "cap:tool:meshrix.endpoints.signaturePolicy.set:execute",
+      "toolId": "meshrix.endpoints.signaturePolicy.set",
+      "kind": "tool",
+      "risk": "safe_write"
+    },
+    {
+      "id": "cap:tool:meshrix.endpoints.signaturePolicy.get:execute",
+      "toolId": "meshrix.endpoints.signaturePolicy.get",
+      "kind": "tool",
+      "risk": "read_only"
     }
   ],
   "wildcards": [

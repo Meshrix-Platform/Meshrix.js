@@ -590,4 +590,109 @@ describe("managed endpoints", () => {
     expect(goodEnroll.ok).toBe(true);
     expect((await goodEnroll.revalidateAuthorization()).ok).toBe(true);
   });
+
+  it("relays an optional task signature verbatim and leaves unsigned tasks untouched", async () => {
+    const env = await createEnv();
+    const { device } = await createAndEnroll(env);
+
+    // Legacy shape: no signature key anywhere in request, record or assignment.
+    const unsigned = await env.service.submitTask(actor(), {
+      requestId: "req-unsigned-001",
+      capabilityId: "ops.ping",
+      input: {}
+    });
+    expect(unsigned.task).not.toHaveProperty("signature");
+    const unsignedPoll = await env.service.workerPoll(device, { batchSize: 1 });
+    expect(unsignedPoll.assignments[0]).not.toHaveProperty("signature");
+    await env.service.workerStart(device, lease(unsignedPoll.assignments[0]));
+    await env.service.workerComplete(device, {
+      ...lease(unsignedPoll.assignments[0]), state: "succeeded", result: null
+    });
+
+    const signature = {
+      algorithm: "ed25519",
+      keyId: "synthetic-key-1",
+      payload: { claim: "synthetic-dispatch", issuedAtMs: 1700000000000 },
+      signature: "c3ludGhldGljLXNpZ25hdHVyZS1ieXRlcw"
+    };
+    const signed = await env.service.submitTask(actor(), {
+      requestId: "req-signed-00001",
+      capabilityId: "ops.ping",
+      input: {},
+      signature
+    });
+    expect(signed.task.signature).toEqual(signature);
+    // Persisted verbatim, without interpretation or re-encoding.
+    expect(env.store.getTask(signed.task.taskId).signature).toEqual(signature);
+    const poll = await env.service.workerPoll(device, { batchSize: 1 });
+    expect(poll.assignments).toHaveLength(1);
+    expect(poll.assignments[0].signature).toEqual(signature);
+    const observed = await env.service.getTask(actor(), signed.task.taskId);
+    expect(observed.task.signature).toEqual(signature);
+  });
+
+  it.each([
+    ["a non-object", "opaque-string"],
+    ["missing a required field", { algorithm: "ed25519", keyId: "synthetic-key-1", payload: {} }],
+    ["an extra field", { algorithm: "ed25519", keyId: "synthetic-key-1", payload: {}, signature: "YWJj", extra: 1 }],
+    ["an invalid algorithm", { algorithm: "Ed25519!", keyId: "k", payload: {}, signature: "YWJj" }],
+    ["an invalid signature value", { algorithm: "ed25519", keyId: "k", payload: {}, signature: "not+base64url==" }],
+    ["an oversized payload", { algorithm: "ed25519", keyId: "k", payload: { blob: "x".repeat(9000) }, signature: "YWJj" }],
+    ["an oversized signature", { algorithm: "ed25519", keyId: "k", payload: {}, signature: "A".repeat(3000) }]
+  ])("rejects a task signature with %s", async (_name, signature) => {
+    const env = await createEnv();
+    await createAndEnroll(env);
+    await expect(env.service.submitTask(actor(), {
+      requestId: "req-badsignature-1",
+      capabilityId: "ops.ping",
+      input: {},
+      signature
+    })).rejects.toMatchObject({ code: "managed_signature_invalid" });
+  });
+
+  it("round-trips the signature policy sheet for members and devices, isolated per organization", async () => {
+    const env = await createEnv();
+    const { device } = await createAndEnroll(env);
+    expect(env.service.getSignaturePolicy(actor())).toEqual({ policy: null });
+    expect(env.service.workerSignaturePolicy(device)).toEqual({ policy: null });
+
+    const policy = {
+      trustedKeyIds: ["synthetic-key-1"],
+      algorithms: ["ed25519"],
+      requireSignature: false
+    };
+    env.service.setSignaturePolicy(actor(), { policy });
+    expect(env.service.getSignaturePolicy(actor())).toEqual({ policy });
+    // The device reads exactly the document the organization installed.
+    expect(env.service.workerSignaturePolicy(device)).toEqual({ policy });
+
+    // Replacement is verbatim; a foreign organization sees only its own sheet.
+    env.service.setSignaturePolicy(actor(), { policy: { note: "revision-2" } });
+    expect(env.service.getSignaturePolicy(actor())).toEqual({ policy: { note: "revision-2" } });
+    expect(env.service.getSignaturePolicy(actor("org-b", "user-9"))).toEqual({ policy: null });
+
+    const foreign = await env.service.createEndpoint(actor("org-b", "user-9"), {
+      label: "foreign-device", kind: "workstation", allowedCapabilityIds: ["ops.ping"]
+    });
+    const foreignCredential = newDeviceCredential();
+    await env.service.enroll({
+      enrollmentToken: foreign.enrollmentToken, deviceCredential: foreignCredential, capabilities: CATALOG
+    });
+    expect(env.service.workerSignaturePolicy(env.service.verifyWorker(foreignCredential)))
+      .toEqual({ policy: null });
+  });
+
+  it("rejects malformed signature policy sheets", async () => {
+    const env = await createEnv();
+    await createAndEnroll(env);
+    for (const input of [
+      { policy: [] },
+      { policy: "sheet" },
+      { policy: { blob: "x".repeat(40000) } },
+      {}
+    ]) {
+      expect(() => env.service.setSignaturePolicy(actor(), input))
+        .toThrowError(expect.objectContaining({ code: "managed_signature_policy_invalid" }));
+    }
+  });
 });

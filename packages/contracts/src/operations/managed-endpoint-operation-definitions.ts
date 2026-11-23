@@ -49,7 +49,8 @@ const WORKER_INPUTS: Record<string, any> = {
   "endpoints.worker.complete": closedInput({
     ...LEASE, state: { type: "string", enum: ["succeeded", "failed", "cancelled", "unknown"] },
     result: {}, errorCode: { type: "string", maxLength: 160 }
-  }, [...leaseRequired, "state", "result"])
+  }, [...leaseRequired, "state", "result"]),
+  "endpoints.worker.signaturePolicy": closedInput({})
 };
 const MEMBER_INPUTS: Record<string, any> = {
   "endpoints.list": closedInput({}),
@@ -60,7 +61,9 @@ const MEMBER_INPUTS: Record<string, any> = {
     endpointId: ID, label: { type: "string", minLength: 1, maxLength: 160 },
     allowedCapabilityIds: { type: "array", maxItems: 256, uniqueItems: true, items: ID }
   }, ["endpointId"]),
-  "endpoints.revoke": closedInput({ endpointId: ID }, ["endpointId"])
+  "endpoints.revoke": closedInput({ endpointId: ID }, ["endpointId"]),
+  "endpoints.signaturePolicy.set": closedInput({ policy: { type: "object" } }, ["policy"]),
+  "endpoints.signaturePolicy.get": closedInput({})
 };
 
 export const MANAGED_ENDPOINT_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
@@ -159,6 +162,19 @@ export const MANAGED_ENDPOINT_OPERATION_DEFINITIONS: readonly any[] = Object.fre
     externalAuthVerifier: DEVICE_WORKER_VERIFIER
   },
   {
+    id: "endpoints.worker.signaturePolicy",
+    feature: "endpoints",
+    label: "托管端点签名策略单读取",
+    target: { controller: "managedEndpoints", method: "handleWorkerSignaturePolicy" },
+    http: { method: "POST", path: "/api/endpoints/worker/signature-policy", localInForwardMode: true },
+    rpc: { method: "endpoints.worker.signaturePolicy", body: "params" },
+    safety: { readOnly: true },
+    log: { recordInput: false, recordOutput: false },
+    requiredScopes: [],
+    externalAuth: true,
+    externalAuthVerifier: DEVICE_WORKER_VERIFIER
+  },
+  {
     id: "endpoints.tasks.submit",
     feature: "endpoints",
     label: "提交托管端点任务",
@@ -175,7 +191,8 @@ export const MANAGED_ENDPOINT_OPERATION_DEFINITIONS: readonly any[] = Object.fre
         endpointId: { type: "string", maxLength: 128 },
         capabilityId: { type: "string", maxLength: 128 },
         workspaceId: { type: "string", maxLength: 128 },
-        input: {}
+        input: {},
+        signature: { type: "object" }
       }
     },
     requiredScopes: ["endpoints:execute"],
@@ -383,6 +400,40 @@ export const MANAGED_ENDPOINT_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       controller: "system",
       method: "verifyConsoleOrToolSkillExternalAuth",
       requiredScopes: ["endpoints:manage"],
+      recordUse: true
+    }
+  },
+  {
+    id: "endpoints.signaturePolicy.set",
+    feature: "endpoints",
+    label: "安装组织签名策略单",
+    target: { controller: "managedEndpoints", method: "handleSetSignaturePolicy" },
+    http: { method: "POST", path: "/api/endpoints/org/signature-policy", localInForwardMode: true },
+    rpc: { method: "endpoints.signaturePolicy.set", body: "params" },
+    safety: { readOnly: false, destructive: false, risk: "safe_write" },
+    requiredScopes: ["endpoints:manage"],
+    externalAuth: true,
+    externalAuthVerifier: {
+      controller: "system",
+      method: "verifyConsoleOrToolSkillExternalAuth",
+      requiredScopes: ["endpoints:manage"],
+      recordUse: true
+    }
+  },
+  {
+    id: "endpoints.signaturePolicy.get",
+    feature: "endpoints",
+    label: "读取组织签名策略单",
+    target: { controller: "managedEndpoints", method: "handleGetSignaturePolicy" },
+    http: { method: "GET", path: "/api/endpoints/org/signature-policy", localInForwardMode: true },
+    rpc: { method: "endpoints.signaturePolicy.get" },
+    safety: { readOnly: true },
+    requiredScopes: ["endpoints:read"],
+    externalAuth: true,
+    externalAuthVerifier: {
+      controller: "system",
+      method: "verifyConsoleOrToolSkillExternalAuth",
+      requiredScopes: ["endpoints:read"],
       recordUse: true
     }
   }

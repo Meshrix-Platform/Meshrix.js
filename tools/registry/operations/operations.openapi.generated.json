@@ -15316,6 +15316,44 @@
         }
       }
     },
+    "/api/endpoints/worker/signature-policy": {
+      "post": {
+        "operationId": "endpoints.worker.signaturePolicy",
+        "summary": "托管端点签名策略单读取",
+        "tags": [
+          "endpoints"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {},
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/endpoints/tasks": {
       "post": {
         "operationId": "endpoints.tasks.submit",
@@ -15364,7 +15402,10 @@
                     "type": "string",
                     "maxLength": 128
                   },
-                  "input": {}
+                  "input": {},
+                  "signature": {
+                    "type": "object"
+                  }
                 }
               }
             }
@@ -15750,6 +15791,79 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/endpoints/org/signature-policy": {
+      "post": {
+        "operationId": "endpoints.signaturePolicy.set",
+        "summary": "安装组织签名策略单",
+        "tags": [
+          "endpoints"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "policy": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "policy"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "get": {
+        "operationId": "endpoints.signaturePolicy.get",
+        "summary": "读取组织签名策略单",
+        "tags": [
+          "endpoints"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success"

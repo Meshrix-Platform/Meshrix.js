@@ -47881,6 +47881,125 @@
       }
     },
     {
+      "id": "endpoints.worker.signaturePolicy",
+      "feature": "endpoints",
+      "label": "托管端点签名策略单读取",
+      "target": {
+        "controller": "managedEndpoints",
+        "method": "handleWorkerSignaturePolicy"
+      },
+      "http": {
+        "method": "POST",
+        "path": "/api/endpoints/worker/signature-policy",
+        "localInForwardMode": true
+      },
+      "rpc": {
+        "method": "endpoints.worker.signaturePolicy",
+        "body": "params"
+      },
+      "safety": {
+        "risk": "safe_write",
+        "readOnly": true,
+        "destructive": false,
+        "approvalScope": "maintenance:approve",
+        "requiresConfirmation": false,
+        "requiresConfirmationExplicit": false,
+        "blocked": false,
+        "reason": "",
+        "resolveRisk": null
+      },
+      "log": {
+        "enabled": true,
+        "redaction": "default",
+        "recordInput": false,
+        "recordOutput": false
+      },
+      "requiredScopes": [],
+      "externalAuth": true,
+      "externalAuthVerifier": {
+        "controller": "managedEndpoints",
+        "method": "verifyManagedEndpointWorkerAuth",
+        "recordUse": true
+      },
+      "errorResponseProjector": {
+        "controller": "managedEndpoints",
+        "method": "projectErrorResponse"
+      },
+      "confirmationInput": false,
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "trafficModel": "gateway_transit",
+      "public": false,
+      "externalAuthMissingCode": "missing_external_auth",
+      "readOnly": true,
+      "destructive": false,
+      "resource": {
+        "capabilityDomain": "endpoints",
+        "resourceKind": "endpoints",
+        "capabilityVerb": "signaturePolicy",
+        "effectKind": "read",
+        "fieldMap": {}
+      },
+      "resourceContext": {
+        "capabilityDomain": "endpoints",
+        "resourceKind": "endpoints",
+        "capabilityVerb": "signaturePolicy",
+        "effectKind": "read",
+        "fieldMap": {}
+      },
+      "proof": {
+        "profile": "receipt",
+        "exclusionReason": "",
+        "changeProjection": "",
+        "lifecycle": "terminal-receipt",
+        "substrate": "operation-proof-substrate"
+      },
+      "concurrency": {
+        "workloadClass": "light",
+        "key": "endpoints.worker.signaturePolicy",
+        "maxParallel": 64,
+        "cost": 1
+      },
+      "audit": {
+        "enabled": true,
+        "recordInput": false,
+        "recordOutput": false,
+        "metadataOnly": false,
+        "redaction": "default",
+        "write": true
+      },
+      "aspects": [
+        "dispatch",
+        "authorization",
+        "safety",
+        "audit",
+        "operation-proof"
+      ],
+      "aspectOptions": {
+        "dispatch": {},
+        "authorization": {},
+        "safety": {},
+        "audit": {},
+        "operation-proof": {}
+      },
+      "description": "托管端点签名策略单读取",
+      "risk": "safe_write",
+      "otel": {
+        "semanticGroup": "endpoints",
+        "operationName": "endpoints_worker_signaturePolicy"
+      },
+      "auditPolicy": {
+        "recordInput": false,
+        "recordOutput": false,
+        "metadataOnly": false,
+        "redaction": "default"
+      }
+    },
+    {
       "id": "endpoints.tasks.submit",
       "feature": "endpoints",
       "label": "提交托管端点任务",
@@ -47940,7 +48059,10 @@
             "type": "string",
             "maxLength": 128
           },
-          "input": {}
+          "input": {},
+          "signature": {
+            "type": "object"
+          }
         }
       },
       "requiredScopes": [
@@ -49282,6 +49404,265 @@
       },
       "auditPolicy": {
         "recordInput": true,
+        "recordOutput": false,
+        "metadataOnly": false,
+        "redaction": "default"
+      }
+    },
+    {
+      "id": "endpoints.signaturePolicy.set",
+      "feature": "endpoints",
+      "label": "安装组织签名策略单",
+      "target": {
+        "controller": "managedEndpoints",
+        "method": "handleSetSignaturePolicy"
+      },
+      "http": {
+        "method": "POST",
+        "path": "/api/endpoints/org/signature-policy",
+        "localInForwardMode": true
+      },
+      "rpc": {
+        "method": "endpoints.signaturePolicy.set",
+        "body": "params"
+      },
+      "safety": {
+        "risk": "safe_write",
+        "readOnly": false,
+        "destructive": false,
+        "approvalScope": "maintenance:approve",
+        "requiresConfirmation": false,
+        "requiresConfirmationExplicit": false,
+        "blocked": false,
+        "reason": "",
+        "resolveRisk": null
+      },
+      "requiredScopes": [
+        "endpoints:manage"
+      ],
+      "externalAuth": true,
+      "externalAuthVerifier": {
+        "controller": "system",
+        "method": "verifyConsoleOrToolSkillExternalAuth",
+        "requiredScopes": [
+          "endpoints:manage"
+        ],
+        "recordUse": true
+      },
+      "errorResponseProjector": {
+        "controller": "managedEndpoints",
+        "method": "projectErrorResponse"
+      },
+      "toolId": "meshrix.endpoints.signaturePolicy.set",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "type": "boolean"
+          },
+          "safetyConfirm": {
+            "type": "boolean"
+          },
+          "policy": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "policy"
+        ]
+      },
+      "trafficModel": "gateway_transit",
+      "public": false,
+      "externalAuthMissingCode": "missing_external_auth",
+      "readOnly": false,
+      "destructive": false,
+      "resource": {
+        "capabilityDomain": "endpoints",
+        "resourceKind": "endpoints",
+        "capabilityVerb": "set",
+        "effectKind": "safe-write",
+        "fieldMap": {}
+      },
+      "resourceContext": {
+        "capabilityDomain": "endpoints",
+        "resourceKind": "endpoints",
+        "capabilityVerb": "set",
+        "effectKind": "safe-write",
+        "fieldMap": {}
+      },
+      "proof": {
+        "profile": "full",
+        "exclusionReason": "",
+        "changeProjection": "",
+        "lifecycle": "two-stage",
+        "substrate": "operation-proof-substrate"
+      },
+      "concurrency": {
+        "workloadClass": "standard",
+        "key": "endpoints.signaturePolicy.set",
+        "maxParallel": 1,
+        "cost": 2
+      },
+      "audit": {
+        "enabled": true,
+        "recordInput": true,
+        "recordOutput": false,
+        "metadataOnly": false,
+        "redaction": "default",
+        "write": true
+      },
+      "log": {
+        "enabled": true,
+        "redaction": "default",
+        "recordInput": true,
+        "recordOutput": false
+      },
+      "aspects": [
+        "dispatch",
+        "authorization",
+        "safety",
+        "audit",
+        "operation-proof"
+      ],
+      "aspectOptions": {
+        "dispatch": {},
+        "authorization": {},
+        "safety": {},
+        "audit": {},
+        "operation-proof": {}
+      },
+      "description": "安装组织签名策略单",
+      "risk": "safe_write",
+      "otel": {
+        "semanticGroup": "endpoints",
+        "operationName": "endpoints_signaturePolicy_set"
+      },
+      "auditPolicy": {
+        "recordInput": true,
+        "recordOutput": false,
+        "metadataOnly": false,
+        "redaction": "default"
+      }
+    },
+    {
+      "id": "endpoints.signaturePolicy.get",
+      "feature": "endpoints",
+      "label": "读取组织签名策略单",
+      "target": {
+        "controller": "managedEndpoints",
+        "method": "handleGetSignaturePolicy"
+      },
+      "http": {
+        "method": "GET",
+        "path": "/api/endpoints/org/signature-policy",
+        "localInForwardMode": true
+      },
+      "rpc": {
+        "method": "endpoints.signaturePolicy.get"
+      },
+      "safety": {
+        "risk": "read_only",
+        "readOnly": true,
+        "destructive": false,
+        "approvalScope": "maintenance:approve",
+        "requiresConfirmation": false,
+        "requiresConfirmationExplicit": false,
+        "blocked": false,
+        "reason": "",
+        "resolveRisk": null
+      },
+      "requiredScopes": [
+        "endpoints:read"
+      ],
+      "externalAuth": true,
+      "externalAuthVerifier": {
+        "controller": "system",
+        "method": "verifyConsoleOrToolSkillExternalAuth",
+        "requiredScopes": [
+          "endpoints:read"
+        ],
+        "recordUse": true
+      },
+      "errorResponseProjector": {
+        "controller": "managedEndpoints",
+        "method": "projectErrorResponse"
+      },
+      "toolId": "meshrix.endpoints.signaturePolicy.get",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "trafficModel": "gateway_transit",
+      "public": false,
+      "externalAuthMissingCode": "missing_external_auth",
+      "readOnly": true,
+      "destructive": false,
+      "resource": {
+        "capabilityDomain": "endpoints",
+        "resourceKind": "endpoints",
+        "capabilityVerb": "get",
+        "effectKind": "read",
+        "fieldMap": {}
+      },
+      "resourceContext": {
+        "capabilityDomain": "endpoints",
+        "resourceKind": "endpoints",
+        "capabilityVerb": "get",
+        "effectKind": "read",
+        "fieldMap": {}
+      },
+      "proof": {
+        "profile": "receipt",
+        "exclusionReason": "",
+        "changeProjection": "",
+        "lifecycle": "terminal-receipt",
+        "substrate": "operation-proof-substrate"
+      },
+      "concurrency": {
+        "workloadClass": "light",
+        "key": "endpoints.signaturePolicy.get",
+        "maxParallel": 64,
+        "cost": 1
+      },
+      "audit": {
+        "enabled": true,
+        "recordInput": false,
+        "recordOutput": false,
+        "metadataOnly": false,
+        "redaction": "default",
+        "write": false
+      },
+      "log": {
+        "enabled": true,
+        "redaction": "default",
+        "recordInput": false,
+        "recordOutput": false
+      },
+      "aspects": [
+        "dispatch",
+        "authorization",
+        "safety",
+        "audit",
+        "operation-proof"
+      ],
+      "aspectOptions": {
+        "dispatch": {},
+        "authorization": {},
+        "safety": {},
+        "audit": {},
+        "operation-proof": {}
+      },
+      "description": "读取组织签名策略单",
+      "risk": "read_only",
+      "otel": {
+        "semanticGroup": "endpoints",
+        "operationName": "endpoints_signaturePolicy_get"
+      },
+      "auditPolicy": {
+        "recordInput": false,
         "recordOutput": false,
         "metadataOnly": false,
         "redaction": "default"
