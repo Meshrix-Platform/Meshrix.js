@@ -2050,12 +2050,19 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     const { parsed } = decoded;
 
     if (!response.ok) {
-      // Deterministic stateless MCP servers reject `initialize` with 404/405/501
-      // or JSON-RPC -32601 (Method not found). Transient 5xx/429/401/403 errors
-      // must NOT be cached as stateless capability.
-      const errObj = parsed && isPlainRecord(parsed.error) ? parsed.error : null;
-      const errCode = errObj && typeof errObj.code === "number" ? errObj.code : null;
-      if (response.status === 405 || response.status === 501 || errCode === -32601) {
+      // HTTP authentication, authorization, rate-limit, not-found, and 5xx
+      // errors take strict precedence and never cache stateless capability.
+      // Stateless fallback applies ONLY to HTTP 400 carrying a valid JSON-RPC
+      // 2.0 -32601 (Method not found) response correlated to `initId`.
+      const errObj =
+        response.status === 400 &&
+        parsed &&
+        parsed.jsonrpc === "2.0" &&
+        parsed.id === initId &&
+        isPlainRecord(parsed.error)
+          ? parsed.error
+          : null;
+      if (errObj && errObj.code === -32601) {
         return { ok: true, mode: "stateless", session: null };
       }
       return {
@@ -2067,7 +2074,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     if (!parsed || isPlainRecord(parsed.error)) {
       const errorRecord = parsed && isPlainRecord(parsed.error) ? parsed.error : null;
       const upstreamCode = errorRecord && typeof errorRecord.code === "number" ? errorRecord.code : undefined;
-      if (upstreamCode === -32601) {
+      if (parsed?.jsonrpc === "2.0" && parsed.id === initId && upstreamCode === -32601) {
         return { ok: true, mode: "stateless", session: null };
       }
       return {
@@ -2140,7 +2147,16 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     if (!cached) {
       const handshake = await this.#handshakeUpstream(cacheKey, callerKeyId, tool.name, url, extraHeaders);
       if (!handshake.ok) {
-        return handshake;
+        // tools/call was never dispatched: mark notSent so any single-use
+        // approval permit is restored to approved rather than lost to a
+        // pre-dispatch handshake failure.
+        return {
+          ok: false,
+          code: handshake.code,
+          message: handshake.message,
+          ...(handshake.upstreamCode !== undefined ? { upstreamCode: handshake.upstreamCode } : {}),
+          notSent: true,
+        };
       }
       cached = {
         keyId: callerKeyId,
@@ -2165,25 +2181,37 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     let session = cached.session;
     let outcome = await this.#sendUpstreamCall(url, callId, callPayload, extraHeaders, session);
 
+    const evictIfSameSession = (targetSession: UpstreamSession | null): void => {
+      const current = this.#upstreamSessions.get(cacheKey);
+      if (current && current.session?.sessionId === targetSession?.sessionId) {
+        this.#upstreamSessions.delete(cacheKey);
+      }
+    };
+
     if (!outcome.ok && outcome.evictCachedSession) {
-      this.#upstreamSessions.delete(cacheKey);
+      evictIfSameSession(session);
     }
 
     // Re-handshake and retry ONLY when the tool explicitly declares replay-safe
     // idempotency (never on approval-gated or default side-effecting tools) AND
     // a session-bearing call received MCP's HTTP 404 session-expired status.
     if (!outcome.ok && outcome.sessionExpired && replaySafeIdempotent) {
-      const handshake = await this.#handshakeUpstream(cacheKey, callerKeyId, tool.name, url, extraHeaders);
-      if (!handshake.ok) {
-        return handshake;
+      const concurrentCached = this.#upstreamSessions.get(cacheKey);
+      if (concurrentCached && concurrentCached.session?.sessionId && concurrentCached.session.sessionId !== session?.sessionId) {
+        cached = concurrentCached;
+      } else {
+        const handshake = await this.#handshakeUpstream(cacheKey, callerKeyId, tool.name, url, extraHeaders);
+        if (!handshake.ok) {
+          return handshake;
+        }
+        cached = {
+          keyId: callerKeyId,
+          toolName: tool.name,
+          mode: handshake.mode,
+          session: handshake.session,
+        };
+        this.#rememberUpstreamSession(cacheKey, cached);
       }
-      cached = {
-        keyId: callerKeyId,
-        toolName: tool.name,
-        mode: handshake.mode,
-        session: handshake.session,
-      };
-      this.#rememberUpstreamSession(cacheKey, cached);
       session = cached.session;
       const retryId = randomId("call");
       outcome = await this.#sendUpstreamCall(
@@ -2195,7 +2223,7 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       );
       if (!outcome.ok) {
         if (outcome.evictCachedSession || outcome.sessionExpired) {
-          this.#upstreamSessions.delete(cacheKey);
+          evictIfSameSession(session);
         }
         if (outcome.sessionExpired) {
           return {

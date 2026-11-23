@@ -1827,8 +1827,19 @@ export async function createPostgresWorkQueueStore({
         SELECT mode FROM work_queue_controls WHERE queue_definition_id = $1 AND scope_key = $2
       `, [queueDefinitionId, scopeKey]);
       const mode = controlRow?.mode || "active";
+      const afterExpiryMs = Math.max(0, asInt(input.afterExpiryMs, 0));
+      const expRow = await queryOne<{ next_expiry_ms: string | number | null }>(database, `
+        SELECT expires_at_ms AS next_expiry_ms FROM work_items
+         WHERE queue_definition_id = $1 AND scope_key = $2
+           AND state IN ('queued', 'recovered', 'retry_wait', 'running')
+           AND expires_at_ms > $3
+         ORDER BY expires_at_ms ASC LIMIT 1
+      `, [queueDefinitionId, scopeKey, afterExpiryMs]);
+      const expVal = Number(expRow?.next_expiry_ms ?? 0);
+      const nextExpiryAtMs = Number.isFinite(expVal) && expVal > 0 ? expVal : null;
+
       if (mode !== "active" || input.canClaimReady === false) {
-        return { mode, nextWakeAtMs: null };
+        return { mode, nextWakeAtMs: null, nextExpiryAtMs };
       }
       const afterMs = Math.max(0, asInt(input.afterMs, 0));
       const wakeRow = await queryOne<{ next_wake_ms: string | number | null }>(database, `
@@ -1846,8 +1857,34 @@ export async function createPostgresWorkQueueStore({
       const val = Number(wakeRow?.next_wake_ms ?? 0);
       return {
         mode,
-        nextWakeAtMs: Number.isFinite(val) && val > 0 ? val : null
+        nextWakeAtMs: Number.isFinite(val) && val > 0 ? val : null,
+        nextExpiryAtMs
       };
+    },
+    async expireDue(input: QueueCommandInput = {}) {
+      return withTransaction(database, async (client) => {
+        const nowMs = nowFrom(timeSource, input.nowMs);
+        const queueDefinitionId = toText(input.queueDefinitionId || input.queueDefinition?.queueDefinitionId);
+        if (!queueDefinitionId) throw new Error("queueDefinitionId is required.");
+        const scopeKey = input.scopeKey || (input.scope ? scopeKeyFromScope(input.scope) : "");
+        const limit = Math.max(1, Math.min(asInt(input.limit, 64), 256));
+        const selected = await client.query<WorkItemProjectionRow>(`
+          SELECT * FROM work_items
+           WHERE queue_definition_id = $1 AND scope_key = $2
+             AND state IN ('queued', 'recovered', 'retry_wait', 'running')
+             AND expires_at_ms > 0 AND expires_at_ms <= $3
+           ORDER BY expires_at_ms ASC
+           LIMIT $4
+           FOR UPDATE SKIP LOCKED
+        `, [queueDefinitionId, scopeKey, nowMs, limit + 1]);
+        const hasMore = selected.rows.length > limit;
+        const batch = hasMore ? selected.rows.slice(0, limit) : selected.rows;
+        const expired = [];
+        for (const row of batch) {
+          expired.push(rowToWorkItem(await expireRow(client, row, nowMs, input)));
+        }
+        return { expired: expired.filter(Boolean), hasMore };
+      });
     },
     async recordBackgroundWrite(aspectType?: unknown, input: QueueCommandInput = {}) {
       return withTransaction(database, (client) => recordBackgroundWriteInternal(client, aspectType, input));

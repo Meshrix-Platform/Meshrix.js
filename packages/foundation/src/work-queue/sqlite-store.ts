@@ -1493,7 +1493,45 @@ function createSqliteWorkQueueStoreFromDatabase({
     )
   `);
 
-  function nextWakeAtMs(input: WorkQueueCommandInput = {}): { mode: string; nextWakeAtMs: number | null } {
+  const nextExpiryStmt = database.prepare(`
+    SELECT MIN(expires_at_ms) AS next_expiry_ms FROM work_items
+     WHERE queue_definition_id = @queue_definition_id AND scope_key = @scope_key
+       AND state IN ('queued', 'recovered', 'retry_wait', 'running')
+       AND expires_at_ms > @after_expiry_ms
+  `);
+
+  const dueExpiredStmt = database.prepare(`
+    SELECT * FROM work_items
+     WHERE queue_definition_id = @queue_definition_id AND scope_key = @scope_key
+       AND state IN ('queued', 'recovered', 'retry_wait', 'running')
+       AND expires_at_ms > 0 AND expires_at_ms <= @now_ms
+     ORDER BY expires_at_ms ASC
+     LIMIT @limit
+  `);
+
+  const expireDueTx = database.transaction((input: WorkQueueCommandInput = {}) => {
+    const nowMs = nowFrom(timeSource, input.nowMs);
+    const queueDefinitionId = toText(input.queueDefinitionId || input.queueDefinition?.queueDefinitionId);
+    if (!queueDefinitionId) throw new Error("queueDefinitionId is required.");
+    const scopeKey = toText(input.scopeKey || (input.scope ? scopeKeyFromScope(input.scope) : ""));
+    const limit = Math.max(1, Math.min(asInt(input.limit, 64), 256));
+    const rows = dueExpiredStmt.all({
+      queue_definition_id: queueDefinitionId,
+      scope_key: scopeKey,
+      now_ms: nowMs,
+      limit: limit + 1
+    }) as WorkQueueRow[];
+    const hasMore = rows.length > limit;
+    const batch = hasMore ? rows.slice(0, limit) : rows;
+    const expired = batch.map((row) => rowToWorkItem(expireRow(row, nowMs, input))).filter(Boolean);
+    return { expired, hasMore };
+  });
+
+  function nextWakeAtMs(input: WorkQueueCommandInput = {}): {
+    mode: string;
+    nextWakeAtMs: number | null;
+    nextExpiryAtMs: number | null;
+  } {
     const queueDefinitionId = toText(input.queueDefinitionId || input.queueDefinition?.queueDefinitionId);
     if (!queueDefinitionId) throw new Error("queueDefinitionId is required.");
     const scopeKey = toText(input.scopeKey || (input.scope ? scopeKeyFromScope(input.scope) : ""));
@@ -1502,8 +1540,17 @@ function createSqliteWorkQueueStoreFromDatabase({
       scope_key: scopeKey
     });
     const mode = control?.mode || "active";
+    const afterExpiryMs = Math.max(0, asInt(input.afterExpiryMs, 0));
+    const expRow = nextExpiryStmt.get({
+      queue_definition_id: queueDefinitionId,
+      scope_key: scopeKey,
+      after_expiry_ms: afterExpiryMs
+    }) as { next_expiry_ms?: number | null } | undefined;
+    const expVal = Number(expRow?.next_expiry_ms ?? 0);
+    const nextExpiryAtMs = Number.isFinite(expVal) && expVal > 0 ? expVal : null;
+
     if (mode !== "active" || input.canClaimReady === false) {
-      return { mode, nextWakeAtMs: null };
+      return { mode, nextWakeAtMs: null, nextExpiryAtMs };
     }
     const afterMs = Math.max(0, asInt(input.afterMs, 0));
     const row = nextWakeStmt.get({
@@ -1514,7 +1561,8 @@ function createSqliteWorkQueueStoreFromDatabase({
     const val = Number(row?.next_wake_ms ?? 0);
     return {
       mode,
-      nextWakeAtMs: Number.isFinite(val) && val > 0 ? val : null
+      nextWakeAtMs: Number.isFinite(val) && val > 0 ? val : null,
+      nextExpiryAtMs
     };
   }
 
@@ -1604,6 +1652,9 @@ function createSqliteWorkQueueStoreFromDatabase({
     },
     getQueueControl,
     nextWakeAtMs,
+    expireDue(input: WorkQueueCommandInput = {}) {
+      return expireDueTx(input);
+    },
     recordBackgroundWrite,
     writeSnapshotState(input: WorkQueueCommandInput = {}) {
       return recordBackgroundWrite("snapshot", input);

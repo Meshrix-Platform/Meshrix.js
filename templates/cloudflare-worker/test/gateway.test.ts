@@ -547,7 +547,12 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     const fetchStub = vi.fn(async (_url: unknown, init?: RequestInit) => {
       expect(init?.redirect).toBe("manual");
       const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
-      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
+      if (reqPayload.method === "initialize") {
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: reqPayload.id ?? null, error: { code: -32601, message: "Method not found" } }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
       return new Response(
         JSON.stringify({
           jsonrpc: "2.0",
@@ -629,7 +634,12 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
       capturedHeaders = new Headers(init?.headers);
       const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
-      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
+      if (reqPayload.method === "initialize") {
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: reqPayload.id ?? null, error: { code: -32601, message: "Method not found" } }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
       return new Response(
         JSON.stringify({
           jsonrpc: "2.0",
@@ -765,8 +775,13 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     // it answered 302, so the permit stays consumed and delivery is unknown.
     const redirectApproval = await approveCall();
     vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
-      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
+      if (reqPayload.method === "initialize") {
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: reqPayload.id ?? null, error: { code: -32601, message: "Method not found" } }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
       return new Response(null, { status: 302, headers: { Location: "https://mcp.example.com/moved" } });
     }));
     try {
@@ -899,8 +914,13 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     // stays consumed and the receipt marks the upstream result as unknown.
     const transportApproval = await approveCall();
     vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
-      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
+      if (reqPayload.method === "initialize") {
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: reqPayload.id ?? null, error: { code: -32601, message: "Method not found" } }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
       throw new TypeError("fetch failed");
     }));
     try {
@@ -920,8 +940,13 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     // An upstream HTTP error keeps the permit consumed and marks resultUnknown on approval-gated tools.
     const httpErrorApproval = await approveCall();
     vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
-      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
+      if (reqPayload.method === "initialize") {
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: reqPayload.id ?? null, error: { code: -32601, message: "Method not found" } }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
       return new Response("boom", { status: 500 });
     }));
     try {
@@ -969,8 +994,13 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
     const { token } = (await keyRes.json()) as { token: string };
 
     const fetchStub = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
-      if (reqPayload.method === "initialize") return new Response(null, { status: 405 });
+      const reqPayload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
+      if (reqPayload.method === "initialize") {
+        return new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: reqPayload.id ?? null, error: { code: -32601, message: "Method not found" } }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
       return new Response("redirected secret", {
         status: 302,
         headers: { Location: "https://mcp.example.com/moved" },
