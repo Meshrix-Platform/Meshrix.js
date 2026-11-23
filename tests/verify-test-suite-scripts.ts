@@ -68,8 +68,13 @@ for (const suite of SUITES) {
     continue;
   }
   if (suite.command.endsWith("npm") || suite.command.endsWith("npm.cmd")) {
-    const runIdx: any = suite.args.indexOf("run");
-    if (runIdx >= 0 && runIdx + 1 < suite.args.length) {
+    // Only npm's own arguments can name a package script. After the first `--`
+    // separator the remaining args belong to the executed command (for example
+    // `npm exec -- vitest run <file>`, where `run` is a vitest subcommand).
+    const separatorIdx: any = suite.args.indexOf("--");
+    const npmArgs: any = separatorIdx >= 0 ? suite.args.slice(0, separatorIdx) : suite.args;
+    const runIdx: any = npmArgs.indexOf("run");
+    if (runIdx >= 0 && runIdx + 1 < npmArgs.length) {
       const scriptName: any = suite.args[runIdx + 1];
       if (scriptName && !scripts[scriptName]) {
         missingScripts.add(scriptName);
