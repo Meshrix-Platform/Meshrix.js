@@ -145,6 +145,13 @@
                   "foundation.checkpoint-tree",
                   "foundation.state-machine"
                 ]
+              },
+              {
+                "id": "templates",
+                "label": "Gateway deployment template checks",
+                "suites": [
+                  "templates.cloudflare-worker"
+                ]
               }
             ]
           },
@@ -214,7 +221,8 @@
         "regression.frontend-backend-interface",
         "regression.platform-services",
         "regression.platform-runtime-plugins",
-        "regression.platform-client-adapters"
+        "regression.platform-client-adapters",
+        "templates.cloudflare-worker"
       ]
     },
     "security-public": {
@@ -3616,6 +3624,27 @@
       "triggerPaths": [
         "packages/kernel/src",
         "tests/vitest/gateway"
+      ]
+    },
+    {
+      "id": "templates.cloudflare-worker",
+      "label": "Cloudflare Workers gateway template unit tests",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "test:template:cloudflare-worker"
+      ],
+      "sideEffects": "temp-files",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [],
+      "triggerPaths": [
+        "templates/cloudflare-worker",
+        "packages/kernel/src"
       ]
     }
   ]

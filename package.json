@@ -445,7 +445,7 @@
     "prepublishOnly": "npm run pack:usage-skills",
     "verify:usage-skills-pack": "node tools/validate-usage-skills-pack.mjs",
     "build": "npm run build:node && npm run build:web && npm run pack:usage-skills",
-    "typecheck": "npm run typecheck:node && npm run typecheck:test && npm run typecheck:web",
+    "typecheck": "npm run typecheck:node && npm run typecheck:test && npm run typecheck:web && npm run typecheck:template:cloudflare-worker",
     "test": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile core-public --continue-on-failure",
     "test:security": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile security-public",
     "test:audit": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile audit-public --continue-on-failure --report build/test-reports/audit-public.json",
@@ -600,6 +600,8 @@
     "typecheck:node": "tsc -p tsconfig.node.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.tests.json --noEmit",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.json",
+    "typecheck:template:cloudflare-worker": "tsc -p templates/cloudflare-worker/tsconfig.json --noEmit",
+    "test:template:cloudflare-worker": "node --conditions=source ./node_modules/vitest/vitest.mjs run --root templates/cloudflare-worker",
     "verify:runtime-capacity-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-capacity-convergence.ts"
   },
   "dependencies": {

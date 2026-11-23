@@ -18,12 +18,8 @@ import {
 
 export {
   assertExternalSchemaBudget,
-  DEFAULT_BUDGET,
   GatewaySchemaError,
-  inspectBudget,
   JSON_SCHEMA_2020_12,
-  schemaByteLength,
-  schemaDialect,
   type CompiledExternalSchema,
   type SchemaBudget,
   type SchemaValidationError,

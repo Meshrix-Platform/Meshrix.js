@@ -209,6 +209,14 @@
       "packageIncluded": true
     },
     {
+      "name": "templates",
+      "kind": "source-root",
+      "required": true,
+      "generated": false,
+      "packageIncluded": false,
+      "description": "Deployable service templates verified by the unified verification entry."
+    },
+    {
       "name": "tools",
       "kind": "source-root",
       "required": true,
@@ -318,7 +326,8 @@
       "plugins",
       "docs",
       "tools",
-      "tests"
+      "tests",
+      "templates"
     ]
   },
   "repoOrganizationAudit": {

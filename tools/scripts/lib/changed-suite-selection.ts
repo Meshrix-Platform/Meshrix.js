@@ -44,6 +44,7 @@ const VERIFICATION_SENSITIVE_PREFIXES: readonly string[] = Object.freeze([
   "packages/",
   "plugins/",
   "services/",
+  "templates/",
   "tests/",
   "tools/",
   "workflows/"

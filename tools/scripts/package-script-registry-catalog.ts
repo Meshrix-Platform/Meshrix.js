@@ -262,6 +262,18 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
     inputs: ["tests/run.ts", "vitest.config.ts", "tools/registry/tests.registry.json", "Dockerfile", "package.json", "tsconfig.node.json", "tools/server-scripts/lib/source-package-contract.ts", "tools/server-scripts/lib/local-execution-environment.ts", "tools/server-scripts/publish-release-set.ts", "tests/vitest/server/distribution-*.test.ts"], outputs: ["build/reports/product-distribution.json", "build/packages/**", "dist/**"],
   },
+  "typecheck:template:cloudflare-worker": {
+    scriptName: "typecheck:template:cloudflare-worker", command: "npm run typecheck:template:cloudflare-worker", category: "verifier", subsystem: "templates",
+    owner: "platform", tier: "hygiene", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
+    inputs: ["templates/cloudflare-worker/tsconfig.json", "templates/cloudflare-worker/src/**", "templates/cloudflare-worker/test/**", "packages/kernel/src/schema/**", "packages/kernel/src/utils.ts"], outputs: [],
+  },
+  "test:template:cloudflare-worker": {
+    scriptName: "test:template:cloudflare-worker", command: "npm run test:template:cloudflare-worker", category: "test", subsystem: "templates",
+    owner: "platform", tier: "unit", sideEffects: "temp-files",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
+    inputs: ["templates/cloudflare-worker/**", "packages/kernel/src/schema/**", "packages/kernel/src/utils.ts"], outputs: [],
+  },
   "server:verify:resource-discipline": {
     scriptName: "server:verify:resource-discipline", command: "npm run server:verify:resource-discipline", category: "verifier", subsystem: "resource-discipline",
     owner: "platform", tier: "integration", sideEffects: "temp-files",

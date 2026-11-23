@@ -67,7 +67,7 @@ describe("unified test runner dry-run", () : any => {
     });
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("phases=4 lanes=14");
+    expect(result.stdout).toContain("phases=4 lanes=15");
     const phaseOffsets = ["environment", "functional", "interface", "platform"]
       .map((phase) => result.stdout.indexOf(`PHASE ${phase}:`));
     expect(phaseOffsets.every((offset) => offset >= 0)).toBe(true);
