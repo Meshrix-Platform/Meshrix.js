@@ -610,4 +610,265 @@ describe("Meshrix Cloudflare Worker Gateway", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  function createStatefulUpstreamStub(options: { expireSessionsAfterHandshake?: boolean } = {}) {
+    const sessions = new Set<string>();
+    let sessionCounter = 0;
+    const calls: Array<{ method: string | undefined; sessionId: string | null; protocolVersion: string | null }> = [];
+
+    const fetchStub = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      expect(init?.redirect).toBe("manual");
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      const normalized: Record<string, string> = {};
+      for (const [k, v] of Object.entries(headers)) normalized[k.toLowerCase()] = v;
+      const sessionId = normalized["mcp-session-id"] ?? null;
+      const protocolVersion = normalized["mcp-protocol-version"] ?? null;
+      const payload = JSON.parse(String(init?.body ?? "{}")) as { id?: unknown; method?: string };
+      calls.push({ method: payload.method, sessionId, protocolVersion });
+
+      const json = (status: number, body: unknown, extraHeaders: Record<string, string> = {}) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { "Content-Type": "application/json", ...extraHeaders },
+        });
+
+      if (payload.method === "initialize") {
+        if (sessionId) return json(404, { error: "unknown session" });
+        sessionCounter += 1;
+        const sid = `sess-${sessionCounter}`;
+        sessions.add(sid);
+        return json(
+          200,
+          {
+            jsonrpc: "2.0",
+            id: payload.id,
+            result: {
+              protocolVersion: "2025-06-18",
+              capabilities: { tools: {} },
+              serverInfo: { name: "stateful-fixture", version: "1.0.0" },
+            },
+          },
+          { "Mcp-Session-Id": sid },
+        );
+      }
+
+      if (payload.method === "notifications/initialized") {
+        if (!sessionId || !sessions.has(sessionId)) return json(404, { error: "unknown session" });
+        if (options.expireSessionsAfterHandshake) sessions.delete(sessionId);
+        return new Response(null, { status: 202 });
+      }
+
+      if (!sessionId) {
+        return json(400, {
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Bad Request: Server not initialized" },
+          id: null,
+        });
+      }
+      if (!sessions.has(sessionId)) return json(404, { error: "unknown session" });
+      return json(200, {
+        jsonrpc: "2.0",
+        id: payload.id ?? 1,
+        result: {
+          content: [{ type: "text", text: "Contact C-42" }],
+          structuredContent: { id: "C-42", status: "active" },
+        },
+      });
+    });
+
+    return { fetchStub, calls, sessions };
+  }
+
+  async function registerUpstreamTool(
+    h: ReturnType<typeof createHarness>,
+    adminHeaders: Record<string, string>,
+    name = "crm.get_contact",
+  ) {
+    const regRes = await h.request("/admin/tools", {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        name,
+        upstreamUrl: "https://mcp.example.com:8443/mcp",
+        inputSchema: {
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          properties: { id: { type: "string" } },
+          additionalProperties: false,
+        },
+      }),
+    });
+    expect(regRes.status).toBe(201);
+
+    const keyRes = await h.request("/admin/keys", {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ name: "crm-agent", allowedTools: [name] }),
+    });
+    const { token } = (await keyRes.json()) as { token: string };
+    return { token };
+  }
+
+  it("handshakes on demand with stateful upstreams, carries the session id, and reuses it", async () => {
+    const adminToken = "self-hosted-operator-secret";
+    const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
+    const adminHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` };
+    const { token } = await registerUpstreamTool(h, adminHeaders);
+
+    const upstream = createStatefulUpstreamStub();
+    vi.stubGlobal("fetch", upstream.fetchStub);
+    try {
+      const firstRes = await h.mcp(token, {
+        jsonrpc: "2.0",
+        id: 30,
+        method: "tools/call",
+        params: { name: "crm.get_contact", arguments: { id: "C-42" } },
+      });
+      expect(firstRes.status).toBe(200);
+      expect((await firstRes.json() as any).result.structuredContent).toEqual({ id: "C-42", status: "active" });
+
+      // Stateless probe, initialize handshake, initialized notification, retried call.
+      expect(upstream.calls.map((c) => c.method)).toEqual([
+        "tools/call",
+        "initialize",
+        "notifications/initialized",
+        "tools/call",
+      ]);
+      expect(upstream.calls[0]!.sessionId).toBeNull();
+      expect(upstream.calls[3]!.sessionId).toBe("sess-1");
+      expect(upstream.calls[3]!.protocolVersion).toBe("2025-06-18");
+
+      // Second call reuses the established session without another handshake.
+      const secondRes = await h.mcp(token, {
+        jsonrpc: "2.0",
+        id: 31,
+        method: "tools/call",
+        params: { name: "crm.get_contact", arguments: { id: "C-42" } },
+      });
+      expect(secondRes.status).toBe(200);
+      expect((await secondRes.json() as any).result.structuredContent.id).toBe("C-42");
+      expect(upstream.calls).toHaveLength(5);
+      expect(upstream.calls[4]).toMatchObject({ method: "tools/call", sessionId: "sess-1" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("re-handshakes exactly once after the upstream invalidates the session", async () => {
+    const adminToken = "self-hosted-operator-secret";
+    const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
+    const adminHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` };
+    const { token } = await registerUpstreamTool(h, adminHeaders);
+
+    const upstream = createStatefulUpstreamStub();
+    vi.stubGlobal("fetch", upstream.fetchStub);
+    try {
+      const firstRes = await h.mcp(token, {
+        jsonrpc: "2.0",
+        id: 40,
+        method: "tools/call",
+        params: { name: "crm.get_contact", arguments: { id: "C-42" } },
+      });
+      expect(firstRes.status).toBe(200);
+      expect(upstream.calls).toHaveLength(4);
+
+      // Upstream forgets every known session (e.g., process restart).
+      upstream.sessions.clear();
+
+      const secondRes = await h.mcp(token, {
+        jsonrpc: "2.0",
+        id: 41,
+        method: "tools/call",
+        params: { name: "crm.get_contact", arguments: { id: "C-42" } },
+      });
+      expect(secondRes.status).toBe(200);
+      expect((await secondRes.json() as any).result.structuredContent.id).toBe("C-42");
+      expect(upstream.calls.map((c) => c.method)).toEqual([
+        "tools/call",
+        "initialize",
+        "notifications/initialized",
+        "tools/call",
+        "tools/call",
+        "initialize",
+        "notifications/initialized",
+        "tools/call",
+      ]);
+      expect(upstream.calls[7]!.sessionId).toBe("sess-2");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns upstream_handshake_failed when the stateful upstream rejects initialize", async () => {
+    const adminToken = "self-hosted-operator-secret";
+    const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
+    const adminHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` };
+    const { token } = await registerUpstreamTool(h, adminHeaders);
+
+    const fetchStub = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body ?? "{}")) as { method?: string };
+      const json = (status: number, body: unknown) =>
+        new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+      if (payload.method === "initialize") {
+        return json(500, { jsonrpc: "2.0", error: { code: -32603, message: "boom" }, id: null });
+      }
+      return json(400, {
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Bad Request: Server not initialized" },
+        id: null,
+      });
+    });
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const callRes = await h.mcp(token, {
+        jsonrpc: "2.0",
+        id: 50,
+        method: "tools/call",
+        params: { name: "crm.get_contact", arguments: { id: "C-42" } },
+      });
+      expect(callRes.status).toBe(200);
+      const payload = (await callRes.json()) as any;
+      expect(payload.result).toBeUndefined();
+      expect(payload.error?.data?.code).toBe("upstream_handshake_failed");
+      expect(fetchStub.mock.calls.map((c) => (JSON.parse(String(c[1]?.body)) as { method?: string }).method)).toEqual([
+        "tools/call",
+        "initialize",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("returns upstream_session_expired when re-handshake still fails to hold a session", async () => {
+    const adminToken = "self-hosted-operator-secret";
+    const h = createHarness({ DEMO_MODE: "false", ADMIN_TOKEN: adminToken });
+    const adminHeaders = { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` };
+    const { token } = await registerUpstreamTool(h, adminHeaders);
+
+    const upstream = createStatefulUpstreamStub({ expireSessionsAfterHandshake: true });
+    vi.stubGlobal("fetch", upstream.fetchStub);
+    try {
+      const callRes = await h.mcp(token, {
+        jsonrpc: "2.0",
+        id: 60,
+        method: "tools/call",
+        params: { name: "crm.get_contact", arguments: { id: "C-42" } },
+      });
+      expect(callRes.status).toBe(200);
+      const payload = (await callRes.json()) as any;
+      expect(payload.result).toBeUndefined();
+      expect(payload.error?.data?.code).toBe("upstream_session_expired");
+      expect(upstream.calls.map((c) => c.method)).toEqual([
+        "tools/call",
+        "initialize",
+        "notifications/initialized",
+        "tools/call",
+        "initialize",
+        "notifications/initialized",
+        "tools/call",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

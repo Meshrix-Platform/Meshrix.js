@@ -27,6 +27,13 @@ const MAX_SCHEMA_CACHE_ENTRIES = 64;
 const TOOL_NAME_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
 const SENSITIVE_KEY_PATTERN = /(?:secret|token|password|api[-_]?key|auth|credential)/iu;
 const SUPPORTED_MCP_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"] as const;
+const UPSTREAM_VISIBLE_TOKEN_PATTERN = /^[\x21-\x7e]{1,256}$/u;
+const UPSTREAM_SESSION_HINT_PATTERN = /session|initializ/iu;
+const MAX_UPSTREAM_SESSION_ENTRIES = 128;
+const GATEWAY_UPSTREAM_CLIENT_INFO = Object.freeze({
+  name: "meshrix-cloudflare-gateway",
+  version: "0.4.2",
+});
 
 const textEncoder = new TextEncoder();
 
@@ -322,6 +329,33 @@ async function readBoundedResponseText(response: Response, maxBytes: number): Pr
   return new TextDecoder().decode(combined);
 }
 
+interface UpstreamSession {
+  readonly sessionId: string | null;
+  readonly protocolVersion: string;
+}
+
+type UpstreamCallFailure = {
+  readonly ok: false;
+  readonly code: string;
+  readonly message: string;
+  readonly upstreamCode?: number;
+  readonly sessionProblem?: boolean;
+};
+
+type UpstreamCallOutcome =
+  | { readonly ok: true; readonly result: Record<string, unknown>; readonly returnedSessionId: string | null }
+  | UpstreamCallFailure;
+
+type UpstreamHandshakeOutcome =
+  | { readonly ok: true; readonly session: UpstreamSession }
+  | UpstreamCallFailure;
+
+function readUpstreamSessionId(response: Response): string | null {
+  const raw = response.headers.get("mcp-session-id");
+  if (!raw || !UPSTREAM_VISIBLE_TOKEN_PATTERN.test(raw)) return null;
+  return raw;
+}
+
 function parseJsonRpcUpstreamPayload(rawText: string, contentType: string): Record<string, unknown> | null {
   if (contentType.toLowerCase().includes("text/event-stream")) {
     let lastParsed: Record<string, unknown> | null = null;
@@ -349,6 +383,8 @@ function parseJsonRpcUpstreamPayload(rawText: string, contentType: string): Reco
 export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
   readonly #sql: SqlStorage;
   readonly #schemaCache = new Map<string, { readonly rawJson: string; readonly compiled: CompiledExternalSchema }>();
+  readonly #upstreamSessions = new Map<string, UpstreamSession>();
+  readonly #upstreamHandshakes = new Map<string, Promise<UpstreamHandshakeOutcome>>();
   #initialized = false;
 
   constructor(ctx: DurableObjectState, env: GatewayEnv) {
@@ -1044,31 +1080,38 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     throw new Error(`Unsupported builtin tool: ${toolName}`);
   }
 
-  async #executeUpstreamTool(
-    tool: ToolRow,
-    args: Record<string, unknown>,
-  ): Promise<{ readonly ok: true; readonly result: Record<string, unknown> } | { readonly ok: false; readonly code: string; readonly message: string; readonly upstreamCode?: number }> {
-    if (!tool.upstream_url) {
-      return { ok: false, code: "upstream_unconfigured", message: "Upstream URL is missing." };
+  #rememberUpstreamSession(url: string, session: UpstreamSession): void {
+    this.#upstreamSessions.delete(url);
+    if (this.#upstreamSessions.size >= MAX_UPSTREAM_SESSION_ENTRIES) {
+      const oldest = this.#upstreamSessions.keys().next().value;
+      if (oldest !== undefined) this.#upstreamSessions.delete(oldest);
     }
+    this.#upstreamSessions.set(url, session);
+  }
 
+  #upstreamRequestHeaders(session: UpstreamSession | null): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    };
+    if (session) {
+      headers["MCP-Protocol-Version"] = session.protocolVersion;
+      if (session.sessionId) headers["Mcp-Session-Id"] = session.sessionId;
+    }
+    return headers;
+  }
+
+  async #postUpstream(
+    url: string,
+    payload: Record<string, unknown>,
+    session: UpstreamSession | null,
+  ): Promise<{ readonly ok: true; readonly response: Response } | UpstreamCallFailure> {
     let response: Response;
     try {
-      response = await safeUpstreamFetch(tool.upstream_url, {
+      response = await safeUpstreamFetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream",
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "tools/call",
-          params: {
-            name: tool.upstream_tool_name ?? tool.name,
-            arguments: args,
-          },
-        }),
+        headers: this.#upstreamRequestHeaders(session),
+        body: JSON.stringify(payload),
       });
     } catch (error) {
       if (error instanceof UpstreamUrlError) {
@@ -1076,12 +1119,25 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       }
       return { ok: false, code: "upstream_transport_failed", message: "Upstream MCP request failed." };
     }
+    return { ok: true, response };
+  }
 
-    if (!response.ok) {
+  async #sendUpstreamCall(
+    url: string,
+    payload: Record<string, unknown>,
+    session: UpstreamSession | null,
+  ): Promise<UpstreamCallOutcome> {
+    const posted = await this.#postUpstream(url, payload, session);
+    if (!posted.ok) return posted;
+    const { response } = posted;
+
+    if (response.status === 404) {
+      await response.body?.cancel().catch(() => undefined);
       return {
         ok: false,
-        code: "upstream_http_error",
-        message: `Upstream MCP server responded with HTTP ${response.status}.`,
+        code: "upstream_session_invalid",
+        message: "Upstream MCP server does not recognize the current session.",
+        sessionProblem: true,
       };
     }
 
@@ -1091,8 +1147,29 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
     } catch {
       return { ok: false, code: "upstream_response_too_large", message: "Upstream MCP response exceeded byte budget." };
     }
-
     const parsed = parseJsonRpcUpstreamPayload(rawText, response.headers.get("content-type") ?? "");
+
+    if (!response.ok) {
+      if (response.status === 400) {
+        const errorRecord = parsed && isPlainRecord(parsed.error) ? parsed.error : null;
+        const errorCode = errorRecord && typeof errorRecord.code === "number" ? errorRecord.code : null;
+        const errorMessage = errorRecord && typeof errorRecord.message === "string" ? errorRecord.message : "";
+        if (!parsed || errorCode === -32000 || UPSTREAM_SESSION_HINT_PATTERN.test(errorMessage)) {
+          return {
+            ok: false,
+            code: "upstream_session_required",
+            message: "Upstream MCP server requires an initialize handshake before serving requests.",
+            sessionProblem: true,
+          };
+        }
+      }
+      return {
+        ok: false,
+        code: "upstream_http_error",
+        message: `Upstream MCP server responded with HTTP ${response.status}.`,
+      };
+    }
+
     if (!parsed) {
       return { ok: false, code: "upstream_invalid_json", message: "Upstream MCP server returned invalid JSON-RPC." };
     }
@@ -1111,7 +1188,173 @@ export class MeshrixGatewayDO extends DurableObject<GatewayEnv> {
       return { ok: false, code: "upstream_invalid_result", message: "Upstream MCP response missed result payload." };
     }
 
-    return { ok: true, result: parsed.result };
+    const returnedSessionId = readUpstreamSessionId(response);
+    if (session?.sessionId && returnedSessionId && returnedSessionId !== session.sessionId) {
+      return {
+        ok: false,
+        code: "upstream_session_invalid",
+        message: "Upstream MCP server returned an unexpected session identifier.",
+        sessionProblem: true,
+      };
+    }
+
+    return { ok: true, result: parsed.result, returnedSessionId };
+  }
+
+  async #handshakeUpstream(url: string): Promise<UpstreamHandshakeOutcome> {
+    const pending = this.#upstreamHandshakes.get(url);
+    if (pending) return pending;
+    const task = this.#performUpstreamHandshake(url).finally(() => {
+      if (this.#upstreamHandshakes.get(url) === task) this.#upstreamHandshakes.delete(url);
+    });
+    this.#upstreamHandshakes.set(url, task);
+    return task;
+  }
+
+  async #performUpstreamHandshake(url: string): Promise<UpstreamHandshakeOutcome> {
+    const initPayload = {
+      jsonrpc: "2.0",
+      id: randomId("init"),
+      method: "initialize",
+      params: {
+        protocolVersion: SUPPORTED_MCP_VERSIONS[0],
+        capabilities: {},
+        clientInfo: GATEWAY_UPSTREAM_CLIENT_INFO,
+      },
+    };
+
+    const posted = await this.#postUpstream(url, initPayload, null);
+    if (!posted.ok) {
+      return {
+        ok: false,
+        code: posted.code === "upstream_transport_failed" ? "upstream_handshake_failed" : posted.code,
+        message: posted.message,
+      };
+    }
+    const { response } = posted;
+    const sessionId = readUpstreamSessionId(response);
+
+    let rawText: string;
+    try {
+      rawText = await readBoundedResponseText(response, MAX_BODY_BYTES);
+    } catch {
+      return { ok: false, code: "upstream_handshake_failed", message: "Upstream MCP initialize response exceeded byte budget." };
+    }
+    const parsed = parseJsonRpcUpstreamPayload(rawText, response.headers.get("content-type") ?? "");
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        code: "upstream_handshake_failed",
+        message: `Upstream MCP initialize failed with HTTP ${response.status}.`,
+      };
+    }
+    if (!parsed || isPlainRecord(parsed.error)) {
+      const errorRecord = parsed && isPlainRecord(parsed.error) ? parsed.error : null;
+      const upstreamCode = errorRecord && typeof errorRecord.code === "number" ? errorRecord.code : undefined;
+      return {
+        ok: false,
+        code: "upstream_handshake_failed",
+        message: "Upstream MCP server rejected the initialize handshake.",
+        ...(upstreamCode !== undefined ? { upstreamCode } : {}),
+      };
+    }
+    if (!isPlainRecord(parsed.result) || parsed.id !== initPayload.id) {
+      return { ok: false, code: "upstream_handshake_failed", message: "Upstream MCP initialize returned no result." };
+    }
+
+    const negotiated =
+      typeof parsed.result.protocolVersion === "string" && UPSTREAM_VISIBLE_TOKEN_PATTERN.test(parsed.result.protocolVersion)
+        ? parsed.result.protocolVersion
+        : SUPPORTED_MCP_VERSIONS[0];
+    const session: UpstreamSession = { sessionId, protocolVersion: negotiated };
+
+    const notified = await this.#postUpstream(
+      url,
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      session,
+    );
+    if (!notified.ok) {
+      return {
+        ok: false,
+        code: notified.code === "upstream_transport_failed" ? "upstream_handshake_failed" : notified.code,
+        message: notified.message,
+      };
+    }
+    if (!notified.response.ok) {
+      await notified.response.body?.cancel().catch(() => undefined);
+      return {
+        ok: false,
+        code: "upstream_handshake_failed",
+        message: `Upstream MCP initialized notification failed with HTTP ${notified.response.status}.`,
+      };
+    }
+    await notified.response.body?.cancel().catch(() => undefined);
+
+    return { ok: true, session };
+  }
+
+  async #executeUpstreamTool(
+    tool: ToolRow,
+    args: Record<string, unknown>,
+  ): Promise<UpstreamCallOutcome> {
+    if (!tool.upstream_url) {
+      return { ok: false, code: "upstream_unconfigured", message: "Upstream URL is missing." };
+    }
+    const url = tool.upstream_url;
+    const callPayload = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: tool.upstream_tool_name ?? tool.name,
+        arguments: args,
+      },
+    };
+
+    let session = this.#upstreamSessions.get(url) ?? null;
+    let outcome = await this.#sendUpstreamCall(url, callPayload, session);
+
+    if (!outcome.ok && outcome.sessionProblem) {
+      // Stateful upstream: run the MCP handshake on demand, then retry once.
+      const handshake = await this.#handshakeUpstream(url);
+      if (!handshake.ok) {
+        this.#upstreamSessions.delete(url);
+        return handshake;
+      }
+      session = handshake.session;
+      this.#rememberUpstreamSession(url, session);
+      outcome = await this.#sendUpstreamCall(url, callPayload, session);
+
+      if (!outcome.ok && outcome.sessionProblem) {
+        // The fresh session was already rejected — re-handshake exactly once.
+        const rehandshake = await this.#handshakeUpstream(url);
+        if (!rehandshake.ok) {
+          this.#upstreamSessions.delete(url);
+          return rehandshake;
+        }
+        session = rehandshake.session;
+        this.#rememberUpstreamSession(url, session);
+        outcome = await this.#sendUpstreamCall(url, callPayload, session);
+        if (!outcome.ok && outcome.sessionProblem) {
+          this.#upstreamSessions.delete(url);
+          return {
+            ok: false,
+            code: "upstream_session_expired",
+            message: "Upstream MCP server rejected the session even after a fresh handshake.",
+          };
+        }
+      }
+    }
+
+    if (outcome.ok && outcome.returnedSessionId && outcome.returnedSessionId !== session?.sessionId) {
+      this.#rememberUpstreamSession(url, {
+        sessionId: outcome.returnedSessionId,
+        protocolVersion: session?.protocolVersion ?? SUPPORTED_MCP_VERSIONS[0],
+      });
+    }
+
+    return outcome;
   }
 
   async #handleMcp(request: Request): Promise<Response> {
