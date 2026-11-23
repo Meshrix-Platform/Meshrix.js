@@ -22,6 +22,11 @@
       "types": "./dist/schema/index.d.ts",
       "default": "./dist/schema/index.js"
     },
+    "./schema/interpreted": {
+      "source": "./src/schema/interpreted.ts",
+      "types": "./dist/schema/interpreted.d.ts",
+      "default": "./dist/schema/interpreted.js"
+    },
     "./payload": {
       "source": "./src/payload/index.ts",
       "types": "./dist/payload/index.d.ts",
