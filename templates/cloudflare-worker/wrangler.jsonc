@@ -1,0 +1,24 @@
+{
+  "name": "meshrix-mcp-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GATEWAY",
+        "class_name": "MeshrixGatewayDO"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["MeshrixGatewayDO"]
+    }
+  ],
+  "vars": {
+    "DEMO_MODE": "false"
+  }
+}

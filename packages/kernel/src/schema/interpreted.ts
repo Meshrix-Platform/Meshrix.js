@@ -20,12 +20,14 @@ import { createHash } from "node:crypto";
 import { cloneJson, canonicalJson } from "../utils.ts";
 import {
   assertExternalSchemaBudget,
+  DEFAULT_BUDGET,
   GatewaySchemaError,
   JSON_SCHEMA_2020_12,
+  schemaByteLength,
   type CompiledExternalSchema,
   type SchemaBudget,
   type SchemaValidationError,
-} from "./index.ts";
+} from "./budget.ts";
 
 export const INTERPRETED_SCHEMA_VALIDATOR_VERSION = "interpreted-2020-12:1" as const;
 
@@ -391,8 +393,12 @@ export function compileInterpretedSchema(
   }
   const original = cloneJson(schema);
   const digest = createHash("sha256").update(canonicalJson(original)).digest("hex");
+  const maxValidationBytes = options.budget?.maxValidationBytes ?? DEFAULT_BUDGET.maxValidationBytes;
   let latestErrors: readonly SchemaValidationError[] = Object.freeze([]);
   const validate = (value: unknown): boolean => {
+    if (schemaByteLength(value) > maxValidationBytes) {
+      throw new GatewaySchemaError("validation_budget_exceeded", "Input exceeds the schema validation byte budget.", { maxValidationBytes });
+    }
     const probe = new InterpretedValidator(original);
     const valid = probe.check(original, value, "", "#");
     latestErrors = probe.errors();
@@ -426,15 +432,16 @@ export function createInterpretedSchemaValidator(options: { readonly budget?: Sc
   let cachedBytes = 0;
   return Object.freeze({
     compile(schema: unknown, label?: string): CompiledExternalSchema {
+      assertExternalSchemaBudget(schema, { budget: options.budget });
       const key = `${JSON_SCHEMA_2020_12}:${createHash("sha256").update(canonicalJson(schema)).digest("hex")}:${INTERPRETED_SCHEMA_VALIDATOR_VERSION}`;
       const cached = cache.get(key);
       if (cached) { cache.delete(key); cache.set(key, cached); return cached; }
       const compiled = compileInterpretedSchema(schema, { budget: options.budget, label });
-      const bytes = Buffer.byteLength(canonicalJson(schema), "utf8");
+      const bytes = schemaByteLength(schema);
       while (cache.size >= 64 || cachedBytes + bytes > 2 * 1024 * 1024) {
         const oldest = cache.keys().next().value;
         if (oldest === undefined) break;
-        cachedBytes -= Buffer.byteLength(canonicalJson(cache.get(oldest)!.schema), "utf8");
+        cachedBytes -= schemaByteLength(cache.get(oldest)!.schema);
         cache.delete(oldest);
       }
       cache.set(key, compiled);
